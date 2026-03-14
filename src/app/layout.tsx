@@ -32,7 +32,7 @@ export default function RootLayout({
       >
         <div className="min-h-screen bg-gradient-to-b from-[#F8F9FA] via-[#F8F9FA] to-[#F8F9FA]">
           <Header />
-          <main className="mx-auto max-w-6xl px-4 pb-16 pt-24 sm:px-6 lg:px-8">
+          <main className="mx-auto max-w-6xl px-4 pb-16 pt-25 sm:px-6 lg:px-8">
             {children}
           </main>
           <Footer />

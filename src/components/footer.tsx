@@ -7,11 +7,14 @@ export function Footer() {
   return (
     <footer className="border-t border-[#CFD8DC] bg-[#F8F9FA]">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 text-sm text-[#616161] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-        <div className="space-y-1">
-          <p className="font-medium text-[#212121]">{siteConfig.site.name}</p>
-          <p className="text-xs">
-            {siteConfig.site.copyright.replace("2024", year.toString())}
-          </p>
+        <div className="space-y-1 flex items-center gap-3">
+          <img src="/SspaciaLogo.png" alt="Sspacia Logo" className="h-20 w-auto" />
+          <div>
+            <p className="font-medium text-[#212121]">{siteConfig.site.name}</p>
+            <p className="text-xs">
+              {siteConfig.site.copyright.replace("2024", year.toString())}
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <a
@@ -36,7 +39,7 @@ export function Footer() {
             >
               Instagram
             </Link>
-            <Link
+            {/* <Link
               href={siteConfig.site.social.twitter}
               target="_blank"
               className="transition-colors hover:text-[#006064]"
@@ -49,7 +52,7 @@ export function Footer() {
               className="transition-colors hover:text-[#006064]"
             >
               Pinterest
-            </Link>
+            </Link> */}
           </div>
         </div>
       </div>
