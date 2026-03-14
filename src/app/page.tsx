@@ -55,11 +55,11 @@ export default function Home() {
           </p>
         </FadeUp>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-3 items-stretch">
           {locations.map((location, i) => (
             <FadeUp key={location.id} delay={i * 0.1}>
               <motion.article
-                className="group flex flex-col overflow-hidden rounded-3xl border border-[#CFD8DC] bg-white shadow-sm shadow-[#006064]/10 transition-shadow hover:shadow-xl"
+                className="group flex flex-col h-full overflow-hidden rounded-3xl border border-[#CFD8DC] bg-white shadow-sm shadow-[#006064]/10 transition-shadow hover:shadow-xl"
                 whileHover={{ y: -6 }}
                 transition={{ type: "spring", stiffness: 300, damping: 22 }}
               >

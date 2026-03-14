@@ -10,7 +10,7 @@ export function Header() {
         <div className="flex items-center">
           <Link href="/" className="flex items-center gap-2">
             <Image
-              src="/sspaciaLogo.png"
+              src="/SspaciaLogo.png"
               alt={siteConfig.site.name}
               width={120}
               height={40}
