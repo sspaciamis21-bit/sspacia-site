@@ -96,9 +96,11 @@ function Hero() {
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.97 }}
               >
-                <Button size="lg" className="gap-3 rounded-full" variant="outline">
-                  Book a tour <PhoneCall className="w-4 h-4" />
-                </Button>
+                <a href="/book-online">
+                  <Button size="lg" className="gap-3 rounded-full" variant="outline">
+                    Book a tour <PhoneCall className="w-4 h-4" />
+                  </Button>
+                </a>
               </motion.div>
               <motion.div
                 variants={fadeIn}
@@ -108,9 +110,11 @@ function Hero() {
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.97 }}
               >
-                <Button size="lg" className="gap-3 rounded-full">
-                  View Spaces <MoveRight className="w-4 h-4" />
-                </Button>
+                <a href="/gallary">
+                  <Button size="lg" className="gap-3 rounded-full">
+                    View Spaces <MoveRight className="w-4 h-4" />
+                  </Button>
+                </a>
               </motion.div>
             </div>
           </div>

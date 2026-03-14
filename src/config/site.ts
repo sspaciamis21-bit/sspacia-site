@@ -21,7 +21,8 @@ export const siteConfig = {
     { label: "Home", href: "/" },
     { label: "About", href: "/about" },
     { label: "Contact", href: "/contact" },
-    { label: "Blog", href: "/blog"}
+    { label: "Blog", href: "/blog"},
+    { label: "Gallery", href: "/gallery"}
   ],
   hero: {
     heading: "TOP Coworking Spaces",
@@ -178,6 +179,7 @@ export const siteConfig = {
     home: { path: "/", title: "Home | SSPACIA Coworking" },
     about: { path: "/about", title: "About | SSPACIA Coworking" },
     bookOnline: { path: "/book-online", title: "Book Online | SSPACIA Coworking" },
+    gallery: { path: "/gallery", title: "Gallery | SSPACIA Coworking" },
   },
 } as const;
 
