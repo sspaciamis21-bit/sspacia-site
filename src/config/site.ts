@@ -8,7 +8,8 @@ export const siteConfig = {
     copyright: "© 2024 by SSPACIA",
     externalWebsite: "https://sspacia.in",
     contact: {
-      email: "Info@sspacia.com",
+      email: "sales@sspacia.com",
+      phone: "7600393779",
     },
     social: {
       facebook: "https://www.facebook.com/sspacia",
@@ -21,6 +22,7 @@ export const siteConfig = {
     { label: "Home", href: "/" },
     { label: "About", href: "/about" },
     { label: "Contact", href: "/contact" },
+    { label: "Products", href: "/products" },
     { label: "Blog", href: "/blog"},
     { label: "Gallery", href: "/gallery"}
   ],
@@ -44,7 +46,7 @@ export const siteConfig = {
     missionStatement:
       "SSPACIA is a new and fresh creative coworking space in Ahmedabad, Gujarat here to open doors to a collaborative work environment where freelancers, entrepreneurs or start-ups from different industries, backgrounds and talents can feel comfortable pursuing their passions while having the opportunity to network, share and exchange ideas with others. In essence, we create the space and together we build the community.",
     targetAudience: ["Freelancers", "Entrepreneurs", "Start-ups", "Growing Teams"],
-    contact: {email: "Info@sspacia.com"}
+    contact: {email: "sales@sspacia.com"}
   },
   locations: [
     {
@@ -89,14 +91,54 @@ export const siteConfig = {
     },
   ],
   features: [
-    { id: "premium-locations", title: "Premium Locations", icon: "MapPin" },
-    { id: "24-7-access", title: "24/7 Access", icon: "Clock" },
-    { id: "professional-staff", title: "Professional & Homely Staff", icon: "Users" },
-    { id: "tea-coffee", title: "Unlimited Gourmet Tea/Coffee", icon: "Coffee" },
-    { id: "cozy-space", title: "Cozy Space", icon: "Home" },
-    { id: "advanced-tech", title: "Advanced Tech", icon: "Cpu" },
-    { id: "affordable-price", title: "Affordable Price", icon: "Tag" },
-    { id: "high-speed-internet", title: "High Speed Internet", icon: "Wifi" },
+    { 
+      id: "premium-locations", 
+      title: "Premium Locations", 
+      icon: "MapPin",
+      description: "Strategically located in Ahmedabad's hubs for maximum prestige and accessibility."
+    },
+    { 
+      id: "24-7-access", 
+      title: "24/7 Access", 
+      icon: "Clock",
+      description: "Your business never sleeps. Access your workspace whenever inspiration strikes."
+    },
+    { 
+      id: "professional-staff", 
+      title: "Homely Staff", 
+      icon: "Users",
+      description: "Experience the perfect blend of corporate efficiency and warm, personalized hospitality."
+    },
+    { 
+      id: "tea-coffee", 
+      title: "Gourmet Brews", 
+      icon: "Coffee",
+      description: "Stay fueled throughout the day with our selection of premium, unlimited brews."
+    },
+    { 
+      id: "cozy-space", 
+      title: "Cozy Space", 
+      icon: "Home",
+      description: "Designed with comfort in mind, featuring ergonomic setups and inspiring corners."
+    },
+    { 
+      id: "advanced-tech", 
+      title: "Advanced Tech", 
+      icon: "Cpu",
+      description: "Plug into high-end infrastructure with smart rooms and seamless tech support."
+    },
+    { 
+      id: "affordable-price", 
+      title: "Smart Pricing", 
+      icon: "Tag",
+      description: "Premium workspaces at rates that respect your bottom line, with zero hidden costs."
+    },
+    { 
+      id: "high-speed-internet", 
+      title: "Ultra-Fast WiFi", 
+      icon: "Wifi",
+      description: "Blazing fast, redundant fiber-optic connectivity to keep your operations smooth."
+    },
   ],
   featuresSection: {
     heading: "Features",
@@ -179,6 +221,7 @@ export const siteConfig = {
     home: { path: "/", title: "Home | SSPACIA Coworking" },
     about: { path: "/about", title: "About | SSPACIA Coworking" },
     bookOnline: { path: "/book-online", title: "Book Online | SSPACIA Coworking" },
+    products: { path: "/products", title: "Products | SSPACIA Coworking" },
     gallery: { path: "/gallery", title: "Gallery | SSPACIA Coworking" },
   },
 } as const;
