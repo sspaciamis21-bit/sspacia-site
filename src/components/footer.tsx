@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Youtube } from "lucide-react";
 import { siteConfig } from "../config/site";
 
 export function Footer() {
@@ -46,6 +47,15 @@ export function Footer() {
             >
               Instagram
             </Link>
+            {siteConfig.site.social.youtube && (
+              <Link
+                href={siteConfig.site.social.youtube}
+                target="_blank"
+                className="transition-colors hover:text-[#006064]"
+              >
+                YouTube
+              </Link>
+            )}
             {/* <Link
               href={siteConfig.site.social.twitter}
               target="_blank"

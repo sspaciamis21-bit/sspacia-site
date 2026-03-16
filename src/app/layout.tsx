@@ -97,6 +97,7 @@ export default function RootLayout({
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} bg-[#F8F9FA] text-[#212121] antialiased`}
+        suppressHydrationWarning
       >
         <div className="flex flex-col min-h-screen bg-gradient-to-b from-[#F8F9FA] via-[#F8F9FA] to-[#F8F9FA]">
           <Header />

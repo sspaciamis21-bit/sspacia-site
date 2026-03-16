@@ -66,7 +66,13 @@ export default function BlogClient() {
                   <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
                     <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
                       <Calendar className="h-3 w-3" />
-                      <span>{new Date(post.date).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</span>
+                      <span>
+                        {new Date(post.date).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          timeZone: "UTC",
+                        })}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
                       <Clock className="h-3 w-3" />

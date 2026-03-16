@@ -180,7 +180,13 @@ export default function HomeClient() {
                     <span className="h-1 w-1 rounded-full bg-[#CFD8DC]" />
                     <span>{post.readTime}</span>
                     <span className="h-1 w-1 rounded-full bg-[#CFD8DC]" />
-                    <span>{new Date(post.date).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</span>
+                    <span>
+                      {new Date(post.date).toLocaleString("en-US", {
+                        month: "short",
+                        year: "numeric",
+                        timeZone: "UTC",
+                      })}
+                    </span>
                   </div>
                   <h3 className="text-xl font-bold leading-tight text-[#212121] transition group-hover:text-[#006064]">
                     {post.title}
