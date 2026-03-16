@@ -110,7 +110,7 @@ export default function ProductsClient() {
 
       {/* ── Workspaces Section ── */}
       <section className="space-y-10">
-        <FadeUp className="space-y-3">
+        <FadeUp className="space-y-3 flex flex-col items-center">
           <SectionLabel>
             <Layers className="h-3 w-3" /> Product Categories
           </SectionLabel>
@@ -194,7 +194,7 @@ export default function ProductsClient() {
 
       {/* ── Guest Spaces Section ── */}
       <section className="space-y-10">
-        <FadeUp className="space-y-3">
+        <FadeUp className="space-y-3 flex flex-col items-center">
           <SectionLabel>
             <Users className="h-3 w-3" /> Shared Spaces
           </SectionLabel>
