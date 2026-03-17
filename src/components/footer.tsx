@@ -20,7 +20,7 @@ export function Footer() {
           <div>
             <p className="font-bold text-[#212121] text-base">{siteConfig.site.name}</p>
             <p className="text-[10px] uppercase font-bold tracking-widest text-[#9E9E9E] mt-0.5">
-              {siteConfig.site.copyright.replace("2024", year.toString())}
+              {siteConfig.site.copyright.replace("2026", year.toString())}
             </p>
           </div>
         </div>

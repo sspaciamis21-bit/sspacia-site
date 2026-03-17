@@ -17,7 +17,7 @@ export default function BlogClient() {
         {/* Decorative blur orbs */}
         <div className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-[#006064]/10 blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-[#4DB6AC]/15 blur-3xl" />
-        
+
         <div className="relative z-10 text-center space-y-6">
           <FadeUp className="flex justify-center">
             <SectionLabel>
@@ -31,7 +31,7 @@ export default function BlogClient() {
           </FadeUp>
           <FadeUp delay={0.2}>
             <p className="mx-auto max-w-2xl text-lg text-[#616161]">
-              Explore the latest trends in workspaces, productivity tips, 
+              Explore the latest trends in workspaces, productivity tips,
               and community stories from Ahmedabad&apos;s leading coworking space.
             </p>
           </FadeUp>
@@ -48,8 +48,6 @@ export default function BlogClient() {
             <FadeUp key={post.id} delay={i * 0.1}>
               <Link
                 href={post.href}
-                target="_blank"
-                rel="noreferrer"
                 className="group flex flex-col overflow-hidden rounded-3xl border border-[#CFD8DC] bg-white shadow-sm shadow-[#006064]/5 transition-all duration-300 hover:-translate-y-2 hover:border-[#006064] hover:shadow-2xl"
               >
                 <div className="relative aspect-[16/10] w-full overflow-hidden">
@@ -62,7 +60,7 @@ export default function BlogClient() {
                     priority={i < 3}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 transition-opacity group-hover:opacity-80" />
-                  
+
                   <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
                     <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
                       <Calendar className="h-3 w-3" />

@@ -155,12 +155,10 @@ export default function HomeClient() {
         </FadeUp>
 
         <div className="grid gap-8 lg:grid-cols-2">
-          {blog.posts.map((post, i) => (
+          {blog.posts.slice(0, 2).map((post, i) => (
             <FadeUp key={post.id} delay={i * 0.1}>
               <motion.a
                 href={post.href}
-                target="_blank"
-                rel="noreferrer"
                 className="group flex flex-col overflow-hidden rounded-[2.5rem] border border-[#CFD8DC] bg-white shadow-sm transition-all hover:shadow-2xl hover:shadow-[#006064]/5"
                 whileHover={{ y: -6 }}
               >
