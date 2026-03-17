@@ -28,6 +28,9 @@ export const metadata: Metadata = {
     template: seoConfig.titleTemplate,
   },
   description: seoConfig.description,
+  verification: {
+    google: "lFuDpBl6XZCriYrk73hlTwVGVkaNjsnZgGSuXZd6yeE"
+  },
   keywords: seoConfig.keywords,
   authors: [{ name: "SSPACIA" }],
   creator: "SSPACIA",
