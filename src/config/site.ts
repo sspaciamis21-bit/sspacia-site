@@ -10,6 +10,7 @@ export const siteConfig = {
     contact: {
       email: "sales@sspacia.com",
       phone: "7600393779",
+      careersEmail: "hr.ssinfrazon@gmail.com",
     },
     social: {
       facebook: "https://www.facebook.com/sspacia",
@@ -24,7 +25,8 @@ export const siteConfig = {
     { label: "Contact", href: "/contact" },
     { label: "Products", href: "/products" },
     { label: "Blog", href: "/blog" },
-    { label: "Gallery", href: "/gallery" }
+    { label: "Gallery", href: "/gallery" },
+    // { label: "Careers", href: "/careers" }
   ],
   hero: {
     heading: "TOP Coworking Spaces",
@@ -55,7 +57,7 @@ export const siteConfig = {
       description: "A vibrant, central hub located on CG Road.",
 
       image: {
-        src: "https://static.wixstatic.com/media/38bf31_ab6cf1c9730341ca86013938519b8374~mv2.png/v1/crop/x_673,y_0,w_775,h_1000/fill/w_310,h_400,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/AgarwalComplex.png",
+        src: "/Pictures/Reception-1.jpeg",
         alt: "Agarwal Complex exterior",
       },
       link: {
@@ -65,7 +67,7 @@ export const siteConfig = {
     },
     {
       id: "mercardo",
-      name: "Mercardo",
+      name: "CG Road – Mercardo",
       description: "Modern amenities and a dynamic atmosphere.",
       image: {
         src: "https://static.wixstatic.com/media/38bf31_511ee8666ecb47baac387ec61552b0ae~mv2.png/v1/fill/w_310,h_400,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/mercado-reception%20(1).png",
@@ -78,10 +80,10 @@ export const siteConfig = {
     },
     {
       id: "premier-house",
-      name: "Premier House",
+      name: "SG Highway – Premier House",
       description: "Elegance and efficiency for a prestigious business address.",
       image: {
-        src: "https://static.wixstatic.com/media/38bf31_e632e0c34b504fdfb915d00913345165~mv2.jpeg/v1/crop/x_725,y_0,w_775,h_1000/fill/w_310,h_400,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/Reception_1.jpeg",
+        src: "/PH_images/ESL04996.JPG",
         alt: "Premier House reception",
       },
       link: {
@@ -144,6 +146,55 @@ export const siteConfig = {
     heading: "Features",
     description:
       "At SSPACIA, we offer more than just office space; we provide a dynamic, collaborative environment designed to fuel your success. Whether you're a freelancer, entrepreneur, or part of a growing team, our coworking space is the perfect place to work, connect, and thrive.",
+  },
+  careers: {
+    heading: "Build the Future of Work in Ahmedabad",
+    subheading: "At SSPACIA, we're not just offering desks; we're crafting experiences. If you're passionate about hospitality, community, and innovation, we'd love to meet you.",
+    benefits: [
+      {
+        title: "Vibrant Community",
+        icon: "Users",
+        description: "Work in a space where growth meets collaboration every single day."
+      },
+      {
+        title: "Learning & Growth",
+        icon: "Rocket",
+        description: "We invest in your career path with mentorship and skill-building opportunities."
+      },
+      {
+        title: "Flexible Environment",
+        icon: "Clock",
+        description: "Experience the work-life balance that only a coworking ecosystem can offer."
+      },
+      {
+        title: "Premium Perks",
+        icon: "Coffee",
+        description: "Unlimited premium coffee, modern workspace, and networking with top entrepreneurs."
+      }
+    ],
+    jobs: [
+      {
+        id: "community-manager",
+        title: "Community Manager",
+        type: "Full-time",
+        location: "CG Road – Agarwal Complex",
+        description: "Be the face of SSPACIA. Manage day-to-day operations and foster a thriving community for our members."
+      },
+      {
+        id: "sales-executive",
+        title: "Sales Executive",
+        type: "Full-time",
+        location: "Ahmedabad (Multi-site)",
+        description: "Drive growth by connecting entrepreneurs with the perfect workspace solutions across our prime locations."
+      },
+      {
+        id: "operations-specialist",
+        title: "Operations Specialist",
+        type: "Full-time",
+        location: "Ahmedabad",
+        description: "Ensure seamless experiences for our members by managing infrastructure and facility logistics."
+      }
+    ]
   },
   blog: {
     heading: "Latest Articles",
@@ -653,6 +704,7 @@ export const siteConfig = {
     bookOnline: { path: "/book-online", title: "Book Online | SSPACIA Coworking" },
     products: { path: "/products", title: "Products | SSPACIA Coworking" },
     gallery: { path: "/gallery", title: "Gallery | SSPACIA Coworking" },
+    careers: { path: "/careers", title: "Careers | SSPACIA Coworking" },
   },
 } as const;
 

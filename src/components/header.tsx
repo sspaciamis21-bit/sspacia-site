@@ -11,7 +11,7 @@ export function Header() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-[100] border-b border-[#CFD8DC] bg-[#F8F9FA]/95 backdrop-blur">
+    <header className="fixed inset-x-0 top-0 z-[100] border-b border-[#CFD8DC] bg-[#F8F9FA]/70 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         {/* Logo - left */}
         <div className="flex items-center">
@@ -28,8 +28,10 @@ export function Header() {
         </div>
 
         {/* Desktop Nav links - center */}
-        <nav className="hidden md:flex flex-1 justify-center items-center gap-8 text-sm font-medium text-[#424242]">
-          {siteConfig.navigation.map((item) => (
+        <nav className="hidden md:flex flex-1 justify-center items-center gap-8 text-md font-medium text-[#424242]">
+          {siteConfig.navigation
+            .filter((item) => item.label !== "Careers")
+            .map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -47,7 +49,7 @@ export function Header() {
         <div className="hidden md:flex">
           <Link
             href="/book-online"
-            className="rounded-full bg-[#006064] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#006064]/20 transition-all hover:bg-[#004D40] active:scale-95"
+            className="rounded-full bg-[#006064] px-5 py-2.5 text-md font-bold text-white shadow-lg shadow-[#006064]/20 transition-all hover:bg-[#004D40] active:scale-95"
           >
             Book Now
           </Link>
@@ -73,7 +75,9 @@ export function Header() {
             className="border-t border-[#CFD8DC] bg-white md:hidden overflow-hidden"
           >
             <div className="flex flex-col space-y-1 p-4">
-              {siteConfig.navigation.map((item) => (
+              {siteConfig.navigation
+                .filter((item) => item.label !== "Careers")
+                .map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}

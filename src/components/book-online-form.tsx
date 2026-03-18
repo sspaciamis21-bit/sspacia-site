@@ -44,9 +44,15 @@ interface LocationData {
 
 const locations = productsData as unknown as LocationData[];
 
-export function BookOnlineForm() {
-  const [selectedLocation, setSelectedLocation] = useState("");
-  const [selectedSpaceType, setSelectedSpaceType] = useState("");
+interface BookOnlineFormProps {
+  initialLocation?: string;
+  initialSpaceType?: string;
+  onSuccess?: () => void;
+}
+
+export function BookOnlineForm({ initialLocation = "", initialSpaceType = "", onSuccess }: BookOnlineFormProps) {
+  const [selectedLocation, setSelectedLocation] = useState(initialLocation);
+  const [selectedSpaceType, setSelectedSpaceType] = useState(initialSpaceType);
 
   const spaceOptions = useMemo(() => {
     if (!selectedLocation) return [];
@@ -86,6 +92,7 @@ export function BookOnlineForm() {
         form.reset();
         setSelectedLocation("");
         setSelectedSpaceType("");
+        if (onSuccess) onSuccess();
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to send');

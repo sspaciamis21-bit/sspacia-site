@@ -5,7 +5,7 @@ import { siteConfig } from "../../config/site";
 import Image from "next/image";
 import { FadeUp } from "../../components/ui/fade-up";
 import { SectionLabel } from "../../components/ui/section-label";
-import { Mail, Phone, MapPin, Send, Facebook, Instagram, Twitter, Linkedin, ExternalLink } from "lucide-react";
+import { Mail, Phone, MapPin, Send, Facebook, Instagram,Youtube, ExternalLink } from "lucide-react";
 
 export default function ContactClient() {
   return (
@@ -152,8 +152,7 @@ export default function ContactClient() {
                       <span className="sr-only">{network}</span>
                       {network === 'facebook' && <Facebook className="h-6 w-6" />}
                       {network === 'instagram' && <Instagram className="h-6 w-6" />}
-                      {network === 'twitter' && <Twitter className="h-6 w-6" />}
-                      {network === 'linkedin' && <Linkedin className="h-6 w-6" />}
+                      {network === 'youtube' && <Youtube className="h-6 w-6" />}
                     </a>
                   </FadeUp>
                 ))}

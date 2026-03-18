@@ -17,6 +17,8 @@ import {
   ArrowRight
 } from "lucide-react";
 import Link from "next/link";
+import { BookOnlineForm } from "@/components/book-online-form";
+import { X } from "lucide-react";
 
 // Types
 interface CommitmentPeriods {
@@ -48,6 +50,8 @@ const locations = productsData as unknown as LocationData[];
 
 export default function ProductsClient() {
   const [activeLocation, setActiveLocation] = useState(locations[0].location);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalData, setModalData] = useState({ location: "", spaceType: "" });
 
   const currentLocationData = locations.find(l => l.location === activeLocation) || locations[0];
 
@@ -60,6 +64,11 @@ export default function ProductsClient() {
       .filter(([_, value]) => value !== null)
       .map(([key]) => formatPeriodLabel(key))
       .join(", ");
+  };
+
+  const openInquiryModal = (location: string, spaceType: string) => {
+    setModalData({ location, spaceType });
+    setIsModalOpen(true);
   };
 
   return (
@@ -179,12 +188,12 @@ export default function ProductsClient() {
                     )}
                   </div>
 
-                  <Link 
-                    href="/book-online"
+                  <button 
+                    onClick={() => openInquiryModal(activeLocation, ws.type)}
                     className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#006064] px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-[#007C91] hover:shadow-md active:scale-95"
                   >
                     Inquire Now <ArrowRight className="w-4 h-4" />
-                  </Link>
+                  </button>
                 </div>
               </motion.article>
             ))}
@@ -253,12 +262,12 @@ export default function ProductsClient() {
                     </div>
                   </div>
 
-                  <Link 
-                    href="/book-online"
+                  <button 
+                    onClick={() => openInquiryModal(activeLocation, gs.type)}
                     className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl border border-[#006064] px-4 py-2.5 text-sm font-bold text-[#006064] transition-all hover:bg-[#006064] hover:text-white active:scale-95"
                   >
                     Inquire Now <ArrowRight className="w-4 h-4" />
-                  </Link>
+                  </button>
                 </div>
               </motion.article>
             ))}
@@ -275,15 +284,49 @@ export default function ProductsClient() {
               Not sure which plan fits you best? Schedule a free tour to explore 
               all our workspaces and find your perfect spot at SSPACIA.
             </p>
-            <Link 
-              href="/book-online"
+            <button 
+              onClick={() => openInquiryModal(activeLocation, "")}
               className="inline-block rounded-full bg-[#006064] px-8 py-4 text-base font-bold text-white transition-all hover:bg-[#007C91] hover:scale-105 active:scale-95 shadow-lg shadow-[#00251A]/40"
             >
               Book a Free Tour
-            </Link>
+            </button>
           </div>
         </section>
       </FadeUp>
+
+      {/* ── Inquiry Modal ── */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar"
+            >
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="absolute right-6 top-6 z-[110] rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors backdrop-blur-md"
+              >
+                <X className="h-6 w-6" />
+              </button>
+              <BookOnlineForm 
+                initialLocation={modalData.location} 
+                initialSpaceType={modalData.spaceType}
+                onSuccess={() => setIsModalOpen(false)}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
