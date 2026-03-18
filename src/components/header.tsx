@@ -30,7 +30,7 @@ export function Header() {
         {/* Desktop Nav links - center */}
         <nav className="hidden md:flex flex-1 justify-center items-center gap-8 text-md font-medium text-[#424242]">
           {siteConfig.navigation
-            .filter((item) => item.label !== "Careers")
+            // .filter((item) => item.label !== "Careers")
             .map((item) => (
             <Link
               key={item.href}
@@ -76,7 +76,7 @@ export function Header() {
           >
             <div className="flex flex-col space-y-1 p-4">
               {siteConfig.navigation
-                .filter((item) => item.label !== "Careers")
+                // .filter((item) => item.label !== "Careers")
                 .map((item) => (
                 <Link
                   key={item.href}
