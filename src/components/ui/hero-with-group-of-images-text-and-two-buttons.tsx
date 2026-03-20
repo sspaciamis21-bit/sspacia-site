@@ -130,7 +130,7 @@ function Hero() {
               whileHover={{ scale: 1.03, transition: { duration: 0.25 } }}
             >
               <Image
-                src="/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/Reception Area.jpg"
+                src="/Pictures/Reception.jpeg"
                 alt="SSPACIA Coworking Space"
                 width={400}
                 height={240}
@@ -166,7 +166,7 @@ function Hero() {
               whileHover={{ scale: 1.03, transition: { duration: 0.25 } }}
             >
               <Image
-                src="/IMAGES_SSPACIA/MERCADO IMAGES/Mercado reception.jpg"
+                src="/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"
                 alt="SSPACIA Mercardo"
                 width={400}
                 height={240}

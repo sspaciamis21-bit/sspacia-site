@@ -30,7 +30,7 @@
         "access_time": "24x7",
         "complementary_meeting_room": "2 hours/month",
         "sdr_plus_adv": "2+1",
-        "image": "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/flexi cabin .jpeg"
+        "image": "/Pictures/Flexi Desk.jpeg"
       },
       {
         "type": "Dedicated Cabin",
@@ -98,16 +98,6 @@
           "per_day": 4500
         },
         "image": "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/Board Room.jpeg"
-      },
-      {
-        "type": "Event Room",
-        "capacity": "40 Person",
-        "commitment_periods": {
-          "per_hour": 2000,
-          "per_4_hours": 6000,
-          "per_day": 10000
-        },
-        "image": "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/Traning Room.jpeg"
       }
     ]
   },
@@ -157,7 +147,7 @@
         "access_time": "24x7",
         "complementary_meeting_room": "2 hours/month",
         "sdr_plus_adv": "3+1",
-        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/MERCADO 5 SEATER DEDICATED CABIN 2.jpg"
+        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/Mercado Photo/Dedicated Room.JPG"
       },
       {
         "type": "Private Cabin",
@@ -172,22 +162,7 @@
         "access_time": "24x7",
         "complementary_meeting_room": "5 hours/month",
         "sdr_plus_adv": "3+1",
-        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/Mercado private cabin 4.jpg"
-      },
-      {
-        "type": "Executive Cabin",
-        "commitment_periods": {
-          "1_day": null,
-          "1_week": null,
-          "1_month": 33000,
-          "3_month": 31500,
-          "6_month": 30000,
-          "1_year": 27000
-        },
-        "access_time": "24x7",
-        "complementary_meeting_room": "5 hours/month",
-        "sdr_plus_adv": "3+1",
-        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/Executive Cabin.jpg"
+        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/Pivate Cabin.jpg"
       }
     ],
     "guest_spaces": [
@@ -199,7 +174,7 @@
           "per_4_hours": 1800,
           "per_day": 3500
         },
-        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/IMG-20251107-WA0003.jpg"
+        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/Meeting Room.jpg"
       },
       {
         "type": "Board Room",
@@ -209,17 +184,7 @@
           "per_4_hours": 3500,
           "per_day": 6000
         },
-        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/Mercado conference area.jpg"
-      },
-      {
-        "type": "Lounge Room",
-        "capacity": "8 Person",
-        "commitment_periods": {
-          "per_hour": 800,
-          "per_4_hours": 3500,
-          "per_day": 5000
-        },
-        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/Meeting Space.jpg"
+        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/Board room.jpg"
       }
     ]
   },
@@ -311,7 +276,7 @@
           "per_4_hours": 1800,
           "per_day": 3500
         },
-        "image": "/IMAGES_SSPACIA/PREMIER HOUSE/meeting room02.jpg"
+        "image": "/IMAGES_SSPACIA/PREMIER HOUSE/Meeting Room.jpg"
       },
       {
         "type": "Board Room",
@@ -321,7 +286,7 @@
           "per_4_hours": 3500,
           "per_day": 6000
         },
-        "image": "/IMAGES_SSPACIA/PREMIER HOUSE/board room.jpg"
+        "image": "/IMAGES_SSPACIA/PREMIER HOUSE/Board room.jpg"
       },
       {
         "type": "Event Room",

@@ -70,7 +70,7 @@ export const siteConfig = {
       name: "CG Road – Mercardo",
       description: "Modern amenities and a dynamic atmosphere.",
       image: {
-        src: "https://static.wixstatic.com/media/38bf31_511ee8666ecb47baac387ec61552b0ae~mv2.png/v1/fill/w_310,h_400,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/mercado-reception%20(1).png",
+        src: "/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg",
         alt: "Mercardo reception",
       },
       link: {

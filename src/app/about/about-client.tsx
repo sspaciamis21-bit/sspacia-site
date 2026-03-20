@@ -51,7 +51,7 @@ export default function AboutClient() {
 
         <FadeUp delay={0.2} className="relative aspect-[4/3] overflow-hidden rounded-3xl shadow-2xl">
            <Image
-            src="/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/Reception Area.jpg"
+            src="/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"
             alt="SSPACIA Coworking Space"
             fill
             className="object-cover"
@@ -111,14 +111,14 @@ export default function AboutClient() {
           </FadeUp>
           <FadeUp delay={0.2}>
              <div className="group relative h-64 overflow-hidden rounded-2xl shadow-lg">
-              <Image src="/IMAGES_SSPACIA/MERCADO IMAGES/Mercado reception.jpg" alt="SSPACIA Community" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
+              <Image src="/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg" alt="SSPACIA Community" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
               <p className="absolute bottom-4 left-4 text-left font-semibold text-white">Dynamic Spaces</p>
             </div>
           </FadeUp>
           <FadeUp delay={0.3}>
              <div className="group relative h-64 overflow-hidden rounded-2xl shadow-lg">
-              <Image src="/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/Reception Area.jpg" alt="SSPACIA Quality" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
+              <Image src="/Pictures/Reception.jpeg" alt="SSPACIA Quality" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
               <p className="absolute bottom-4 left-4 text-left font-semibold text-white">Professional Support</p>
             </div>
