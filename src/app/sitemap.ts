@@ -20,9 +20,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: route === '' ? 1 : 0.8,
   }));
 
-  // If there were dynamic blog posts with slugs, we would add them here.
-  // Since currently we only have external blog links in siteConfig, 
-  // we'll stick to the main routes.
+  const blogRoutes = siteConfig.blog.posts.map((post) => ({
+    url: `${baseUrl}/blog/${post.id}`,
+    lastModified: new Date(post.date),
+    changeFrequency: 'monthly' as const,
+    priority: 0.7,
+  }));
 
-  return routes;
+  return [...routes, ...blogRoutes];
 }

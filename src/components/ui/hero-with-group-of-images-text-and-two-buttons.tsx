@@ -148,7 +148,7 @@ function Hero() {
               whileHover={{ scale: 1.02, transition: { duration: 0.25 } }}
             >
               <Image
-                src="/IMAGES_SSPACIA/PREMIER HOUSE/ESL04996.JPG"
+                src="/IMAGES_SSPACIA/PREMIER HOUSE/Reception.JPG"
                 alt="SSPACIA Premier House"
                 width={400}
                 height={480}

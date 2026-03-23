@@ -104,7 +104,7 @@ export default function AboutClient() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <FadeUp delay={0.1}>
             <div className="group relative h-64 overflow-hidden rounded-2xl shadow-lg">
-              <Image src="/IMAGES_SSPACIA/PREMIER HOUSE/ESL04996.JPG" alt="SSPACIA Workspace" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
+              <Image src="/IMAGES_SSPACIA/PREMIER HOUSE/Reception.JPG" alt="SSPACIA Workspace" fill className="object-cover transition-transform duration-500 group-hover:scale-110" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
               <p className="absolute bottom-4 left-4 text-left font-semibold text-white">Premier Facilities</p>
             </div>

@@ -1,8 +1,10 @@
 import { siteConfig } from "../../../config/site";
+import { seoConfig } from "../../../config/seo";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { FadeUp } from "../../../components/ui/fade-up";
 import { SectionLabel } from "../../../components/ui/section-label";
+import { StructuredData } from "../../../components/structured-data";
 import { Calendar, Clock, ArrowLeft, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
@@ -20,6 +22,15 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
   return {
     title: `${post.title} | SSPACIA Blog`,
     description: post.excerpt,
+    alternates: { canonical: `${seoConfig.baseUrl}/blog/${slug}` },
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      type: "article",
+      publishedTime: post.date,
+      authors: [post.author],
+      images: [{ url: post.image.src, alt: post.image.alt }],
+    },
   };
 }
 
@@ -31,6 +42,34 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     notFound();
   }
 
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": post.title,
+    "description": post.excerpt,
+    "author": {
+      "@type": "Organization",
+      "name": post.author,
+      "url": seoConfig.baseUrl,
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "SSPACIA",
+      "logo": {
+        "@type": "ImageObject",
+        "url": `${seoConfig.baseUrl}/SspaciaLogo.png`,
+      },
+    },
+    "datePublished": post.date,
+    "dateModified": post.date,
+    "image": `${seoConfig.baseUrl}${post.image.src}`,
+    "url": `${seoConfig.baseUrl}/blog/${post.id}`,
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": `${seoConfig.baseUrl}/blog/${post.id}`,
+    },
+  };
+
   // Get related posts (exclude current)
   const relatedPosts = siteConfig.blog.posts
     .filter((p) => p.id !== slug)
@@ -38,6 +77,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
   return (
     <main className="min-h-screen bg-[#F8F9FA]">
+      <StructuredData data={articleSchema} />
       {/* ── Hero Section ── */}
       <section className="relative h-[70vh] min-h-[500px] w-full overflow-hidden">
         <Image

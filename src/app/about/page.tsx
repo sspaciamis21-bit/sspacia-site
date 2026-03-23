@@ -5,6 +5,7 @@ import AboutClient from "./about-client";
 export const metadata: Metadata = {
   title: seoConfig.pages.about.title,
   description: seoConfig.pages.about.description,
+  alternates: { canonical: `${seoConfig.baseUrl}/about` },
 };
 
 export default function AboutPage() {

@@ -5,6 +5,7 @@ import ContactClient from "./contact-client";
 export const metadata: Metadata = {
   title: seoConfig.pages.contact.title,
   description: seoConfig.pages.contact.description,
+  alternates: { canonical: `${seoConfig.baseUrl}/contact` },
 };
 
 export default function ContactPage() {

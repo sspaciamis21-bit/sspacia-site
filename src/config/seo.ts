@@ -8,13 +8,17 @@ export const seoConfig = {
   ogImage: "/og-image.jpg",
   keywords: [
     "coworking space Ahmedabad",
+    "coworking space CG Road Ahmedabad",
     "shared office Ahmedabad",
     "private cabin Ahmedabad",
     "meeting rooms Ahmedabad",
-    "SSPACIA",
-    "premium workspace",
+    "hot desk Ahmedabad",
+    "office space for rent Ahmedabad",
+    "flexible office space Gujarat",
+    "virtual office Ahmedabad",
     "startup office Ahmedabad",
-    "business center Ahmedabad"
+    "business center Ahmedabad",
+    "SSPACIA",
   ],
   pages: {
     home: {

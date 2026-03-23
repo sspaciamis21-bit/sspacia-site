@@ -162,7 +162,7 @@
         "access_time": "24x7",
         "complementary_meeting_room": "5 hours/month",
         "sdr_plus_adv": "3+1",
-        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/Pivate Cabin.jpg"
+        "image": "/IMAGES_SSPACIA/MERCADO IMAGES/Private Cabin.jpg"
       }
     ],
     "guest_spaces": [
@@ -219,7 +219,7 @@
         "access_time": "24x7",
         "complementary_meeting_room": "2 hours/month",
         "sdr_plus_adv": "2+1",
-        "image": "/IMAGES_SSPACIA/PREMIER HOUSE/Fixed & Flexi Desk.jpeg"
+        "image": "/IMAGES_SSPACIA/PREMIER HOUSE/FixedFlexiDesk.jpeg"
       },
       {
         "type": "Dedicated Cabin",
@@ -276,7 +276,7 @@
           "per_4_hours": 1800,
           "per_day": 3500
         },
-        "image": "/IMAGES_SSPACIA/PREMIER HOUSE/Meeting Room.jpg"
+        "image": "/IMAGES_SSPACIA/PREMIER HOUSE/meeting room.jpg"
       },
       {
         "type": "Board Room",
@@ -286,7 +286,7 @@
           "per_4_hours": 3500,
           "per_day": 6000
         },
-        "image": "/IMAGES_SSPACIA/PREMIER HOUSE/Board room.jpg"
+        "image": "/IMAGES_SSPACIA/PREMIER HOUSE/board room.jpg"
       },
       {
         "type": "Event Room",

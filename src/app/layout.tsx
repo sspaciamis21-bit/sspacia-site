@@ -34,6 +34,10 @@ export const metadata: Metadata = {
   keywords: seoConfig.keywords,
   authors: [{ name: "SSPACIA" }],
   creator: "SSPACIA",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
   openGraph: {
     type: "website",
     locale: "en_IN",
@@ -90,13 +94,98 @@ export default function RootLayout({
     "sameAs": [
       siteConfig.site.social.facebook,
       siteConfig.site.social.instagram,
+      siteConfig.site.social.youtube,
     ],
   };
+
+  const localBusinessData = [
+    {
+      "@context": "https://schema.org",
+      "@type": "CoworkingSpace",
+      "name": "SSPACIA Coworking – CG Road Agarwal Complex",
+      "url": siteUrl,
+      "telephone": siteConfig.site.contact.phone,
+      "email": siteConfig.site.contact.email,
+      "image": `${siteUrl}/Agarwal_images/Reception%20Area.jpg`,
+      "priceRange": "₹₹",
+      "openingHours": "Mo-Su 00:00-23:59",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Agarwal Complex, CG Road",
+        "addressLocality": "Ahmedabad",
+        "addressRegion": "GJ",
+        "postalCode": "380009",
+        "addressCountry": "IN",
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 23.0349279,
+        "longitude": 72.5413010,
+      },
+      "hasMap": "https://maps.app.goo.gl/nv4fsViv3n5JnZKP6",
+      "sameAs": [siteConfig.site.social.facebook, siteConfig.site.social.instagram],
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "CoworkingSpace",
+      "name": "SSPACIA Coworking – CG Road Mercardo",
+      "url": siteUrl,
+      "telephone": siteConfig.site.contact.phone,
+      "email": siteConfig.site.contact.email,
+      "image": `${siteUrl}/IMAGES_SSPACIA/MERCADO%20IMAGES/Mercado%20reception.jpg`,
+      "priceRange": "₹₹",
+      "openingHours": "Mo-Su 00:00-23:59",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Mercardo, CG Road",
+        "addressLocality": "Ahmedabad",
+        "addressRegion": "GJ",
+        "postalCode": "380009",
+        "addressCountry": "IN",
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 23.0349279,
+        "longitude": 72.5413010,
+      },
+      "hasMap": "https://maps.app.goo.gl/hvfuXehGcpgP1FfBA",
+      "sameAs": [siteConfig.site.social.facebook, siteConfig.site.social.instagram],
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "CoworkingSpace",
+      "name": "SSPACIA Coworking – SG Highway Premier House",
+      "url": siteUrl,
+      "telephone": siteConfig.site.contact.phone,
+      "email": siteConfig.site.contact.email,
+      "image": `${siteUrl}/IMAGES_SSPACIA/PREMIER%20HOUSE/Reception.JPG`,
+      "priceRange": "₹₹",
+      "openingHours": "Mo-Su 00:00-23:59",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Premier House, SG Highway",
+        "addressLocality": "Ahmedabad",
+        "addressRegion": "GJ",
+        "postalCode": "380054",
+        "addressCountry": "IN",
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 23.0447083,
+        "longitude": 72.4965942,
+      },
+      "hasMap": "https://maps.app.goo.gl/ZJ948unE5tiks47RA",
+      "sameAs": [siteConfig.site.social.facebook, siteConfig.site.social.instagram],
+    },
+  ];
 
   return (
     <html lang="en">
       <head>
         <StructuredData data={organizationData} />
+        {localBusinessData.map((location, i) => (
+          <StructuredData key={i} data={location} />
+        ))}
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} bg-[#F8F9FA] text-[#212121] antialiased`}

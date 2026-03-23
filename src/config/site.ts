@@ -57,7 +57,7 @@ export const siteConfig = {
       description: "A vibrant, central hub located on CG Road.",
 
       image: {
-        src: "/Pictures/Reception-1.jpeg",
+        src: "/Pictures/Reception.jpeg",
         alt: "Agarwal Complex exterior",
       },
       link: {
