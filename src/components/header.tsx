@@ -6,9 +6,11 @@ import { useState } from "react";
 import { siteConfig } from "../config/site";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useAuth } from "../context/AuthContext";
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
+  const { user, isLoggedIn, logout } = useAuth();
 
   return (
     <header className="fixed inset-x-0 top-0 z-[100] border-b border-[#CFD8DC] bg-[#F8F9FA]/70 backdrop-blur">
@@ -45,14 +47,42 @@ export function Header() {
           ))}
         </nav>
 
-        {/* Desktop Button - right */}
-        <div className="hidden md:flex">
-          <Link
-            href="/book-online"
-            className="rounded-full bg-[#006064] px-5 py-2.5 text-md font-bold text-white shadow-lg shadow-[#006064]/20 transition-all hover:bg-[#004D40] active:scale-95"
-          >
-            Book Now
-          </Link>
+        {/* Desktop Buttons - right */}
+        <div className="hidden md:flex items-center gap-4">
+          {isLoggedIn ? (
+            <div className="flex items-center gap-4">
+              <Link
+                href={user?.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard'}
+                className="text-md font-bold text-[#006064] hover:text-[#004D40] transition-colors"
+              >
+                Dashboard
+              </Link>
+              <button
+                onClick={logout}
+                className="text-md font-bold text-[#424242] hover:text-red-600 transition-colors"
+              >
+                Logout
+              </button>
+              <div className="h-10 w-10 rounded-full bg-[#E0F7FA] text-[#006064] flex items-center justify-center font-bold border border-[#006064]/20 shadow-inner">
+                {user?.name.charAt(0).toUpperCase()}
+              </div>
+            </div>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-md font-bold text-[#424242] hover:text-[#006064] transition-colors"
+              >
+                Log In
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-full bg-[#006064] px-6 py-2.5 text-md font-bold text-white shadow-lg shadow-[#006064]/20 transition-all hover:bg-[#004D40] active:scale-95"
+              >
+                Join us
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile Toggle */}
@@ -87,14 +117,44 @@ export function Header() {
                   {item.label}
                 </Link>
               ))}
-              <div className="pt-4 border-t border-[#CFD8DC]/50 mt-2">
-                <Link
-                  href="/book-online"
-                  onClick={() => setIsOpen(false)}
-                  className="flex w-full items-center justify-center rounded-xl bg-[#006064] py-4 text-base font-bold text-white shadow-xl shadow-[#006064]/20"
-                >
-                  Book Now
-                </Link>
+              <div className="pt-4 border-t border-[#CFD8DC]/50 mt-2 flex flex-col gap-3">
+                {isLoggedIn ? (
+                  <>
+                    <Link
+                      href={user?.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard'}
+                      onClick={() => setIsOpen(false)}
+                      className="flex w-full items-center justify-center rounded-xl border-2 border-[#006064] py-3 text-base font-bold text-[#006064]"
+                    >
+                      Go to Dashboard
+                    </Link>
+                    <button
+                      onClick={() => {
+                        logout();
+                        setIsOpen(false);
+                      }}
+                      className="flex w-full items-center justify-center rounded-xl bg-red-50 py-4 text-base font-bold text-red-600 border border-red-100"
+                    >
+                      Logout
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/login"
+                      onClick={() => setIsOpen(false)}
+                      className="flex w-full items-center justify-center rounded-xl border-2 border-[#006064] py-3 text-base font-bold text-[#006064]"
+                    >
+                      Log In
+                    </Link>
+                    <Link
+                      href="/signup"
+                      onClick={() => setIsOpen(false)}
+                      className="flex w-full items-center justify-center rounded-xl bg-[#006064] py-4 text-base font-bold text-white shadow-xl shadow-[#006064]/20"
+                    >
+                      Join us
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>

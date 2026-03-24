@@ -1,0 +1,239 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────
+
+enum RoleName {
+  ADMIN
+  MANAGER
+  USER
+}
+
+enum PermissionName {
+  view_dashboard
+  view_admin_panel
+  manage_users
+  create_user
+  update_user
+  delete_user
+  manage_roles
+  change_roles
+  view_reports
+  export_reports
+}
+
+enum ProductType {
+  FLEX_DESK
+  FIXED_DESK
+  DEDICATED_CABIN
+  PRIVATE_CABIN
+  EXECUTIVE_CABIN
+  MEETING_ROOM
+  BOARD_ROOM
+  EVENT_ROOM
+}
+
+enum DurationType {
+  PER_HOUR
+  PER_4_HOURS
+  PER_DAY
+  PER_WEEK
+  PER_MONTH
+  PER_3_MONTHS
+  PER_6_MONTHS
+  PER_YEAR
+}
+
+enum AccessTime {
+  BUSINESS_HOURS
+  TWENTY_FOUR_SEVEN
+}
+
+enum SpaceCategory {
+  WORKSPACE
+  GUEST_SPACE
+}
+
+// ─────────────────────────────────────────────────────────
+// AUTH MODELS
+// ─────────────────────────────────────────────────────────
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  isActive  Boolean  @default(true)
+  roleId    Int
+  role      Role     @relation(fields: [roleId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([roleId])
+}
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  name        RoleName         @unique
+  description String?
+  users       User[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id          Int              @id @default(autoincrement())
+  name        PermissionName   @unique
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  assignedAt   DateTime   @default(now())
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+// ─────────────────────────────────────────────────────────
+// LOCATION MODELS
+// ─────────────────────────────────────────────────────────
+
+model City {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  slug      String     @unique
+  isActive  Boolean    @default(true)
+  locations Location[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Location {
+  id        Int             @id @default(autoincrement())
+  cityId    Int
+  city      City            @relation(fields: [cityId], references: [id])
+  name      String
+  slug      String          @unique
+  address   String?         @db.Text
+  mapUrl    String?
+  mapEmbed  String?         @db.Text
+  phone     String?
+  email     String?
+  isActive  Boolean         @default(true)
+  sortOrder Int             @default(0)
+  products  Product[]
+  images    LocationImage[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([cityId])
+}
+
+model LocationImage {
+  id         Int      @id @default(autoincrement())
+  locationId Int
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  url        String
+  alt        String?
+  isPrimary  Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([locationId])
+}
+
+// ─────────────────────────────────────────────────────────
+// PRODUCT MODELS
+// ─────────────────────────────────────────────────────────
+
+model Product {
+  id                       Int              @id @default(autoincrement())
+  locationId               Int
+  location                 Location         @relation(fields: [locationId], references: [id])
+  name                     String
+  slug                     String
+  type                     ProductType
+  category                 SpaceCategory
+  description              String?          @db.Text
+  accessTime               AccessTime?
+  capacity                 Int?
+  quantity                 Int              @default(1)
+  sdrPlusAdv               String?
+  complementaryMeetingRoom String?
+  isActive                 Boolean          @default(true)
+  isFeatured               Boolean          @default(false)
+  sortOrder                Int              @default(0)
+  pricingPlans             PricingPlan[]
+  images                   ProductImage[]
+  amenities                ProductAmenity[]
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  @@unique([locationId, slug])
+  @@index([locationId])
+  @@index([type])
+  @@index([category])
+}
+
+model PricingPlan {
+  id           Int          @id @default(autoincrement())
+  productId    Int
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  durationType DurationType
+  price        Decimal      @db.Decimal(10, 2)
+  oldPrice     Decimal?     @db.Decimal(10, 2)
+  discount     Decimal?     @db.Decimal(5, 2)
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([productId, durationType])
+  @@index([productId])
+}
+
+model ProductImage {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+model Amenity {
+  id       Int              @id @default(autoincrement())
+  name     String           @unique
+  icon     String?
+  products ProductAmenity[]
+}
+
+model ProductAmenity {
+  productId Int
+  amenityId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([productId, amenityId])
+  @@index([productId])
+}
