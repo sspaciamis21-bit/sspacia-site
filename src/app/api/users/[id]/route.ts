@@ -14,6 +14,9 @@ export async function GET(
       where: { id: parseInt(id) },
       include: {
         role: true,
+        assignedLocations: {
+          include: { location: true },
+        },
       },
     });
 
@@ -24,8 +27,15 @@ export async function GET(
       );
     }
 
-    const { password: _, ...userWithoutPassword } = user;
-    return NextResponse.json(userWithoutPassword);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...userWithoutPassword } = user;
+    return NextResponse.json({
+      ...userWithoutPassword,
+      assignedLocations: user.assignedLocations.map((ul) => ({
+        id: ul.location.id,
+        name: ul.location.name,
+      })),
+    });
   } catch (error: any) {
     console.error('Get user error:', error);
     return NextResponse.json(
@@ -43,7 +53,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, email, roleId, isActive, password } = body;
+    const { name, email, roleId, isActive, password, assignedLocationIds } = body;
 
     const data: any = {};
     if (name !== undefined) data.name = name;
@@ -60,11 +70,58 @@ export async function PATCH(
       data,
       include: {
         role: true,
+        assignedLocations: {
+          include: { location: true },
+        },
       },
     });
 
-    const { password: _, ...userWithoutPassword } = user;
-    return NextResponse.json(userWithoutPassword);
+    // Handle location assignment
+    if (assignedLocationIds !== undefined) {
+      await prisma.userLocation.deleteMany({
+        where: { userId: parseInt(id) },
+      });
+
+      if (assignedLocationIds.length > 0) {
+        await prisma.userLocation.createMany({
+          data: assignedLocationIds.map((locId: number) => ({
+            userId: parseInt(id),
+            locationId: locId,
+          })),
+        });
+      }
+
+      // Refetch with updated locations
+      const updatedUser = await prisma.user.findUnique({
+        where: { id: parseInt(id) },
+        include: {
+          role: true,
+          assignedLocations: {
+            include: { location: true },
+          },
+        },
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password: _password, ...userWithoutPassword } = updatedUser!;
+      return NextResponse.json({
+        ...userWithoutPassword,
+        assignedLocations: updatedUser!.assignedLocations.map((ul) => ({
+          id: ul.location.id,
+          name: ul.location.name,
+        })),
+      });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...userWithoutPassword } = user;
+    return NextResponse.json({
+      ...userWithoutPassword,
+      assignedLocations: user.assignedLocations.map((ul) => ({
+        id: ul.location.id,
+        name: ul.location.name,
+      })),
+    });
   } catch (error: any) {
     console.error('Update user error:', error);
     return NextResponse.json(

@@ -45,6 +45,16 @@ export async function GET() {
               }
             }
           }
+        },
+        assignedLocations: {
+          select: {
+            location: {
+              select: {
+                id: true,
+                name: true,
+              }
+            }
+          }
         }
       }
     })
@@ -67,6 +77,10 @@ export async function GET() {
         email: user.email,
         role: user.role.name,
         permissions,
+        assignedLocations: user.assignedLocations.map((ul) => ({
+          id: ul.location.id,
+          name: ul.location.name,
+        })),
       }
     })
 

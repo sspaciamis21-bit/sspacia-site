@@ -47,10 +47,11 @@ export default function LoginPage() {
       const role = data.user.role;
       if (role === 'ADMIN') {
         router.push('/admin/dashboard');
-      } else if (role === 'MANAGER') {
-        router.push('/manager/dashboard');
-      } else {
+      } else if (role === 'USER') {
         router.push('/dashboard');
+      } else {
+        // Any custom role (MANAGER, COMMUNITY_MANAGER, etc.)
+        router.push('/manager/dashboard');
       }
       
       router.refresh();
@@ -107,10 +108,7 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex justify-between items-center ml-4 mr-4">
                 <label className="text-sm font-bold text-[#004D40]">Password</label>
-                <Link href="#" className="text-xs text-[#006064] hover:text-[#004D40] font-bold transition-colors">
-                  Forgot password?
-                </Link>
-              </div>
+                              </div>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-[#9E9E9E] group-focus-within:text-[#006064] transition-colors">
                   <Lock size={18} />

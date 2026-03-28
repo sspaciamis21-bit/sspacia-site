@@ -9,6 +9,7 @@ interface User {
   email: string
   role: string
   permissions: string[]
+  assignedLocations?: { id: number; name: string }[]
 }
 
 interface AuthContextType {

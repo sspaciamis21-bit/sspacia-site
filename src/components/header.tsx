@@ -2,15 +2,27 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { siteConfig } from "../config/site";
-import { Menu, X } from "lucide-react";
+import { Menu, X, ChevronDown, LayoutDashboard, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../context/AuthContext";
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const { user, isLoggedIn, logout } = useAuth();
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <header className="fixed inset-x-0 top-0 z-[100] border-b border-[#CFD8DC] bg-[#F8F9FA]/70 backdrop-blur">
@@ -50,22 +62,47 @@ export function Header() {
         {/* Desktop Buttons - right */}
         <div className="hidden md:flex items-center gap-4">
           {isLoggedIn ? (
-            <div className="flex items-center gap-4">
-              <Link
-                href={user?.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard'}
-                className="text-md font-bold text-[#006064] hover:text-[#004D40] transition-colors"
+            <div className="relative" ref={menuRef}>
+              <button 
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="flex items-center gap-3 hover:opacity-80 transition-opacity"
               >
-                Dashboard
-              </Link>
-              <button
-                onClick={logout}
-                className="text-md font-bold text-[#424242] hover:text-red-600 transition-colors"
-              >
-                Logout
+                <div className="h-10 w-10 rounded-full bg-[#E0F7FA] text-[#006064] flex items-center justify-center font-bold border border-[#006064]/20 shadow-inner">
+                  {user?.name?.charAt(0).toUpperCase()}
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-[#004D40] leading-none">{user?.name}</p>
+                </div>
+                <ChevronDown size={14} className={`text-[#9E9E9E] transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
               </button>
-              <div className="h-10 w-10 rounded-full bg-[#E0F7FA] text-[#006064] flex items-center justify-center font-bold border border-[#006064]/20 shadow-inner">
-                {user?.name.charAt(0).toUpperCase()}
-              </div>
+
+              <AnimatePresence>
+                {isMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl shadow-[#006064]/10 border border-[#CFD8DC]/50 overflow-hidden z-[110] flex flex-col p-1"
+                  >
+                    <Link 
+                      href={user?.role === 'ADMIN' ? '/admin/dashboard' : user?.role === 'MANAGER' ? '/manager/dashboard' : '/dashboard'}
+                      onClick={() => setIsMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-[#424242] hover:bg-[#F8F9FA] hover:text-[#006064] rounded-lg transition-colors"
+                    >
+                      <LayoutDashboard size={16} />
+                      Dashboard
+                    </Link>
+                    <button 
+                      onClick={() => { setIsMenuOpen(false); logout(); }}
+                      className="flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <LogOut size={16} />
+                      Logout
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           ) : (
             <>

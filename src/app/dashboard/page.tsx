@@ -6,7 +6,7 @@ import { FadeUp } from '@/components/ui/fade-up';
 
 export default function UserDashboardPage() {
   return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center p-8 bg-gradient-to-b from-[#F8F9FA] to-white">
+    <div className="flex flex-col items-center justify-center py-12">
       <FadeUp className="text-center max-w-2xl">
         <div className="inline-flex p-6 rounded-3xl bg-indigo-50 text-[#006064] mb-8">
           <Layout size={48} />

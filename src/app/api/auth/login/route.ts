@@ -30,6 +30,9 @@ export async function POST(request: Request) {
             },
           },
         },
+        assignedLocations: {
+          include: { location: true },
+        },
       },
     })
 
@@ -85,6 +88,10 @@ export async function POST(request: Request) {
         email: user.email,
         role: user.role.name,
         permissions,
+        assignedLocations: user.assignedLocations.map((ul) => ({
+          id: ul.location.id,
+          name: ul.location.name,
+        })),
       },
       token,
     })

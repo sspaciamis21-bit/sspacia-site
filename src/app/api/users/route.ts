@@ -9,16 +9,26 @@ export async function GET() {
     const users = await prisma.user.findMany({
       include: {
         role: true,
+        assignedLocations: {
+          include: { location: true },
+        },
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    // Remove passwords from response
+    // Remove passwords from response and format locations
     const usersWithoutPasswords = users.map((user) => {
-      const { password: _, ...u } = user;
-      return u;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...u } = user;
+      return {
+        ...u,
+        assignedLocations: user.assignedLocations.map((ul) => ({
+          id: ul.location.id,
+          name: ul.location.name,
+        })),
+      };
     });
 
     return NextResponse.json(usersWithoutPasswords);
@@ -34,7 +44,7 @@ export async function GET() {
 // POST /api/users - Create a new user manually
 export async function POST(request: Request) {
   try {
-    const { name, email, password, roleId } = await request.json();
+    const { name, email, password, roleId, assignedLocationIds } = await request.json();
 
     if (!name || !email || !password || !roleId) {
       return NextResponse.json(
@@ -62,15 +72,33 @@ export async function POST(request: Request) {
         email,
         password: hashedPassword,
         roleId: parseInt(roleId),
+        assignedLocations: {
+          create: (assignedLocationIds || []).map((locId: number) => ({
+            locationId: locId,
+          })),
+        },
       },
       include: {
         role: true,
+        assignedLocations: {
+          include: { location: true },
+        },
       },
     });
 
-    const { password: _, ...userWithoutPassword } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...userWithoutPassword } = user;
 
-    return NextResponse.json(userWithoutPassword, { status: 201 });
+    return NextResponse.json(
+      {
+        ...userWithoutPassword,
+        assignedLocations: user.assignedLocations.map((ul) => ({
+          id: ul.location.id,
+          name: ul.location.name,
+        })),
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error('Create user error:', error);
     return NextResponse.json(

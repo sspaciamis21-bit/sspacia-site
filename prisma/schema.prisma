@@ -7,96 +7,165 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────────────────────
-// ENUMS
-// ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// DYNAMIC CONFIGURATION TABLES (replaces all enums)
+// ═══════════════════════════════════════════════════════════
 
-enum RoleName {
-  ADMIN
-  MANAGER
-  USER
+/// Admin-managed product types (Flex Desk, Fixed Desk, Dedicated Cabin, etc.)
+/// Replaces the old ProductType enum — add/rename/retire types without migrations.
+model ProductType {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique           // e.g. "FLEX_DESK", "MEETING_ROOM"
+  displayName String                      // e.g. "Flexi Desk", "Meeting Room"
+  slug        String    @unique           // e.g. "flex-desk", "meeting-room"
+  description String?   @db.Text
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
-enum PermissionName {
-  view_dashboard
-  view_admin_panel
-  manage_users
-  create_user
-  update_user
-  delete_user
-  manage_roles
-  change_roles
-  view_reports
-  export_reports
+/// Admin-managed billing durations (Per Hour, Per Day, Per Month, etc.)
+/// Replaces the old DurationType enum.
+model DurationType {
+  id           Int           @id @default(autoincrement())
+  name         String        @unique        // e.g. "PER_HOUR", "PER_MONTH"
+  displayName  String                       // e.g. "Per Hour", "Per Month"
+  slug         String        @unique        // e.g. "per-hour", "per-month"
+  durationDays Int?                         // approximate days (30, 90, 180, 365) — NULL for hourly
+  durationHours Int?                        // for hourly durations (1, 4)
+  sortOrder    Int           @default(0)
+  isActive     Boolean       @default(true)
+  pricingPlans PricingPlan[]
+  bookings     Booking[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
-enum ProductType {
-  FLEX_DESK
-  FIXED_DESK
-  DEDICATED_CABIN
-  PRIVATE_CABIN
-  EXECUTIVE_CABIN
-  MEETING_ROOM
-  BOARD_ROOM
-  EVENT_ROOM
+/// Admin-managed space categories (Workspace, Guest Space, etc.)
+/// Replaces the old SpaceCategory enum.
+model SpaceCategory {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique           // e.g. "WORKSPACE", "GUEST_SPACE"
+  displayName String                      // e.g. "Workspace", "Guest Space"
+  slug        String    @unique
+  description String?   @db.Text
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
-enum DurationType {
-  PER_HOUR
-  PER_4_HOURS
-  PER_DAY
-  PER_WEEK
-  PER_MONTH
-  PER_3_MONTHS
-  PER_6_MONTHS
-  PER_YEAR
+/// Admin-managed access-time options (Business Hours, 24/7, Custom)
+/// Replaces the old AccessTime enum.
+model AccessTimeOption {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique           // e.g. "24X7", "BUSINESS_HOURS"
+  displayName String                      // e.g. "24×7", "Business Hours (9 AM – 7 PM)"
+  startTime   String?                     // "09:00" — NULL means round-the-clock
+  endTime     String?                     // "19:00"
+  isActive    Boolean   @default(true)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
-enum AccessTime {
-  BUSINESS_HOURS
-  TWENTY_FOUR_SEVEN
+/// Admin-managed ticket statuses (Open, In Progress, Resolved, Closed, etc.)
+/// Replaces the old TicketStatus enum.
+model TicketStatus {
+  id          Int             @id @default(autoincrement())
+  name        String          @unique      // e.g. "OPEN", "IN_PROGRESS"
+  displayName String                       // e.g. "Open", "In Progress"
+  color       String?                      // hex for UI badges
+  isFinal     Boolean         @default(false) // true = ticket is considered closed
+  sortOrder   Int             @default(0)
+  isActive    Boolean         @default(true)
+  tickets     SupportTicket[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 }
 
-enum SpaceCategory {
-  WORKSPACE
-  GUEST_SPACE
+/// Admin-managed booking statuses (Pending, Confirmed, Active, Completed, Cancelled)
+model BookingStatus {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique           // e.g. "PENDING", "CONFIRMED", "ACTIVE"
+  displayName String                      // e.g. "Pending", "Confirmed"
+  color       String?
+  isFinal     Boolean   @default(false)   // true = no further transitions
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  bookings    Booking[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
-// ─────────────────────────────────────────────────────────
-// AUTH MODELS
-// ─────────────────────────────────────────────────────────
+/// Admin-managed payment statuses (Pending, Partial, Paid, Refunded, Failed)
+model PaymentStatus {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  displayName String
+  color       String?
+  isFinal     Boolean   @default(false)
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  payments    Payment[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
 
+// ═══════════════════════════════════════════════════════════
+// AUTH & RBAC (fully dynamic roles + permissions)
+// ═══════════════════════════════════════════════════════════
+
+/// Internal admin/staff users who manage the platform.
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  isActive  Boolean  @default(true)
-  roleId    Int
-  role      Role     @relation(fields: [roleId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                Int              @id @default(autoincrement())
+  name              String
+  email             String           @unique
+  password          String
+  phone             String?
+  avatar            String?
+  isActive          Boolean          @default(true)
+  roleId            Int
+  role              Role             @relation(fields: [roleId], references: [id])
+  assignedLocations UserLocation[]
+  supportTickets    SupportTicket[]  @relation("TicketAssignee")
+  activityLogs      ActivityLog[]
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   @@index([email])
   @@index([roleId])
 }
 
+/// Roles are fully dynamic — admin creates them at runtime (Admin, Manager, etc.)
 model Role {
   id          Int              @id @default(autoincrement())
-  name        RoleName         @unique
-  description String?
+  name        String           @unique        // e.g. "admin", "manager", "community_manager"
+  displayName String                          // e.g. "Admin", "Community Manager"
+  description String?          @db.Text
+  isSystem    Boolean          @default(false) // true = cannot be deleted (super-admin)
+  isActive    Boolean          @default(true)
   users       User[]
   permissions RolePermission[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 }
 
+/// Permissions are fully dynamic — admin defines granular access controls.
 model Permission {
   id          Int              @id @default(autoincrement())
-  name        PermissionName   @unique
-  description String?
+  module      String                          // e.g. "users", "products", "bookings", "reports"
+  action      String                          // e.g. "view", "create", "update", "delete", "export"
+  name        String           @unique        // e.g. "users.create", "bookings.view"
+  displayName String                          // e.g. "Create Users", "View Bookings"
+  description String?          @db.Text
   roles       RolePermission[]
   createdAt   DateTime         @default(now())
+
+  @@index([module])
 }
 
 model RolePermission {
@@ -111,39 +180,83 @@ model RolePermission {
   @@index([permissionId])
 }
 
-// ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// CUSTOMER / CLIENT (the people who book spaces)
+// ═══════════════════════════════════════════════════════════
+
+/// External customers — businesses or freelancers who rent your spaces.
+model Customer {
+  id             Int       @id @default(autoincrement())
+  name           String
+  email          String    @unique
+  phone          String?
+  organization   String?                     // company name if applicable
+  gstNumber      String?                     // GST for Indian invoicing
+  billingAddress String?   @db.Text
+  isActive       Boolean   @default(true)
+  bookings       Booking[]
+  supportTickets SupportTicket[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([email])
+  @@index([phone])
+}
+
+// ═══════════════════════════════════════════════════════════
 // LOCATION MODELS
-// ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
 
 model City {
   id        Int        @id @default(autoincrement())
-  name      String     @unique
-  slug      String     @unique
+  name      String     @unique              // "Ahmedabad"
+  slug      String     @unique              // "ahmedabad"
+  state     String?                         // "Gujarat"
   isActive  Boolean    @default(true)
+  sortOrder Int        @default(0)
   locations Location[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 }
 
 model Location {
-  id        Int             @id @default(autoincrement())
-  cityId    Int
-  city      City            @relation(fields: [cityId], references: [id])
-  name      String
-  slug      String          @unique
-  address   String?         @db.Text
-  mapUrl    String?
-  mapEmbed  String?         @db.Text
-  phone     String?
-  email     String?
-  isActive  Boolean         @default(true)
-  sortOrder Int             @default(0)
-  products  Product[]
-  images    LocationImage[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id            Int              @id @default(autoincrement())
+  cityId        Int
+  city          City             @relation(fields: [cityId], references: [id])
+  name          String                       // "Agarwal Complex"
+  slug          String           @unique     // "agarwal-complex-cg-road"
+  area          String?                      // "CG Road", "SG Highway"
+  address       String?          @db.Text
+  mapUrl        String?          @db.Text
+  mapEmbed      String?          @db.Text
+  phone         String?
+  email         String?
+  gstNumber     String?                      // location-level GST
+  isActive      Boolean          @default(true)
+  sortOrder     Int              @default(0)
+  products      Product[]
+  images        LocationImage[]
+  assignedUsers UserLocation[]
+  operatingHours LocationOperatingHour[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   @@index([cityId])
+  @@index([slug])
+}
+
+/// Per-location operating hours (so each branch can have different timings).
+model LocationOperatingHour {
+  id         Int      @id @default(autoincrement())
+  locationId Int
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  dayOfWeek  Int                             // 0=Sunday … 6=Saturday
+  openTime   String                          // "09:00"
+  closeTime  String                          // "21:00"
+  isClosed   Boolean  @default(false)        // true = location closed this day
+
+  @@unique([locationId, dayOfWeek])
+  @@index([locationId])
 }
 
 model LocationImage {
@@ -159,53 +272,77 @@ model LocationImage {
   @@index([locationId])
 }
 
-// ─────────────────────────────────────────────────────────
-// PRODUCT MODELS
-// ─────────────────────────────────────────────────────────
+/// Many-to-many: which staff users are assigned to which locations.
+model UserLocation {
+  userId     Int
+  locationId Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
 
+  @@id([userId, locationId])
+  @@index([userId])
+  @@index([locationId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// PRODUCT MODELS
+// ═══════════════════════════════════════════════════════════
+
+/// A bookable space at a specific location.
 model Product {
-  id                       Int              @id @default(autoincrement())
-  locationId               Int
-  location                 Location         @relation(fields: [locationId], references: [id])
-  name                     String
-  slug                     String
-  type                     ProductType
-  category                 SpaceCategory
-  description              String?          @db.Text
-  accessTime               AccessTime?
-  capacity                 Int?
-  quantity                 Int              @default(1)
-  sdrPlusAdv               String?
-  complementaryMeetingRoom String?
-  isActive                 Boolean          @default(true)
-  isFeatured               Boolean          @default(false)
-  sortOrder                Int              @default(0)
-  pricingPlans             PricingPlan[]
-  images                   ProductImage[]
-  amenities                ProductAmenity[]
-  createdAt                DateTime         @default(now())
-  updatedAt                DateTime         @updatedAt
+  id                          Int              @id @default(autoincrement())
+  locationId                  Int
+  location                    Location         @relation(fields: [locationId], references: [id])
+  typeId                      Int
+  type                        ProductType      @relation(fields: [typeId], references: [id])
+  categoryId                  Int
+  category                    SpaceCategory    @relation(fields: [categoryId], references: [id])
+  accessTimeId                Int?
+  accessTime                  AccessTimeOption? @relation(fields: [accessTimeId], references: [id])
+  name                        String                       // "Dedicated Cabin – Agarwal Complex"
+  slug                        String
+  description                 String?          @db.Text
+  capacity                    Int?                          // seats / person capacity
+  quantity                    Int              @default(1)  // how many units available
+  securityDepositMonths       Int              @default(3)  // refundable deposit = N months rent
+  complementaryMeetingHours   Int?                          // free meeting room hrs/month (e.g. 2, 5)
+  sdr                         Int?                          // SDR count
+  adv                         Int?                          // ADV count
+  isActive                    Boolean          @default(true)
+  isFeatured                  Boolean          @default(false)
+  sortOrder                   Int              @default(0)
+  pricingPlans                PricingPlan[]
+  images                      ProductImage[]
+  amenities                   ProductAmenity[]
+  bookings                    Booking[]
+  createdAt                   DateTime         @default(now())
+  updatedAt                   DateTime         @updatedAt
 
   @@unique([locationId, slug])
   @@index([locationId])
-  @@index([type])
-  @@index([category])
+  @@index([typeId])
+  @@index([categoryId])
 }
 
+/// Pricing per product × duration combination.
+/// e.g. Dedicated Cabin at Mercado → Per Month → ₹11,000
 model PricingPlan {
-  id           Int          @id @default(autoincrement())
-  productId    Int
-  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  durationType DurationType
-  price        Decimal      @db.Decimal(10, 2)
-  oldPrice     Decimal?     @db.Decimal(10, 2)
-  discount     Decimal?     @db.Decimal(5, 2)
-  isActive     Boolean      @default(true)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id             Int          @id @default(autoincrement())
+  productId      Int
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  durationTypeId Int
+  durationType   DurationType @relation(fields: [durationTypeId], references: [id])
+  price          Decimal      @db.Decimal(10, 2) // current price (INR)
+  oldPrice       Decimal?     @db.Decimal(10, 2) // strike-through price for display
+  discount       Decimal?     @db.Decimal(5, 2)  // percentage discount
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  @@unique([productId, durationType])
+  @@unique([productId, durationTypeId])
   @@index([productId])
+  @@index([durationTypeId])
 }
 
 model ProductImage {
@@ -221,11 +358,18 @@ model ProductImage {
   @@index([productId])
 }
 
+/// Amenities are fully dynamic — admin creates them.
 model Amenity {
-  id       Int              @id @default(autoincrement())
-  name     String           @unique
-  icon     String?
-  products ProductAmenity[]
+  id          Int              @id @default(autoincrement())
+  name        String           @unique      // "Ultra-Fast WiFi"
+  slug        String           @unique      // "ultra-fast-wifi"
+  icon        String?                       // icon name or URL
+  description String?          @db.Text
+  isActive    Boolean          @default(true)
+  sortOrder   Int              @default(0)
+  products    ProductAmenity[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
 model ProductAmenity {
@@ -236,4 +380,155 @@ model ProductAmenity {
 
   @@id([productId, amenityId])
   @@index([productId])
+  @@index([amenityId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// BOOKING SYSTEM
+// ═══════════════════════════════════════════════════════════
+
+/// Core booking record — ties a customer to a product for a duration.
+model Booking {
+  id                Int           @id @default(autoincrement())
+  bookingNumber     String        @unique              // auto-generated: "BK-20260328-0001"
+  customerId        Int
+  customer          Customer      @relation(fields: [customerId], references: [id])
+  productId         Int
+  product           Product       @relation(fields: [productId], references: [id])
+  durationTypeId    Int
+  durationType      DurationType  @relation(fields: [durationTypeId], references: [id])
+  statusId          Int
+  status            BookingStatus @relation(fields: [statusId], references: [id])
+
+  // Timing
+  startDate         DateTime                           // booking start
+  endDate           DateTime                           // booking end
+  startTime         String?                            // for hourly: "14:00"
+  endTime           String?                            // for hourly: "18:00"
+  durationUnits     Int           @default(1)          // e.g. 3 (months), 2 (hours)
+
+  // Financials (snapshot at booking time — immune to later price edits)
+  unitPrice         Decimal       @db.Decimal(10, 2)   // price per unit at time of booking
+  totalAmount       Decimal       @db.Decimal(12, 2)   // total before tax
+  taxRate           Decimal?      @db.Decimal(5, 2)    // GST %
+  taxAmount         Decimal?      @db.Decimal(10, 2)   // computed tax
+  grandTotal        Decimal       @db.Decimal(12, 2)   // total + tax
+  securityDeposit   Decimal?      @db.Decimal(10, 2)   // refundable deposit amount
+  depositReturned   Boolean       @default(false)
+
+  seats             Int           @default(1)          // how many seats/desks booked
+  notes             String?       @db.Text
+
+  payments          Payment[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([customerId])
+  @@index([productId])
+  @@index([statusId])
+  @@index([startDate, endDate])
+  @@index([bookingNumber])
+}
+
+/// Payment records against bookings (supports partial payments, deposits, refunds).
+model Payment {
+  id              Int           @id @default(autoincrement())
+  paymentNumber   String        @unique                // "PAY-20260328-0001"
+  bookingId       Int
+  booking         Booking       @relation(fields: [bookingId], references: [id])
+  statusId        Int
+  status          PaymentStatus @relation(fields: [statusId], references: [id])
+  amount          Decimal       @db.Decimal(12, 2)
+  method          String?                              // "UPI", "NEFT", "Cash", "Card"
+  transactionRef  String?                              // external payment reference
+  type            String        @default("PAYMENT")    // "PAYMENT", "DEPOSIT", "REFUND"
+  notes           String?       @db.Text
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([bookingId])
+  @@index([statusId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// SUPPORT TICKETS
+// ═══════════════════════════════════════════════════════════
+
+model SupportTicket {
+  id           Int                @id @default(autoincrement())
+  ticketNumber String             @unique              // "TKT-20260328-0001"
+  customerId   Int?
+  customer     Customer?          @relation(fields: [customerId], references: [id])
+  assigneeId   Int?                                    // staff member assigned
+  assignee     User?              @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  statusId     Int
+  status       TicketStatus       @relation(fields: [statusId], references: [id])
+  name         String                                  // requester name (if no customer record)
+  email        String?
+  phone        String?
+  organization String?
+  spaceType    String?
+  location     String?
+  subject      String?
+  description  String             @db.Text
+  priority     String             @default("MEDIUM")   // LOW, MEDIUM, HIGH, URGENT
+  attachments  TicketAttachment[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([customerId])
+  @@index([assigneeId])
+  @@index([statusId])
+  @@index([ticketNumber])
+}
+
+model TicketAttachment {
+  id              Int           @id @default(autoincrement())
+  supportTicketId Int
+  supportTicket   SupportTicket @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
+  url             String
+  fileName        String?
+  fileSize        Int?                                 // bytes
+  mimeType        String?
+  createdAt       DateTime      @default(now())
+
+  @@index([supportTicketId])
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUDIT / ACTIVITY LOG
+// ═══════════════════════════════════════════════════════════
+
+/// Tracks all admin actions for accountability and debugging.
+model ActivityLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String                                   // "CREATE", "UPDATE", "DELETE"
+  module     String                                   // "users", "products", "bookings"
+  recordId   Int?                                     // ID of the affected record
+  oldData    Json?                                    // previous state (for updates)
+  newData    Json?                                    // new state
+  ipAddress  String?
+  userAgent  String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([module])
+  @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════
+// APPLICATION SETTINGS (key-value config store)
+// ═══════════════════════════════════════════════════════════
+
+/// Global settings the admin can tweak without redeployment.
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique                                // e.g. "default_gst_rate", "booking_prefix"
+  value String @db.Text                               // stored as JSON string
+  group String @default("general")                    // "general", "billing", "notifications"
+
+  @@index([group])
 }

@@ -14,12 +14,25 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
+import { AddUserModal } from '@/components/admin/add-user-modal';
+import { EditUserModal } from '@/components/admin/edit-user-modal';
+
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  isActive: boolean;
+  createdAt: string;
+  role: { id: number; name: string };
+  roleId: number;
+}
 
 export default function AdminUsersPage() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -50,6 +63,10 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleEditUser = (user: User) => {
+    setEditingUser(user);
+  };
+
   const filteredUsers = users.filter(user => 
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -64,7 +81,10 @@ export default function AdminUsersPage() {
         </FadeUp>
         
         <FadeUp delay={0.1}>
-          <button className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#006064] text-white rounded-lg font-bold shadow-lg shadow-[#006064]/20 hover:bg-[#004D40] transition-all transform hover:-translate-y-0.5 active:translate-y-0">
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#006064] text-white rounded-lg font-bold shadow-lg shadow-[#006064]/20 hover:bg-[#004D40] transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+          >
             <UserPlus size={20} />
             Add New Member
           </button>
@@ -166,7 +186,11 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button className="p-2 text-[#9E9E9E] hover:text-[#006064] hover:bg-[#E0F7FA] rounded-md transition-all" title="Edit">
+                          <button 
+                            onClick={() => handleEditUser(user)}
+                            className="p-2 text-[#9E9E9E] hover:text-[#006064] hover:bg-[#E0F7FA] rounded-md transition-all" 
+                            title="Edit"
+                          >
                             <Edit2 size={16} />
                           </button>
                           <button 
@@ -186,6 +210,19 @@ export default function AdminUsersPage() {
           </div>
         </div>
       </FadeUp>
+
+      <AddUserModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={fetchUsers}
+      />
+
+      <EditUserModal
+        isOpen={!!editingUser}
+        user={editingUser}
+        onClose={() => setEditingUser(null)}
+        onSuccess={fetchUsers}
+      />
     </div>
   );
 }

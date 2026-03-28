@@ -9,10 +9,12 @@ import {
   Users, 
   Package, 
   LogOut, 
-  Menu, 
-  X,
   Loader2,
-  User as UserIcon
+  MapPin,
+  ChevronLeft,
+  ChevronRight,
+  Ticket,
+  Shield
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -20,8 +22,11 @@ import { useAuth } from '@/context/AuthContext';
 
 const sidebarItems = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-  { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'Locations', href: '/admin/locations', icon: MapPin },
   { name: 'Products', href: '/admin/products', icon: Package },
+  { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'Roles', href: '/admin/roles', icon: Shield },
+  { name: 'Tickets', href: '/admin/tickets', icon: Ticket },
 ];
 
 export default function AdminLayout({
@@ -63,13 +68,20 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex">
+    <div className="h-screen overflow-hidden bg-[#F8F9FA] flex">
       {/* Sidebar */}
       <aside 
         className={`${
           isSidebarOpen ? 'w-72' : 'w-20'
-        } bg-white border-r border-[#CFD8DC]/50 transition-all duration-300 ease-in-out flex flex-col z-50`}
+        } bg-white border-r border-[#CFD8DC]/50 transition-all duration-300 ease-in-out flex flex-col z-50 relative`}
       >
+        <button 
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="absolute -right-3 top-8 p-1.5 bg-white border border-[#CFD8DC] rounded-full text-[#006064] shadow-sm hover:bg-[#E0F7FA] transition-colors z-[60]"
+        >
+          {isSidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+        </button>
+
         <div className="p-6 flex items-center justify-between overflow-hidden">
           <AnimatePresence mode="wait">
             {isSidebarOpen ? (
@@ -123,39 +135,41 @@ export default function AdminLayout({
           })}
         </nav>
 
-        <div className="p-4 border-t border-[#CFD8DC]/30">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-4 px-4 py-3 text-[#616161] hover:bg-red-50 hover:text-red-600 rounded-lg transition-all group"
-          >
-            <LogOut size={22} className="group-hover:rotate-12 transition-transform" />
-            {isSidebarOpen && <span className="font-bold">Logout</span>}
-          </button>
-        </div>
+        {user && (
+          <div className="border-t border-[#CFD8DC]/30 p-4 shrink-0 flex flex-col gap-2">
+            {isSidebarOpen ? (
+              <div className="flex items-center gap-3 px-2 mb-2 w-full">
+                <div className="h-10 w-10 shrink-0 rounded-lg bg-[#E0F7FA] text-[#006064] flex items-center justify-center border border-[#006064]/10 shadow-inner font-bold">
+                  {user.name?.charAt(0).toUpperCase()}
+                </div>
+                <div className="w-full min-w-0 overflow-hidden">
+                  <p className="text-sm font-bold text-[#004D40] truncate w-full">{user.name}</p>
+                  <p className="text-xs text-[#616161] uppercase tracking-widest truncate">{user.role}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-center mb-2 w-full">
+                 <div className="h-10 w-10 shrink-0 rounded-lg bg-[#E0F7FA] text-[#006064] flex items-center justify-center border border-[#006064]/10 shadow-inner font-bold">
+                  {user.name?.charAt(0).toUpperCase()}
+                </div>
+              </div>
+            )}
+            
+            <button
+               onClick={handleLogout}
+               className="w-full flex items-center gap-4 px-3 py-2.5 text-[#616161] hover:bg-red-50 hover:text-red-600 rounded-lg transition-all group"
+               title="Logout"
+            >
+               <LogOut size={20} className="shrink-0 group-hover:rotate-12 transition-transform" />
+               {isSidebarOpen && <span className="font-bold text-sm whitespace-nowrap">Logout</span>}
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className="h-20 bg-white border-b border-[#CFD8DC]/30 flex items-center justify-between px-8">
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 bg-[#F8F9FA] rounded-lg text-[#006064] hover:bg-[#E0F7FA] transition-colors"
-          >
-            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-bold text-[#004D40]">{user.name}</p>
-              <p className="text-xs text-[#616161] uppercase tracking-widest">{user.role}</p>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-[#E0F7FA] text-[#006064] flex items-center justify-center border border-[#006064]/10 shadow-inner">
-              <UserIcon size={20} />
-            </div>
-          </div>
-        </header>
-
-        <div className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 flex flex-col min-w-0 relative">
+        <div className="flex-1 p-8 overflow-y-auto relative z-0">
           {children}
         </div>
       </main>
