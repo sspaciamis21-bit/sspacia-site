@@ -1,101 +1,154 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyToken } from '@/lib/jwt';
+import { withPermission } from '@/lib/auth/withPermission';
+import { requireAuth } from '@/lib/auth';
 
-interface CreateLocationBody {
-  cityId: number;
-  name: string;
-  slug: string;
-  address?: string;
-  mapUrl?: string;
-  mapEmbed?: string;
-  phone?: string;
-  email?: string;
-  isActive?: boolean;
-  sortOrder?: number;
-}
-
-async function requireAdmin() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth-token')?.value;
-  if (!token) return null;
-  const payload = await verifyToken(token);
-  if (!payload || (payload.role as string) !== 'ADMIN') return null;
-  return payload;
-}
-
-// GET /api/admin/locations - List all locations
-export async function GET() {
+// ─── GET /api/admin/locations ────────────────────────────────────────────────
+// List all locations with pagination. Scoped to assigned locations if any.
+export const GET = withPermission('locations', 'read', async (req: NextRequest) => {
   try {
-    const auth = await requireAdmin();
-    if (!auth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const payload = await requireAuth();
+    if (!payload?.id) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
 
-    const locations = await prisma.location.findMany({
-      where: { isActive: true },
-      include: { city: true },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    const userId = Number(payload.id);
+    const { searchParams } = req.nextUrl;
+
+    const page  = Math.max(1, parseInt(searchParams.get('page')  ?? '1',  10));
+    const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') ?? '50', 10)));
+    const skip  = (page - 1) * limit;
+
+    // Determine location scope from assigned locations
+    const user = await prisma.user.findUnique({
+      where: { id: userId, isActive: true },
+      select: {
+        assignedLocations: { select: { locationId: true } },
+      },
     });
 
-    const data = locations.map((loc) => ({
-      id: loc.id,
-      name: `${loc.name} (${loc.city.name})`,
-      cityId: loc.cityId,
-      slug: loc.slug,
-    }));
-
-    return NextResponse.json({ data });
-  } catch (error) {
-    console.error('GET /api/admin/locations error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-// POST /api/admin/locations - Create a new location
-export async function POST(request: Request) {
-  try {
-    const auth = await requireAdmin();
-    if (!auth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const body: CreateLocationBody = await request.json();
-    const { cityId, name, slug } = body;
+    const assignedIds = user.assignedLocations.map((al) => al.locationId);
+    const scopeWhere = assignedIds.length > 0 ? { id: { in: assignedIds } } : {};
 
-    if (!cityId || !name || !slug) {
+    const [total, locations] = await prisma.$transaction([
+      prisma.location.count({ where: scopeWhere }),
+      prisma.location.findMany({
+        where: scopeWhere,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          address: true,
+          phone: true,
+          email: true,
+          isActive: true,
+          sortOrder: true,
+          city: { select: { id: true, name: true } },
+        },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      }),
+    ]);
+
+    return NextResponse.json({
+      data: locations,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    });
+  } catch (error) {
+    console.error('[LOCATIONS_READ]', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+});
+
+// ─── POST /api/admin/locations ───────────────────────────────────────────────
+// Create a new location.
+export const POST = withPermission('locations', 'create', async (req: NextRequest) => {
+  try {
+    const payload = await requireAuth();
+    if (!payload?.id) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+    }
+
+    const body = await req.json() as Record<string, unknown>;
+
+    // 1. Parse & validate
+    const cityId   = parseInt(String(body.cityId ?? ''), 10);
+    const name     = String(body.name  ?? '').trim();
+    const slug     = String(body.slug  ?? '').trim();
+
+    if (isNaN(cityId) || !name || !slug) {
       return NextResponse.json(
-        { error: 'Missing required fields: cityId, name, slug' },
+        { error: 'Missing or invalid required fields: cityId, name, slug' },
         { status: 400 }
       );
     }
 
-    const location = await prisma.location.create({
-      data: {
-        cityId: Number(cityId),
-        name,
-        slug,
-        address: body.address,
-        mapUrl: body.mapUrl,
-        mapEmbed: body.mapEmbed,
-        phone: body.phone,
-        email: body.email,
-        isActive: body.isActive ?? true,
-        sortOrder: body.sortOrder ?? 0,
-      },
-      include: { city: true },
+    // 2. Duplicate slug check
+    const existing = await prisma.location.findUnique({
+      where: { slug },
+      select: { id: true },
     });
 
-    return NextResponse.json({ data: location }, { status: 201 });
-  } catch (error) {
-    console.error('POST /api/admin/locations error:', error);
+    if (existing) {
+      return NextResponse.json(
+        { error: 'Location with this slug already exists' },
+        { status: 400 }
+      );
+    }
+
+    // 3. Create + activity log in transaction
+    const location = await prisma.$transaction(async (tx) => {
+      const loc = await tx.location.create({
+        data: {
+          cityId,
+          name,
+          slug,
+          address:   String(body.address   ?? ''),
+          mapUrl:    String(body.mapUrl     ?? ''),
+          mapEmbed:  String(body.mapEmbed   ?? ''),
+          phone:     String(body.phone      ?? ''),
+          email:     String(body.email      ?? ''),
+          isActive:  body.isActive !== false,
+          sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+          sortOrder: true,
+          city: { select: { id: true, name: true } },
+          createdAt: true,
+        },
+      });
+
+      // 4. Activity log
+      await tx.activityLog.create({
+        data: {
+          userId:    Number(payload.id),
+          action:    'CREATE',
+          module:    'locations',
+          recordId:  loc.id,
+          newData:   JSON.stringify(loc),
+          ipAddress: req.headers.get('x-forwarded-for') ?? null,
+        },
+      });
+
+      return loc;
+    });
+
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { data: location, message: 'Created successfully' },
+      { status: 201 }
     );
+  } catch (error) {
+    console.error('[LOCATIONS_CREATE]', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

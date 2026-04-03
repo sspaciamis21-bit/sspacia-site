@@ -18,8 +18,13 @@ interface SupportTicket {
   organization: string | null;
   spaceType: string | null;
   location: string | null;
+  locationRel: { id: number; name: string } | null;
+  productTypeId: number | null;
+  productType: { id: number; name: string; displayName: string } | null;
+  category: string | null;
+  subCategory: string | null;
   description: string;
-  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  status: any; // Object ({ name: 'OPEN', color: '#F59E0B', displayName: 'Open' })
   attachments: TicketAttachment[];
   createdAt: string;
   user: {
@@ -36,13 +41,15 @@ export default function AdminTicketsPage() {
   const fetchTickets = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/tickets`);
+      const res = await fetch(`/api/admin/tickets`);
       if (!res.ok) throw new Error('Failed to fetch tickets');
-      const data = await res.json();
-      setTickets(data);
+      const json = await res.json();
+      // Extract tickets from 'data' property of the standardized response
+      setTickets(json.data ?? []);
     } catch (error) {
       console.error(error);
       toast.error('Failed to load tickets.');
+      setTickets([]);
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +63,7 @@ export default function AdminTicketsPage() {
 
   const handleStatusChange = async (id: number, newStatus: string) => {
     try {
-      const res = await fetch(`/api/tickets`, {
+      const res = await fetch(`/api/admin/tickets`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -67,24 +74,17 @@ export default function AdminTicketsPage() {
       if (!res.ok) throw new Error('Failed to update status');
       
       toast.success('Ticket status updated');
-      setTickets(prev => prev.map(t => t.id === id ? { ...t, status: newStatus as any } : t));
+      setTickets(prev => prev.map(t => t.id === id ? { ...t, status: { name: newStatus } } : t));
     } catch (error) {
       console.error(error);
       toast.error('Could not update ticket status');
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'OPEN': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'IN_PROGRESS': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'RESOLVED': return 'bg-green-100 text-green-700 border-green-200';
-      case 'CLOSED': return 'bg-gray-100 text-gray-700 border-gray-200';
-      default: return 'bg-gray-100 text-gray-700';
-    }
-  };
 
-  const getStatusIcon = (status: string) => {
+
+  const getStatusIcon = (statusInput: any) => {
+    const status = typeof statusInput === 'object' && statusInput !== null ? statusInput.name : statusInput;
     switch (status) {
       case 'OPEN': return <AlertCircle className="w-4 h-4" />;
       case 'IN_PROGRESS': return <RefreshCw className="w-4 h-4 animate-spin-slow" />;
@@ -148,7 +148,10 @@ export default function AdminTicketsPage() {
               transition={{ delay: idx * 0.05 }}
               className="bg-white rounded-2xl border border-[#CFD8DC] p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden"
             >
-              <div className={`absolute top-0 left-0 w-1.5 h-full ${ticket.status === 'OPEN' ? 'bg-amber-400' : ticket.status === 'IN_PROGRESS' ? 'bg-blue-400' : ticket.status === 'RESOLVED' ? 'bg-green-400' : 'bg-gray-400'}`} />
+              <div 
+                className="absolute top-0 left-0 w-1.5 h-full" 
+                style={{ backgroundColor: (typeof ticket.status === 'object' && ticket.status?.color) ? ticket.status.color : '#9CA3AF' }}
+              />
               
               <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
                 <div className="flex-1">
@@ -156,9 +159,18 @@ export default function AdminTicketsPage() {
                     <span className="text-sm font-bold text-[#006064] bg-[#E0F7FA] px-3 py-1 rounded-full">
                       {ticket.ticketNumber}
                     </span>
-                    <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(ticket.status)}`}>
+                    <span 
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border"
+                      style={{
+                        backgroundColor: (typeof ticket.status === 'object' && ticket.status?.color) ? `${ticket.status.color}15` : '#F3F4F6',
+                        color: (typeof ticket.status === 'object' && ticket.status?.color) ? ticket.status.color : '#374151',
+                        borderColor: (typeof ticket.status === 'object' && ticket.status?.color) ? `${ticket.status.color}30` : '#E5E7EB'
+                      }}
+                    >
                       {getStatusIcon(ticket.status)}
-                      {ticket.status.replace('_', ' ')}
+                      {typeof ticket.status === 'object' 
+                        ? (ticket.status.displayName || ticket.status.name?.replace('_', ' '))
+                        : ticket.status?.replace('_', ' ')}
                     </span>
                     <div className="text-sm text-[#757575] flex items-center gap-1.5 whitespace-nowrap ml-auto">
                       <Clock className="w-4 h-4" />
@@ -166,7 +178,15 @@ export default function AdminTicketsPage() {
                     </div>
                   </div>
                   
-                  <h3 className="text-lg font-bold text-[#212121] mb-1">{ticket.spaceType || 'General Issue'} - {ticket.location || 'Unknown Location'}</h3>
+                  <h3 className="text-lg font-bold text-[#212121] mb-1">
+                    {ticket.productType?.displayName || ticket.spaceType || 'Workspace'} - {ticket.locationRel?.name || ticket.location || 'Unknown Location'}
+                  </h3>
+
+                  {(ticket.category || ticket.subCategory) && (
+                    <p className="text-xs font-bold text-[#006064] uppercase tracking-wider mb-3 bg-[#E0F7FA]/50 inline-block px-2 py-0.5 rounded">
+                       {ticket.category} {ticket.subCategory ? `› ${ticket.subCategory}` : ''}
+                    </p>
+                  )}
                   
                   <div className="bg-[#F8F9FA] p-4 rounded-xl text-sm text-[#424242] mb-4 border border-[#CFD8DC]/50 leading-relaxed">
                     {ticket.description}
@@ -211,7 +231,7 @@ export default function AdminTicketsPage() {
                   <div className="p-4 bg-white rounded-xl border border-[#CFD8DC]/50">
                     <label className="block text-xs font-bold text-[#757575] uppercase tracking-wider mb-2">Update Status</label>
                     <select
-                      value={ticket.status}
+                      value={typeof ticket.status === 'object' && ticket.status !== null ? ticket.status.name : ticket.status}
                       onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
                       className="w-full text-sm rounded-lg border border-[#CFD8DC] bg-white px-3 py-2 outline-none transition-all focus:border-[#006064] focus:ring-1 focus:ring-[#006064]/20"
                     >

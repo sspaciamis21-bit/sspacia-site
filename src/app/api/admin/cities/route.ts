@@ -1,64 +1,82 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyToken } from '@/lib/jwt';
+import { withPermission } from '@/lib/auth/withPermission';
+import { requireAuth } from '@/lib/auth';
 
-export async function GET() {
+// ─── GET /api/admin/cities ────────────────────────────────────────────────────
+export const GET = withPermission('locations', 'read', async () => {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth-token')?.value;
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const payload = await verifyToken(token);
-    if (!payload || (payload.role as string) !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const cities = await prisma.city.findMany({
-      orderBy: { name: 'asc' },
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        isActive: true,
+        sortOrder: true,
+        _count: { select: { locations: true } },
+      },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
-    
+
     return NextResponse.json({ data: cities });
   } catch (error) {
-    console.error('GET /api/admin/cities error:', error);
+    console.error('[CITIES_READ]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: Request) {
+// ─── POST /api/admin/cities ───────────────────────────────────────────────────
+export const POST = withPermission('locations', 'create', async (req: NextRequest) => {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth-token')?.value;
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const payload = await verifyToken(token);
-    if (!payload || (payload.role as string) !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const payload = await requireAuth();
+    if (!payload?.id) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { name, slug, isActive } = body;
+    const body = await req.json() as Record<string, unknown>;
+    const name = String(body.name ?? '').trim();
+    const slug = String(body.slug ?? '').trim();
 
     if (!name || !slug) {
-      return NextResponse.json(
-        { error: 'Missing required fields: name, slug' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'name and slug are required' }, { status: 400 });
     }
 
-    const city = await prisma.city.create({
-      data: {
-        name,
-        slug,
-        isActive: isActive ?? true,
-      },
+    // Duplicate check
+    const existing = await prisma.city.findUnique({ where: { slug }, select: { id: true } });
+    if (existing) {
+      return NextResponse.json({ error: 'A city with this slug already exists' }, { status: 400 });
+    }
+
+    const city = await prisma.$transaction(async (tx) => {
+      const c = await tx.city.create({
+        data: {
+          name,
+          slug,
+          isActive:  body.isActive  !== false,
+          sortOrder: body.sortOrder !== undefined ? Number(body.sortOrder) : 0,
+        },
+        select: { id: true, name: true, slug: true, isActive: true, sortOrder: true },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId:    Number(payload.id),
+          action:    'CREATE',
+          module:    'locations',
+          recordId:  c.id,
+          newData:   JSON.stringify(c),
+          ipAddress: req.headers.get('x-forwarded-for') ?? null,
+        },
+      });
+
+      return c;
     });
 
-    return NextResponse.json({ data: city }, { status: 201 });
+    return NextResponse.json({ data: city, message: 'Created successfully' }, { status: 201 });
   } catch (error) {
-    console.error('POST /api/admin/cities error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('[CITIES_CREATE]', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
-
+});

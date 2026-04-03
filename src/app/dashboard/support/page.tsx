@@ -7,29 +7,88 @@ import {
   CheckCircle2, AlertCircle, Image as ImageIcon, Send, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
-import { siteConfig } from "../../../config/site";
 import { useAuth } from "@/context/AuthContext";
-
-const spaceTypes = [
-  "Flex Desk", "Fixed Desk", "Dedicated Cabin", "Private Cabin",
-  "Executive Cabin", "Meeting Room", "Board Room", "Event Room", "Other"
-];
-
-const locations = siteConfig.locations.map(loc => `${loc.name}, Ahmedabad`);
-
-// Using Filestack instead of local base64 encoding
 
 export default function DashboardSupportPage() {
   const { user } = useAuth();
   
-  const [formData, setFormData] = useState({
-    name: "", organization: "", spaceType: "", location: "", description: "",
+  const [metadata, setMetadata] = useState<{ locations: { id: number, name: string }[], productTypes: { id: number, name: string }[] }>({
+    locations: [],
+    productTypes: []
   });
+  const [formData, setFormData] = useState({
+    name: "", organization: "", productTypeId: "", locationId: "", description: "",
+    category: "", subCategory: ""
+  });
+  const subOptionsData = {
+    "House Keeping": [
+      "Cleaning not done properly (dust, stains, or unclean surfaces)",
+      "Washrooms not cleaned or maintained",
+      "Trash bins not emptied or overflowing",
+      "Floor not mopped or cleaned",
+      "Cleaning staff not available or irregular",
+      "Bad odor or hygiene issue",
+      "Pest problem (insects, cockroaches, etc.)",
+      "Other:"
+    ],
+    "Pantry": [
+      "Cleanliness issue (unclean area, smell, overflowing bin, dirty utensils)",
+      "Appliance not working (microwave, refrigerator, water dispenser, coffee machine, etc.)",
+      "Pantry supplies missing (tea, coffee, sugar, milk, tissue, cups, etc.)",
+      "Maintenance issue (electrical socket, lighting, leakage, damaged furniture, etc.)",
+      "Hygiene or safety concern (pests, wet floor, food waste, etc.)",
+      "Other:"
+    ],
+    "IT": [
+      "Internet not working or slow connection",
+      "Wi-Fi not accessible or unstable",
+      "System not starting or crashing frequently",
+      "Printer / scanner not working",
+      "Email or login access issue",
+      "Software installation or update required",
+      "Network cable or LAN port issue",
+      "Projector / display screen not working",
+      "Data loss or file access issue",
+      "Other:"
+    ],
+    "Reception": [
+      "Reception desk unattended / no staff available",
+      "Visitor not attended properly",
+      "Phone or intercom not working",
+      "Poor behavior or unprofessional conduct",
+      "Visitor entry not recorded properly",
+      "Waiting area not clean or organized",
+      "Lights / air conditioning not working",
+      "Signage or display board issue",
+      "Delivery or courier not handled properly",
+      "Other:"
+    ]
+  };
   const [filestackUrls, setFilestackUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isLoadingMetadata, setIsLoadingMetadata] = useState(true);
+
+  // Fetch dropdown data on mount
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      try {
+        const response = await fetch("/api/public/support/metadata");
+        if (response.ok) {
+          const json = await response.json();
+          if (json.data) setMetadata(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch support metadata:", err);
+        toast.error("Failed to load form options. Please refresh.");
+      } finally {
+        setIsLoadingMetadata(false);
+      }
+    };
+    fetchMetadata();
+  }, []);
 
   // Pre-fill name from authenticated user
   useEffect(() => {
@@ -40,7 +99,11 @@ export default function DashboardSupportPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: value,
+      ...(name === "category" ? { subCategory: "" } : {})
+    }));
   };
 
   const removeFile = (index: number) => {
@@ -63,7 +126,7 @@ export default function DashboardSupportPage() {
       for (let i = 0; i < files.length; i++) {
         const formData = new FormData();
         formData.append("file", files[i]);
-        const response = await fetch("/api/upload-image", {
+        const response = await fetch("/api/admin/upload-image", {
           method: "POST",
           body: formData,
         });
@@ -88,8 +151,8 @@ export default function DashboardSupportPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.location || !formData.spaceType || !formData.description) {
-      toast.error("Please fill in all required fields");
+    if (!formData.name || !formData.locationId || !formData.productTypeId || !formData.category || !formData.subCategory || !formData.description) {
+      toast.error("Please fill in all required fields including ticket category and sub-category");
       return;
     }
 
@@ -99,14 +162,16 @@ export default function DashboardSupportPage() {
       const payload = {
         name: formData.name,
         organization: formData.organization,
-        spaceType: formData.spaceType,
-        location: formData.location,
+        productTypeId: formData.productTypeId,
+        locationId: formData.locationId,
+        category: formData.category,
+        subCategory: formData.subCategory,
         description: formData.description,
         userId: user?.id,
         filestackUrls: filestackUrls,
       };
 
-      const response = await fetch("/api/tickets", {
+      const response = await fetch("/api/admin/tickets", {
         method: "POST",
         headers: {
           "Content-Type": "application/json", 
@@ -117,14 +182,24 @@ export default function DashboardSupportPage() {
       if (response.ok) {
         setIsSuccess(true);
         toast.success("Ticket raised successfully!");
-        setFormData({ name: user?.name || "", organization: "", spaceType: "", location: "", description: "" });
+        setFormData({ 
+          name: user?.name || "", 
+          organization: "", 
+          productTypeId: "", 
+          locationId: "", 
+          description: "",
+          category: "",
+          subCategory: ""
+        });
         setFilestackUrls([]);
       } else {
-        throw new Error("Failed to create ticket");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to create ticket");
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error("Failed to raise ticket. Please check the connection and try again.");
+      const message = error instanceof Error ? error.message : "Failed to raise ticket. Please check the connection and try again.";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -169,23 +244,33 @@ export default function DashboardSupportPage() {
   }
 
   return (
-    <div className="pb-8">
-      <div className="mb-8 pl-2">
-        <motion.h1 
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-3xl font-bold text-[#004D40]"
+    <div className="max-w-4xl mx-auto space-y-10 pb-20">
+      <div className="mb-8 pl-2 flex items-center gap-6">
+        <motion.div
+           initial={{ opacity: 0, scale: 0.9 }}
+           animate={{ opacity: 1, scale: 1 }}
+           className="h-20 w-20 bg-[var(--primary)]/10 rounded-3xl flex items-center justify-center border border-[var(--primary)]/20 shadow-inner group"
         >
-          Raise a Support Ticket
-        </motion.h1>
-        <motion.p 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className="text-[#616161] mt-2"
-        >
-          Experiencing an issue or need assistance with your workspace? Fill out the form below.
-        </motion.p>
+          <AlertCircle className="h-10 w-10 text-[var(--primary)] group-hover:scale-110 transition-transform duration-500" />
+        </motion.div>
+        
+        <div>
+          <motion.h1 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-3xl md:text-4xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight italic"
+          >
+            Support <span className="text-[var(--primary)] not-italic">Node</span>
+          </motion.h1>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="text-[#616161] mt-2 font-bold text-sm uppercase tracking-widest opacity-70"
+          >
+            Experiencing an issue? Deploy a priority support ticket below.
+          </motion.p>
+        </div>
       </div>
 
       <div className="max-w-4xl">
@@ -193,32 +278,34 @@ export default function DashboardSupportPage() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="relative overflow-hidden rounded-3xl border border-[#CFD8DC] bg-white p-6 shadow-sm md:p-8"
+          className="relative overflow-hidden rounded-[3rem] border border-[var(--outline-variant)] bg-[var(--surface-lowest)] p-10 md:p-12 shadow-sm"
         >
-          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#E0F7FA]/30 blur-3xl pointer-events-none" />
+          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[var(--primary)]/5 blur-[100px] pointer-events-none group-hover:bg-[var(--primary)]/10 transition-colors" />
           
-          <form onSubmit={handleSubmit} className="relative space-y-6">
-            <div className="grid gap-6 md:grid-cols-2">
-              <motion.div variants={itemVariants} className="space-y-2">
-                <label htmlFor="name" className="flex items-center gap-2 text-sm font-semibold text-[#424242]">
-                  <User className="h-4 w-4 text-[#006064]" />
-                  Full Name <span className="text-red-500">*</span>
+          <form onSubmit={handleSubmit} className="relative space-y-10">
+            <div className="grid gap-10 md:grid-cols-2">
+              <motion.div variants={itemVariants} className="space-y-3">
+                <label htmlFor="name" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
+                  <User className="h-4 w-4 text-[var(--primary)]" />
+                  Full Name <span className="text-red-500 font-bold">*</span>
                 </label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  required
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  placeholder="John Doe"
-                  className="w-full rounded-xl border border-[#CFD8DC] bg-[#F8F9FA] px-4 py-3 outline-none transition-all focus:border-[#006064] focus:bg-white focus:ring-2 focus:ring-[#006064]/20"
-                />
+                <div className="relative group/field">
+                  <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    required
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    placeholder="John Doe"
+                    className="w-full rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50 text-[15px]"
+                  />
+                </div>
               </motion.div>
 
-              <motion.div variants={itemVariants} className="space-y-2">
-                <label htmlFor="organization" className="flex items-center gap-2 text-sm font-semibold text-[#424242]">
-                  <Building2 className="h-4 w-4 text-[#006064]" />
+              <motion.div variants={itemVariants} className="space-y-3">
+                <label htmlFor="organization" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
+                  <Building2 className="h-4 w-4 text-[var(--primary)]" />
                   Organization
                 </label>
                 <input
@@ -228,86 +315,168 @@ export default function DashboardSupportPage() {
                   value={formData.organization}
                   onChange={handleInputChange}
                   placeholder="Company Name"
-                  className="w-full rounded-xl border border-[#CFD8DC] bg-[#F8F9FA] px-4 py-3 outline-none transition-all focus:border-[#006064] focus:bg-white focus:ring-2 focus:ring-[#006064]/20"
+                  className="w-full rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50 text-[15px]"
                 />
               </motion.div>
 
-              <motion.div variants={itemVariants} className="space-y-2">
-                <label htmlFor="spaceType" className="flex items-center gap-2 text-sm font-semibold text-[#424242]">
-                  <Layout className="h-4 w-4 text-[#006064]" />
-                  Select Space Type <span className="text-red-500">*</span>
+              <motion.div variants={itemVariants} className="space-y-3">
+                <label htmlFor="spaceType" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
+                  <Layout className="h-4 w-4 text-[var(--primary)]" />
+                  Select Space Type <span className="text-red-500 font-bold">*</span>
                 </label>
-                <select
-                  id="spaceType"
-                  name="spaceType"
-                  required
-                  value={formData.spaceType}
-                  onChange={handleInputChange}
-                  className="w-full appearance-none rounded-xl border border-[#CFD8DC] bg-[#F8F9FA] px-4 py-3 outline-none transition-all focus:border-[#006064] focus:bg-white focus:ring-2 focus:ring-[#006064]/20"
-                >
-                  <option value="" disabled>Select a workspace</option>
-                  {spaceTypes.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
+                <div className="relative group/field">
+                  <select
+                    id="productTypeId"
+                    name="productTypeId"
+                    required
+                    value={formData.productTypeId}
+                    onChange={handleInputChange}
+                    className="w-full appearance-none rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] text-[15px] cursor-pointer"
+                  >
+                    <option value="" disabled className="font-bold">Select a workspace</option>
+                    {metadata.productTypes.map(type => (
+                      <option key={type.id} value={type.id.toString()} className="font-bold">{type.name}</option>
+                    ))}
+                    {isLoadingMetadata && <option disabled className="font-bold">Loading types...</option>}
+                  </select>
+                </div>
               </motion.div>
 
-              <motion.div variants={itemVariants} className="space-y-2">
-                <label htmlFor="location" className="flex items-center gap-2 text-sm font-semibold text-[#424242]">
-                  <MapPin className="h-4 w-4 text-[#006064]" />
-                  Office Location <span className="text-red-500">*</span>
+              <motion.div variants={itemVariants} className="space-y-3">
+                <label htmlFor="location" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
+                  <MapPin className="h-4 w-4 text-[var(--primary)]" />
+                  Office Location <span className="text-red-500 font-bold">*</span>
                 </label>
-                <select
-                  id="location"
-                  name="location"
-                  required
-                  value={formData.location}
-                  onChange={handleInputChange}
-                  className="w-full appearance-none rounded-xl border border-[#CFD8DC] bg-[#F8F9FA] px-4 py-3 outline-none transition-all focus:border-[#006064] focus:bg-white focus:ring-2 focus:ring-[#006064]/20"
-                >
-                  <option value="" disabled>Select location</option>
-                  {locations.map(loc => (
-                    <option key={loc} value={loc}>{loc}</option>
-                  ))}
-                </select>
+                <div className="relative group/field">
+                  <select
+                    id="locationId"
+                    name="locationId"
+                    required
+                    value={formData.locationId}
+                    onChange={handleInputChange}
+                    className="w-full appearance-none rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] text-[15px] cursor-pointer"
+                  >
+                    <option value="" disabled className="font-bold">Select location</option>
+                    {metadata.locations.map(loc => (
+                      <option key={loc.id} value={loc.id.toString()} className="font-bold">{loc.name}</option>
+                    ))}
+                    {isLoadingMetadata && <option disabled className="font-bold">Loading locations...</option>}
+                  </select>
+                </div>
               </motion.div>
+
+              <motion.div variants={itemVariants} className="space-y-3">
+                <label htmlFor="category" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
+                  <Layout className="h-4 w-4 text-[var(--primary)]" />
+                  Issue Classification <span className="text-red-500 font-bold">*</span>
+                </label>
+                <div className="relative group/field">
+                  <select
+                    id="category"
+                    name="category"
+                    required
+                    value={formData.category}
+                    onChange={handleInputChange}
+                    className="w-full appearance-none rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] text-[15px] cursor-pointer"
+                  >
+                    <option value="" disabled className="font-bold">Select category</option>
+                    <option value="House Keeping" className="font-bold">House Keeping</option>
+                    <option value="Pantry" className="font-bold">Pantry</option>
+                    <option value="IT" className="font-bold">IT</option>
+                    <option value="Reception" className="font-bold">Reception</option>
+                    <option value="Other" className="font-bold">Other</option>
+                  </select>
+                </div>
+              </motion.div>
+
+              {(formData.category && formData.category !== "Other") && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  variants={itemVariants} 
+                  className="space-y-3 md:col-span-2"
+                >
+                  <label htmlFor="subCategory" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
+                    <AlertCircle className="h-4 w-4 text-[var(--primary)]" />
+                    Specific Anomaly <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <div className="relative group/field">
+                    <select
+                      id="subCategory"
+                      name="subCategory"
+                      required
+                      value={formData.subCategory}
+                      onChange={handleInputChange}
+                      className="w-full appearance-none rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] text-[15px] cursor-pointer"
+                    >
+                      <option value="" disabled className="font-bold">Select specific issue</option>
+                      {subOptionsData[formData.category as keyof typeof subOptionsData]?.map((option) => (
+                        <option key={option} value={option} className="font-bold">{option}</option>
+                      ))}
+                    </select>
+                  </div>
+                </motion.div>
+              )}
+
+              {formData.category === "Other" && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  variants={itemVariants} 
+                  className="space-y-3 md:col-span-2"
+                >
+                  <label htmlFor="subCategory" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
+                    <AlertCircle className="h-4 w-4 text-[var(--primary)]" />
+                    Manual Specification <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="subCategory"
+                    name="subCategory"
+                    required
+                    value={formData.subCategory}
+                    onChange={handleInputChange}
+                    placeholder="Specify your concern..."
+                    className="w-full rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50 text-[15px]"
+                  />
+                </motion.div>
+              )}
             </div>
 
-            <motion.div variants={itemVariants} className="space-y-2">
-              <label htmlFor="description" className="flex items-center gap-2 text-sm font-semibold text-[#424242]">
-                <FileText className="h-4 w-4 text-[#006064]" />
-                Description of Issue <span className="text-red-500">*</span>
+            <motion.div variants={itemVariants} className="space-y-3">
+              <label htmlFor="description" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
+                <FileText className="h-4 w-4 text-[var(--primary)]" />
+                Description of Issue
               </label>
               <textarea
                 id="description"
                 name="description"
-                required
-                rows={4}
+                rows={5}
                 value={formData.description}
                 onChange={handleInputChange}
-                placeholder="Please describe the issue in detail..."
-                className="w-full rounded-xl border border-[#CFD8DC] bg-[#F8F9FA] px-4 py-3 outline-none transition-all focus:border-[#006064] focus:bg-white focus:ring-2 focus:ring-[#006064]/20"
+                placeholder="Please describe the anomaly in detail for our technicians..."
+                className="w-full rounded-[2rem] border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-6 py-5 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50 text-[15px] leading-relaxed shadow-inner"
               />
             </motion.div>
 
-            <motion.div variants={itemVariants} className="space-y-4">
-              <label className="flex items-center gap-2 text-sm font-semibold text-[#424242]">
-                <Upload className="h-4 w-4 text-[#006064]" />
-                Upload Images or Video (Max 5MB total)
+            <motion.div variants={itemVariants} className="space-y-5">
+              <label className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
+                <Upload className="h-4 w-4 text-[var(--primary)]" />
+                Evidence Payload (Max 5MB total)
               </label>
               
               <div 
                 onClick={() => !isUploading && fileInputRef.current?.click()}
-                className={`group relative flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#CFD8DC] bg-[#F8F9FA] py-8 transition-all hover:border-[#006064] hover:bg-[#E0F7FA]/10 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`group relative flex cursor-pointer flex-col items-center justify-center rounded-[2.5rem] border-2 border-dashed border-[var(--outline-variant)] bg-[var(--surface-low)]/30 py-10 transition-all hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''} shadow-inner`}
               >
-                <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#E0F7FA] text-[#006064] transition-transform group-hover:scale-110">
-                  {isUploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--primary)]/10 text-[var(--primary)] transition-all group-hover:scale-110 group-hover:rotate-12 shadow-sm">
+                  {isUploading ? <Loader2 className="h-8 w-8 animate-spin" /> : <Upload className="h-8 w-8" />}
                 </div>
-                <p className="text-center text-sm font-medium text-[#424242]">
-                  {isUploading ? 'Uploading...' : 'Click to upload'}
+                <p className="text-center text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest italic group-hover:text-[var(--primary)] transition-colors">
+                  {isUploading ? 'Encrypting Payload...' : 'Click to add operational assets'}
                 </p>
-                <p className="mt-1 text-center text-xs text-[#757575]">
-                  Supports Images, Videos, and Documents
+                <p className="mt-2 text-center text-[10px] font-bold text-[#9E9E9E] uppercase tracking-tighter opacity-70">
+                  Images, Videos, and PDF Reports
                 </p>
                 <input
                   type="file"
@@ -325,7 +494,7 @@ export default function DashboardSupportPage() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4"
+                    className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4"
                   >
                     {filestackUrls.map((url, index) => (
                       <motion.div
@@ -333,12 +502,14 @@ export default function DashboardSupportPage() {
                         layout
                         initial={{ scale: 0.8, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
-                        className="group relative h-20 overflow-hidden rounded-xl border border-[#CFD8DC] bg-white shadow-sm"
+                        className="group relative h-24 overflow-hidden rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 shadow-sm hover:shadow-md transition-shadow group/item"
                       >
-                        <div className="flex h-full flex-col items-center justify-center p-2 text-center">
-                          <ImageIcon className="mb-1 h-5 w-5 text-[#006064]" />
-                          <p className="line-clamp-1 text-[10px] font-medium text-[#424242]">
-                            Attachment {index + 1}
+                        <div className="flex h-full flex-col items-center justify-center p-3 text-center">
+                          <div className="p-2 bg-[var(--primary)]/10 rounded-lg mb-1 group-hover/item:scale-110 transition-transform">
+                             <ImageIcon className="h-4 w-4 text-[var(--primary)]" />
+                          </div>
+                          <p className="line-clamp-1 text-[9px] font-bold text-[#1B1C1C] uppercase tracking-tighter italic">
+                            Asset {index + 1}
                           </p>
                         </div>
                         <button
@@ -347,9 +518,9 @@ export default function DashboardSupportPage() {
                             e.stopPropagation();
                             removeFile(index);
                           }}
-                          className="absolute right-1 top-1 rounded-full bg-red-500 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                          className="absolute right-2 top-2 rounded-xl bg-red-500 p-1.5 text-white opacity-0 transition-all group-hover:opacity-100 shadow-lg hover:scale-110"
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-3 h-3" />
                         </button>
                       </motion.div>
                     ))}
@@ -358,28 +529,28 @@ export default function DashboardSupportPage() {
               </AnimatePresence>
             </motion.div>
 
-            <motion.div variants={itemVariants} className="flex gap-2 rounded-xl bg-amber-50 p-4 text-amber-800">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <p className="text-xs">
-                Our support team responds typically within 2 hours during business hours.
+            <motion.div variants={itemVariants} className="flex gap-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-5 text-amber-700">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <p className="text-[11px] font-bold uppercase tracking-widest leading-relaxed italic opacity-80">
+                Critical Note: Our support team typically responds within <span className="text-amber-700 font-black">2 business hours</span> for priority member reports.
               </p>
             </motion.div>
 
-            <motion.div variants={itemVariants}>
+            <motion.div variants={itemVariants} className="pt-6">
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-[#006064] px-8 py-3 text-sm font-bold text-white shadow-md shadow-[#006064]/20 transition-all hover:bg-[#004D40] disabled:cursor-not-allowed disabled:opacity-70"
+                className="group relative flex items-center justify-center gap-4 overflow-hidden rounded-[1.5rem] bg-[#1B1B1B] hover:bg-[var(--primary)] px-12 py-5 text-[11px] font-bold text-white uppercase tracking-[0.3em] shadow-2xl transition-all duration-700 disabled:cursor-not-allowed disabled:opacity-70 active:scale-95 group/btn w-full md:w-auto"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Raising Ticket...
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Synchronizing...
                   </>
                 ) : (
                   <>
-                    Submit Ticket
-                    <Send className="h-4 w-4 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
+                    Deploy Support Node
+                    <Send className="h-4 w-4 transition-transform group-hover/btn:translate-x-2 group-hover/btn:-translate-y-2" />
                   </>
                 )}
               </button>
@@ -390,10 +561,10 @@ export default function DashboardSupportPage() {
 
       <style jsx global>{`
         select {
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23006064'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%231ab0bc'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
           background-repeat: no-repeat;
-          background-position: right 1rem center;
-          background-size: 1.25em;
+          background-position: right 1.25rem center;
+          background-size: 1em;
         }
       `}</style>
     </div>

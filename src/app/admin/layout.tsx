@@ -14,7 +14,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Ticket,
-  Shield
+  Shield,
+  Calendar,
+  Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -24,9 +26,11 @@ const sidebarItems = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { name: 'Locations', href: '/admin/locations', icon: MapPin },
   { name: 'Products', href: '/admin/products', icon: Package },
+  { name: 'Amenities', href: '/admin/amenities', icon: Sparkles },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Roles', href: '/admin/roles', icon: Shield },
   { name: 'Tickets', href: '/admin/tickets', icon: Ticket },
+  { name: 'Bookings', href: '/admin/bookings', icon: Calendar },
 ];
 
 export default function AdminLayout({

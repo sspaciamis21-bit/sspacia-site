@@ -18,7 +18,7 @@ export function MainWrapper({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-b from-[#F8F9FA] via-[#F8F9FA] to-[#F8F9FA]">
       <Header />
-      <main className="flex-1 mx-auto w-full max-w-6xl px-4 pb-16 pt-20 sm:px-6 lg:px-8">
+      <main className="flex-1 mx-auto w-full max-w-6xl px-4 pb-16 pt-16 sm:px-6 lg:px-8">
         {children}
       </main>
       <Footer />

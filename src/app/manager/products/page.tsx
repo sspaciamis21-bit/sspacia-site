@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 interface Product {
   id: number;
   name: string;
-  type: string;
+  type: string | { name: string };
   location: { name: string; id: number };
   quantity: number;
   isActive: boolean;
@@ -36,7 +36,7 @@ export default function ManagerProductsPage() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/manager/dashboard', {
+      const response = await fetch('/api/admin/products', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -57,60 +57,63 @@ export default function ManagerProductsPage() {
   if (loading || authLoading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
-        <Loader size={48} className="text-[#006064] animate-spin mb-4" />
+        <Loader size={40} className="text-[var(--primary)] animate-spin mb-4" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-8">
       <FadeUp>
-        <div className="flex items-center gap-3 mb-8">
-          <div className="inline-flex p-3 rounded-2xl bg-[#006064]/10">
-            <Package size={32} className="text-[#006064]" />
+        <div className="flex items-center gap-4 mb-10">
+          <div className="inline-flex p-3.5 rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
+            <Package size={28} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-[#004D40]">Products & Spaces</h1>
-            <p className="text-[#616161]">View and manage spaces in your assigned locations</p>
+            <h1 className="text-3xl md:text-4xl font-display font-bold text-[#1B1C1C] tracking-tight">Products & Spaces</h1>
+            <p className="text-[#616161] font-medium text-sm mt-1">View and manage spaces in your assigned locations</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-[#E0E0E0] shadow-sm">
+        <div className="bg-[var(--surface-lowest)] rounded-3xl p-8 border border-[var(--outline-variant)]/50 shadow-sm overflow-hidden">
           {products.length === 0 ? (
-            <div className="text-center py-12 text-[#9E9E9E]">
-              <Package size={48} className="mx-auto mb-4 opacity-50" />
-              <p className="font-semibold text-lg">No products available</p>
+            <div className="text-center py-20 text-[#9E9E9E]">
+              <div className="inline-flex p-6 rounded-3xl bg-[var(--surface-low)] text-[#9E9E9E] mb-6">
+                <Package size={48} />
+              </div>
+              <p className="font-display font-bold text-xl text-[#1B1C1C]">No products available</p>
+              <p className="text-sm font-medium mt-2">No workspace products were found for your assigned locations.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto -mx-8 px-8">
+              <table className="w-full text-left border-collapse min-w-[700px]">
                 <thead>
-                  <tr className="border-b-2 border-[#E0E0E0]">
-                    <th className="p-4 text-sm font-semibold text-[#616161] uppercase tracking-wider">Product Name</th>
-                    <th className="p-4 text-sm font-semibold text-[#616161] uppercase tracking-wider">Location</th>
-                    <th className="p-4 text-sm font-semibold text-[#616161] uppercase tracking-wider">Type</th>
-                    <th className="p-4 text-sm font-semibold text-[#616161] uppercase tracking-wider">Quantity</th>
-                    <th className="p-4 text-sm font-semibold text-[#616161] uppercase tracking-wider">Status</th>
+                  <tr className="border-b border-[var(--outline-variant)]/30">
+                    <th className="pb-5 px-4 text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Product Name</th>
+                    <th className="pb-5 px-4 text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Location</th>
+                    <th className="pb-5 px-4 text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Type</th>
+                    <th className="pb-5 px-4 text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Quantity</th>
+                    <th className="pb-5 px-4 text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#F0F0F0]">
+                <tbody className="divide-y divide-[var(--outline-variant)]/10">
                   {products.map((product) => (
-                    <tr key={product.id} className="hover:bg-[#F8F9FA] transition-colors">
-                      <td className="p-4 font-semibold text-[#004D40]">{product.name}</td>
-                      <td className="p-4 text-[#616161]">{product.location.name}</td>
-                      <td className="p-4 text-[#616161]">
-                        <span className="inline-block px-3 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded-full text-xs font-bold whitespace-nowrap">
-                          {product.type.replace('_', ' ')}
+                    <tr key={product.id} className="hover:bg-[var(--surface-low)]/30 transition-colors group">
+                      <td className="py-5 px-4 font-bold text-[#1B1C1C] group-hover:text-[var(--primary)] transition-colors">{product.name}</td>
+                      <td className="py-5 px-4 text-[#616161] font-medium text-sm">{product.location.name}</td>
+                      <td className="py-5 px-4">
+                        <span className="inline-block px-3 py-1 bg-[var(--surface-low)] text-[var(--primary)] rounded-full text-[10px] font-bold whitespace-nowrap border border-[var(--primary)]/10">
+                          {typeof product.type === 'object' ? product.type.name?.replace('_', ' ') : product.type?.replace('_', ' ')}
                         </span>
                       </td>
-                      <td className="p-4 text-[#616161] font-semibold">{product.quantity}</td>
-                      <td className="p-4">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                      <td className="py-5 px-4 text-[#1B1C1C] font-bold text-sm">{product.quantity}</td>
+                      <td className="py-5 px-4 text-left">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all ${
                           product.isActive 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-gray-100 text-gray-700'
+                            ? 'bg-green-50 text-green-700 border border-green-100' 
+                            : 'bg-gray-50 text-gray-700 border border-gray-100'
                         }`}>
-                          {product.isActive ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                          {product.isActive ? <CheckCircle size={12} /> : <XCircle size={12} />}
                           {product.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>

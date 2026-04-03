@@ -18,8 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
-import { ProductType, SpaceCategory } from '@prisma/client';
-
+import Link from 'next/link';
 // ─── Types ──────────────────────────────────────────────────
 interface DashboardStats {
   totalProducts: number;
@@ -31,15 +30,15 @@ interface DashboardStats {
 interface RecentProduct {
   id: number;
   name: string;
-  type: ProductType;
-  category: SpaceCategory;
+  type: { name: string };
+  category: { name: string };
   isActive: boolean;
   isFeatured: boolean;
   location: { name: string };
 }
 
 // ─── Display Helpers ────────────────────────────────────────
-const TYPE_LABELS: Record<ProductType, string> = {
+const TYPE_LABELS: Record<string, string> = {
   FLEX_DESK: 'Flex Desk',
   FIXED_DESK: 'Fixed Desk',
   DEDICATED_CABIN: 'Dedicated Cabin',
@@ -111,7 +110,6 @@ export default function AdminDashboardPage() {
 
     // Fetch recent products (last 5)
     fetchRecentProducts();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDeactivate = async (id: number, name: string) => {
@@ -166,13 +164,12 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-10">
       {/* Header */}
-      <FadeUp>
-        <h1 className="text-3xl font-bold text-[#004D40]">Admin Dashboard</h1>
-        <p className="text-[#616161] mt-2">
-          Welcome back! Here&apos;s a live overview of your workspace.
-        </p>
-      </FadeUp>
-
+        <FadeUp>
+          <h1 className="text-3xl font-bold text-[#004D40]">Admin Dashboard</h1>
+          <p className="text-[#616161] mt-2">
+            Welcome back! Here&apos;s a live overview of your workspace.
+          </p>
+        </FadeUp>
       {/* Stats Grid */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat, i) => (
@@ -253,7 +250,7 @@ export default function AdminDashboardPage() {
                         </td>
                         <td className="px-6 py-3">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#004D40] text-white uppercase tracking-wider">
-                            {TYPE_LABELS[product.type]}
+                            {product.type?.name ? TYPE_LABELS[product.type.name] || product.type.name : 'Unknown'}
                           </span>
                         </td>
                         <td className="px-6 py-3">

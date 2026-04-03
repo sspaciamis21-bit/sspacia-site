@@ -25,7 +25,7 @@ export function Header() {
   }, []);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-[100] border-b border-[#CFD8DC] bg-[#F8F9FA]/70 backdrop-blur">
+    <header className="fixed inset-x-0 top-0 z-[100] bg-surface/70 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         {/* Logo - left */}
         <div className="flex items-center">
@@ -38,23 +38,23 @@ export function Header() {
               className="h-12 w-auto object-contain sm:h-16"
               priority
             />
+            {/* <span className="ml-2 font-display text-xl sm:text-2xl font-bold tracking-tight text-primary-container select-none">SSPACIA</span> */}
           </Link>
         </div>
 
         {/* Desktop Nav links - center */}
-        <nav className="hidden md:flex flex-1 justify-center items-center gap-8 text-md font-medium text-[#424242]">
+        <nav className="hidden md:flex flex-1 justify-center items-center gap-10 text-xs font-bold uppercase tracking-[0.2em] text-on-surface/60">
           {siteConfig.navigation
-            // .filter((item) => item.label !== "Careers")
             .map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="relative transition-colors hover:text-[#006064] group py-2"
+              className="relative transition-all hover:text-primary group py-2"
             >
               <span className="relative z-10">
                 {item.label}
               </span>
-              <span className="absolute left-0 bottom-0 w-full h-[2px] bg-[#006064] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
+              <span className="absolute left-0 bottom-0 w-full h-[1px] bg-primary scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></span>
             </Link>
           ))}
         </nav>
@@ -67,13 +67,13 @@ export function Header() {
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="flex items-center gap-3 hover:opacity-80 transition-opacity"
               >
-                <div className="h-10 w-10 rounded-full bg-[#E0F7FA] text-[#006064] flex items-center justify-center font-bold border border-[#006064]/20 shadow-inner">
+                <div className="h-10 w-10 rounded-sm bg-surface-low text-primary flex items-center justify-center font-bold">
                   {user?.name?.charAt(0).toUpperCase()}
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-bold text-[#004D40] leading-none">{user?.name}</p>
+                  <p className="text-sm font-bold text-on-surface leading-none">{user?.name}</p>
                 </div>
-                <ChevronDown size={14} className={`text-[#9E9E9E] transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className={`text-tertiary transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
               <AnimatePresence>
@@ -83,12 +83,12 @@ export function Header() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl shadow-[#006064]/10 border border-[#CFD8DC]/50 overflow-hidden z-[110] flex flex-col p-1"
+                    className="absolute right-0 top-full mt-2 w-48 bg-surface-lowest shadow-[0_20px_50px_rgba(27,28,28,0.05)] overflow-hidden z-[110] flex flex-col p-1"
                   >
                     <Link 
                       href={user?.role === 'ADMIN' ? '/admin/dashboard' : user?.role === 'MANAGER' ? '/manager/dashboard' : '/dashboard'}
                       onClick={() => setIsMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-[#424242] hover:bg-[#F8F9FA] hover:text-[#006064] rounded-lg transition-colors"
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-surface-low hover:text-primary transition-colors"
                     >
                       <LayoutDashboard size={16} />
                       Dashboard
@@ -108,13 +108,14 @@ export function Header() {
             <>
               <Link
                 href="/login"
-                className="text-md font-bold text-[#424242] hover:text-[#006064] transition-colors"
+                className="text-xs font-bold uppercase tracking-widest text-on-surface/60 hover:text-primary transition-colors"
               >
                 Log In
               </Link>
               <Link
+
                 href="/signup"
-                className="rounded-full bg-[#006064] px-6 py-2.5 text-md font-bold text-white shadow-lg shadow-[#006064]/20 transition-all hover:bg-[#004D40] active:scale-95"
+                className="liquid-hover rounded-none bg-primary-container px-8 py-3 text-xs font-bold uppercase tracking-widest text-on-primary-container shadow-[0_20px_50px_rgba(0,105,111,0.1)] transition-all hover:text-white"
               >
                 Join us
               </Link>
@@ -124,7 +125,7 @@ export function Header() {
 
         {/* Mobile Toggle */}
         <button 
-          className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#006064]/5 text-[#006064] md:hidden"
+          className="flex h-10 w-10 items-center justify-center rounded-sm bg-surface-low text-primary md:hidden"
           onClick={() => setIsOpen(!isOpen)}
           aria-label="Toggle Menu"
         >
@@ -139,7 +140,7 @@ export function Header() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="border-t border-[#CFD8DC] bg-white md:hidden overflow-hidden"
+            className="border-t border-surface-low bg-surface md:hidden overflow-hidden"
           >
             <div className="flex flex-col space-y-1 p-4">
               {siteConfig.navigation
@@ -149,18 +150,18 @@ export function Header() {
                   key={item.href}
                   href={item.href}
                   onClick={() => setIsOpen(false)}
-                  className="rounded-xl px-4 py-3 text-base font-medium text-[#424242] transition-colors hover:bg-[#E0F7FA] hover:text-[#006064]"
+                  className="rounded-sm px-4 py-3 text-base font-medium text-on-surface transition-colors hover:bg-surface-low hover:text-primary"
                 >
                   {item.label}
                 </Link>
               ))}
-              <div className="pt-4 border-t border-[#CFD8DC]/50 mt-2 flex flex-col gap-3">
+              <div className="pt-4 mt-2 flex flex-col gap-3">
                 {isLoggedIn ? (
                   <>
                     <Link
                       href={user?.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard'}
                       onClick={() => setIsOpen(false)}
-                      className="flex w-full items-center justify-center rounded-xl border-2 border-[#006064] py-3 text-base font-bold text-[#006064]"
+                      className="flex w-full items-center justify-center rounded-sm border-2 border-outline-variant/15 py-3 text-base font-bold text-primary"
                     >
                       Go to Dashboard
                     </Link>
@@ -169,7 +170,7 @@ export function Header() {
                         logout();
                         setIsOpen(false);
                       }}
-                      className="flex w-full items-center justify-center rounded-xl bg-red-50 py-4 text-base font-bold text-red-600 border border-red-100"
+                      className="flex w-full items-center justify-center rounded-sm bg-red-50 py-4 text-base font-bold text-red-600"
                     >
                       Logout
                     </button>
@@ -179,14 +180,14 @@ export function Header() {
                     <Link
                       href="/login"
                       onClick={() => setIsOpen(false)}
-                      className="flex w-full items-center justify-center rounded-xl border-2 border-[#006064] py-3 text-base font-bold text-[#006064]"
+                      className="flex w-full items-center justify-center rounded-sm border-2 border-outline-variant/15 py-3 text-base font-bold text-primary"
                     >
                       Log In
                     </Link>
                     <Link
                       href="/signup"
                       onClick={() => setIsOpen(false)}
-                      className="flex w-full items-center justify-center rounded-xl bg-[#006064] py-4 text-base font-bold text-white shadow-xl shadow-[#006064]/20"
+                      className="flex w-full items-center justify-center rounded-sm bg-primary-container py-4 text-base font-bold text-on-primary-container shadow-[0_20px_50px_rgba(27,28,28,0.05)]"
                     >
                       Join us
                     </Link>

@@ -33,6 +33,14 @@ export async function GET() {
         id: true,
         name: true,
         email: true,
+        phone: true,
+        companyName: true,
+        companyStreet: true,
+        companyCity: true,
+        companyState: true,
+        companyZip: true,
+        contactNumber: true,
+        designation: true,
         isActive: true,
         role: {
           select: {
@@ -75,12 +83,21 @@ export async function GET() {
         id: user.id,
         name: user.name,
         email: user.email,
+        phone: user.phone,
+        companyName: user.companyName,
+        companyStreet: user.companyStreet,
+        companyCity: user.companyCity,
+        companyState: user.companyState,
+        companyZip: user.companyZip,
+        contactNumber: user.contactNumber,
+        designation: user.designation,
         role: user.role.name,
         permissions,
         assignedLocations: user.assignedLocations.map((ul) => ({
           id: ul.location.id,
           name: ul.location.name,
         })),
+        profileCompleted: !!(user.phone && user.companyName && user.designation),
       }
     })
 
@@ -90,5 +107,44 @@ export async function GET() {
       { error: 'Something went wrong' },
       { status: 500 }
     )
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get('auth-token')?.value
+
+    if (!token) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
+    const payload = await verifyToken(token)
+    if (!payload || !payload.id) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    }
+
+    const body = await req.json()
+    const { name, phone, designation, companyName, companyCity, companyState, companyStreet, companyZip } = body
+    
+    // We update the user
+    await prisma.user.update({
+      where: { id: Number(payload.id) },
+      data: {
+        name,
+        phone,
+        designation,
+        companyName,
+        companyCity,
+        companyState,
+        companyStreet,
+        companyZip,
+      }
+    })
+
+    return NextResponse.json({ message: 'Profile updated successfully' })
+  } catch (error) {
+    console.error('Profile update error:', error)
+    return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
   }
 }

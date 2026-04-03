@@ -1,95 +1,100 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyToken } from '@/lib/jwt';
+import { withPermission } from '@/lib/auth/withPermission';
+import { requireAuth } from '@/lib/auth';
 
-async function requireAdmin() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth-token')?.value;
-  if (!token) return null;
-  const payload = await verifyToken(token);
-  if (!payload || (payload.role as string) !== 'ADMIN') return null;
-  return payload;
-}
-
-export async function GET() {
+// ─── GET /api/admin/roles ─────────────────────────────────────────────────────
+export const GET = withPermission('roles', 'read', async () => {
   try {
-    const auth = await requireAdmin();
-    if (!auth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const roles = await prisma.role.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        displayName: true,
+        description: true,
+        isActive: true,
+        createdAt: true,
+        permissions: {
+          select: {
+            permission: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        _count: { select: { users: true } },
+      },
       orderBy: { name: 'asc' },
-      include: {
-        permissions: {
-          include: { permission: true },
-        },
-      },
     });
 
-    const formatted = roles.map((role) => ({
-      id: role.id,
-      name: role.name,
-      description: role.description,
-      permissions: role.permissions.map((rp) => ({
-        id: rp.permission.id,
-        name: rp.permission.name,
-      })),
+    const flattened = roles.map((r) => ({
+      ...r,
+      permissions: r.permissions.map((rp) => rp.permission),
     }));
-    
-    return NextResponse.json({ data: formatted });
+
+    return NextResponse.json({ data: flattened });
   } catch (error) {
-    console.error('GET /api/admin/roles error:', error);
+    console.error('[ROLES_READ]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
-// POST /api/admin/roles - Create a new role
-export async function POST(request: Request) {
+// ─── POST /api/admin/roles ────────────────────────────────────────────────────
+export const POST = withPermission('roles', 'create', async (req: NextRequest) => {
   try {
-    const auth = await requireAdmin();
-    if (!auth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const payload = await requireAuth();
+    if (!payload?.id) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { name, description, permissionIds } = body;
+    const body = await req.json() as Record<string, unknown>;
+    const name        = String(body.name        ?? '').trim();
+    const displayName = String(body.displayName ?? '').trim();
 
-    if (!name || typeof name !== 'string') {
-      return NextResponse.json({ error: 'Role name is required' }, { status: 400 });
+    if (!name || !displayName) {
+      return NextResponse.json({ error: 'name and displayName are required' }, { status: 400 });
     }
 
-    const role = await prisma.role.create({
-      data: {
-        name,
-        description: description || undefined,
-        permissions: {
-          create: (permissionIds || []).map((permId: number) => ({
-            permissionId: permId,
-          })),
+    // Duplicate check
+    const existing = await prisma.role.findUnique({ where: { name }, select: { id: true } });
+    if (existing) {
+      return NextResponse.json({ error: 'Role with this name already exists' }, { status: 400 });
+    }
+
+    const role = await prisma.$transaction(async (tx) => {
+      const r = await tx.role.create({
+        data: {
+          name,
+          displayName,
+          description: body.description ? String(body.description) : undefined,
         },
-      },
-      include: {
-        permissions: {
-          include: { permission: true },
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          description: true,
+          createdAt: true,
         },
-      },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId:    Number(payload.id),
+          action:    'CREATE',
+          module:    'roles',
+          recordId:  r.id,
+          newData:   JSON.stringify(r),
+          ipAddress: req.headers.get('x-forwarded-for') ?? null,
+        },
+      });
+
+      return r;
     });
 
-    const formatted = {
-      id: role.id,
-      name: role.name,
-      description: role.description,
-      permissions: role.permissions.map((rp) => ({
-        id: rp.permission.id,
-        name: rp.permission.name,
-      })),
-    };
-
-    return NextResponse.json({ data: formatted }, { status: 201 });
+    return NextResponse.json({ data: role, message: 'Created successfully' }, { status: 201 });
   } catch (error) {
-    console.error('POST /api/admin/roles error:', error);
+    console.error('[ROLES_CREATE]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

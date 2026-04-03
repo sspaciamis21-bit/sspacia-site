@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { FadeUp } from "../../components/ui/fade-up";
-import { SectionLabel } from "../../components/ui/section-label";
 import { ImageIcon, Maximize2, X, ChevronLeft, ChevronRight } from "lucide-react";
 
 import imagesData from "../../config/images.json";
@@ -55,7 +55,7 @@ const GalleryCard = ({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.5 }}
-      className="group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-3xl bg-[#F1F5F9] shadow-sm transition-all hover:shadow-2xl"
+      className="group relative aspect-[4/3] cursor-pointer overflow-hidden bg-surface-high border border-outline-variant/10 shadow-sm transition-all hover:shadow-2xl"
       onClick={onSelect}
       whileHover={{ y: -5 }}
     >
@@ -65,42 +65,39 @@ const GalleryCard = ({
           <motion.div 
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-20 bg-[#F1F5F9] animate-pulse flex items-center justify-center"
+            className="absolute inset-0 z-20 bg-surface-high animate-pulse flex items-center justify-center"
           >
-            <ImageIcon className="h-8 w-8 text-[#006064]/20" />
+            <ImageIcon className="h-8 w-8 text-tertiary/20" />
           </motion.div>
         )}
       </AnimatePresence>
 
-      <img
+      <Image
         src={image.src}
         alt={image.alt}
+        width={800}
+        height={600}
         onLoad={() => setIsLoaded(true)}
-        className={`w-full h-full object-cover transition-all duration-1000 ease-out group-hover:scale-110 ${
+        className={`w-full h-full object-cover transition-all duration-1000 ease-out group-hover:scale-105 ${
           isLoaded ? "opacity-100 scale-100" : "opacity-0 scale-105"
         }`}
         loading="lazy"
       />
       
-      {/* Minimal Overlay Label */}
-      <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-        <div className="translate-y-4 transition-transform duration-300 group-hover:translate-y-0 text-left">
-          <p className="text-[10px] font-bold text-[#4DB6AC] uppercase tracking-[0.2em] mb-1">
+      {/* Overlay Label */}
+      <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-6 md:p-8 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
+        <div className="translate-y-4 transition-transform duration-500 group-hover:translate-y-0 text-left">
+          <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-2 shadow-sm">
             {image.category}
           </p>
-          <p className="text-sm font-bold text-white mb-2 line-clamp-1">
+          <p className="text-xl md:text-2xl font-display font-bold text-white mb-4 line-clamp-1">
             {image.alt}
           </p>
-          <div className="inline-flex items-center gap-2 rounded-lg bg-white/20 px-3 py-1.5 backdrop-blur-md">
+          <div className="inline-flex items-center gap-2 rounded-none bg-white/10 border border-white/20 px-4 py-2 backdrop-blur-md transition-colors hover:bg-primary hover:border-primary">
             <Maximize2 className="h-3 w-3 text-white" />
-            <span className="text-[10px] font-bold text-white uppercase tracking-wider">View Full</span>
+            <span className="text-[10px] font-bold text-white uppercase tracking-widest">View Full</span>
           </div>
         </div>
-      </div>
-
-      {/* Constant Subtle Indicator */}
-      <div className="absolute top-4 right-4 z-30 rounded-full bg-white/10 p-2 opacity-100 backdrop-blur-md transition-all group-hover:bg-white/30 group-hover:scale-110">
-        <ImageIcon className="h-3 w-3 text-white" />
       </div>
     </motion.div>
   );
@@ -175,34 +172,31 @@ export default function GalleryClient() {
   };
 
   return (
-    <div className="space-y-16 py-12">
+    <div className="space-y-16 py-24 mb-32 max-w-7xl mx-auto px-4 md:px-8">
       {/* ── Header ── */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#E0F7FA] via-[#F8F9FA] to-[#E0F2F1] px-6 py-16 sm:px-12 sm:py-24 text-center">
-        <div className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-[#006064]/10 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-[#4DB6AC]/15 blur-3xl" />
-        
-        <div className="relative z-10 space-y-6">
+      <section className="relative overflow-hidden bg-surface-lowest p-8 md:p-16 border border-outline-variant/10 shadow-[0_40px_80px_rgba(27,28,28,0.05)] text-center mb-16">
+        <div className="absolute top-0 left-1/2 w-[1px] h-full bg-outline-variant/10 hidden md:block"></div>
+        <div className="relative z-10 space-y-8">
           <FadeUp className="flex justify-center">
-            <SectionLabel>
-              <ImageIcon className="h-3 w-3" /> Visual Tour
-            </SectionLabel>
+            <span className="font-sans text-[10px] uppercase tracking-[0.4em] text-primary block font-bold">Visual Tour</span>
           </FadeUp>
           <FadeUp delay={0.1}>
-            <h1 className="text-4xl font-bold tracking-tight text-[#004D40] sm:text-6xl">
+            <h1 className="font-display text-5xl md:text-7xl font-bold tracking-tighter text-on-surface leading-none">
               Our Gallery
             </h1>
           </FadeUp>
           <FadeUp delay={0.2}>
-            <p className="mx-auto max-w-2xl text-lg text-[#616161]">
+            <p className="mx-auto max-w-2xl text-xl text-tertiary font-light">
               Explore the premium interiors and vibrant work environments 
               across all our SSPACIA locations in Ahmedabad.
             </p>
           </FadeUp>
         </div>
+        <div className="absolute bottom-[-1px] left-[50%] -translate-x-1/2 w-24 h-[4px] bg-primary z-20"></div>
       </section>
 
       {/* ── Filter ── */}
-      <div className="flex flex-wrap justify-center gap-4 px-4">
+      <div className="flex flex-wrap justify-center gap-4 px-4 mb-16">
         {categories.map((cat, i) => (
           <FadeUp key={cat} delay={i * 0.05}>
             <button
@@ -211,10 +205,10 @@ export default function GalleryClient() {
                 setActiveCategory(cat);
                 setVisibleCount(12); // Reset count on category change
               }}
-              className={`relative rounded-full px-8 py-3 text-sm font-bold transition-all duration-300 active:scale-95 ${
+              className={`relative rounded-none px-8 py-4 text-[10px] uppercase tracking-[0.2em] font-bold transition-all duration-300 active:scale-95 border ${
                 activeCategory === cat
-                  ? "bg-[#006064] text-white shadow-xl shadow-[#006064]/20"
-                  : "bg-white text-[#455A64] hover:bg-[#F0F4F8] hover:text-[#006064] border border-[#ECEFF1]"
+                  ? "bg-primary text-white border-primary shadow-xl shadow-primary/20"
+                  : "bg-surface-lowest text-tertiary border-outline-variant/30 hover:border-primary hover:text-primary"
               }`}
             >
               {cat}
@@ -232,7 +226,7 @@ export default function GalleryClient() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           >
             {displayedImages.map((image) => (
               <GalleryCard 
@@ -251,51 +245,46 @@ export default function GalleryClient() {
           <FadeUp>
             <button
               onClick={loadMore}
-              className="group relative flex items-center gap-3 rounded-2xl bg-white px-10 py-5 text-sm font-bold text-[#006064] shadow-md transition-all hover:bg-[#006064] hover:text-white hover:shadow-xl active:scale-95 border border-[#ECEFF1]"
+              className="liquid-hover group relative flex items-center justify-center gap-4 rounded-none bg-surface-lowest border border-outline-variant/30 px-12 py-5 text-[10px] font-bold uppercase tracking-[0.3em] text-on-surface shadow-md transition-all hover:bg-primary hover:text-white hover:border-primary hover:shadow-xl mt-8"
             >
-              <div className="rounded-full bg-[#006064]/10 p-2 transition-colors group-hover:bg-white/20">
-                <ImageIcon className="h-4 w-4" />
-              </div>
-              Load More Masterpieces
+              Load More
             </button>
           </FadeUp>
         </div>
       )}
 
+      {/* ── Lightbox Modal ── */}
       <AnimatePresence>
         {selectedImage && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black h-[100dvh] w-screen m-0 p-0"
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-sm h-[100dvh] w-screen m-0 p-0"
             onClick={() => setSelectedIndex(null)}
           >
-            {/* Background elements are now redundant with bg-black, but keep for safety/transitions */}
-            <div className="absolute inset-0 bg-black" />
-
             {/* Navigation Buttons */}
             <button 
-              className="absolute left-6 top-1/2 -translate-y-1/2 z-[120] text-white/50 hover:text-white transition-all bg-white/10 hover:bg-white/20 p-4 rounded-full backdrop-blur-md"
+              className="absolute left-6 top-1/2 -translate-y-1/2 z-[120] text-white/50 hover:text-white transition-all bg-white/5 hover:bg-white/10 p-4 rounded-none border border-white/10 backdrop-blur-md"
               onClick={handlePrev}
             >
               <ChevronLeft className="w-8 h-8" />
             </button>
             <button 
-              className="absolute right-6 top-1/2 -translate-y-1/2 z-[120] text-white/50 hover:text-white transition-all bg-white/10 hover:bg-white/20 p-4 rounded-full backdrop-blur-md"
+              className="absolute right-6 top-1/2 -translate-y-1/2 z-[120] text-white/50 hover:text-white transition-all bg-white/5 hover:bg-white/10 p-4 rounded-none border border-white/10 backdrop-blur-md"
               onClick={handleNext}
             >
               <ChevronRight className="w-8 h-8" />
             </button>
 
             <button 
-              className="absolute top-6 right-6 z-[120] text-white/70 hover:text-white transition-colors bg-white/10 p-3 rounded-2xl backdrop-blur-md"
+              className="absolute top-8 right-8 z-[120] text-white/70 hover:text-white transition-colors bg-white/5 hover:bg-white/10 p-3 rounded-none border border-white/10 backdrop-blur-md"
               onClick={() => setSelectedIndex(null)}
             >
               <X className="w-8 h-8" />
             </button>
 
-            <div className="relative z-[110] flex flex-col items-center justify-center w-full max-w-5xl px-4 min-h-[70vh]">
+            <div className="relative z-[110] flex flex-col items-center justify-center w-full max-w-6xl px-12 min-h-[70vh]">
               <AnimatePresence initial={false} custom={direction} mode="wait">
                 <motion.div 
                   key={selectedImage.src}
@@ -304,10 +293,10 @@ export default function GalleryClient() {
                   initial="enter"
                   animate="center"
                   exit="exit"
-                  className="flex flex-col items-center justify-center"
+                  className="flex flex-col items-center justify-center w-full"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <img 
+                   <img 
                     src={selectedImage.src} 
                     alt={selectedImage.alt}
                     className="max-h-[75vh] sm:max-h-[80vh] w-auto object-contain rounded-xl shadow-2xl"
@@ -318,19 +307,19 @@ export default function GalleryClient() {
 
             {/* Repositioned Label - Bottom Left */}
             <div 
-              className="absolute bottom-10 left-10 z-[120] text-left space-y-1"
+              className="absolute bottom-12 left-12 z-[120] text-left space-y-2"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-bold text-[#E0F2F1] uppercase tracking-[0.3em]">
+              <div className="flex items-center gap-4">
+                <span className="text-[10px] font-bold text-primary uppercase tracking-[0.4em]">
                   {selectedImage.category}
                 </span>
-                <span className="h-4 w-[1px] bg-white/20"></span>
-                <span className="text-[10px] text-white/60 font-medium whitespace-nowrap">
+                <span className="h-4 w-[1px] bg-white/30"></span>
+                <span className="text-[10px] font-bold text-white/60 tracking-widest whitespace-nowrap">
                   {(selectedIndex ?? 0) + 1} / {filteredImages.length}
                 </span>
               </div>
-              <h3 className="text-2xl font-bold text-white leading-tight">
+              <h3 className="text-3xl font-display font-bold text-white leading-tight">
                 {selectedImage.alt}
               </h3>
             </div>
@@ -340,19 +329,24 @@ export default function GalleryClient() {
 
       {/* ── CTA Section ── */}
       <FadeUp>
-        <section className="rounded-3xl bg-[#004D40] px-6 py-12 text-center text-white sm:px-12 sm:py-20">
-          <div className="mx-auto max-w-2xl space-y-6">
-            <h2 className="text-3xl font-bold sm:text-4xl">Experience it in person</h2>
-            <p className="text-[#B2DFDB]">
+        <section className="relative overflow-hidden bg-primary px-8 py-24 text-center text-white sm:px-16 shadow-2xl">
+          <div className="absolute top-0 right-24 w-[1px] h-full bg-white/10 hidden md:block"></div>
+          <div className="absolute left-0 bottom-24 w-full h-[1px] bg-white/10 hidden md:block"></div>
+          <div className="relative z-10 mx-auto max-w-3xl space-y-8">
+            <span className="font-sans text-[10px] uppercase tracking-[0.4em] text-primary-container block font-bold">Visit Us</span>
+            <h2 className="font-display text-4xl font-bold sm:text-6xl tracking-tighter">Experience it in person</h2>
+            <p className="text-xl text-white/80 font-light mx-auto max-w-xl">
               Photos can only show so much. Schedule a free tour to breathe in the atmosphere 
               and find your perfect spot at SSPACIA.
             </p>
-            <a 
-              href="/book-online"
-              className="inline-block rounded-full bg-[#006064] px-8 py-4 text-base font-bold text-white transition-all hover:bg-[#007C91] hover:scale-105 active:scale-95 shadow-lg shadow-[#00251A]/40"
-            >
-              Book a Free Tour
-            </a>
+            <div className="pt-8">
+              <a 
+                href="/book-online"
+                className="liquid-hover inline-flex items-center gap-4 bg-white px-10 py-5 text-[10px] font-bold uppercase tracking-widest text-primary transition-all hover:bg-surface-lowest shadow-xl"
+              >
+                Book a Free Tour
+              </a>
+            </div>
           </div>
         </section>
       </FadeUp>

@@ -1,226 +1,195 @@
 "use client";
 
 import { toast } from "sonner";
-import { siteConfig } from "../../config/site";
-import Image from "next/image";
-import { FadeUp } from "../../components/ui/fade-up";
-import { SectionLabel } from "../../components/ui/section-label";
-import { Mail, Phone, MapPin, Send, Facebook, Instagram,Youtube, ExternalLink } from "lucide-react";
+import { siteConfig } from "@/config/site";
+import { FadeUp } from "@/components/ui/fade-up";
+import { Send, Facebook, Instagram, Youtube, ExternalLink } from "lucide-react";
 
 export default function ContactClient() {
   return (
-    <div className="space-y-24 py-12 container mx-auto px-4 sm:px-6 lg:px-8">
-      {/* ── Header ── */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#E0F7FA] via-[#F8F9FA] to-[#E0F2F1] px-6 py-16 sm:px-12 sm:py-24">
-        {/* Decorative blur orbs */}
-        <div className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-[#006064]/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -right-24 h-96 w-96 rounded-full bg-[#4DB6AC]/15 blur-3xl" />
-        
-        <div className="relative z-10 text-center space-y-6">
-          <FadeUp className="flex justify-center">
-            <SectionLabel>
-              <Mail className="h-3 w-3" /> Get In Touch
-            </SectionLabel>
-          </FadeUp>
-          <FadeUp delay={0.1}>
-            <h1 className="text-4xl font-bold tracking-tight text-[#004D40] sm:text-6xl">
-              Contact Us
-            </h1>
-          </FadeUp>
-          <FadeUp delay={0.2}>
-            <p className="mx-auto max-w-2xl text-lg text-[#616161]">
-              Have questions or want to book a tour? We&apos;d love to hear from you. 
-              Reach out to our team or visit one of our prime locations in Ahmedabad.
-            </p>
-          </FadeUp>
+    <div className="space-y-24 py-24 pb-12 max-w-7xl mx-auto px-6 md:px-12">
+      {/* ── Hero: Reach Out ── */}
+      <section className="relative min-h-[50vh] flex items-center">
+        <div className="relative z-10 w-full">
+            <FadeUp className="space-y-10">
+              <div className="flex items-center gap-4">
+                <span className="h-[1px] w-12 bg-primary"></span>
+                <span className="font-sans text-[10px] uppercase tracking-[0.6em] text-primary font-bold">
+                  Connection Points
+                </span>
+              </div>
+              
+              <h1 className="font-display text-5xl md:text-8xl font-black tracking-tighter leading-[0.9] text-on-surface max-w-4xl">
+                Reach <br />
+                <span className="text-primary italic">Out.</span>
+              </h1>
+              
+              <div className="grid lg:grid-cols-2 gap-16 pt-8">
+                <p className="text-xl md:text-2xl leading-tight text-on-surface font-medium max-w-xl">
+                  Have questions or want to book a tour? Ahmedabad&apos;s most dynamic support team is ready.
+                </p>
+                <div className="flex items-start">
+                  <p className="text-lg leading-relaxed text-tertiary font-light max-w-md border-l-2 border-primary/20 pl-8">
+                    Visit our workspace environments or connect digitally for a guided spatial overview.
+                  </p>
+                </div>
+              </div>
+            </FadeUp>
         </div>
       </section>
 
-      {/* ── Main Content Grid ── */}
-      <section className="grid gap-12 lg:grid-cols-2">
-        {/* Contact Form */}
-        <FadeUp>
-          <div className="rounded-3xl border border-[#CFD8DC] bg-white p-8 shadow-2xl shadow-[#006064]/5 lg:p-12 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-8 text-[#006064]/5 pointer-events-none group-hover:text-[#006064]/10 transition-colors">
-              <Send className="h-32 w-32 -rotate-12" />
-            </div>
-            
-            <h2 className="mb-8 text-3xl font-bold text-[#212121]">Send us a Message</h2>
-            <form 
-              className="space-y-6 relative z-10"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.currentTarget;
-                const formData = new FormData(form);
-                const data = Object.fromEntries(formData.entries());
-                
-                const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
-                if(submitBtn) submitBtn.disabled = true;
+      {/* ── Main Interface: Tonal Contrast ── */}
+      <section className="relative">
+        <div className="grid gap-16 md:grid-cols-2 lg:items-start">
+          {/* Contact form */}
+          <div className="order-2 md:order-1">
+            <FadeUp>
+              <div className="bg-white p-8 lg:p-16 shadow-[0_40px_100px_rgba(0,105,111,0.06)] relative overflow-hidden group border border-outline-variant/10 rounded-sm">
+                <h2 className="font-display text-4xl font-bold tracking-tighter text-on-surface mb-2">Send a Message</h2>
+                <p className="text-tertiary mb-12 font-light uppercase tracking-widest text-[9px]">Response Target / 24 Hours</p>
 
-                try {
-                  const response = await fetch('/api/contact', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data),
-                  });
+                <form 
+                  className="space-y-10 relative z-10"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const form = e.currentTarget;
+                    const formData = new FormData(form);
+                    const data = Object.fromEntries(formData.entries());
+                    
+                    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+                    if(submitBtn) submitBtn.disabled = true;
+
+                    try {
+                      const response = await fetch('/api/contact', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data),
+                      });
+                      
+                      if (response.ok) {
+                        toast.success("Thank you! Your message has been sent.");
+                        form.reset();
+                      } else {
+                        throw new Error('Failed to send');
+                      }
+                    } catch {
+                      toast.error("Something went wrong. Please try again.");
+                    } finally {
+                      if(submitBtn) submitBtn.disabled = false;
+                    }
+                  }}
+                >
+                  <div className="grid gap-10 sm:grid-cols-2">
+                    <div className="space-y-1 group">
+                      <label htmlFor="firstName" className="text-[10px] font-bold uppercase tracking-widest text-primary/60 transition-colors font-sans">First Name</label>
+                      <input id="firstName" name="firstName" required type="text" className="w-full rounded-none border-b border-outline-variant/30 bg-transparent px-0 py-3 text-lg outline-none transition-all focus:border-primary text-on-surface placeholder:text-tertiary/20" placeholder="John" />
+                    </div>
+                    <div className="space-y-1 group">
+                      <label htmlFor="lastName" className="text-[10px] font-bold uppercase tracking-widest text-primary/60 transition-colors font-sans">Last Name</label>
+                      <input id="lastName" name="lastName" type="text" className="w-full rounded-none border-b border-outline-variant/30 bg-transparent px-0 py-3 text-lg outline-none transition-all focus:border-primary text-on-surface placeholder:text-tertiary/20" placeholder="Doe" />
+                    </div>
+                  </div>
+                  <div className="space-y-1 group">
+                    <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-widest text-primary/60 transition-colors font-sans">Digital Handle (Email)</label>
+                    <input id="email" name="email" required type="email" className="w-full rounded-none border-b border-outline-variant/30 bg-transparent px-0 py-3 text-lg outline-none transition-all focus:border-primary text-on-surface placeholder:text-tertiary/20" placeholder="john@example.com" />
+                  </div>
+                  <div className="space-y-1 group">
+                    <label htmlFor="message" className="text-[10px] font-bold uppercase tracking-widest text-primary/60 transition-colors font-sans">Inquiry Context</label>
+                    <textarea id="message" name="message" required rows={3} className="w-full resize-none rounded-none border-b border-outline-variant/30 bg-transparent px-0 py-3 text-lg outline-none transition-all focus:border-primary text-on-surface placeholder:text-tertiary/20" placeholder="Describe your spatial needs..."></textarea>
+                  </div>
                   
-                  if (response.ok) {
-                    toast.success("Thank you! Your message has been sent to our sales team.");
-                    form.reset();
-                  } else {
-                    throw new Error('Failed to send');
-                  }
-                } catch (err) {
-                  toast.error("Something went wrong. Please try again later or contact us directly via email.");
-                } finally {
-                  if(submitBtn) submitBtn.disabled = false;
-                }
-              }}
-            >
-              <div className="grid gap-6 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label htmlFor="firstName" className="text-sm font-semibold text-[#424242]">First Name</label>
-                  <input id="firstName" name="firstName" required type="text" className="w-full rounded-xl border border-[#CFD8DC] bg-[#F8F9FA] px-4 py-3.5 text-sm outline-none transition-all focus:border-[#006064] focus:ring-4 focus:ring-[#006064]/10" placeholder="John" />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="lastName" className="text-sm font-semibold text-[#424242]">Last Name</label>
-                  <input id="lastName" name="lastName" type="text" className="w-full rounded-xl border border-[#CFD8DC] bg-[#F8F9FA] px-4 py-3.5 text-sm outline-none transition-all focus:border-[#006064] focus:ring-4 focus:ring-[#006064]/10" placeholder="Doe" />
-                </div>
+                  <button type="submit" className="flex items-center justify-center gap-6 bg-primary px-12 py-5 text-[10px] font-bold uppercase tracking-[0.4em] text-white shadow-xl transition-all hover:bg-primary-container disabled:opacity-50 active:scale-95 rounded-sm">
+                    Dispatch Message
+                    <Send className="h-4 w-4" />
+                  </button>
+                </form>
               </div>
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-semibold text-[#424242]">Email Address</label>
-                <input id="email" name="email" required type="email" className="w-full rounded-xl border border-[#CFD8DC] bg-[#F8F9FA] px-4 py-3.5 text-sm outline-none transition-all focus:border-[#006064] focus:ring-4 focus:ring-[#006064]/10" placeholder="john@example.com" />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="subject" className="text-sm font-semibold text-[#424242]">Subject</label>
-                <input id="subject" name="subject" type="text" className="w-full rounded-xl border border-[#CFD8DC] bg-[#F8F9FA] px-4 py-3.5 text-sm outline-none transition-all focus:border-[#006064] focus:ring-4 focus:ring-[#006064]/10" placeholder="How can we help?" />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="message" className="text-sm font-semibold text-[#424242]">Message</label>
-                <textarea id="message" name="message" required rows={5} className="w-full resize-none rounded-xl border border-[#CFD8DC] bg-[#F8F9FA] px-4 py-3.5 text-sm outline-none transition-all focus:border-[#006064] focus:ring-4 focus:ring-[#006064]/10" placeholder="Your message here..."></textarea>
-              </div>
-              <button type="submit" className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#006064] px-6 py-4 text-base font-bold text-white shadow-xl shadow-[#006064]/30 transition-all hover:bg-[#007C91] hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
-                Send Message
-                <Send className="h-4 w-4 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
-              </button>
-            </form>
+            </FadeUp>
           </div>
+
+          {/* Info Panels */}
+          <div className="order-1 md:order-2 space-y-12 md:pl-10">
+            <FadeUp delay={0.2} className="space-y-10">
+              <div className="space-y-6">
+                <h3 className="font-display text-5xl font-bold tracking-tighter text-on-surface">Let&apos;s talk.</h3>
+                <p className="text-xl text-tertiary font-light leading-relaxed">
+                  Our ecosystem thrives on direct communication. Select your preferred channel for immediate engagement.
+                </p>
+              </div>
+              
+              <div className="grid gap-10">
+                <div className="space-y-2">
+                   <p className="text-[9px] font-bold uppercase tracking-[0.4em] text-primary">Direct Mail</p>
+                   <a href={`mailto:${siteConfig.site.contact.email}`} className="text-xl font-display font-medium text-on-surface hover:text-primary transition-colors">
+                      {siteConfig.site.contact.email}
+                   </a>
+                </div>
+                
+                <div className="space-y-2">
+                   <p className="text-[9px] font-bold uppercase tracking-[0.4em] text-primary">Voice Comms</p>
+                   <a href="tel:+917600393779" className="text-2xl font-display font-bold text-on-surface hover:text-primary transition-colors">
+                      +91 76003 93779
+                   </a>
+                </div>
+              </div>
+
+              <div className="pt-8 space-y-6">
+                <h4 className="font-sans text-[10px] uppercase tracking-[0.4em] font-bold text-tertiary/70">Social Network</h4>
+                <div className="flex gap-4">
+                  {Object.entries(siteConfig.site.social).map(([network, url]) => (
+                    <a key={network} href={url as string} target="_blank" rel="noreferrer" className="flex h-12 w-12 items-center justify-center bg-white border border-outline-variant/10 text-tertiary transition-all hover:bg-primary hover:text-white rounded-none">
+                      {network === 'facebook' && <Facebook className="h-4 w-4" />}
+                      {network === 'instagram' && <Instagram className="h-4 w-4" />}
+                      {network === 'youtube' && <Youtube className="h-4 w-4" />}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </FadeUp>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Locations: Physical Coordinates ── */}
+      <section className="space-y-16">
+        <FadeUp className="space-y-6">
+           <div className="flex items-center gap-4">
+            <span className="h-[1px] w-12 bg-primary"></span>
+            <span className="font-sans text-[10px] uppercase tracking-[0.6em] text-primary font-bold">Physical Coordinates</span>
+          </div>
+          <h2 className="font-display text-5xl md:text-7xl font-bold tracking-tighter text-on-surface leading-none">Our Hubs.</h2>
         </FadeUp>
 
-        {/* Contact Info & Socials */}
-        <div className="flex flex-col justify-between py-4">
-          <FadeUp delay={0.2} className="space-y-8">
-            <div className="space-y-4">
-              <h3 className="text-3xl font-bold text-[#212121]">Connect Directly</h3>
-              <p className="text-lg text-[#616161]">
-                Our team is here to help you find the perfect workspace.
-              </p>
-            </div>
-            
-            <div className="grid gap-6">
-              <div className="group flex items-center gap-6 rounded-3xl border border-[#CFD8DC] bg-white p-6 transition-all hover:border-[#006064] hover:shadow-xl hover:shadow-[#006064]/5">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#E0F2F1] text-[#006064] transition-all group-hover:bg-[#006064] group-hover:text-white group-hover:scale-110">
-                  <Mail className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-[#757575]">Write to us</p>
-                  <a href={`mailto:${siteConfig.site.contact.email}`} className="text-xl font-semibold text-[#212121] hover:text-[#006064]">
-                    {siteConfig.site.contact.email}
-                  </a>
-                </div>
-              </div>
-              
-              <div className="group flex items-center gap-6 rounded-3xl border border-[#CFD8DC] bg-white p-6 transition-all hover:border-[#006064] hover:shadow-xl hover:shadow-[#006064]/5">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#eceff1] text-[#455a64] transition-all group-hover:bg-[#455a64] group-hover:text-white group-hover:scale-110">
-                  <Phone className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-[#757575]">Call us</p>
-                  <a href="tel:+917600393779" className="text-xl font-semibold text-[#212121] hover:text-[#006064]">
-                    +91 76003 93779
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-8 space-y-6">
-              <h4 className="text-lg font-bold text-[#212121]">Follow Ahmedabad&apos;s best work community</h4>
-              <div className="flex gap-4">
-                {Object.entries(siteConfig.site.social).map(([network, url], i) => (
-                  <FadeUp key={network} delay={0.3 + (i * 0.1)}>
-                    <a href={url as string} target="_blank" rel="noreferrer" className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white border border-[#CFD8DC] text-[#424242] transition-all hover:border-[#006064] hover:text-[#006064] hover:shadow-2xl hover:scale-110">
-                      <span className="sr-only">{network}</span>
-                      {network === 'facebook' && <Facebook className="h-6 w-6" />}
-                      {network === 'instagram' && <Instagram className="h-6 w-6" />}
-                      {network === 'youtube' && <Youtube className="h-6 w-6" />}
-                    </a>
-                  </FadeUp>
-                ))}
-              </div>
-            </div>
-          </FadeUp>
-
-          <FadeUp delay={0.5} className="mt-12 rounded-3xl bg-[#E0F7FA] p-8 text-[#006064]">
-             <p className="font-bold">Available 24/7 for Members</p>
-             <p className="mt-1 text-sm text-[#006064]/80">Our support team is available Mon-Sat, 9 AM - 8 PM for visitor tours and inquiries.</p>
-          </FadeUp>
-        </div>
-      </section>
-
-      {/* ── Locations with Maps ── */}
-      <section className="space-y-12 pt-12 border-t border-[#CFD8DC]">
-        <div className="text-center space-y-4">
-          <h2 className="text-4xl font-bold tracking-tight text-[#212121]">Our Spaces in Ahmedabad</h2>
-          <p className="mx-auto max-w-2xl text-lg text-[#616161]">
-            Find us in the most connected hubs of the city.
-          </p>
-        </div>
-
-        <div className="grid gap-20 pt-8">
+        <div className="grid gap-32">
           {siteConfig.locations.map((location, index) => (
-            <FadeUp key={location.id} delay={index * 0.1} className={`flex flex-col gap-12 lg:items-center ${index % 2 !== 0 ? 'lg:flex-row-reverse' : 'lg:flex-row'}`}>
+            <FadeUp key={location.id} delay={0.1} className={`grid gap-16 lg:grid-cols-12 lg:items-center`}>
+              {/* Map Embed */}
+              <div className={`lg:col-span-8 ${index % 2 !== 0 ? 'lg:order-2' : ''}`}>
+                 <div className="relative aspect-video shadow-[0_40px_100px_rgba(0,105,111,0.1)] rounded-none overflow-hidden grayscale hover:grayscale-0 transition-all duration-1000 border border-outline-variant/10">
+                    <div className="w-full h-full"
+                        dangerouslySetInnerHTML={{ __html: location.link.embed }}
+                    />
+                 </div>
+              </div>
               
-              {/* Info Side */}
-              <div className="flex-1 space-y-8">
-                <div className="space-y-4">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-[#006064]/20 bg-[#E0F7FA] px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-[#006064]">
-                    <MapPin className="h-4 w-4" />
-                    <span>{location.name}</span>
-                  </div>
-                  <h3 className="text-3xl font-bold text-[#212121]">{location.name}</h3>
-                  <p className="text-lg leading-relaxed text-[#616161]">{location.description}</p>
-                </div>
-                
-                <div className="group relative overflow-hidden rounded-3xl shadow-xl shadow-[#006064]/5 border border-[#CFD8DC]">
-                  <Image 
-                    src={location.image.src}
-                    alt={location.image.alt}
-                    width={600}
-                    height={400}
-                    className="h-64 w-full object-cover sm:h-80 transition-transform duration-700 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              {/* Info Block */}
+              <div className={`lg:col-span-4 space-y-8 ${index % 2 !== 0 ? 'lg:order-1' : ''}`}>
+                <div className="space-y-6">
+                  <span className="text-[10px] font-sans font-bold text-primary tracking-[0.4em]">LOC / 0{index + 1}</span>
+                  <h3 className="font-display text-4xl font-bold tracking-tighter text-on-surface">{location.name}</h3>
+                  <p className="text-lg leading-relaxed text-tertiary font-light">{location.description}</p>
                 </div>
                 
                 <a 
                   href={location.link.href}
                   target="_blank"
                   rel="noreferrer"
-                  className="group inline-flex items-center gap-2 text-base font-bold text-[#006064] hover:text-[#004D40]"
+                  className="inline-flex items-center gap-6 text-[10px] font-bold uppercase tracking-[0.4em] text-on-surface border-b-2 border-primary/20 hover:border-primary transition-all py-2"
                 >
-                  <ExternalLink className="h-5 w-5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                  Open in Google Maps
+                  Navigate to Space
+                  <ExternalLink className="h-4 w-4" />
                 </a>
               </div>
-              
-              {/* Map Embed Side */}
-              <div className="w-full lg:w-[50%]">
-                <div 
-                  className="overflow-hidden rounded-3xl border border-[#CFD8DC] bg-white p-4 shadow-2xl shadow-[#006064]/5 [&>iframe]:w-full [&>iframe]:h-[400px] lg:[&>iframe]:h-[550px] [&>iframe]:rounded-2xl"
-                  dangerouslySetInnerHTML={{ __html: location.link.embed }}
-                />
-              </div>
-
             </FadeUp>
           ))}
         </div>

@@ -5,7 +5,31 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Package, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { ProductType, SpaceCategory, AccessTime } from '@prisma/client';
+// ─── Local Enums (since Prisma models aren't enums at runtime) ────────────────
+const ProductType = {
+  FLEX_DESK: 'FLEX_DESK',
+  FIXED_DESK: 'FIXED_DESK',
+  DEDICATED_CABIN: 'DEDICATED_CABIN',
+  PRIVATE_CABIN: 'PRIVATE_CABIN',
+  EXECUTIVE_CABIN: 'EXECUTIVE_CABIN',
+  MEETING_ROOM: 'MEETING_ROOM',
+  BOARD_ROOM: 'BOARD_ROOM',
+  EVENT_ROOM: 'EVENT_ROOM',
+} as const;
+
+const SpaceCategory = {
+  WORKSPACE: 'WORKSPACE',
+  GUEST_SPACE: 'GUEST_SPACE',
+} as const;
+
+const AccessTime = {
+  BUSINESS_HOURS: 'BUSINESS_HOURS',
+  TWENTY_FOUR_SEVEN: '24X7',
+} as const;
+
+type ProductType = (typeof ProductType)[keyof typeof ProductType];
+type SpaceCategory = (typeof SpaceCategory)[keyof typeof SpaceCategory];
+type AccessTime = (typeof AccessTime)[keyof typeof AccessTime];
 
 interface LocationOption {
   id: number;
@@ -18,15 +42,22 @@ interface ProductImageData {
   isPrimary: boolean;
 }
 
+interface Amenity {
+  id: number;
+  name: string;
+  icon: string | null;
+}
+
 interface ProductToEdit {
   id: number;
   locationId: number;
+  location?: { id: number; name: string };
   name: string;
   slug: string;
-  type: ProductType;
-  category: SpaceCategory;
+  type: string;
+  category: string;
   description?: string;
-  accessTime?: AccessTime;
+  accessTime?: string;
   capacity?: number;
   quantity: number;
   sdrPlusAdv?: string;
@@ -35,6 +66,7 @@ interface ProductToEdit {
   isFeatured: boolean;
   sortOrder: number;
   images?: ProductImageData[];
+  amenities?: { amenity: Amenity }[];
 }
 
 interface AddProductModalProps {
@@ -89,16 +121,18 @@ const accessTimeOptions: Array<{ value: AccessTime; label: string }> = [
 export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProductModalProps) {
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
+  const [amenitiesOptions, setAmenitiesOptions] = useState<Amenity[]>([]);
+  const [selectedAmenities, setSelectedAmenities] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
   const [locationId, setLocationId] = useState('');
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
-  const [type, setType] = useState<ProductType>(ProductType.FLEX_DESK);
-  const [category, setCategory] = useState<SpaceCategory>(SpaceCategory.WORKSPACE);
+  const [type, setType] = useState<string>(ProductType.FLEX_DESK);
+  const [category, setCategory] = useState<string>(SpaceCategory.WORKSPACE);
   const [description, setDescription] = useState('');
-  const [accessTime, setAccessTime] = useState<AccessTime | ''>('');
+  const [accessTime, setAccessTime] = useState<string | ''>('');
   const [capacity, setCapacity] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [isActive, setIsActive] = useState(true);
@@ -123,6 +157,13 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       })
       .catch(() => toast.error('Failed to load locations'))
       .finally(() => setLocationsLoading(false));
+
+    fetch('/api/admin/amenities')
+      .then((r) => r.json())
+      .then((json) => {
+         if (json.data) setAmenitiesOptions(json.data.filter((a: any) => a.isActive));
+      })
+      .catch(() => console.error('Failed to load amenities'));
   }, [isOpen]);
 
   useEffect(() => {
@@ -132,15 +173,16 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       setLocationId(String(product.locationId ?? product.location?.id ?? ''));
       setName(product.name);
       setSlug(product.slug);
-      setType(product.type);
-      setCategory(product.category);
+      setType(typeof product.type === 'object' ? (product.type as any).name : product.type);
+      setCategory(typeof product.category === 'object' ? (product.category as any).name : product.category);
       setDescription(product.description ?? '');
-      setAccessTime(product.accessTime ?? '');
+      setAccessTime(typeof product.accessTime === 'object' ? (product.accessTime as any).name : (product.accessTime ?? ''));
       setCapacity(product.capacity?.toString() ?? '');
       setQuantity(String(product.quantity ?? 1));
       setIsActive(product.isActive);
       setIsFeatured(product.isFeatured);
       setSortOrder(String(product.sortOrder ?? 0));
+      setSelectedAmenities(product.amenities?.map(a => a.amenity.id) || []);
       setSlugManuallyEdited(true);
       setImageFiles([]);
       setImagePreviewUrls([]);
@@ -158,6 +200,7 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       setIsActive(true);
       setIsFeatured(false);
       setSortOrder('0');
+      setSelectedAmenities([]);
       setSlugManuallyEdited(false);
       setImageFiles([]);
       setImagePreviewUrls([]);
@@ -261,6 +304,7 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       isActive,
       isFeatured,
       sortOrder: sortOrder ? Number(sortOrder) : 0,
+      amenityIds: selectedAmenities,
     };
 
     try {
@@ -583,6 +627,44 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                       <p className="text-[10px] text-[#9E9E9E]">Toggle to hide or show this product on listings</p>
                     </div>
                   </label>
+
+                  {/* Amenities Selection */}
+                  <div className="space-y-4 pt-4 border-t border-[#CFD8DC]/30">
+                     <div className="flex items-center justify-between">
+                       <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest">
+                         Available Amenities
+                       </h3>
+                       <span className="text-[10px] bg-[#E0F7FA] text-[#006064] px-2 py-0.5 rounded-full font-bold">
+                         {selectedAmenities.length} Selected
+                       </span>
+                     </div>
+                     
+                     <div className="grid grid-cols-2 gap-3">
+                        {amenitiesOptions.map((amenity) => {
+                          const isSelected = selectedAmenities.includes(amenity.id);
+                          return (
+                            <div 
+                              key={amenity.id}
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedAmenities(prev => prev.filter(id => id !== amenity.id));
+                                } else {
+                                  setSelectedAmenities(prev => [...prev, amenity.id]);
+                                }
+                              }}
+                              className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                                isSelected 
+                                  ? 'bg-[#E0F7FA] border-[#006064] text-[#006064] shadow-sm' 
+                                  : 'bg-white border-[#CFD8DC]/50 text-[#616161] hover:border-[#006064]/30'
+                              }`}
+                            >
+                              <div className="text-lg">{amenity.icon || '✨'}</div>
+                              <span className="text-sm font-bold truncate">{amenity.name}</span>
+                            </div>
+                          );
+                        })}
+                     </div>
+                  </div>
                 </section>
               </form>
             </div>

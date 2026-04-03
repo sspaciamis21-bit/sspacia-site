@@ -1,111 +1,129 @@
 "use client";
 
-import { siteConfig } from "../../config/site";
+import { siteConfig } from "@/config/site";
 import Image from "next/image";
-import { FadeUp } from "../../components/ui/fade-up";
-import { SectionLabel } from "../../components/ui/section-label";
-import { BookOpen, Calendar, Clock, ArrowRight, TrendingUp } from "lucide-react";
+import { FadeUp } from "@/components/ui/fade-up";
+import { Calendar, Clock, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 export default function BlogClient() {
   const { blog } = siteConfig;
 
   return (
-    <div className="space-y-24 py-12 container mx-auto px-4 sm:px-6 lg:px-8">
-      {/* ── Header ── */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#E0F7FA] via-[#F8F9FA] to-[#E0F2F1] px-6 py-16 sm:px-12 sm:py-24">
-        {/* Decorative blur orbs */}
-        <div className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-[#006064]/10 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-[#4DB6AC]/15 blur-3xl" />
-
-        <div className="relative z-10 text-center space-y-6">
-          <FadeUp className="flex justify-center">
-            <SectionLabel>
-              <BookOpen className="h-3 w-3" /> Our Insights
-            </SectionLabel>
-          </FadeUp>
-          <FadeUp delay={0.1}>
-            <h1 className="text-4xl font-bold tracking-tight text-[#004D40] sm:text-6xl">
-              {blog.heading}
-            </h1>
-          </FadeUp>
-          <FadeUp delay={0.2}>
-            <p className="mx-auto max-w-2xl text-lg text-[#616161]">
-              Explore the latest trends in workspaces, productivity tips,
-              and community stories from Ahmedabad&apos;s leading coworking space.
-            </p>
-          </FadeUp>
+    <div className="space-y-24 py-24 pb-12 max-w-7xl mx-auto px-6 md:px-12 font-sans">
+      {/* ── Hero: The Journal ── */}
+      <section className="relative min-h-[50vh] flex items-center">
+        <div className="relative z-10 w-full">
+            <FadeUp className="space-y-10">
+              <div className="flex items-center gap-4">
+                <span className="h-[1px] w-12 bg-primary"></span>
+                <span className="font-sans text-[10px] uppercase tracking-[0.6em] text-primary font-bold">
+                  Shared Intelligence
+                </span>
+              </div>
+              
+              <h1 className="font-display text-5xl md:text-8xl font-black tracking-tighter leading-[0.9] text-on-surface max-w-4xl">
+                The <br />
+                <span className="text-primary italic">Journal.</span>
+              </h1>
+              
+              <div className="grid lg:grid-cols-2 gap-16 pt-8">
+                <p className="text-xl md:text-2xl leading-tight text-on-surface font-medium max-w-xl">
+                  Documenting the evolution of workspace culture and collaborative success.
+                </p>
+                <div className="flex items-start">
+                  <p className="text-lg leading-relaxed text-tertiary font-light max-w-md border-l-2 border-primary/20 pl-8">
+                    {blog.heading}. Explore Ahmedabad&apos;s leading insights into productivity and architectural design.
+                  </p>
+                </div>
+              </div>
+            </FadeUp>
         </div>
       </section>
 
-      {/* ── Blog Grid ── */}
-      <section className="space-y-6">
-        <div className="sr-only">
-          <h2>Latest Blog Posts</h2>
-        </div>
-        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-3">
-          {blog.posts.map((post, i) => (
-            <FadeUp key={post.id} delay={i * 0.1}>
-              <Link
-                href={post.href}
-                className="group flex flex-col overflow-hidden rounded-3xl border border-[#CFD8DC] bg-white shadow-sm shadow-[#006064]/5 transition-all duration-300 hover:-translate-y-2 hover:border-[#006064] hover:shadow-2xl"
-              >
-                <div className="relative aspect-[16/10] w-full overflow-hidden">
-                  <Image
-                    src={post.image.src}
-                    alt={post.image.alt}
-                    width={800}
-                    height={500}
-                    className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
-                    priority={i < 3}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 transition-opacity group-hover:opacity-80" />
+      {/* ── Featured Flow: Modular Grid ── */}
+      <section className="relative">
+        <div className="space-y-16">
+          <FadeUp className="max-w-3xl space-y-6">
+            <div className="flex items-center gap-4">
+              <span className="h-[1px] w-8 bg-primary"></span>
+              <span className="font-sans text-[10px] uppercase tracking-[0.4em] text-primary font-bold">Curated Content</span>
+            </div>
+            <h2 className="font-display text-4xl md:text-6xl font-bold tracking-tighter text-on-surface leading-tight">Latest Insights.</h2>
+          </FadeUp>
 
-                  <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
-                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
-                      <Calendar className="h-3 w-3" />
-                      <span>
-                        {new Date(post.date).toLocaleString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          timeZone: "UTC",
-                        })}
+          <div className="grid gap-16 lg:grid-cols-2">
+            {blog.posts.map((post, i) => (
+              <FadeUp key={post.id} delay={i * 0.1}>
+                <Link href={post.href} className="group block space-y-6">
+                  <div className="relative aspect-[16/10] overflow-hidden bg-white shadow-[0_40px_100px_rgba(0,105,111,0.06)] border border-outline-variant/10 rounded-sm">
+                      <Image
+                          src={post.image.src}
+                          alt={post.image.alt}
+                          fill
+                          className="object-cover transition-all duration-1000 transform group-hover:scale-105 group-hover:rotate-1 grayscale group-hover:grayscale-0"
+                          priority={i < 2}
+                      />
+                      <div className="absolute inset-0 bg-primary/5 transition-opacity duration-700"></div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-6 text-[9px] font-black uppercase tracking-[0.4em] text-primary">
+                      <span className="flex items-center gap-2">
+                         <Calendar className="h-3.5 w-3.5" />
+                         {new Date(post.date).toLocaleDateString()}
+                      </span>
+                      <span className="flex items-center gap-2">
+                         <Clock className="h-3.5 w-3.5" />
+                         {post.readTime}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
-                      <Clock className="h-3 w-3" />
-                      <span>{post.readTime}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-1 flex-col justify-between p-7 pt-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-[#006064]">
-                      <TrendingUp className="h-3.5 w-3.5" />
-                      <span>{post.author}</span>
-                    </div>
-                    <h3 className="line-clamp-2 text-xl font-bold leading-tight text-[#212121] transition group-hover:text-[#006064]">
+                    
+                    <h3 className="font-display text-2xl md:text-3xl font-bold tracking-tighter text-on-surface group-hover:text-primary transition-colors leading-tight">
                       {post.title}
                     </h3>
-                    <p className="line-clamp-3 text-sm leading-relaxed text-[#616161]">
+                    
+                    <p className="text-base text-tertiary font-light leading-relaxed line-clamp-2">
                       {post.excerpt}
                     </p>
-                  </div>
-
-                  <div className="mt-6 flex items-center justify-between border-t border-[#CFD8DC] pt-4">
-                    <span className="text-sm font-bold text-[#006064]">
-                      Read Now
-                    </span>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#E0F7FA] text-[#006064] transition-all group-hover:bg-[#006064] group-hover:text-white">
-                      <ArrowRight className="h-4 w-4" />
+                    
+                    <div className="flex items-center gap-4 pt-2">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-on-surface group-hover:text-primary transition-colors">Read Article</span>
+                      <ArrowRight className="h-4 w-4 text-primary transition-transform group-hover:translate-x-2" />
                     </div>
                   </div>
-                </div>
-              </Link>
-            </FadeUp>
-          ))}
+                </Link>
+              </FadeUp>
+            ))}
+          </div>
         </div>
+      </section>
+
+      {/* ── CTA: Contribution ── */}
+      <section className="relative overflow-hidden py-12">
+        <FadeUp>
+          <div className="relative bg-white p-10 md:p-20 text-left border border-outline-variant/10 shadow-[0_40px_100px_rgba(0,105,111,0.06)] group rounded-sm">
+            <div className="grid md:grid-cols-2 gap-12 items-center">
+               <div className="space-y-6">
+                  <h2 className="font-display text-4xl md:text-5xl font-bold tracking-tighter text-on-surface leading-tight">
+                    Become part of <br />the <span className="text-primary italic">discourse.</span>
+                  </h2>
+                  <p className="text-lg text-tertiary font-light leading-relaxed">
+                    Ahmedabad&apos;s most influential professionals share their journeys within our ecosystem.
+                  </p>
+               </div>
+               <div className="flex justify-start md:justify-end">
+                  <Link 
+                    href="/contact"
+                    className="inline-flex items-center gap-6 bg-primary px-12 py-5 text-[10px] font-bold uppercase tracking-[0.4em] text-white transition-all hover:bg-primary-container shadow-xl rounded-sm active:scale-95"
+                  >
+                    Collaborate with Us
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+               </div>
+            </div>
+          </div>
+        </FadeUp>
       </section>
     </div>
   );

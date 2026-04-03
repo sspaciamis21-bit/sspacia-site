@@ -35,13 +35,15 @@ export default function AdminUsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const fetchUsers = async () => {
+    setIsLoading(true);
     try {
-      const response = await fetch('/api/users');
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      setUsers(data);
-    } catch {
-      toast.error('Failed to load users');
+      const response = await fetch('/api/admin/users');
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || 'Failed to load users');
+      setUsers(json.data ?? []);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to load users');
+      setUsers([]);
     } finally {
       setIsLoading(false);
     }
@@ -54,7 +56,7 @@ export default function AdminUsersPage() {
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this user?')) return;
     try {
-      const response = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+      const response = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Delete failed');
       toast.success('User deleted successfully');
       fetchUsers();
@@ -219,7 +221,7 @@ export default function AdminUsersPage() {
 
       <EditUserModal
         isOpen={!!editingUser}
-        user={editingUser}
+        user={editingUser!}
         onClose={() => setEditingUser(null)}
         onSuccess={fetchUsers}
       />

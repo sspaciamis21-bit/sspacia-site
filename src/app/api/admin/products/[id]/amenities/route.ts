@@ -1,50 +1,67 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyToken } from '@/lib/jwt';
+import { withPermission } from '@/lib/auth/withPermission';
+import { requireAuth } from '@/lib/auth';
 
-async function requireAdmin() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth-token')?.value;
-  if (!token) return null;
-  const payload = await verifyToken(token);
-  if (!payload || (payload.role as string) !== 'ADMIN') return null;
-  return payload;
-}
-
-// POST /api/admin/products/[id]/amenities - Assign amenity to product
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// POST /api/admin/products/[id]/amenities — Assign an amenity to a product
+export const POST = withPermission('products', 'update', async (
+  req: NextRequest,
+  { params }: { params: Promise<Record<string, string>> }
+) => {
   try {
-    const auth = await requireAdmin();
-    if (!auth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const payload = await requireAuth();
+    if (!payload?.id) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
 
     const { id } = await params;
-    const productId = parseInt(id);
+    const productId = parseInt(id, 10);
     if (isNaN(productId)) {
       return NextResponse.json({ error: 'Invalid product ID' }, { status: 400 });
     }
 
-    const { amenityId } = await request.json();
-    if (!amenityId) {
-      return NextResponse.json({ error: 'amenityId is required' }, { status: 400 });
+    const body = await req.json() as Record<string, unknown>;
+    const amenityId = parseInt(String(body.amenityId ?? ''), 10);
+    if (isNaN(amenityId)) {
+      return NextResponse.json({ error: 'amenityId is required and must be a number' }, { status: 400 });
     }
 
-    const productAmenity = await prisma.productAmenity.create({
-      data: { productId, amenityId: Number(amenityId) },
-      include: { amenity: true },
+    // Check product exists
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    });
+
+    if (!product) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    const productAmenity = await prisma.$transaction(async (tx) => {
+      const pa = await tx.productAmenity.create({
+        data: { productId, amenityId },
+        select: {
+          amenity: { select: { id: true, name: true, icon: true } },
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          userId:    Number(payload.id),
+          action:    'CREATE',
+          module:    'products',
+          recordId:  productId,
+          newData:   JSON.stringify({ amenityId }),
+          ipAddress: req.headers.get('x-forwarded-for') ?? null,
+        },
+      });
+
+      return pa;
     });
 
     return NextResponse.json({ data: productAmenity }, { status: 201 });
   } catch (error) {
-    console.error('POST /api/admin/products/[id]/amenities error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('[PRODUCT_AMENITY_ADD]', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

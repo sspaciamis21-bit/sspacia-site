@@ -12,8 +12,8 @@ interface RecentProduct {
   locationId: number;
   name: string;
   slug: string;
-  type: ProductType;
-  category: SpaceCategory;
+  type: any;
+  category: any;
   description?: string;
   accessTime?: string;
   capacity?: number;
@@ -159,8 +159,12 @@ export default function AdminProductsPage() {
                     <tr key={product.id} className="hover:bg-[#E0F7FA]/20 transition-colors">
                       <td className="px-4 py-3 text-sm font-bold text-[#212121]">{product.name}</td>
                       <td className="px-4 py-3 text-sm text-[#616161]">{product.location.name}</td>
-                      <td className="px-4 py-3 text-sm text-[#616161]">{product.type.replace('_', ' ')}</td>
-                      <td className="px-4 py-3 text-sm text-[#616161]">{product.category.replace('_', ' ')}</td>
+                      <td className="px-4 py-3 text-sm text-[#616161]">
+                        {typeof product.type === 'object' ? (product.type as any).displayName || (product.type as any).name : product.type?.replace('_', ' ')}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-[#616161]">
+                        {typeof product.category === 'object' ? (product.category as any).displayName || (product.category as any).name : product.category?.replace('_', ' ')}
+                      </td>
                       <td className="px-4 py-3">
                         {product.isActive ? (
                           <div className="inline-flex items-center gap-1 text-emerald-600 font-bold text-xs">

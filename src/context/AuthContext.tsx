@@ -10,6 +10,15 @@ interface User {
   role: string
   permissions: string[]
   assignedLocations?: { id: number; name: string }[]
+  profileCompleted?: boolean
+  phone?: string
+  designation?: string
+  companyName?: string
+  companyStreet?: string
+  companyCity?: string
+  companyState?: string
+  companyZip?: string
+  contactNumber?: string
 }
 
 interface AuthContextType {
@@ -66,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Check role
   const isRole = (role: string) => {
-    return user?.role === role
+    return user?.role.toUpperCase() === role.toUpperCase()
   }
 
   return (

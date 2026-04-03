@@ -1,46 +1,57 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyToken } from '@/lib/jwt';
+import { withPermission } from '@/lib/auth/withPermission';
+import { requireAuth } from '@/lib/auth';
 
-async function requireAdmin() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth-token')?.value;
-  if (!token) return null;
-  const payload = await verifyToken(token);
-  if (!payload || (payload.role as string) !== 'ADMIN') return null;
-  return payload;
-}
-
-// DELETE /api/admin/products/[id]/pricing/[planId] - Remove a pricing plan
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string; planId: string }> }
-) {
+// DELETE /api/admin/products/[id]/pricing/[planId] — Remove a pricing plan
+export const DELETE = withPermission('products', 'update', async (
+  req: NextRequest,
+  { params }: { params: Promise<Record<string, string>> }
+) => {
   try {
-    const auth = await requireAdmin();
-    if (!auth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const payload = await requireAuth();
+    if (!payload?.id) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
 
     const { id, planId } = await params;
-    const productId = parseInt(id);
-    const pId = parseInt(planId);
+    const productId = parseInt(id, 10);
+    const pId       = parseInt(planId, 10);
 
     if (isNaN(productId) || isNaN(pId)) {
       return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
     }
 
-    await prisma.pricingPlan.delete({
+    // Check plan belongs to product
+    const plan = await prisma.pricingPlan.findFirst({
       where: { id: pId, productId },
+      select: { id: true, durationType: true, price: true },
+    });
+
+    if (!plan) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.pricingPlan.delete({ where: { id: pId } });
+
+      await tx.activityLog.create({
+        data: {
+          userId:    Number(payload.id),
+          action:    'DELETE',
+          module:    'products',
+          recordId:  productId,
+          oldData:   JSON.stringify(plan),
+          newData:   null,
+          ipAddress: req.headers.get('x-forwarded-for') ?? null,
+        },
+      });
     });
 
     return NextResponse.json({ data: { message: 'Pricing plan removed successfully' } });
   } catch (error) {
-    console.error('DELETE /api/admin/products/[id]/pricing/[planId] error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('[PRODUCT_PRICING_REMOVE]', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

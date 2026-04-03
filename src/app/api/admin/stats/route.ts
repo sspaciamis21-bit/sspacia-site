@@ -1,37 +1,58 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { withPermission } from '@/lib/auth/withPermission';
 import prisma from '@/lib/prisma';
-import { verifyToken } from '@/lib/jwt';
 
-// GET /api/admin/stats - Dashboard stats (ADMIN only)
-export async function GET() {
+// GET /api/admin/stats — Dashboard summary counts
+export const GET = withPermission('reports', 'read', async () => {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth-token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const payload = await verifyToken(token);
-    if (!payload || (payload.role as string) !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const [totalProducts, totalLocations, totalUsers, activeListings] =
-      await Promise.all([
-        prisma.product.count(),
-        prisma.location.count(),
-        prisma.user.count(),
-        prisma.product.count({ where: { isActive: true } }),
-      ]);
+    const [
+      totalLocations,
+      totalProducts,
+      totalBookings,
+      totalRevenue,
+      pendingTickets,
+      totalUsers,
+      recentBookings,
+    ] = await prisma.$transaction([
+      prisma.location.count({ where: { isActive: true } }),
+      prisma.product.count({ where: { isActive: true } }),
+      prisma.booking.count(),
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: { status: { name: 'PAID' } },
+      }),
+      prisma.supportTicket.count({
+        where: { status: { name: { notIn: ['CLOSED', 'RESOLVED'] } } },
+      }),
+      prisma.user.count({ where: { isActive: true } }),
+      prisma.booking.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          bookingNumber: true,
+          grandTotal: true,
+          createdAt: true,
+          customer: { select: { name: true, email: true } },
+          product:  { select: { name: true } },
+          status:   { select: { name: true, displayName: true, color: true } },
+        },
+      }),
+    ]);
 
     return NextResponse.json({
-      data: { totalProducts, totalLocations, totalUsers, activeListings },
+      data: {
+        totalLocations,
+        totalProducts,
+        totalBookings,
+        totalRevenue: totalRevenue._sum.amount ?? 0,
+        pendingTickets,
+        totalUsers,
+        recentBookings,
+      },
     });
   } catch (error) {
-    console.error('GET /api/admin/stats error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('[STATS_READ]', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

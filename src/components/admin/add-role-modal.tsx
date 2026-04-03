@@ -98,6 +98,7 @@ export function AddRoleModal({ isOpen, onClose, onSuccess, role }: AddRoleModalP
     try {
       const body = {
         name,
+        displayName: name,
         description: description || undefined,
         permissionIds: selectedPermissions,
       };

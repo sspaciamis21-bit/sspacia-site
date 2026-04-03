@@ -157,7 +157,7 @@ export function EditUserModal({ isOpen, onClose, onSuccess, user }: EditUserModa
       }
 
       const method = user ? 'PATCH' : 'POST';
-      const url = user ? `/api/users/${user.id}` : '/api/users';
+      const url = user ? `/api/admin/users/${user.id}` : '/api/admin/users';
 
       const response = await fetch(url, {
         method,

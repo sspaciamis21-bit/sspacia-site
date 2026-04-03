@@ -1,46 +1,57 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyToken } from '@/lib/jwt';
+import { withPermission } from '@/lib/auth/withPermission';
+import { requireAuth } from '@/lib/auth';
 
-async function requireAdmin() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth-token')?.value;
-  if (!token) return null;
-  const payload = await verifyToken(token);
-  if (!payload || (payload.role as string) !== 'ADMIN') return null;
-  return payload;
-}
-
-// DELETE /api/admin/products/[id]/images/[imageId] - Remove image
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string; imageId: string }> }
-) {
+// DELETE /api/admin/products/[id]/images/[imageId] — Remove a product image
+export const DELETE = withPermission('products', 'update', async (
+  req: NextRequest,
+  { params }: { params: Promise<Record<string, string>> }
+) => {
   try {
-    const auth = await requireAdmin();
-    if (!auth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const payload = await requireAuth();
+    if (!payload?.id) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
 
     const { id, imageId } = await params;
-    const productId = parseInt(id);
-    const imgId = parseInt(imageId);
+    const productId = parseInt(id, 10);
+    const imgId     = parseInt(imageId, 10);
 
     if (isNaN(productId) || isNaN(imgId)) {
       return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
     }
 
-    await prisma.productImage.delete({
+    // Check image belongs to product
+    const image = await prisma.productImage.findFirst({
       where: { id: imgId, productId },
+      select: { id: true, url: true },
+    });
+
+    if (!image) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.productImage.delete({ where: { id: imgId } });
+
+      await tx.activityLog.create({
+        data: {
+          userId:    Number(payload.id),
+          action:    'DELETE',
+          module:    'products',
+          recordId:  productId,
+          oldData:   JSON.stringify(image),
+          newData:   null,
+          ipAddress: req.headers.get('x-forwarded-for') ?? null,
+        },
+      });
     });
 
     return NextResponse.json({ data: { message: 'Image removed successfully' } });
   } catch (error) {
-    console.error('DELETE /api/admin/products/[id]/images/[imageId] error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('[PRODUCT_IMAGE_REMOVE]', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

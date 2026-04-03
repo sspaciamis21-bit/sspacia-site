@@ -1,185 +1,76 @@
 "use client";
 import Image from "next/image";
-import { MoveRight, PhoneCall } from "lucide-react";
+import { MoveRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import ShinyText from "@/components/ui/ShinyText";
-import { motion, Variants} from "motion/react";
-
-// Reusable variants with explicit typing
-const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 28 },
-  show: (delay: number = 0) => ({
-    opacity: 1,
-    y: 0,
-    transition: { 
-      duration: 0.55, 
-      ease: [0.22, 1, 0.36, 1] as const, // Added as const
-      delay 
-    },
-  }),
-};
-
-const fadeIn: Variants = {
-  hidden: { opacity: 0, scale: 0.92 },
-  show: (delay: number = 0) => ({
-    opacity: 1,
-    scale: 1,
-    transition: { 
-      duration: 0.5, 
-      ease: [0.22, 1, 0.36, 1] as const, // Added as const
-      delay 
-    },
-  }),
-};
+import { motion } from "motion/react";
 
 function Hero() {
   return (
-    <div className="relative w-full py-10 lg:py-20 overflow-hidden bg-gradient-to-br from-[#E0F7FA] via-[#F8F9FA] to-[#E0F2F1]">
-      {/* Decorative blur orbs */}
-      <div className="pointer-events-none absolute -top-20 -left-20 w-96 h-96 rounded-full bg-[#006064]/15 blur-3xl" />
-      <div className="pointer-events-none absolute top-1/2 right-0 w-80 h-80 -translate-y-1/2 rounded-full bg-[#4DB6AC]/20 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-0 left-1/3 w-72 h-72 rounded-full bg-[#B2EBF2]/40 blur-2xl" />
-
-      <div className="w-screen -mx-[calc(50vw-50%)] px-4 sm:px-6 lg:px-50 relative z-10">
-        <div className="grid grid-cols-1 gap-8 items-center md:grid-cols-2">
-
-          {/* ── Left: Text + Buttons ── */}
-          <div className="flex gap-6 flex-col text-center md:text-left items-center md:items-start">
-
-            {/* Badge */}
-            <motion.div
-              variants={fadeUp}
-              initial="hidden"
-              animate="show"
-              custom={0}
-            >
-              <span className="inline-flex items-center gap-3 rounded-full border border-[#006064]/30 bg-white/60 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] shadow-sm">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#006064] opacity-60" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[#006064]" />
-                </span>
-                <ShinyText
-                  text="Premium Coworking in Ahmedabad"
-                  color="#006064"
-                  shineColor="#ffffff"
-                  speed={3}
-                  spread={100}
-                />
-              </span>
-            </motion.div>
-
-            {/* Heading + subtext */}
-            <motion.div
-              className="flex gap-4 flex-col"
-              variants={fadeUp}
-              initial="hidden"
-              animate="show"
-              custom={0.1}
-            >
-              <h1 className="text-5xl md:text-7xl lg:text-8xl max-w-lg tracking-tighter leading-[0.9] font-bold text-[#004D40]">
-                Top Coworking Spaces
-              </h1>
-              <p className="text-base sm:text-lg leading-relaxed tracking-tight text-[#616161] max-w-md mx-auto md:mx-0">
-                SSPACIA offers modern coworking spaces in Ahmedabad, designed to
-                foster creativity and collaboration in a professional
-                environment. Join our vibrant community today.
-              </p>
-            </motion.div>
-
-            {/* Buttons */}
-            <div className="flex flex-row gap-4 flex-wrap justify-center md:justify-start">
-              <motion.div
-                variants={fadeIn}
-                initial="hidden"
-                animate="show"
-                custom={0.22}
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <a href="/book-online">
-                  <Button size="lg" className="gap-3 rounded-full h-14 px-8 text-base font-bold shadow-xl shadow-[#006064]/20" variant="outline">
-                    Book a tour <PhoneCall className="w-4 h-4" />
-                  </Button>
-                </a>
-              </motion.div>
-              <motion.div
-                variants={fadeIn}
-                initial="hidden"
-                animate="show"
-                custom={0.32}
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <a href="/gallery">
-                  <Button size="lg" className="gap-3 rounded-full h-14 px-8 text-base font-bold shadow-xl shadow-[#006064]/20">
-                    View Spaces <MoveRight className="w-4 h-4" />
-                  </Button>
-                </a>
-              </motion.div>
+    <section className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[630px] flex items-center mb-48">
+      <div className="grid grid-cols-12 gap-12 relative w-full">
+        {/* Drafting Line Accent */}
+        <div className="absolute top-0 left-0 w-px h-full bg-primary-container/20 -ml-4 hidden lg:block"></div>
+        <div className="absolute top-1/4 left-0 w-1/2 h-px bg-primary-container/20 -mt-4 hidden lg:block"></div>
+        <div className="col-span-12 lg:col-span-7 z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
+          >
+            <h1 className="font-display text-5xl md:text-7xl lg:text-[7rem] font-bold leading-[0.85] tracking-tighter text-on-surface mb-8">
+              The <span className="text-primary-container"><br/>Spatial</span> Blueprint.
+            </h1>
+            <p className="text-lg md:text-xl text-tertiary max-w-lg font-light leading-relaxed mb-10">
+              Architectural coworking designed for those who build the future. A clinical fusion of form, function, and high-performance flow.
+            </p>
+            <div className="flex gap-6 items-center">
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full bg-primary-container pulse-node"></span>
+                <span className="text-[10px] font-sans uppercase tracking-[0.2em] text-outline font-bold">Available in 3 Clusters</span>
+              </div>
             </div>
-          </div>
-
-          {/* ── Right: Image Grid ── */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 h-[350px] sm:h-[480px]">
-            {/* Top-left */}
-            <motion.div
-              className="rounded-3xl overflow-hidden ring-1 ring-[#006064]/10 shadow-lg shadow-[#006064]/5"
-              initial={{ opacity: 0, y: 40, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
-              whileHover={{ scale: 1.03, transition: { duration: 0.25 } }}
-            >
-              <Image
-                src="/Pictures/Reception.jpeg"
-                alt="SSPACIA Coworking Space"
-                width={400}
-                height={240}
-                className="w-full h-full object-cover"
-                priority
-              />
-            </motion.div>
-
-            {/* Right — tall, spans 2 rows */}
-            <motion.div
-              className="rounded-3xl overflow-hidden row-span-2 ring-1 ring-[#006064]/10 shadow-xl shadow-[#006064]/10"
-              initial={{ opacity: 0, x: 50, scale: 0.95 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
-              whileHover={{ scale: 1.02, transition: { duration: 0.25 } }}
-            >
-              <Image
-                src="/IMAGES_SSPACIA/PREMIER HOUSE/Reception.JPG"
-                alt="SSPACIA Premier House"
-                width={400}
-                height={480}
-                className="w-full h-full object-cover"
-                priority
-              />
-            </motion.div>
-
-            {/* Bottom-left */}
-            <motion.div
-              className="rounded-3xl overflow-hidden ring-1 ring-[#006064]/10 shadow-lg shadow-[#006064]/5"
-              initial={{ opacity: 0, y: 40, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.42 }}
-              whileHover={{ scale: 1.03, transition: { duration: 0.25 } }}
-            >
-              <Image
-                src="/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"
-                alt="SSPACIA Mercardo"
-                width={400}
-                height={240}
-                className="w-full h-full object-cover"
-                priority
-              />
-            </motion.div>
-          </div>
-
+            {/* Buttons */}
+            <div className="flex flex-row gap-4 flex-wrap mt-10">
+              <a href="/book-online">
+                <Button size="lg" className="liquid-hover rounded-none h-12 px-8 text-[10px] font-bold uppercase tracking-widest text-on-primary-container bg-primary-container hover:bg-primary-container" variant="default">
+                  Book a Tour <MoveRight className="w-3 h-3 ml-2" />
+                </Button>
+              </a>
+              <a href="/gallery">
+                <Button size="lg" className="rounded-none h-12 px-8 border border-outline font-bold uppercase tracking-widest text-[10px] hover:bg-surface-high transition-colors text-on-surface bg-transparent">
+                  View Spaces
+                </Button>
+              </a>
+            </div>
+          </motion.div>
         </div>
+        
+        {/* Overlapping Image 1 */}
+        <motion.div
+          className="col-span-12 lg:col-span-6 lg:absolute lg:right-0 lg:top-0 h-[600px] w-full lg:w-[45%] overflow-hidden bg-surface-container-high shadow-2xl mt-12 lg:mt-0"
+          initial={{ opacity: 0, x: 50 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 1, ease: [0.23, 1, 0.32, 1], delay: 0.2 }}
+        >
+          <Image
+            src="/Pictures/Reception.jpeg"
+            alt="Ultra-modern architectural office interior"
+            fill
+            className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-1000 transform hover:scale-105"
+            priority
+          />
+          <div className="absolute bottom-8 left-8 bg-surface-lowest p-6 shadow-xl z-20">
+            <span className="text-[0.65rem] font-sans uppercase tracking-[0.3em] text-primary">Volume 01</span>
+            <h3 className="font-display text-2xl font-bold mt-2 text-on-surface">Executive Cabins</h3>
+          </div>
+        </motion.div>
+        
+        {/* Floating Geometric Line */}
+        <div className="hidden lg:block absolute bottom-[-5%] left-[10%] w-[30%] h-px bg-primary-container z-20"></div>
       </div>
-    </div>
+    </section>
   );
 }
 
 export { Hero };
+

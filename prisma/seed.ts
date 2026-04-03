@@ -129,13 +129,16 @@ async function main() {
   // ─────────────────────────────────────────────────────────
 
   const adminRole = await prisma.role.create({
-    data: { name: "admin", displayName: "Admin", description: "Full system access", isSystem: true },
+    data: { name: "ADMIN", displayName: "Admin", description: "Full system access", isSystem: true },
   });
   const managerRole = await prisma.role.create({
-    data: { name: "manager", displayName: "Manager", description: "Location management and reports" },
+    data: { name: "MANAGER", displayName: "Manager", description: "Location management and reports" },
   });
   const cmRole = await prisma.role.create({
-    data: { name: "community_manager", displayName: "Community Manager", description: "Day-to-day operations at assigned locations" },
+    data: { name: "COMMUNITY_MANAGER", displayName: "Community Manager", description: "Day-to-day operations at assigned locations" },
+  });
+  const userRole = await prisma.role.create({
+    data: { name: "USER", displayName: "User", description: "External customer/member" },
   });
 
   // Admin gets ALL permissions
@@ -165,7 +168,15 @@ async function main() {
   await prisma.rolePermission.createMany({
     data: cmPerms.map((p) => ({ roleId: cmRole.id, permissionId: p.id })),
   });
-  console.log("✅ 3 Roles with permissions mapped");
+
+  // User gets basic view permissions
+  const userPerms = permissionRecords.filter((p) =>
+    ["dashboard.view", "locations.view", "products.view", "tickets.create"].includes(p.name)
+  );
+  await prisma.rolePermission.createMany({
+    data: userPerms.map((p) => ({ roleId: userRole.id, permissionId: p.id })),
+  });
+  console.log("✅ 4 Roles with permissions mapped");
 
   // ─────────────────────────────────────────────────────────
   // 4. SEED ADMIN USER
