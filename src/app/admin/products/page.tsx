@@ -18,11 +18,18 @@ interface RecentProduct {
   accessTime?: string;
   capacity?: number;
   quantity: number;
+  sdr?: number;
+  adv?: number;
+  securityDepositMonths?: number;
+  complementaryMeetingHours?: number;
   isActive: boolean;
   isFeatured: boolean;
   sortOrder: number;
   location: { id: number; name: string };
-  images?: { id: number; url: string; isPrimary: boolean }[];
+  images?: { id: number; url: string; alt?: string; isPrimary: boolean; sortOrder?: number }[];
+  pricingPlans?: any[];
+  units?: any[];
+  amenities?: any[];
 }
 
 export default function AdminProductsPage() {

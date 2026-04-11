@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
 import { Toaster } from "sonner";

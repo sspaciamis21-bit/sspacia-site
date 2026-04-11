@@ -3,33 +3,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Package, Loader2 } from 'lucide-react';
+import { X, Package, Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-// ─── Local Enums (since Prisma models aren't enums at runtime) ────────────────
-const ProductType = {
-  FLEX_DESK: 'FLEX_DESK',
-  FIXED_DESK: 'FIXED_DESK',
-  DEDICATED_CABIN: 'DEDICATED_CABIN',
-  PRIVATE_CABIN: 'PRIVATE_CABIN',
-  EXECUTIVE_CABIN: 'EXECUTIVE_CABIN',
-  MEETING_ROOM: 'MEETING_ROOM',
-  BOARD_ROOM: 'BOARD_ROOM',
-  EVENT_ROOM: 'EVENT_ROOM',
-} as const;
-
-const SpaceCategory = {
-  WORKSPACE: 'WORKSPACE',
-  GUEST_SPACE: 'GUEST_SPACE',
-} as const;
-
-const AccessTime = {
-  BUSINESS_HOURS: 'BUSINESS_HOURS',
-  TWENTY_FOUR_SEVEN: '24X7',
-} as const;
-
-type ProductType = (typeof ProductType)[keyof typeof ProductType];
-type SpaceCategory = (typeof SpaceCategory)[keyof typeof SpaceCategory];
-type AccessTime = (typeof AccessTime)[keyof typeof AccessTime];
 
 interface LocationOption {
   id: number;
@@ -48,25 +23,71 @@ interface Amenity {
   icon: string | null;
 }
 
+interface ProductTypeOption {
+  id: number;
+  name: string;
+  displayName: string;
+}
+
+interface SpaceCategoryOption {
+  id: number;
+  name: string;
+  displayName: string;
+  slug: string;
+}
+
+interface AccessTimeOption {
+  id: number;
+  name: string;
+  displayName: string;
+}
+
+interface DurationTypeOption {
+  id: number;
+  name: string;
+  displayName: string;
+}
+
+interface PricingPlanData {
+  id?: number;
+  durationType: string;
+  price: number;
+  oldPrice?: number;
+  discount?: number;
+  priceType?: 'PER_SEAT' | 'FIXED';
+}
+
+interface ProductUnitData {
+  id?: number;
+  name: string;
+  code?: string;
+  capacity?: number;
+  description?: string;
+}
+
 interface ProductToEdit {
   id: number;
   locationId: number;
   location?: { id: number; name: string };
   name: string;
   slug: string;
-  type: string;
-  category: string;
+  type: ProductTypeOption | string;
+  category: SpaceCategoryOption | string;
   description?: string;
-  accessTime?: string;
+  accessTime?: AccessTimeOption | string;
   capacity?: number;
   quantity: number;
-  sdrPlusAdv?: string;
-  complementaryMeetingRoom?: string;
+  sdr?: number;
+  adv?: number;
+  securityDepositMonths?: number;
+  complementaryMeetingHours?: number;
   isActive: boolean;
   isFeatured: boolean;
   sortOrder: number;
   images?: ProductImageData[];
   amenities?: { amenity: Amenity }[];
+  pricingPlans?: PricingPlanData[];
+  units?: ProductUnitData[];
 }
 
 interface AddProductModalProps {
@@ -97,31 +118,16 @@ const inputClass =
 const selectClass =
   'w-full px-4 py-2.5 bg-[#F8F9FA] border border-[#CFD8DC]/50 rounded-lg text-sm text-[#212121] focus:outline-none focus:ring-4 focus:ring-[#006064]/8 focus:border-[#006064] transition-all appearance-none cursor-pointer';
 
-const typeOptions: Array<{ value: ProductType; label: string }> = [
-  { value: ProductType.FLEX_DESK, label: 'Flex Desk' },
-  { value: ProductType.FIXED_DESK, label: 'Fixed Desk' },
-  { value: ProductType.DEDICATED_CABIN, label: 'Dedicated Cabin' },
-  { value: ProductType.PRIVATE_CABIN, label: 'Private Cabin' },
-  { value: ProductType.EXECUTIVE_CABIN, label: 'Executive Cabin' },
-  { value: ProductType.MEETING_ROOM, label: 'Meeting Room' },
-  { value: ProductType.BOARD_ROOM, label: 'Board Room' },
-  { value: ProductType.EVENT_ROOM, label: 'Event Room' },
-];
-
-const categoryOptions: Array<{ value: SpaceCategory; label: string }> = [
-  { value: SpaceCategory.WORKSPACE, label: 'Workspace' },
-  { value: SpaceCategory.GUEST_SPACE, label: 'Guest Space' },
-];
-
-const accessTimeOptions: Array<{ value: AccessTime; label: string }> = [
-  { value: AccessTime.BUSINESS_HOURS, label: 'Business Hours' },
-  { value: AccessTime.TWENTY_FOUR_SEVEN, label: '24/7 Access' },
-];
-
 export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProductModalProps) {
   const [locations, setLocations] = useState<LocationOption[]>([]);
-  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [productTypes, setProductTypes] = useState<ProductTypeOption[]>([]);
+  const [categories, setCategories] = useState<SpaceCategoryOption[]>([]);
+  const [accessTimeOptionsList, setAccessTimeOptionsList] = useState<AccessTimeOption[]>([]);
+  const [durationTypes, setDurationTypes] = useState<DurationTypeOption[]>([]);
   const [amenitiesOptions, setAmenitiesOptions] = useState<Amenity[]>([]);
+  
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [optionsLoading, setOptionsLoading] = useState(false);
   const [selectedAmenities, setSelectedAmenities] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
@@ -129,12 +135,21 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
   const [locationId, setLocationId] = useState('');
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
-  const [type, setType] = useState<string>(ProductType.FLEX_DESK);
-  const [category, setCategory] = useState<string>(SpaceCategory.WORKSPACE);
+  const [type, setType] = useState('');
+  const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
-  const [accessTime, setAccessTime] = useState<string | ''>('');
+  const [accessTime, setAccessTime] = useState('');
   const [capacity, setCapacity] = useState('');
   const [quantity, setQuantity] = useState('1');
+  
+  const [sdr, setSdr] = useState('');
+  const [adv, setAdv] = useState('');
+  const [securityDepositMonths, setSecurityDepositMonths] = useState('3');
+  const [complementaryMeetingHours, setComplementaryMeetingHours] = useState('');
+  
+  const [pricingPlans, setPricingPlans] = useState<PricingPlanData[]>([]);
+  const [units, setUnits] = useState<ProductUnitData[]>([]);
+  
   const [isActive, setIsActive] = useState(true);
   const [isFeatured, setIsFeatured] = useState(false);
   const [sortOrder, setSortOrder] = useState('0');
@@ -150,6 +165,9 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
     if (!isOpen) return;
 
     setLocationsLoading(true);
+    setOptionsLoading(true);
+
+    // Fetch Locations
     fetch('/api/admin/locations')
       .then((r) => r.json())
       .then((json) => {
@@ -158,12 +176,30 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       .catch(() => toast.error('Failed to load locations'))
       .finally(() => setLocationsLoading(false));
 
-    fetch('/api/admin/amenities')
+    // Fetch Amenities
+    fetch('/api/admin/config/amenities')
       .then((r) => r.json())
       .then((json) => {
-         if (json.data) setAmenitiesOptions(json.data.filter((a: any) => a.isActive));
+         if (json.data) setAmenitiesOptions(json.data.filter((a: Amenity & { isActive: boolean }) => a.isActive));
       })
       .catch(() => console.error('Failed to load amenities'));
+
+    // Fetch Dynamic Options
+    Promise.all([
+      fetch('/api/admin/config/product-types').then(r => r.json()),
+      fetch('/api/admin/config/space-categories').then(r => r.json()),
+      fetch('/api/admin/config/access-time-options').then(r => r.json()),
+      fetch('/api/admin/config/duration-types').then(r => r.json()),
+    ]).then(([typesJson, catsJson, accessJson, durationsJson]) => {
+      if (typesJson.data) setProductTypes(typesJson.data);
+      if (catsJson.data) setCategories(catsJson.data);
+      if (accessJson.data) setAccessTimeOptionsList(accessJson.data);
+      if (durationsJson.data) setDurationTypes(durationsJson.data);
+    }).catch(err => {
+      console.error('Failed to load configuration options', err);
+      toast.error('Failed to load configuration options');
+    }).finally(() => setOptionsLoading(false));
+
   }, [isOpen]);
 
   useEffect(() => {
@@ -173,12 +209,34 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       setLocationId(String(product.locationId ?? product.location?.id ?? ''));
       setName(product.name);
       setSlug(product.slug);
-      setType(typeof product.type === 'object' ? (product.type as any).name : product.type);
-      setCategory(typeof product.category === 'object' ? (product.category as any).name : product.category);
+      
+      const typeName = typeof product.type === 'object' ? product.type.name : product.type;
+      setType(typeName);
+      
+      const catName = typeof product.category === 'object' ? product.category.name : product.category;
+      setCategory(catName);
+      
       setDescription(product.description ?? '');
-      setAccessTime(typeof product.accessTime === 'object' ? (product.accessTime as any).name : (product.accessTime ?? ''));
+      
+      const accessName = typeof product.accessTime === 'object' ? product.accessTime.name : (product.accessTime ?? '');
+      setAccessTime(accessName);
+      
       setCapacity(product.capacity?.toString() ?? '');
       setQuantity(String(product.quantity ?? 1));
+      
+      setSdr(product.sdr?.toString() ?? '');
+      setAdv(product.adv?.toString() ?? '');
+      setSecurityDepositMonths(product.securityDepositMonths?.toString() ?? '3');
+      setComplementaryMeetingHours(product.complementaryMeetingHours?.toString() ?? '');
+      
+      const mappedPlans = product.pricingPlans?.map(p => ({
+        ...p,
+        durationType: typeof p.durationType === 'object' ? (p.durationType as any).name : p.durationType
+      })) ?? [];
+      setPricingPlans(mappedPlans);
+      
+      setUnits(product.units ?? []);
+      
       setIsActive(product.isActive);
       setIsFeatured(product.isFeatured);
       setSortOrder(String(product.sortOrder ?? 0));
@@ -191,12 +249,18 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       setLocationId('');
       setName('');
       setSlug('');
-      setType(ProductType.FLEX_DESK);
-      setCategory(SpaceCategory.WORKSPACE);
+      setType('');
+      setCategory('');
       setDescription('');
       setAccessTime('');
       setCapacity('');
       setQuantity('1');
+      setSdr('');
+      setAdv('');
+      setSecurityDepositMonths('3');
+      setComplementaryMeetingHours('');
+      setPricingPlans([]);
+      setUnits([]);
       setIsActive(true);
       setIsFeatured(false);
       setSortOrder('0');
@@ -281,11 +345,40 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
     }
   };
 
+  const addPricingPlan = () => {
+    setPricingPlans(prev => [...prev, { durationType: '', price: 0, priceType: 'PER_SEAT' }]);
+  };
+
+  const updatePricingPlan = (index: number, field: keyof PricingPlanData, value: any) => {
+    setPricingPlans(prev => prev.map((plan, i) => i === index ? { ...plan, [field]: value } : plan));
+  };
+
+  const removePricingPlan = (index: number) => {
+    setPricingPlans(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addUnit = () => {
+    setUnits(prev => [...prev, { name: '', code: '', capacity: 1, description: '' }]);
+  };
+
+  const updateUnit = (index: number, field: keyof ProductUnitData, value: any) => {
+    setUnits(prev => prev.map((unit, i) => i === index ? { ...unit, [field]: value } : unit));
+  };
+
+  const removeUnit = (index: number) => {
+    setUnits(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!locationId || !name || !slug || !type || !category) {
       toast.error('Please fill in Location, Name, Slug, Type, and Category.');
+      return;
+    }
+
+    if (isOwnedSpace && units.length > Number(quantity)) {
+      toast.error(`You cannot add more units than the total quantity (${quantity})`);
       return;
     }
 
@@ -301,10 +394,26 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       accessTime: accessTime || undefined,
       capacity: capacity ? Number(capacity) : undefined,
       quantity: quantity ? Number(quantity) : 1,
+      sdr: sdr ? Number(sdr) : undefined,
+      adv: adv ? Number(adv) : undefined,
+      securityDepositMonths: Number(securityDepositMonths),
+      complementaryMeetingHours: complementaryMeetingHours ? Number(complementaryMeetingHours) : undefined,
       isActive,
       isFeatured,
       sortOrder: sortOrder ? Number(sortOrder) : 0,
       amenityIds: selectedAmenities,
+      pricingPlans: pricingPlans.filter(p => p.durationType && p.price > 0).map(p => ({
+        durationType: p.durationType,
+        price: p.price,
+        oldPrice: p.oldPrice,
+        discount: p.discount,
+        priceType: p.priceType || 'PER_SEAT',
+      })),
+      units: units.filter(u => u.name).map(u => ({
+        ...u,
+        capacity: Number(u.capacity) || 1,
+        description: u.description || '',
+      })),
     };
 
     try {
@@ -352,10 +461,13 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
     }
   };
 
+  const selectedCategorySlug = categories.find(c => c.name === category)?.slug;
+  const isOwnedSpace = selectedCategorySlug === 'owned-space' || category === 'WORKSPACE'; // Fallback for old data
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -366,11 +478,11 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
           />
 
           <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="relative flex flex-col w-full max-w-xl bg-white shadow-2xl h-full"
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className="relative flex flex-col w-full max-w-4xl bg-white shadow-2xl max-h-[90vh] rounded-[2rem] overflow-hidden"
           >
             <div className="flex items-center justify-between px-6 py-5 border-b border-[#CFD8DC]/30 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -503,13 +615,15 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                       <select
                         id="type"
                         value={type}
-                        onChange={(e) => setType(e.target.value as ProductType)}
+                        onChange={(e) => setType(e.target.value)}
                         className={selectClass}
                         required
+                        disabled={optionsLoading}
                       >
-                        {typeOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                        <option value="">{optionsLoading ? 'Loading types...' : 'Select Type'}</option>
+                        {productTypes.map((opt) => (
+                          <option key={opt.id} value={opt.name}>
+                            {opt.displayName}
                           </option>
                         ))}
                       </select>
@@ -520,13 +634,15 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                       <select
                         id="category"
                         value={category}
-                        onChange={(e) => setCategory(e.target.value as SpaceCategory)}
+                        onChange={(e) => setCategory(e.target.value)}
                         className={selectClass}
                         required
+                        disabled={optionsLoading}
                       >
-                        {categoryOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                        <option value="">{optionsLoading ? 'Loading categories...' : 'Select Category'}</option>
+                        {categories.map((opt) => (
+                          <option key={opt.id} value={opt.name}>
+                            {opt.displayName}
                           </option>
                         ))}
                       </select>
@@ -551,27 +667,69 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                       <select
                         id="accessTime"
                         value={accessTime}
-                        onChange={(e) => setAccessTime(e.target.value as AccessTime | '')}
+                        onChange={(e) => setAccessTime(e.target.value)}
                         className={selectClass}
+                        disabled={optionsLoading}
                       >
                         <option value="">Choose an access option</option>
-                        {accessTimeOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                        {accessTimeOptionsList.map((opt) => (
+                          <option key={opt.id} value={opt.name}>
+                            {opt.displayName}
                           </option>
                         ))}
                       </select>
                     </div>
 
+                    {!isOwnedSpace && (
+                      <div>
+                        <Label htmlFor="capacity">Capacity (Pax)</Label>
+                        <input
+                          id="capacity"
+                          type="number"
+                          min={0}
+                          value={capacity}
+                          onChange={(e) => setCapacity(e.target.value)}
+                          placeholder="e.g. 5"
+                          className={inputClass}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <Label htmlFor="capacity">Capacity</Label>
+                      <Label htmlFor="sdr">Security Deposit (SDR)</Label>
                       <input
-                        id="capacity"
+                        id="sdr"
                         type="number"
                         min={0}
-                        value={capacity}
-                        onChange={(e) => setCapacity(e.target.value)}
-                        placeholder="e.g. 8"
+                        value={sdr}
+                        onChange={(e) => setSdr(e.target.value)}
+                        placeholder="0"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="adv">Advance Rent (ADV)</Label>
+                      <input
+                        id="adv"
+                        type="number"
+                        min={0}
+                        value={adv}
+                        onChange={(e) => setAdv(e.target.value)}
+                        placeholder="0"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="complementaryMeetingHours">Free Meeting Hrs (Per Month)</Label>
+                      <input
+                        id="complementaryMeetingHours"
+                        type="number"
+                        min={0}
+                        value={complementaryMeetingHours}
+                        onChange={(e) => setComplementaryMeetingHours(e.target.value)}
+                        placeholder="0"
                         className={inputClass}
                       />
                     </div>
@@ -627,6 +785,166 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                       <p className="text-[10px] text-[#9E9E9E]">Toggle to hide or show this product on listings</p>
                     </div>
                   </label>
+
+                  {/* Pricing Plans Section */}
+                  <div className="space-y-4 pt-4 border-t border-[#CFD8DC]/30">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest">
+                          Pricing Plans
+                        </h3>
+                        <p className="text-[10px] text-[#9E9E9E]">Set prices for different billing durations</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addPricingPlan}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E0F7FA] text-[#006064] rounded-lg text-xs font-bold hover:bg-[#B2EBF2] transition-colors"
+                      >
+                        <Plus size={14} /> Add Plan
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {pricingPlans.map((plan, index) => (
+                        <div key={index} className="flex items-end gap-3 p-3 bg-[#F8F9FA] rounded-xl border border-[#CFD8DC]/30">
+                          <div className="flex-1">
+                            <Label htmlFor={`duration-${index}`}>Duration</Label>
+                            <select
+                              id={`duration-${index}`}
+                              value={plan.durationType}
+                              onChange={(e) => updatePricingPlan(index, 'durationType', e.target.value)}
+                              className={selectClass}
+                            >
+                              <option value="">Select Duration</option>
+                              {durationTypes.map(d => (
+                                <option key={d.id} value={d.name}>{d.displayName}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="w-28">
+                            <Label htmlFor={`price-${index}`}>Price (₹)</Label>
+                            <input
+                              id={`price-${index}`}
+                              type="number"
+                              value={plan.price}
+                              onChange={(e) => updatePricingPlan(index, 'price', Number(e.target.value))}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div className="w-32">
+                            <Label htmlFor={`priceType-${index}`}>Type</Label>
+                            <select
+                              id={`priceType-${index}`}
+                              value={plan.priceType || 'PER_SEAT'}
+                              onChange={(e) => updatePricingPlan(index, 'priceType', e.target.value)}
+                              className={selectClass}
+                            >
+                              <option value="PER_SEAT">Per Seat</option>
+                              <option value="FIXED">Fixed (Per Unit)</option>
+                            </select>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removePricingPlan(index)}
+                            className="p-2.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      ))}
+                      {pricingPlans.length === 0 && (
+                        <p className="text-center py-4 text-xs text-[#9E9E9E] italic underline decoration-[#CFD8DC]">No pricing plans added yet.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Product Units Section (Owned Space only) */}
+                  {isOwnedSpace && (
+                    <div className="space-y-4 pt-4 border-t border-[#CFD8DC]/30">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest">
+                            Physical Units
+                          </h3>
+                          <p className="text-[10px] text-[#9E9E9E]">Manage specific desks/cabins for this product</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <p className={`text-xs font-bold ${units.length > Number(quantity) ? 'text-red-500' : 'text-[#006064]'}`}>
+                            {units.length} / {quantity} Units
+                          </p>
+                          <button
+                            type="button"
+                            onClick={addUnit}
+                            disabled={units.length >= Number(quantity)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E0F7FA] text-[#006064] rounded-lg text-xs font-bold hover:bg-[#B2EBF2] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Plus size={14} /> Add Unit
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        {units.map((unit, index) => (
+                          <div key={index} className="flex items-end gap-3 p-3 bg-[#F8F9FA] rounded-xl border border-[#CFD8DC]/30">
+                            <div className="flex-1">
+                              <Label htmlFor={`unit-name-${index}`}>Unit Name (e.g. Desk #1)</Label>
+                              <input
+                                id={`unit-name-${index}`}
+                                type="text"
+                                value={unit.name}
+                                onChange={(e) => updateUnit(index, 'name', e.target.value)}
+                                className={inputClass}
+                                placeholder="Desk #1"
+                              />
+                            </div>
+                            <div className="w-20">
+                              <Label htmlFor={`unit-code-${index}`}>Code</Label>
+                              <input
+                                id={`unit-code-${index}`}
+                                type="text"
+                                value={unit.code ?? ''}
+                                onChange={(e) => updateUnit(index, 'code', e.target.value)}
+                                className={inputClass}
+                                placeholder="D1"
+                              />
+                            </div>
+                            <div className="w-20">
+                              <Label htmlFor={`unit-seats-${index}`}>Seats</Label>
+                              <input
+                                id={`unit-seats-${index}`}
+                                type="number"
+                                min={1}
+                                value={unit.capacity ?? 1}
+                                onChange={(e) => updateUnit(index, 'capacity', Number(e.target.value))}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <Label htmlFor={`unit-desc-${index}`}>Description / Notes</Label>
+                              <input
+                                id={`unit-desc-${index}`}
+                                type="text"
+                                value={unit.description ?? ''}
+                                onChange={(e) => updateUnit(index, 'description', e.target.value)}
+                                className={inputClass}
+                                placeholder="Near window, extra space..."
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeUnit(index)}
+                              className="p-2.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        ))}
+                        {units.length === 0 && (
+                          <p className="text-center py-4 text-xs text-[#9E9E9E] italic underline decoration-[#CFD8DC]">No units added. This product will be booked without specific unit assignment.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Amenities Selection */}
                   <div className="space-y-4 pt-4 border-t border-[#CFD8DC]/30">
@@ -692,7 +1010,7 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                 ) : (
                   <>
                     <Package size={15} />
-                    Add Product
+                    {product ? 'Update Product' : 'Add Product'}
                   </>
                 )}
               </button>

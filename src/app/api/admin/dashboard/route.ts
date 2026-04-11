@@ -5,7 +5,7 @@ import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
 // GET /api/admin/dashboard — Manager/admin dashboard: location-scoped stats
-export const GET = withPermission('reports', 'read', async (req: NextRequest) => {
+export const GET = withPermission('dashboard', 'view', async (req: NextRequest) => {
   try {
     const payload = await requireAuth();
     if (!payload?.id) {
@@ -156,12 +156,13 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           totalProducts,
           totalBookings,
           totalRevenue: Number(totalRevenue._sum.amount ?? 0),
-          pendingTickets,
+          openTickets: pendingTickets,
           totalTickets,
           totalLocations: assignedLocationIds.length,
           statusBreakdown,
         },
         recentBookings,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tickets: recentTickets.map((t: any) => ({
           ...t,
           status: t.status.name,

@@ -1,18 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { withPermission } from '@/lib/auth/withPermission';
-import { requireAuth } from '@/lib/auth';
+import { withPermission, type PermissionContext } from '@/lib/auth/withPermission';
 
 // ─── GET /api/admin/products ──────────────────────────────────────────────────
 // Lists products, scope-filtered by the caller's assigned locations.
-export const GET = withPermission('products', 'read', async (req: NextRequest) => {
+export const GET = withPermission('products', 'view', async (req: NextRequest, { payload }: PermissionContext) => {
   try {
-    const payload = await requireAuth();
-    if (!payload?.id) {
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
-    }
-
     const userId = Number(payload.id);
     const { searchParams } = req.nextUrl;
 
@@ -47,6 +41,10 @@ export const GET = withPermission('products', 'read', async (req: NextRequest) =
           isFeatured: true,
           capacity: true,
           quantity: true,
+          sdr: true,
+          adv: true,
+          securityDepositMonths: true,
+          complementaryMeetingHours: true,
           sortOrder: true,
           createdAt: true,
           location: { select: { id: true, name: true, slug: true } },
@@ -60,8 +58,13 @@ export const GET = withPermission('products', 'read', async (req: NextRequest) =
           pricingPlans: {
             where: { isActive: true },
             orderBy: { price: 'asc' },
-            take: 1,
-            select: { price: true, durationType: true },
+            select: { 
+              id: true, 
+              price: true, 
+              oldPrice: true, 
+              discount: true, 
+              durationType: { select: { id: true, name: true, displayName: true } } 
+            },
           },
           _count: { select: { amenities: true, images: true } },
         },
@@ -80,12 +83,8 @@ export const GET = withPermission('products', 'read', async (req: NextRequest) =
 });
 
 // ─── POST /api/admin/products ─────────────────────────────────────────────────
-export const POST = withPermission('products', 'create', async (req: NextRequest) => {
+export const POST = withPermission('products', 'create', async (req: NextRequest, { payload }: PermissionContext) => {
   try {
-    const payload = await requireAuth();
-    if (!payload?.id) {
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
-    }
 
     const body = await req.json() as Record<string, unknown>;
     const { locationId, name, slug, type, category } = body;
@@ -116,27 +115,34 @@ export const POST = withPermission('products', 'create', async (req: NextRequest
       );
     }
 
-    // Parse sdrPlusAdv
-    let sdrValue: number | undefined;
-    let advValue: number | undefined;
-    const sdrPlusAdv = body.sdrPlusAdv;
-    if (typeof sdrPlusAdv === 'string') {
-      const parts = sdrPlusAdv.split('+').map((p) => parseInt(p.trim(), 10));
+    // Parse sdr/adv/securityDeposit
+    const sdrValue = body.sdr !== undefined ? Number(body.sdr) : undefined;
+    const advValue = body.adv !== undefined ? Number(body.adv) : undefined;
+    const securityDepositMonths = body.securityDepositMonths !== undefined ? Number(body.securityDepositMonths) : 3;
+
+    // Legacy sdrPlusAdv support
+    let finalSdr = sdrValue;
+    let finalAdv = advValue;
+    if (finalSdr === undefined && typeof body.sdrPlusAdv === 'string') {
+      const parts = body.sdrPlusAdv.split('+').map((p) => parseInt(p.trim(), 10));
       if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-        sdrValue = parts[0];
-        advValue = parts[1];
+        finalSdr = parts[0];
+        finalAdv = parts[1];
       }
     }
 
-    const meetingHoursRaw = body.complementaryMeetingRoom;
-    const meetingHours = meetingHoursRaw ? parseInt(String(meetingHoursRaw), 10) : undefined;
+    const meetingHoursRaw = body.complementaryMeetingHours ?? body.complementaryMeetingRoom;
+    const meetingHours = meetingHoursRaw !== undefined ? parseInt(String(meetingHoursRaw), 10) : undefined;
 
-    interface PricingPlanInput { durationType: string; price: number; oldPrice?: number; discount?: number }
+    interface PricingPlanInput { durationType: string; price: number; oldPrice?: number; discount?: number; priceType?: string }
     const pricingPlans: PricingPlanInput[] = Array.isArray(body.pricingPlans)
       ? (body.pricingPlans as PricingPlanInput[])
       : [];
 
+    const units: any[] = Array.isArray(body.units) ? body.units : [];
+
     const amenityIds: number[] = Array.isArray(body.amenityIds)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ? (body.amenityIds as any[]).map((id) => parseInt(String(id), 10)).filter((id) => !isNaN(id))
       : [];
 
@@ -155,8 +161,9 @@ export const POST = withPermission('products', 'create', async (req: NextRequest
             : undefined,
           capacity:  body.capacity   ? Number(body.capacity)  : undefined,
           quantity:  body.quantity   ? Number(body.quantity)  : 1,
-          sdr:       sdrValue,
-          adv:       advValue,
+          sdr:       finalSdr,
+          adv:       finalAdv,
+          securityDepositMonths,
           complementaryMeetingHours:
             meetingHours !== undefined && !isNaN(meetingHours) ? meetingHours : undefined,
           isActive:   body.isActive  !== false,
@@ -169,6 +176,17 @@ export const POST = withPermission('products', 'create', async (req: NextRequest
                   price:    p.price,
                   oldPrice: p.oldPrice,
                   discount: p.discount,
+                  priceType: (p.priceType as any) || 'PER_SEAT',
+                })),
+              }
+            : undefined,
+          units: units.length > 0
+            ? {
+                create: units.map((u) => ({
+                  name: u.name,
+                  code: u.code,
+                  capacity: u.capacity ? Number(u.capacity) : 1,
+                  description: u.description || '',
                 })),
               }
             : undefined,

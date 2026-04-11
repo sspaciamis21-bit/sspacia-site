@@ -15,6 +15,8 @@ import {
   ChevronRight,
   Ticket,
   Calendar,
+  FileText,
+  ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -71,6 +73,9 @@ export default function ManagerLayout({
     items.push({ name: 'Products', href: '/manager/products', icon: Package });
     items.push({ name: 'Bookings', href: '/manager/bookings', icon: Calendar });
     items.push({ name: 'Tickets', href: '/manager/tickets', icon: Ticket });
+    items.push({ name: 'Review Documents', href: '/manager/contracts', icon: ShieldCheck });
+    items.push({ name: 'Documents', href: '/manager/documents', icon: ShieldCheck });
+    items.push({ name: 'Agreements', href: '/manager/agreements', icon: FileText });
     items.push({ name: 'Users', href: '/manager/users', icon: Users });
 
     // Optional/Permission based routes (Keeping Locations if managed by some)

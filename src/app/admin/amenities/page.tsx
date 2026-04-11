@@ -45,7 +45,7 @@ export default function AdminAmenitiesPage() {
   const fetchAmenities = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/admin/amenities');
+      const res = await fetch('/api/admin/config/amenities');
       if (!res.ok) throw new Error('Failed to load amenities');
       const json = await res.json();
       setAmenities(json.data ?? []);
@@ -84,7 +84,7 @@ export default function AdminAmenitiesPage() {
       const mode = editingAmenity ? 'PATCH' : 'POST';
       const body = editingAmenity ? { ...formData, id: editingAmenity.id } : formData;
 
-      const res = await fetch('/api/admin/amenities', {
+      const res = await fetch('/api/admin/config/amenities', {
         method: mode,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -104,7 +104,7 @@ export default function AdminAmenitiesPage() {
   const handleDelete = async (id: number, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
     try {
-      const res = await fetch(`/api/admin/amenities?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/config/amenities?id=${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       toast.success('Amenity deleted.');
       fetchAmenities();

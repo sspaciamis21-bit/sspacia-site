@@ -19,7 +19,9 @@ import {
   Briefcase,
   Building2,
   ArrowRight,
-  User
+  User,
+  FileText,
+  ShieldCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -28,6 +30,8 @@ import { useAuth } from '@/context/AuthContext';
 const sidebarItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'My Bookings', href: '/dashboard/bookings', icon: Calendar },
+  { name: 'Review Documents', href: '/dashboard/contracts', icon: ShieldCheck },
+  { name: 'Documents', href: '/dashboard/documents', icon: FileText },
   { name: 'Support', href: '/dashboard/support', icon: LifeBuoy },
   { name: 'My Tickets', href: '/dashboard/tickets', icon: Ticket },
   { name: 'Profile', href: '/dashboard/profile', icon: User },
@@ -52,7 +56,7 @@ export default function UserLayout({
 
   const isRegularUser = user && !isRole('ADMIN') && !isRole('MANAGER');
   
-  const [hasSkippedProfile, setHasSkippedProfile] = useState(true); // default true to avoid hydration mismatch, check in effect
+  const [hasSkippedProfile, setHasSkippedProfile] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -72,8 +76,8 @@ export default function UserLayout({
     }
   }, [user]);
 
-  const isProfileComplete = !!(user?.companyName && user?.phone);
-  const needsProfileCompletion = isRegularUser && !isProfileComplete && hasSkippedProfile === false;
+  const isProfileComplete = !!(user?.companyName && user?.phone && user?.designation);
+  const needsProfileCompletion = isRegularUser && !isProfileComplete && !hasSkippedProfile;
 
   useEffect(() => {
     if (!isLoading && isRegularUser) {

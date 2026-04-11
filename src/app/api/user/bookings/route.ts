@@ -43,6 +43,12 @@ export async function GET() {
           payments: {
              select: { method: true },
              take: 1
+          },
+          contracts: {
+            select: { id: true, status: { select: { name: true } } }
+          },
+          contractRequests: {
+            select: { id: true, status: true }
           }
       }
     });

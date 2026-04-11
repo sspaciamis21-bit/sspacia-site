@@ -142,3 +142,64 @@ export const GET = withPermission('bookings', 'read', async (req: NextRequest) =
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
+
+/**
+ * PATCH /api/admin/bookings
+ * 
+ * Update booking status
+ */
+export const PATCH = withPermission('bookings', 'update', async (req: NextRequest) => {
+    try {
+        const payload = await requireAuth();
+        if (!payload?.id) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+
+        const body = await req.json();
+        const { id, statusId, notes } = body;
+
+        if (!id || !statusId) {
+            return NextResponse.json({ error: 'ID and statusId are required' }, { status: 400 });
+        }
+
+        const oldBooking = await prisma.booking.findUnique({
+            where: { id: Number(id) }
+        });
+
+        if (!oldBooking) {
+            return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+        }
+
+        const updatedBooking = await prisma.booking.update({
+            where: { id: Number(id) },
+            data: { 
+                statusId: Number(statusId),
+                notes: notes || oldBooking.notes
+            },
+            include: {
+                status: true,
+                customer: true,
+                product: true
+            }
+        });
+
+        // Log the change
+        await prisma.activityLog.create({
+            data: {
+                userId: Number(payload.id),
+                action: 'UPDATE',
+                module: 'bookings',
+                recordId: updatedBooking.id,
+                oldData: JSON.stringify(oldBooking),
+                newData: JSON.stringify(updatedBooking)
+            }
+        });
+
+        return NextResponse.json({ 
+            message: 'Booking updated successfully',
+            data: updatedBooking 
+        });
+
+    } catch (error) {
+        console.error('[BOOKINGS_UPDATE]', error);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+});

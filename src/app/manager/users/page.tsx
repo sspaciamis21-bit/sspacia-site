@@ -24,7 +24,7 @@ export default function ManagerUsersPage() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      if (!hasPermission('manage_users') && !hasPermission('create_user')) {
+      if (!hasPermission('users.create')) {
         toast.error('Unauthorized to view users.');
         router.push('/manager/dashboard');
         return;

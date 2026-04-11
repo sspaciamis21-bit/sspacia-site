@@ -11,9 +11,14 @@ interface Ticket {
   id: number;
   ticketNumber: string;
   name: string;
-  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  status: {
+    name: string;
+    displayName: string;
+  };
   createdAt: string;
-  location?: string;
+  locationRel?: {
+    name: string;
+  };
 }
 
 export default function ManagerTicketsPage() {
@@ -21,11 +26,12 @@ export default function ManagerTicketsPage() {
   const router = useRouter();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTabTickets, setSelectedTabTickets] = useState<'ALL' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED'>('OPEN');
+  const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED'>('ALL');
 
   useEffect(() => {
     if (!authLoading && user) {
-      if (!hasPermission('manage_location_tickets')) {
+      if (!hasPermission('tickets.view')) {
         toast.error('Unauthorized to view tickets.');
         router.push('/manager/dashboard');
         return;
@@ -37,7 +43,7 @@ export default function ManagerTicketsPage() {
   const fetchTickets = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/user/tickets', {
+      const response = await fetch('/api/admin/tickets', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -46,12 +52,40 @@ export default function ManagerTicketsPage() {
       if (!response.ok) throw new Error('Failed to fetch data');
 
       const data = await response.json();
-      setTickets(data.tickets || []);
+      setTickets(data.data || []);
     } catch (error) {
       console.error(error);
       toast.error('Failed to load tickets');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStatusUpdate = async (ticketId: number, statusName: string) => {
+    try {
+      setUpdatingStatus(ticketId);
+      const response = await fetch('/api/admin/tickets', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ticketId, status: statusName }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) throw new Error('Failed to update status');
+
+      const data = await response.json();
+      
+      // Update local state
+      setTickets((prev) => 
+        prev.map((t) => t.id === ticketId ? { ...t, status: data.data.status } : t)
+      );
+      
+      toast.success(`Ticket status updated to ${statusName.replace('_', ' ')}`);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to update ticket status');
+    } finally {
+      setUpdatingStatus(null);
     }
   };
 
@@ -75,9 +109,9 @@ export default function ManagerTicketsPage() {
     }
   };
 
-  const filteredTickets = selectedTabTickets === 'ALL' 
+  const filteredTickets = statusFilter === 'ALL' 
     ? tickets 
-    : tickets.filter(t => t.status === selectedTabTickets);
+    : tickets.filter(t => t.status.name === statusFilter);
 
   if (loading || authLoading) {
     return (
@@ -101,20 +135,23 @@ export default function ManagerTicketsPage() {
         </div>
 
         <div className="bg-[var(--surface-lowest)] rounded-3xl p-8 border border-[var(--outline-variant)]/50 shadow-sm overflow-hidden">
-          <div className="flex gap-4 mb-10 overflow-x-auto pb-2 no-scrollbar border-b border-[var(--outline-variant)]/30">
-            {['OPEN', 'IN_PROGRESS', 'RESOLVED', 'ALL'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setSelectedTabTickets(tab as 'ALL' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED')}
-                className={`px-6 py-3 rounded-xl whitespace-nowrap font-bold text-[11px] uppercase tracking-widest transition-all -mb-[1px] border-2 ${
-                  selectedTabTickets === tab
-                    ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-md shadow-[var(--primary)]/20'
-                    : 'bg-transparent text-[#616161] hover:text-[var(--primary)] hover:bg-[var(--surface-low)] border-transparent'
-                }`}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10 overflow-x-auto pb-2 no-scrollbar border-b border-[var(--outline-variant)]/30">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Filter By Status:</span>
+              <select 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as 'ALL' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED')}
+                className="bg-[var(--surface-low)] text-[#1B1C1C] border border-[var(--outline-variant)]/30 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-[var(--primary)] outline-none"
               >
-                {tab === 'IN_PROGRESS' ? 'In Progress' : tab}
-              </button>
-            ))}
+                <option value="ALL">All Tickets</option>
+                <option value="OPEN">Open</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="RESOLVED">Resolved</option>
+              </select>
+            </div>
+            <div className="text-[11px] font-bold text-[#616161] uppercase tracking-widest bg-[var(--surface-low)] px-4 py-2 rounded-xl">
+              Showing {filteredTickets.length} {statusFilter === 'ALL' ? '' : statusFilter.replace('_', ' ')} Tickets
+            </div>
           </div>
 
           {filteredTickets.length === 0 ? (
@@ -122,7 +159,7 @@ export default function ManagerTicketsPage() {
               <div className="inline-flex p-6 rounded-3xl bg-[var(--surface-low)] text-[#9E9E9E] mb-6">
                 <AlertCircle size={48} />
               </div>
-              <p className="font-display font-bold text-xl text-[#1B1C1C]">No {selectedTabTickets === 'ALL' ? 'tickets' : selectedTabTickets.toLowerCase()} found</p>
+              <p className="font-display font-bold text-xl text-[#1B1C1C]">No {statusFilter === 'ALL' ? 'tickets' : statusFilter.toLowerCase()} found</p>
               <p className="text-sm font-medium mt-2">There are currently no tickets in this category.</p>
             </div>
           ) : (
@@ -142,12 +179,26 @@ export default function ManagerTicketsPage() {
                     <tr key={ticket.id} className="hover:bg-[var(--surface-low)]/30 transition-colors group">
                       <td className="py-5 px-4 font-display font-bold text-[var(--primary)] group-hover:underline cursor-pointer">{ticket.ticketNumber}</td>
                       <td className="py-5 px-4 font-bold text-[#1B1C1C]">{ticket.name}</td>
-                      <td className="py-5 px-4 text-[#616161] font-medium text-sm">{ticket.location || '—'}</td>
+                      <td className="py-5 px-4 text-[#616161] font-medium text-sm">{ticket.locationRel?.name || '—'}</td>
                       <td className="py-5 px-4">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all whitespace-nowrap ${getStatusColor(ticket.status)}`}>
-                          {getStatusIcon(ticket.status)}
-                          {ticket.status === 'IN_PROGRESS' ? 'In Progress' : ticket.status}
-                        </span>
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all whitespace-nowrap ${getStatusColor(ticket.status.name)}`}>
+                          {updatingStatus === ticket.id ? (
+                            <Loader size={12} className="animate-spin" />
+                          ) : (
+                            getStatusIcon(ticket.status.name)
+                          )}
+                          <select
+                            value={ticket.status.name}
+                            disabled={updatingStatus === ticket.id}
+                            onChange={(e) => handleStatusUpdate(ticket.id, e.target.value)}
+                            className="bg-transparent border-none p-0 ml-1 text-[10px] font-bold uppercase focus:ring-0 cursor-pointer outline-none active:outline-none"
+                          >
+                            <option value="OPEN" className="bg-white text-black">Open</option>
+                            <option value="IN_PROGRESS" className="bg-white text-black">In Progress</option>
+                            <option value="RESOLVED" className="bg-white text-black">Resolved</option>
+                            <option value="CLOSED" className="bg-white text-black">Closed</option>
+                          </select>
+                        </div>
                       </td>
                       <td className="py-5 px-4 text-[#616161] font-bold text-[11px] uppercase tracking-tighter">
                         {new Date(ticket.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}

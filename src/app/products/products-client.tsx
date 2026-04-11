@@ -12,8 +12,13 @@ import {
   Zap, 
   Coffee, 
   Wifi, 
-  Monitor
+  Monitor,
+  ShieldCheck,
+  Loader2,
+  AlertCircle
 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 import { BookOnlineForm } from "@/components/book-online-form";
 import { AvailabilityTimeline } from "@/components/ui/availability-timeline";
 
@@ -53,8 +58,22 @@ export default function ProductsClient({
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [selectedSlotsByProduct, setSelectedSlotsByProduct] = useState<Record<number, string[]>>({});
   
+  const { user } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState({ location: "", spaceType: "" });
+  const [isVerified, setIsVerified] = useState<boolean | null>(null);
+  const [requestingPurchaseId, setRequestingPurchaseId] = useState<number | null>(null);
+
+  React.useEffect(() => {
+     if (user) {
+         fetch('/api/user/documents/status')
+            .then(r => r.json())
+            .then(json => setIsVerified(json.isVerified))
+            .catch(() => setIsVerified(false));
+     } else {
+         setIsVerified(false);
+     }
+  }, [user]);
 
   const handleToggleSlot = (productId: number, slot: string) => {
     setSelectedSlotsByProduct(prev => {
@@ -105,6 +124,58 @@ export default function ProductsClient({
   const openInquiryModal = (locationName: string, spaceType: string) => {
     setModalData({ location: locationName, spaceType });
     setIsModalOpen(true);
+  };
+
+  const handlePurchaseRequest = async (product: Product) => {
+      if (!user) {
+          toast.error("Please login to request a purchase");
+          return;
+      }
+
+      if (!isVerified) {
+          toast.error("Account Verification Required", {
+              description: "Please complete your KYC verification in the dashboard before purchasing.",
+              action: {
+                  label: "Go to KYC",
+                  onClick: () => window.location.href = "/dashboard/documents"
+              }
+          });
+          return;
+      }
+
+      setRequestingPurchaseId(product.id);
+      const toastId = toast.loading("Submitting purchase request...");
+
+      try {
+          // Pick the first pricing plan (usually monthly for workspaces)
+          const plan = product.pricingPlans[0];
+          if (!plan) throw new Error("No pricing plan selected");
+
+          const res = await fetch('/api/user/bookings/request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  productId: product.id,
+                  durationTypeId: plan.durationTypeId,
+                  startDate: new Date().toISOString()
+              })
+          });
+
+          const json = await res.json();
+          if (res.ok) {
+              toast.success("Request Submitted", {
+                id: toastId,
+                description: "Your request is now visible to our managers. They will contact you shortly."
+              });
+          } else {
+              toast.error(json.error || "Failed", { id: toastId });
+          }
+      } catch (err) {
+          const message = err instanceof Error ? err.message : "Something went wrong";
+          toast.error(message, { id: toastId });
+      } finally {
+          setRequestingPurchaseId(null);
+      }
   };
 
   const formatPrice = (price: number) => `₹${price.toLocaleString()}/-`;
@@ -376,14 +447,37 @@ export default function ProductsClient({
                                   </div>
                               </div>
                               
-                              <div className="flex justify-center pt-6 border-t border-outline-variant/5">
-                                   <button 
-                                       onClick={() => openInquiryModal(ws.location.name, ws.name)}
-                                       className="w-full sm:w-auto bg-[#1ab0bc] text-white px-10 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-sm shadow-[0_20px_40px_rgba(26,176,188,0.2)] hover:shadow-[0_25px_50px_rgba(26,176,188,0.3)] transition-all transform hover:-translate-y-1 active:scale-95 text-center"
-                                   >
-                                       ENQUIRE NOW
-                                   </button>
-                               </div>
+                               <div className="flex flex-col gap-4 pt-6 border-t border-outline-variant/5">
+                                   {user ? (
+                                       <button 
+                                           disabled={requestingPurchaseId === ws.id}
+                                           onClick={() => handlePurchaseRequest(ws)}
+                                           className={`w-full bg-[#1B1C1C] text-white px-10 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-sm shadow-xl transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 ${isVerified === false ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:bg-[var(--primary)]'}`}
+                                       >
+                                           {requestingPurchaseId === ws.id ? (
+                                               <Loader2 className="w-4 h-4 animate-spin" />
+                                           ) : isVerified ? (
+                                               <ShieldCheck className="w-4 h-4" />
+                                           ) : (
+                                               <AlertCircle className="w-4 h-4" />
+                                           )}
+                                           {isVerified ? 'REQUEST PURCHASE' : 'VERIFICATION PENDING'}
+                                       </button>
+                                   ) : (
+                                       <button 
+                                           onClick={() => openInquiryModal(ws.location.name, ws.name)}
+                                           className="w-full bg-[#1ab0bc] text-white px-10 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-sm shadow-[0_20px_40px_rgba(26,176,188,0.2)] hover:shadow-[0_25px_50px_rgba(26,176,188,0.3)] transition-all transform hover:-translate-y-1 active:scale-95 text-center"
+                                       >
+                                           ENQUIRE NOW
+                                       </button>
+                                   )}
+                                   
+                                   {user && isVerified === false && (
+                                       <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest text-center italic">
+                                           KYC Approval is required to initiate purchase.
+                                       </p>
+                                   )}
+                                </div>
                            </div>
                         </motion.div>
                       );

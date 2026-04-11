@@ -20,7 +20,7 @@ async function generateTicketNumber(): Promise<string> {
 // Returns tickets scoped to the caller's assigned locations.
 // If no locations assigned → returns all (admin behaviour).
 // Supports: ?page, ?limit, ?statusId, ?priority
-export const GET = withPermission('tickets', 'read', async (req: NextRequest) => {
+export const GET = withPermission('tickets', 'view', async (req: NextRequest) => {
   try {
     const payload = await requireAuth();
     if (!payload?.id) {
@@ -94,6 +94,7 @@ export const GET = withPermission('tickets', 'read', async (req: NextRequest) =>
       }),
     ]);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const responseData = (tickets as any[]).map((t) => ({
       ...t,
       // Frontend expects 'user' object for reporter info

@@ -1,20 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { withPermission } from '@/lib/auth/withPermission';
-import { requireAuth } from '@/lib/auth';
+import { withPermission, type PermissionContext } from '@/lib/auth/withPermission';
 
 // POST /api/admin/products/[id]/pricing — Upsert a pricing plan for a product
 export const POST = withPermission('products', 'update', async (
   req: NextRequest,
-  { params }: { params: Promise<Record<string, string>> }
+  { params, payload }: PermissionContext
 ) => {
   try {
-    const payload = await requireAuth();
-    if (!payload?.id) {
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
-    }
-
     const { id } = await params;
     const productId = parseInt(id, 10);
     if (isNaN(productId)) {

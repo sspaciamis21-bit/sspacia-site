@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 interface Product {
   id: number;
   name: string;
-  type: string | { name: string };
+  type: { name: string; displayName?: string } | string;
   location: { name: string; id: number };
   quantity: number;
   isActive: boolean;
@@ -24,7 +24,7 @@ export default function ManagerProductsPage() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      if (!hasPermission('view_location_details') && !hasPermission('manage_location_products')) {
+      if (!hasPermission('products.view')) {
         toast.error('Unauthorized to view products.');
         router.push('/manager/dashboard');
         return;
@@ -45,7 +45,7 @@ export default function ManagerProductsPage() {
       if (!response.ok) throw new Error('Failed to fetch data');
 
       const data = await response.json();
-      setProducts(data.products || []);
+      setProducts(data.data || []);
     } catch (error) {
       console.error(error);
       toast.error('Failed to load products');
@@ -103,7 +103,9 @@ export default function ManagerProductsPage() {
                       <td className="py-5 px-4 text-[#616161] font-medium text-sm">{product.location.name}</td>
                       <td className="py-5 px-4">
                         <span className="inline-block px-3 py-1 bg-[var(--surface-low)] text-[var(--primary)] rounded-full text-[10px] font-bold whitespace-nowrap border border-[var(--primary)]/10">
-                          {typeof product.type === 'object' ? product.type.name?.replace('_', ' ') : product.type?.replace('_', ' ')}
+                          {typeof product.type === 'object' 
+                            ? (product.type.displayName || product.type.name?.replace('_', ' ')) 
+                            : product.type?.replace('_', ' ')}
                         </span>
                       </td>
                       <td className="py-5 px-4 text-[#1B1C1C] font-bold text-sm">{product.quantity}</td>
