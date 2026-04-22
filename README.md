@@ -34,3 +34,15 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Production Database Workflow
+
+To ensure database stability in production:
+
+1. **Initialize Migrations**: If `prisma/migrations` is missing, run:
+   ```bash
+   npx prisma migrate dev --name init
+   ```
+2. **Deployment**: The `package.json` includes a `postinstall` script to generate the Prisma Client automatically on the build server.
+3. **Seeding**: Use `npx prisma db seed` for initial setup. Secure the admin password by setting `INITIAL_ADMIN_PASSWORD` in your environment variables.
+4. **Connection Pooling**: For serverless environments, use a proxy or Prisma Accelerate to avoid exhausting database connection limits.

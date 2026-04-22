@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@peculiar/x509": "^2.0.0",
@@ -26,7 +27,7 @@
     "@tiptap/extension-underline": "^3.22.2",
     "@tiptap/pm": "^3.22.2",
     "@tiptap/react": "^3.22.2",
-    "@tiptap/starter-kit": "^3.22.2",
+    "@tiptap/starter-kit": "^3.22.2", 
     "@types/nodemailer": "^7.0.11",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",

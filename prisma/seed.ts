@@ -386,11 +386,12 @@ async function main() {
 
   const adminExists = await prisma.user.findUnique({ where: { email: "admin@sspacia.com" } });
   if (!adminExists) {
-    const hashedPw = await bcrypt.hash("admin@123", 12);
+    const initialPassword = process.env.INITIAL_ADMIN_PASSWORD || "admin@123";
+    const hashedPw = await bcrypt.hash(initialPassword, 12);
     await prisma.user.create({
       data: { name: "Super Admin", email: "admin@sspacia.com", password: hashedPw, roleId: adminRole.id },
     });
-    console.log("✅ Admin user (admin@sspacia.com / admin@123)");
+    console.log(`✅ Admin user (admin@sspacia.com / ${process.env.INITIAL_ADMIN_PASSWORD ? "PROTECTED" : "admin@123"})`);
   } else {
     console.log("⏭️ Admin user already exists, skipping");
   }
