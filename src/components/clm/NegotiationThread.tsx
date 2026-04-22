@@ -42,11 +42,11 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
       className="clm-negotiation-thread group"
       style={{
         border: "1px solid var(--outline-variant)",
-        borderRadius: 24,
+        borderRadius: 0,
         overflow: "hidden",
         marginBottom: 20,
         background: "var(--surface-low)",
-        boxShadow: "0 4px 12px -2px rgba(0,0,0,0.05)"
+        boxShadow: "none"
       }}
     >
 
@@ -70,9 +70,8 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
             style={{
               width: 10,
               height: 10,
-              borderRadius: "50%",
+              borderRadius: 0,
               background: statusColor,
-              boxShadow: `0 0 10px ${statusColor}`,
               flexShrink: 0,
             }}
           />
@@ -88,7 +87,7 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
               letterSpacing: '0.1em',
               background: 'rgba(0,0,0,0.05)',
               padding: '2px 8px',
-              borderRadius: 4
+              borderRadius: 0
             }}
           >
             {negotiation.messages.length} msg
@@ -104,8 +103,8 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
               letterSpacing: "0.15em",
               color: statusColor,
               padding: "4px 12px",
-              borderRadius: 8,
-              background: `${statusColor}1A`,
+              borderRadius: 0,
+              background: `${statusColor}08`,
               border: `1px solid ${statusColor}33`,
             }}
           >
@@ -153,7 +152,7 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
                     style={{
                       width: 32,
                       height: 32,
-                      borderRadius: "50%",
+                      borderRadius: 0,
                       background: isStaff ? "var(--clm-primary)" : "var(--surface-lowest)",
                       display: "flex",
                       alignItems: "center",
@@ -192,7 +191,7 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
                       className="clm-message-bubble"
                       style={{
                         padding: "12px 16px",
-                        borderRadius: 12,
+                        borderRadius: 0,
                         fontSize: 12,
                         lineHeight: 1.6,
                         color: isStaff ? "#fff" : "#1B1C1C",
@@ -232,7 +231,7 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
                   width: "100%",
                   background: "var(--surface-lowest)",
                   border: "1px solid var(--outline-variant)",
-                  borderRadius: 16,
+                  borderRadius: 0,
                   color: "#1B1C1C",
                   fontSize: 13,
                   padding: "16px",
@@ -240,7 +239,7 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
                   outline: "none",
                   marginBottom: 16,
                   transition: 'all 0.3s',
-                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)'
+                  boxShadow: 'none'
                 }}
                 onFocus={(e) => e.currentTarget.style.borderColor = 'var(--clm-primary)'}
                 onBlur={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
@@ -253,7 +252,7 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
                       disabled={loading}
                       style={{ 
                         padding: '10px 18px',
-                        borderRadius: 12,
+                        borderRadius: 0,
                         fontSize: 11,
                         fontWeight: 700,
                         textTransform: 'uppercase',
@@ -274,7 +273,7 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
                       disabled={loading}
                       style={{ 
                         padding: '10px 18px',
-                        borderRadius: 12,
+                        borderRadius: 0,
                         fontSize: 11,
                         fontWeight: 700,
                         textTransform: 'uppercase',
@@ -297,7 +296,7 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
                   disabled={loading || !message.trim()}
                   style={{ 
                     padding: '10px 24px',
-                    borderRadius: 12,
+                    borderRadius: 0,
                     fontSize: 11,
                     fontWeight: 700,
                     textTransform: 'uppercase',
@@ -306,7 +305,7 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
                     color: '#fff',
                     border: 'none',
                     cursor: 'pointer',
-                    boxShadow: '0 10px 20px -5px rgba(255,87,34,0.3)',
+                    boxShadow: 'none',
                     transition: 'all 0.3s'
                   }}
                   onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}

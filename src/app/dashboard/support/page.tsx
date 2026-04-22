@@ -82,7 +82,7 @@ export default function DashboardSupportPage() {
         }
       } catch (err) {
         console.error("Failed to fetch support metadata:", err);
-        toast.error("Failed to load form options. Please refresh.");
+        // Suppress toast for a smoother UX
       } finally {
         setIsLoadingMetadata(false);
       }
@@ -225,19 +225,19 @@ export default function DashboardSupportPage() {
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-green-100 text-green-600"
+          className="mb-6 flex h-24 w-24 items-center justify-center rounded-none bg-green-100 text-green-600 border border-green-200"
         >
           <CheckCircle2 className="h-12 w-12" />
         </motion.div>
-        <h1 className="mb-4 text-3xl font-bold text-[#212121]">Ticket Successfully Raised!</h1>
+        <h1 className="mb-4 text-3xl font-bold text-[#212121]">Ticket Saved!</h1>
         <p className="mb-8 max-w-md text-[#757575]">
           Thank you for reaching out. Our support team has been notified and will get back to you shortly.
         </p>
         <button
           onClick={() => setIsSuccess(false)}
-          className="rounded-full bg-[#006064] px-8 py-3 font-bold text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+          className="rounded-none bg-[#006064] px-10 py-4 font-bold text-white uppercase tracking-widest text-[11px] shadow-lg transition-transform hover:bg-[#004d40]"
         >
-          Raise Another Ticket
+          Raise New Ticket
         </button>
       </div>
     );
@@ -249,26 +249,26 @@ export default function DashboardSupportPage() {
         <motion.div
            initial={{ opacity: 0, scale: 0.9 }}
            animate={{ opacity: 1, scale: 1 }}
-           className="h-20 w-20 bg-[var(--primary)]/10 rounded-3xl flex items-center justify-center border border-[var(--primary)]/20 shadow-inner group"
+           className="h-20 w-20 bg-[var(--primary)] text-white rounded-none flex items-center justify-center border border-[var(--primary)] shadow-sm group"
         >
-          <AlertCircle className="h-10 w-10 text-[var(--primary)] group-hover:scale-110 transition-transform duration-500" />
+          <AlertCircle className="h-8 w-8" />
         </motion.div>
         
         <div>
           <motion.h1 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-3xl md:text-4xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight italic"
+            className="text-3xl md:text-4xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight"
           >
-            Support <span className="text-[var(--primary)] not-italic">Node</span>
+            Help <span className="text-[var(--primary)]">Center</span>
           </motion.h1>
           <motion.p 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.1 }}
-            className="text-[#616161] mt-2 font-bold text-sm uppercase tracking-widest opacity-70"
+            className="text-[#616161] mt-1 font-bold text-[10px] uppercase tracking-widest opacity-50"
           >
-            Experiencing an issue? Deploy a priority support ticket below.
+            Need help? Fill out the support form below.
           </motion.p>
         </div>
       </div>
@@ -278,9 +278,9 @@ export default function DashboardSupportPage() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="relative overflow-hidden rounded-[3rem] border border-[var(--outline-variant)] bg-[var(--surface-lowest)] p-10 md:p-12 shadow-sm"
+          className="relative overflow-hidden rounded-none border border-[var(--outline-variant)] bg-[var(--surface-lowest)] p-10 md:p-14 shadow-sm"
         >
-          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[var(--primary)]/5 blur-[100px] pointer-events-none group-hover:bg-[var(--primary)]/10 transition-colors" />
+          <div className="absolute -right-20 -top-20 h-64 w-64 bg-[var(--primary)]/5 blur-[100px] pointer-events-none group-hover:bg-[var(--primary)]/10 transition-colors" />
           
           <form onSubmit={handleSubmit} className="relative space-y-10">
             <div className="grid gap-10 md:grid-cols-2">
@@ -298,7 +298,7 @@ export default function DashboardSupportPage() {
                     value={formData.name}
                     onChange={handleInputChange}
                     placeholder="John Doe"
-                    className="w-full rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50 text-[15px]"
+                    className="w-full rounded-none border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-white font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/40 text-[14px]"
                   />
                 </div>
               </motion.div>
@@ -315,7 +315,7 @@ export default function DashboardSupportPage() {
                   value={formData.organization}
                   onChange={handleInputChange}
                   placeholder="Company Name"
-                  className="w-full rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50 text-[15px]"
+                  className="w-full rounded-none border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-white font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/40 text-[14px]"
                 />
               </motion.div>
 
@@ -331,7 +331,7 @@ export default function DashboardSupportPage() {
                     required
                     value={formData.productTypeId}
                     onChange={handleInputChange}
-                    className="w-full appearance-none rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] text-[15px] cursor-pointer"
+                    className="w-full appearance-none rounded-none border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-white font-bold text-[#1B1C1C] text-[14px] cursor-pointer"
                   >
                     <option value="" disabled className="font-bold">Select a workspace</option>
                     {metadata.productTypes.map(type => (
@@ -354,7 +354,7 @@ export default function DashboardSupportPage() {
                     required
                     value={formData.locationId}
                     onChange={handleInputChange}
-                    className="w-full appearance-none rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] text-[15px] cursor-pointer"
+                    className="w-full appearance-none rounded-none border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-white font-bold text-[#1B1C1C] text-[14px] cursor-pointer"
                   >
                     <option value="" disabled className="font-bold">Select location</option>
                     {metadata.locations.map(loc => (
@@ -368,7 +368,7 @@ export default function DashboardSupportPage() {
               <motion.div variants={itemVariants} className="space-y-3">
                 <label htmlFor="category" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
                   <Layout className="h-4 w-4 text-[var(--primary)]" />
-                  Issue Classification <span className="text-red-500 font-bold">*</span>
+                  Category <span className="text-red-500 font-bold">*</span>
                 </label>
                 <div className="relative group/field">
                   <select
@@ -377,7 +377,7 @@ export default function DashboardSupportPage() {
                     required
                     value={formData.category}
                     onChange={handleInputChange}
-                    className="w-full appearance-none rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] text-[15px] cursor-pointer"
+                    className="w-full appearance-none rounded-none border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-white font-bold text-[#1B1C1C] text-[14px] cursor-pointer"
                   >
                     <option value="" disabled className="font-bold">Select category</option>
                     <option value="House Keeping" className="font-bold">House Keeping</option>
@@ -398,7 +398,7 @@ export default function DashboardSupportPage() {
                 >
                   <label htmlFor="subCategory" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
                     <AlertCircle className="h-4 w-4 text-[var(--primary)]" />
-                    Specific Anomaly <span className="text-red-500 font-bold">*</span>
+                    Sub-category <span className="text-red-500 font-bold">*</span>
                   </label>
                   <div className="relative group/field">
                     <select
@@ -407,7 +407,7 @@ export default function DashboardSupportPage() {
                       required
                       value={formData.subCategory}
                       onChange={handleInputChange}
-                      className="w-full appearance-none rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] text-[15px] cursor-pointer"
+                      className="w-full appearance-none rounded-none border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-white font-bold text-[#1B1C1C] text-[14px] cursor-pointer"
                     >
                       <option value="" disabled className="font-bold">Select specific issue</option>
                       {subOptionsData[formData.category as keyof typeof subOptionsData]?.map((option) => (
@@ -427,7 +427,7 @@ export default function DashboardSupportPage() {
                 >
                   <label htmlFor="subCategory" className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
                     <AlertCircle className="h-4 w-4 text-[var(--primary)]" />
-                    Manual Specification <span className="text-red-500 font-bold">*</span>
+                    Specify Issue <span className="text-red-500 font-bold">*</span>
                   </label>
                   <input
                     type="text"
@@ -437,7 +437,7 @@ export default function DashboardSupportPage() {
                     value={formData.subCategory}
                     onChange={handleInputChange}
                     placeholder="Specify your concern..."
-                    className="w-full rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50 text-[15px]"
+                    className="w-full rounded-none border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-5 py-4 outline-none transition-all focus:border-[var(--primary)] focus:bg-white font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/40 text-[14px]"
                   />
                 </motion.div>
               )}
@@ -455,27 +455,27 @@ export default function DashboardSupportPage() {
                 value={formData.description}
                 onChange={handleInputChange}
                 placeholder="Please describe the anomaly in detail for our technicians..."
-                className="w-full rounded-[2rem] border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-6 py-5 outline-none transition-all focus:border-[var(--primary)] focus:bg-[var(--surface-lowest)] focus:ring-4 focus:ring-[var(--primary)]/5 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50 text-[15px] leading-relaxed shadow-inner"
+                className="w-full rounded-none border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 px-6 py-5 outline-none transition-all focus:border-[var(--primary)] focus:bg-white font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/40 text-[14px] leading-relaxed"
               />
             </motion.div>
 
             <motion.div variants={itemVariants} className="space-y-5">
               <label className="flex items-center gap-2.5 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">
                 <Upload className="h-4 w-4 text-[var(--primary)]" />
-                Evidence Payload (Max 5MB total)
+                Upload Files (Max 5MB total)
               </label>
               
               <div 
                 onClick={() => !isUploading && fileInputRef.current?.click()}
-                className={`group relative flex cursor-pointer flex-col items-center justify-center rounded-[2.5rem] border-2 border-dashed border-[var(--outline-variant)] bg-[var(--surface-low)]/30 py-10 transition-all hover:border-[var(--primary)] hover:bg-[var(--primary)]/5 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''} shadow-inner`}
+                className={`group relative flex cursor-pointer flex-col items-center justify-center rounded-none border border-[var(--outline-variant)] bg-[var(--surface-low)]/30 py-8 transition-all hover:border-[var(--primary)] ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--primary)]/10 text-[var(--primary)] transition-all group-hover:scale-110 group-hover:rotate-12 shadow-sm">
-                  {isUploading ? <Loader2 className="h-8 w-8 animate-spin" /> : <Upload className="h-8 w-8" />}
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-none bg-[var(--primary)] text-white shadow-sm">
+                  {isUploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
                 </div>
-                <p className="text-center text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest italic group-hover:text-[var(--primary)] transition-colors">
-                  {isUploading ? 'Encrypting Payload...' : 'Click to add operational assets'}
+                <p className="text-center text-[10px] font-bold text-[#1B1C1C] uppercase tracking-widest group-hover:text-[var(--primary)] transition-colors">
+                  {isUploading ? 'Uploading...' : 'Click to upload files'}
                 </p>
-                <p className="mt-2 text-center text-[10px] font-bold text-[#9E9E9E] uppercase tracking-tighter opacity-70">
+                <p className="mt-1 text-center text-[9px] font-bold text-[#9E9E9E] uppercase tracking-tighter opacity-70">
                   Images, Videos, and PDF Reports
                 </p>
                 <input
@@ -502,13 +502,13 @@ export default function DashboardSupportPage() {
                         layout
                         initial={{ scale: 0.8, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
-                        className="group relative h-24 overflow-hidden rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 shadow-sm hover:shadow-md transition-shadow group/item"
+                        className="group relative h-24 overflow-hidden rounded-none border border-[var(--outline-variant)] bg-[var(--surface-low)]/50 group/item"
                       >
                         <div className="flex h-full flex-col items-center justify-center p-3 text-center">
-                          <div className="p-2 bg-[var(--primary)]/10 rounded-lg mb-1 group-hover/item:scale-110 transition-transform">
-                             <ImageIcon className="h-4 w-4 text-[var(--primary)]" />
+                          <div className="p-2 bg-[var(--primary)] rounded-none mb-1">
+                             <ImageIcon className="h-4 w-4 text-white" />
                           </div>
-                          <p className="line-clamp-1 text-[9px] font-bold text-[#1B1C1C] uppercase tracking-tighter italic">
+                          <p className="line-clamp-1 text-[8px] font-bold text-[#1B1C1C] uppercase tracking-widest">
                             Asset {index + 1}
                           </p>
                         </div>
@@ -518,9 +518,9 @@ export default function DashboardSupportPage() {
                             e.stopPropagation();
                             removeFile(index);
                           }}
-                          className="absolute right-2 top-2 rounded-xl bg-red-500 p-1.5 text-white opacity-0 transition-all group-hover:opacity-100 shadow-lg hover:scale-110"
+                          className="absolute right-2 top-2 rounded-none bg-red-500 p-1.5 text-white opacity-0 transition-all group-hover:opacity-100 shadow-md"
                         >
-                          <X className="h-3 h-3" />
+                          <X className="h-3 w-3" />
                         </button>
                       </motion.div>
                     ))}
@@ -529,9 +529,9 @@ export default function DashboardSupportPage() {
               </AnimatePresence>
             </motion.div>
 
-            <motion.div variants={itemVariants} className="flex gap-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-5 text-amber-700">
+            <motion.div variants={itemVariants} className="flex gap-4 rounded-none bg-amber-500/5 border border-amber-500/20 p-5 text-amber-700">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-              <p className="text-[11px] font-bold uppercase tracking-widest leading-relaxed italic opacity-80">
+              <p className="text-[10px] font-bold uppercase tracking-widest leading-relaxed opacity-60">
                 Critical Note: Our support team typically responds within <span className="text-amber-700 font-black">2 business hours</span> for priority member reports.
               </p>
             </motion.div>
@@ -540,16 +540,16 @@ export default function DashboardSupportPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="group relative flex items-center justify-center gap-4 overflow-hidden rounded-[1.5rem] bg-[#1B1B1B] hover:bg-[var(--primary)] px-12 py-5 text-[11px] font-bold text-white uppercase tracking-[0.3em] shadow-2xl transition-all duration-700 disabled:cursor-not-allowed disabled:opacity-70 active:scale-95 group/btn w-full md:w-auto"
+                className="group relative flex items-center justify-center gap-4 overflow-hidden rounded-none bg-[#1B1B1B] hover:bg-black px-12 py-5 text-[10px] font-bold text-white uppercase tracking-[0.2em] shadow-xl transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-70 active:scale-[0.98] w-full md:w-auto"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    Synchronizing...
+                    Sending...
                   </>
                 ) : (
                   <>
-                    Deploy Support Node
+                    Submit Ticket
                     <Send className="h-4 w-4 transition-transform group-hover/btn:translate-x-2 group-hover/btn:-translate-y-2" />
                   </>
                 )}

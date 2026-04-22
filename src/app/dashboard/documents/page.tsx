@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState } from 'react';
 import { 
   FileText, 
   Eye, 
-  Loader, 
+  Loader2, 
   Search, 
   CheckCircle, 
   Clock, 
@@ -105,8 +106,9 @@ export default function UserDocumentsPage() {
         pan: kyc.find(d => d.title.toLowerCase().includes('pan'))
       });
     } catch (error) {
-      console.error(error);
-      toast.error('Failed to load documents');
+      console.error('Documents fetch error:', error);
+      // Suppress toast for a cleaner onboarding experience
+      setDocuments([]);
     } finally {
       setLoading(false);
     }
@@ -223,8 +225,8 @@ export default function UserDocumentsPage() {
   if (loading || authLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
-        <Loader size={40} className="text-[var(--primary)] animate-spin" />
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#9E9E9E] animate-pulse">Syncing Secure Vault...</p>
+        <Loader2 size={40} className="text-[var(--primary)] animate-spin" />
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#9E9E9E] animate-pulse">Initializing...</p>
       </div>
     );
   }
@@ -234,58 +236,58 @@ export default function UserDocumentsPage() {
       <FadeUp>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <h1 className="text-4xl font-display font-bold text-[#1B1C1C] tracking-tight italic uppercase">
-              My <span className="text-[var(--primary)] not-italic">Documents</span>
+            <h1 className="text-4xl font-display font-bold text-[#1B1C1C] tracking-tight uppercase">
+              My <span className="text-[var(--primary)]">Documents</span>
             </h1>
-            <p className="text-[#616161] font-bold text-sm uppercase tracking-widest opacity-70">
+            <p className="text-[#616161] font-bold text-[10px] uppercase tracking-widest mt-1 opacity-50">
               Access your lease agreements, membership terms, and official letters.
             </p>
           </div>
           <div className="flex items-center gap-4">
              <div className="relative group w-full md:w-80">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9E9E9E] group-focus-within:text-[var(--primary)] transition-colors" size={18} />
-                <input 
-                  type="text"
-                  placeholder="Search documents..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white border border-[var(--outline-variant)] rounded-2xl pl-12 pr-4 py-4 text-sm font-bold focus:ring-4 focus:ring-[var(--primary)]/10 outline-none transition-all shadow-sm"
-                />
+                 <input 
+                   type="text"
+                   placeholder="Search documents..."
+                   value={searchQuery}
+                   onChange={(e) => setSearchQuery(e.target.value)}
+                   className="w-full bg-white border border-[var(--outline-variant)] rounded-none pl-12 pr-4 py-4 text-xs font-bold outline-none focus:border-[var(--primary)] transition-all"
+                 />
               </div>
           </div>
         </div>
 
         {/* KYC SECTION */}
-        <section className="mt-12 overflow-hidden rounded-[2.5rem] border border-[var(--outline-variant)]/50 bg-[#1B1C1C] p-8 md:p-12 text-white relative shadow-2xl">
+        <section className="mt-12 overflow-hidden rounded-none border border-white/10 bg-[#1B1C1C] p-10 md:p-14 text-white relative shadow-xl">
             <div className="absolute top-0 right-0 w-1/3 h-full bg-gradient-to-l from-[var(--primary)]/20 to-transparent pointer-none" />
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-10">
                 <div className="max-w-xl space-y-4">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-[9px] font-black uppercase tracking-[0.2em] italic">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 text-[8px] font-black uppercase tracking-[0.2em]">
                         <CheckCircle size={10} className={kycStatus() === 'VERIFIED' ? 'text-green-400' : 'text-gray-400'} />
                         Identity Verification Node
                     </div>
-                    <h2 className="text-3xl font-display font-bold italic uppercase tracking-tight">
-                        KYC <span className="text-[var(--primary)] not-italic">Compliance</span>
+                    <h2 className="text-3xl font-display font-bold uppercase tracking-tight">
+                        KYC <span className="text-[var(--primary)]">Compliance</span>
                     </h2>
-                    <p className="text-gray-400 font-bold text-sm leading-relaxed uppercase tracking-widest opacity-80">
-                        Upload your core identity assets to unlock premium booking nodes and streamlined checkout logic.
+                    <p className="text-white/40 font-bold text-[10px] leading-relaxed uppercase tracking-[0.2em] max-w-sm">
+                        Upload your core identity assets to unlock premium booking nodes.
                     </p>
                     
                     <div className="flex flex-wrap gap-4 pt-2">
                         {kycStatus() === 'VERIFIED' ? (
-                            <div className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-green-500/20 border border-green-500/30 text-green-400">
-                                <CheckCircle size={18} />
-                                <span className="text-xs font-black uppercase tracking-widest">Profile Verified</span>
+                            <div className="flex items-center gap-3 px-6 py-4 rounded-none bg-green-500/5 border border-green-500/20 text-green-400">
+                                <CheckCircle size={16} />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Profile Verified</span>
                             </div>
                         ) : kycStatus() === 'PENDING' ? (
-                            <div className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-orange-500/20 border border-orange-500/30 text-orange-400">
-                                <Clock size={18} />
-                                <span className="text-xs font-black uppercase tracking-widest">Verification in Progress</span>
+                            <div className="flex items-center gap-3 px-6 py-4 rounded-none bg-orange-500/5 border border-orange-500/20 text-orange-400">
+                                <Clock size={16} />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Verification in Progress</span>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
-                                <AlertTriangle size={18} />
-                                <span className="text-xs font-black uppercase tracking-widest italic">{kycStatus() === 'REJECTED' ? 'Verification Rejected - Re-upload' : 'Compliance Pending'}</span>
+                            <div className="flex items-center gap-3 px-6 py-4 rounded-none bg-red-500/5 border border-red-500/20 text-red-400">
+                                <AlertTriangle size={16} />
+                                <span className="text-[10px] font-black uppercase tracking-widest">{kycStatus() === 'REJECTED' ? 'Verification Rejected' : 'Compliance Pending'}</span>
                             </div>
                         )}
                     </div>
@@ -293,11 +295,11 @@ export default function UserDocumentsPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full md:w-auto">
                     {/* AADHAAR */}
-                    <div className={`p-6 rounded-3xl border transition-all ${kycDocs.aadhaar ? 'bg-white/5 border-white/10' : 'bg-[var(--primary)]/10 border-[var(--primary)]/30 hover:border-[var(--primary)] hover:scale-105'}`}>
+                    <div className={`p-8 rounded-none border transition-all ${kycDocs.aadhaar ? 'bg-white/5 border-white/10' : 'bg-[var(--primary)]/5 border-[var(--primary)]/30 group-hover:border-[var(--primary)]'}`}>
                         <div className="flex items-center justify-between mb-4">
-                           <FileText size={24} className={kycDocs.aadhaar ? 'text-gray-500' : 'text-[var(--primary)]'} />
+                           <FileText size={20} className={kycDocs.aadhaar ? 'text-white/20' : 'text-[var(--primary)]'} />
                            {kycDocs.aadhaar && (
-                             <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter ${
+                             <span className={`text-[7px] font-black px-2 py-0.5 rounded-none uppercase tracking-widest ${
                                 kycDocs.aadhaar.status.name === 'APPROVED' ? 'bg-green-500/20 text-green-400' : 
                                 kycDocs.aadhaar.status.name === 'REJECTED' ? 'bg-red-500/20 text-red-400' : 
                                 'bg-orange-500/20 text-orange-400'
@@ -306,21 +308,21 @@ export default function UserDocumentsPage() {
                              </span>
                            )}
                         </div>
-                        <h4 className="font-display font-bold uppercase tracking-tight text-sm italic mb-1">Aadhaar Card</h4>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-4">Front & Back Combined</p>
+                        <h4 className="font-display font-bold uppercase tracking-tight text-xs mb-1">Aadhaar Card</h4>
+                        <p className="text-[9px] text-[#5A5A72] font-bold uppercase tracking-widest mb-6">Front & Back Combined</p>
                         
                         {!kycDocs.aadhaar || kycDocs.aadhaar.status.name === 'REJECTED' ? (
                             <button 
                                 onClick={() => handleUpload('Aadhaar')}
                                 disabled={isUploading}
-                                className="w-full py-3 rounded-xl bg-white text-black text-[9px] font-black uppercase tracking-widest hover:bg-[var(--primary)] hover:text-white transition-all disabled:opacity-50"
+                                className="w-full py-3 rounded-none bg-white text-black text-[9px] font-black uppercase tracking-widest hover:bg-[var(--primary)] hover:text-white transition-all disabled:opacity-50"
                             >
                                 {isUploading ? 'Uploading...' : 'Upload Now'}
                             </button>
                         ) : (
                             <button 
                                 onClick={() => window.open(kycDocs.aadhaar?.fileUrl, '_blank')}
-                                className="w-full py-3 rounded-xl bg-white/5 text-white/50 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                                className="w-full py-3 rounded-none bg-white/5 border border-white/10 text-white/40 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                             >
                                 View File
                             </button>
@@ -328,11 +330,11 @@ export default function UserDocumentsPage() {
                     </div>
 
                     {/* PAN */}
-                    <div className={`p-6 rounded-3xl border transition-all ${kycDocs.pan ? 'bg-white/5 border-white/10' : 'bg-[var(--primary)]/10 border-[var(--primary)]/30 hover:border-[var(--primary)] hover:scale-105'}`}>
+                    <div className={`p-8 rounded-none border transition-all ${kycDocs.pan ? 'bg-white/5 border-white/10' : 'bg-[var(--primary)]/5 border-[var(--primary)]/30 group-hover:border-[var(--primary)]'}`}>
                         <div className="flex items-center justify-between mb-4">
-                           <FileText size={24} className={kycDocs.pan ? 'text-gray-500' : 'text-[var(--primary)]'} />
+                           <FileText size={20} className={kycDocs.pan ? 'text-white/20' : 'text-[var(--primary)]'} />
                            {kycDocs.pan && (
-                             <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter ${
+                             <span className={`text-[7px] font-black px-2 py-0.5 rounded-none uppercase tracking-widest ${
                                 kycDocs.pan.status.name === 'APPROVED' ? 'bg-green-500/20 text-green-400' : 
                                 kycDocs.pan.status.name === 'REJECTED' ? 'bg-red-500/20 text-red-400' : 
                                 'bg-orange-500/20 text-orange-400'
@@ -341,21 +343,21 @@ export default function UserDocumentsPage() {
                              </span>
                            )}
                         </div>
-                        <h4 className="font-display font-bold uppercase tracking-tight text-sm italic mb-1">PAN Card</h4>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-4">Clear digital copy</p>
+                        <h4 className="font-display font-bold uppercase tracking-tight text-xs mb-1">PAN Card</h4>
+                        <p className="text-[9px] text-[#5A5A72] font-bold uppercase tracking-widest mb-6">Clear digital copy</p>
                         
                         {!kycDocs.pan || kycDocs.pan.status.name === 'REJECTED' ? (
                             <button 
                                 onClick={() => handleUpload('PAN')}
                                 disabled={isUploading}
-                                className="w-full py-3 rounded-xl bg-white text-black text-[9px] font-black uppercase tracking-widest hover:bg-[var(--primary)] hover:text-white transition-all disabled:opacity-50"
+                                className="w-full py-3 rounded-none bg-white text-black text-[9px] font-black uppercase tracking-widest hover:bg-[var(--primary)] hover:text-white transition-all disabled:opacity-50"
                             >
                                 {isUploading ? 'Uploading...' : 'Upload Now'}
                             </button>
                         ) : (
                             <button 
                                 onClick={() => window.open(kycDocs.pan?.fileUrl, '_blank')}
-                                className="w-full py-3 rounded-xl bg-white/5 text-white/50 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                                className="w-full py-3 rounded-none bg-white/5 border border-white/10 text-white/40 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                             >
                                 View File
                             </button>
@@ -365,27 +367,27 @@ export default function UserDocumentsPage() {
             </div>
         </section>
 
-        {/* PURCHASE HUB SECTION */}
-        <section className="mt-12 bg-white rounded-[2.5rem] p-8 md:p-12 border border-[var(--outline-variant)]/50 shadow-2xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--primary)]/5 blur-[100px] rounded-full -mr-32 -mt-32 transition-all group-hover:bg-[var(--primary)]/10" />
+         {/* PURCHASE HUB SECTION */}
+        <section className="mt-12 bg-white rounded-none p-10 md:p-14 border border-[var(--outline-variant)] shadow-xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--primary)]/5 blur-[100px] -mr-32 -mt-32 transition-all" />
             
             <div className="relative z-10 flex flex-col lg:flex-row gap-12 lg:items-center">
                 <div className="flex-1 space-y-6">
-                    <div className="inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-[var(--surface-low)] border border-[var(--outline-variant)]/30 text-[var(--primary)]">
-                        <ShoppingBag size={18} />
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em] italic">Operational Node: Purchase Hub</span>
+                    <div className="inline-flex items-center gap-3 px-4 py-2 bg-[var(--surface-low)] border border-[var(--outline-variant)] text-[var(--primary)]">
+                        <ShoppingBag size={16} />
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em]">Purchase Hub</span>
                     </div>
-                    <h2 className="text-3xl font-display font-black text-[#1B1C1C] italic uppercase tracking-tighter leading-none">
-                        Select Your <span className="text-[var(--primary)] not-italic">Service Node</span>
+                    <h2 className="text-3xl font-display font-black text-[#1B1C1C] uppercase tracking-tight leading-none">
+                        Select Your <span className="text-[var(--primary)]">Service Node</span>
                     </h2>
-                    <p className="text-[#616161] font-bold text-sm uppercase tracking-widest max-w-lg leading-relaxed opacity-80 italic">
-                        Initialize your workspace selection below. Once submitted, your intent will be bridged to our manager dashboard for final approval.
+                    <p className="text-[#616161] font-bold text-[10px] uppercase tracking-widest max-w-sm leading-relaxed opacity-50">
+                        Initialize your workspace selection below. Once submitted, your intent will be bridged to our manager dashboard.
                     </p>
                 </div>
 
                 <div className="w-full lg:w-[450px] space-y-4">
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.2em] ml-2">Choose Workspace System</label>
+                     <div className="space-y-1">
+                        <label className="text-[9px] font-black text-[#9E9E9E] uppercase tracking-[0.2em] ml-2">Choose Workspace System</label>
                         <select 
                             value={selectedProductId}
                             onChange={(e) => {
@@ -393,7 +395,7 @@ export default function UserDocumentsPage() {
                                 setSelectedPlanId('');
                                 setSelectedUnitId('');
                             }}
-                            className="w-full bg-[var(--surface-low)]/50 border border-[var(--outline-variant)]/30 rounded-2xl px-6 py-4 text-sm font-bold text-[#1B1C1C] outline-none focus:ring-4 focus:ring-[var(--primary)]/5 transition-all appearance-none cursor-pointer"
+                            className="w-full bg-[var(--surface-low)]/50 border border-[var(--outline-variant)] rounded-none px-6 py-4 text-xs font-bold text-[#1B1C1C] outline-none focus:border-[var(--primary)] transition-all appearance-none cursor-pointer"
                         >
                             <option value="">-- SELECT PRODUCT --</option>
                             {products.map(p => (
@@ -403,12 +405,12 @@ export default function UserDocumentsPage() {
                     </div>
 
                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.2em] ml-2">Seats Option</label>
+                        <label className="text-[9px] font-black text-[#9E9E9E] uppercase tracking-[0.2em] ml-2">Seats Option</label>
                         <select 
                             value={selectedUnitId}
                             onChange={(e) => setSelectedUnitId(e.target.value)}
                             disabled={!selectedProductId || (products.find(p => p.id === Number(selectedProductId))?.units.length === 0)}
-                            className="w-full bg-[var(--surface-low)]/50 border border-[var(--outline-variant)]/30 rounded-2xl px-6 py-4 text-sm font-bold text-[#1B1C1C] outline-none focus:ring-4 focus:ring-[var(--primary)]/5 transition-all appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="w-full bg-[var(--surface-low)]/50 border border-[var(--outline-variant)] rounded-none px-6 py-4 text-xs font-bold text-[#1B1C1C] outline-none focus:border-[var(--primary)] transition-all appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             <option value="">-- SELECT SEATS OPTION --</option>
                             {products.find(p => p.id === Number(selectedProductId))?.units.map(unit => (
@@ -420,12 +422,12 @@ export default function UserDocumentsPage() {
                     </div>
 
                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.2em] ml-2">Period of Time</label>
+                        <label className="text-[9px] font-black text-[#9E9E9E] uppercase tracking-[0.2em] ml-2">Period of Time</label>
                         <select 
                             value={selectedPlanId}
                             onChange={(e) => setSelectedPlanId(e.target.value)}
                             disabled={!selectedProductId}
-                            className="w-full bg-[var(--surface-low)]/50 border border-[var(--outline-variant)]/30 rounded-2xl px-6 py-4 text-sm font-bold text-[#1B1C1C] outline-none focus:ring-4 focus:ring-[var(--primary)]/5 transition-all appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="w-full bg-[var(--surface-low)]/50 border border-[var(--outline-variant)] rounded-none px-6 py-4 text-xs font-bold text-[#1B1C1C] outline-none focus:border-[var(--primary)] transition-all appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             <option value="">-- SELECT PERIOD --</option>
                             {products.find(p => p.id === Number(selectedProductId))?.pricingPlans.map(plan => (
@@ -439,32 +441,32 @@ export default function UserDocumentsPage() {
                     <button 
                         onClick={handleSubmitRequest}
                         disabled={isSubmitting || !selectedProductId || !selectedPlanId}
-                        className="w-full mt-4 bg-[#1B1C1C] text-white py-5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 shadow-xl hover:bg-[var(--primary)] transition-all transform hover:-translate-y-1 active:scale-95 disabled:opacity-30 disabled:hover:-translate-y-0 disabled:cursor-not-allowed italic"
+                        className="w-full mt-4 bg-[#1B1C1C] text-white py-5 rounded-none text-[10px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 shadow-xl hover:bg-black transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? (
-                            <Loader className="w-4 h-4 animate-spin" />
+                            <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                             <ShieldCheck className="w-4 h-4" />
                         )}
                         {isSubmitting ? 'INITIATING...' : 'SUBMIT PURCHASE REQUEST'}
                     </button>
-                    <div className="flex justify-center items-center gap-2 pt-2">
-                        <Zap size={10} className="text-amber-500 animate-pulse" />
-                        <span className="text-[8px] font-black text-[#BDBDBD] uppercase tracking-[0.4em] italic">Bypass Gateway: Status ACTIVE</span>
+                     <div className="flex justify-center items-center gap-2 pt-2">
+                        <div className="w-1.5 h-1.5 bg-amber-500"></div>
+                        <span className="text-[7px] font-black text-[#BDBDBD] uppercase tracking-[0.2em]">Bypass Gateway: Status ACTIVE</span>
                     </div>
                 </div>
             </div>
         </section>
 
-        <div className="mt-12 bg-white rounded-[2.5rem] p-8 md:p-12 border border-[var(--outline-variant)]/50 shadow-2xl shadow-black/[0.02]">
+        <div className="mt-12 bg-white rounded-none p-10 md:p-14 border border-[var(--outline-variant)] shadow-sm">
           {filteredDocs.length === 0 ? (
             <div className="py-24 text-center">
-              <div className="inline-flex p-10 rounded-[2rem] bg-[var(--surface-low)] text-[#9E9E9E] mb-8 shadow-inner border border-[var(--outline-variant)]/30">
-                <FileText size={48} />
+              <div className="inline-flex p-10 bg-[var(--surface-low)] border border-[var(--outline-variant)] text-[#9E9E9E] mb-8">
+                <FileText size={40} />
               </div>
               <h3 className="text-2xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight">No Documents Available</h3>
-              <p className="max-w-md mx-auto mt-4 text-[#616161] font-bold text-sm uppercase tracking-widest opacity-60 leading-relaxed">
-                Your archive is currently empty. Agreements and official documents will appear here once finalized by the management.
+              <p className="max-w-xs mx-auto mt-4 text-[#616161] font-bold text-[10px] uppercase tracking-widest opacity-40 leading-relaxed">
+                Your archive is currently empty. Agreements will appear here once finalized.
               </p>
               <div className="mt-10 flex flex-col items-center gap-4">
                  <div className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-50 text-orange-700 border border-orange-100 text-[10px] font-black uppercase tracking-[0.2em]">
@@ -477,45 +479,45 @@ export default function UserDocumentsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-separate border-spacing-y-4">
                 <thead>
-                  <tr className="text-[#9E9E9E]">
-                    <th className="px-6 py-2 text-[10px] font-black uppercase tracking-[0.3em] italic">Archive ID</th>
-                    <th className="px-6 py-2 text-[10px] font-black uppercase tracking-[0.3em] italic">Document Meta</th>
-                    <th className="px-6 py-2 text-[10px] font-black uppercase tracking-[0.3em] italic">Timeline</th>
-                    <th className="px-6 py-2 text-[10px] font-black uppercase tracking-[0.3em] italic text-right">Interaction</th>
+                  <tr className="text-[#9E9E9E] border-b border-[var(--outline-variant)]">
+                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">Archive ID</th>
+                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">Document Meta</th>
+                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">Timeline</th>
+                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-right">Interaction</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredDocs.map((doc) => (
-                     <tr key={doc.id} className="group">
-                      <td className="px-6 py-6 bg-[var(--surface-low)]/30 first:rounded-l-3xl border-y border-l border-[var(--outline-variant)]/20 font-display font-bold text-[var(--primary)] text-sm italic">
+                     <tr key={doc.id} className="group border-b border-[var(--outline-variant)]/30 last:border-0">
+                      <td className="px-6 py-6 font-display font-bold text-[var(--primary)] text-sm">
                         #{doc.id}
                       </td>
-                      <td className="px-6 py-6 bg-[var(--surface-low)]/30 border-y border-[var(--outline-variant)]/20">
+                      <td className="px-6 py-6">
                         <div>
-                          <p className="font-bold text-[#1C1C1C] text-sm uppercase tracking-tight group-hover:text-[var(--primary)] transition-colors cursor-pointer">{doc.title}</p>
-                          <p className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-widest mt-1 italic">{doc.category.displayName}</p>
+                          <p className="font-bold text-[#1C1C1C] text-sm uppercase tracking-tight">{doc.title}</p>
+                          <p className="text-[9px] font-black text-[#9E9E9E] uppercase tracking-widest mt-1">{doc.category.displayName}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-6 bg-[var(--surface-low)]/30 border-y border-[var(--outline-variant)]/20">
+                      <td className="px-6 py-6">
                          <div className="flex items-center gap-2">
-                           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all`} 
-                                 style={{ backgroundColor: `${doc.status.color}20`, color: doc.status.color, border: `1px solid ${doc.status.color}30` }}>
+                           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-[8px] font-black uppercase tracking-widest border transition-all`} 
+                                 style={{ backgroundColor: `${doc.status.color}10`, color: doc.status.color, borderColor: `${doc.status.color}30` }}>
                              {doc.status.name === 'APPROVED' ? <CheckCircle size={10} /> : <Clock size={10} />}
                              {doc.status.displayName}
                            </span>
-                           <span className="text-[10px] font-bold text-[#9E9E9E] italic">
+                           <span className="text-[10px] font-bold text-[#9E9E9E]">
                              {new Date(doc.createdAt).toLocaleDateString()}
                            </span>
                          </div>
                       </td>
-                      <td className="px-6 py-6 bg-[var(--surface-low)]/30 last:rounded-r-3xl border-y border-r border-[var(--outline-variant)]/20 text-right">
-                        <div className="flex items-center justify-end gap-3 translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-500">
+                      <td className="px-6 py-6 text-right">
+                        <div className="flex items-center justify-end gap-3 translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all">
                           <button 
                             onClick={() => window.open(doc.fileUrl, '_blank')}
-                            className="p-3 rounded-xl bg-white text-[#616161] hover:text-[var(--primary)] shadow-sm border border-[var(--outline-variant)]/30 hover:scale-110 active:scale-95 transition-all"
+                            className="p-2.5 rounded-none bg-white text-[#616161] border border-[var(--outline-variant)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-all"
                             title="Preview"
                           >
-                            <Eye size={16} />
+                            <Eye size={14} />
                           </button>
                         </div>
                       </td>

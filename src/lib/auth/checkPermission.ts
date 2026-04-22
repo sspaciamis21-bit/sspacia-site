@@ -34,7 +34,8 @@ export async function checkPermission(
   if (roleName === 'user' || roleName === 'member' || roleName === 'customer') {
     const memberPermissions = [
       'tickets:read', 'tickets:create',
-      'bookings:read', 'bookings:create'
+      'bookings:read', 'bookings:create',
+      'documents:view', 'documents:update'
     ];
     if (memberPermissions.includes(`${module}:${action}`)) {
       return true;

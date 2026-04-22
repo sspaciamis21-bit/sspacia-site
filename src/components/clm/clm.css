@@ -10,20 +10,20 @@
   --clm-surface: #FFFFFF;
   --clm-surface2: #F1F3F5;
   --clm-surface3: #E9ECEF;
-  --clm-border: #E0E0E0;
-  --clm-border2: #CED4DA;
+  --clm-border: var(--outline-variant, #E0E0E0);
+  --clm-border2: var(--outline, #CED4DA);
   --clm-text: #1B1C1C;
   --clm-text2: #495057;
   --clm-text3: #868E96;
-  --clm-primary: #FF5722;
-  --clm-primary-glow: rgba(255, 87, 34, 0.1);
+  --clm-primary: var(--primary, #00B0BC);
+  --clm-primary-glow: rgba(0, 176, 188, 0.1);
   --clm-dark: #1B1B1B;
   --clm-mint: #00D4AA;
   --clm-red: #FF5A5A;
   --clm-blue: #4A9EFF;
 
-  --font-mono: 'DM Mono', 'Courier New', monospace;
-  --font-display: 'Fraunces', Georgia, serif;
+  --font-mono: 'Space Grotesk', 'DM Mono', 'Courier New', monospace;
+  --font-display: 'Inter', 'Fraunces', Georgia, serif;
 }
 
 

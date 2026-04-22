@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { MapPin, Loader, Building2 } from 'lucide-react';
+import { MapPin, Loader2, Building2 } from 'lucide-react';
 import { FadeUp } from '@/components/ui/fade-up';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
@@ -53,57 +53,53 @@ export default function ManagerLocationsPage() {
 
   if (loading || authLoading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <Loader size={40} className="text-[var(--primary)] animate-spin mb-4" />
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
+        <Loader2 size={40} className="text-[var(--primary)] animate-spin" />
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#9E9E9E] animate-pulse">Initializing Nodes...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10">
+    <div className="max-w-7xl mx-auto space-y-12 px-4 pb-20">
       <FadeUp>
-        <div className="flex items-center gap-4 mb-10">
-          <div className="inline-flex p-3.5 rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
-            <MapPin size={28} />
+        <div className="flex items-center gap-6 mb-10">
+          <div className="inline-flex p-4 bg-white border border-[var(--outline-variant)] text-[var(--primary)]">
+            <MapPin size={24} />
           </div>
           <div>
-            <h1 className="text-3xl md:text-4xl font-display font-bold text-[#1B1C1C] tracking-tight">Assigned Locations</h1>
-            <p className="text-[#616161] font-medium text-sm mt-1">View the facilities you currently manage</p>
+            <h1 className="text-3xl md:text-4xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight">Facility Registry</h1>
+            <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60">Locations under active management</p>
           </div>
         </div>
 
         {locations.length === 0 ? (
-          <div className="bg-[var(--surface-lowest)] rounded-3xl p-12 border border-[var(--outline-variant)]/50 text-center py-24 shadow-sm">
-            <div className="inline-flex p-6 rounded-3xl bg-[var(--surface-low)] text-[#9E9E9E] mb-6">
-              <Building2 size={64} />
-            </div>
-            <h2 className="text-2xl font-display font-bold text-[#1B1C1C] mb-2">No Assigned Locations</h2>
-            <p className="text-[#616161] font-medium max-w-sm mx-auto">You haven&apos;t been assigned to manage any locations yet. Please contact the administrator.</p>
+          <div className="bg-white border border-[var(--outline-variant)] p-20 text-center rounded-none shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#9E9E9E]">No assigned nodes identified</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {locations.map((loc, idx) => (
               <motion.div
                 key={loc.id}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                whileHover={{ y: -8, boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
-                className="bg-[var(--surface-lowest)] rounded-3xl p-8 border border-[var(--outline-variant)]/50 shadow-sm transition-all flex flex-col gap-6 group"
+                className="bg-white border border-[var(--outline-variant)] p-8 rounded-none group hover:border-[var(--primary)] transition-all flex flex-col gap-8 relative"
               >
                 <div className="flex justify-between items-start">
-                  <div className="p-4 bg-[var(--surface-low)] rounded-2xl text-[var(--primary)] group-hover:bg-[var(--primary)] group-hover:text-white transition-all shadow-inner">
-                    <Building2 size={28} />
+                  <div className="p-4 bg-neutral-50 border border-neutral-100 text-[#9E9E9E] group-hover:text-[var(--primary)] group-hover:bg-white group-hover:border-[var(--primary)]/30 transition-all">
+                    <Building2 size={24} />
                   </div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--surface-low)] border border-[var(--outline-variant)]/30 text-[10px] font-bold text-[#616161] uppercase tracking-widest">
-                    ID: {loc.id}
+                  <div className="inline-flex items-center px-3 py-1 bg-neutral-100 border border-neutral-200 text-[8px] font-black text-[#616161] uppercase tracking-[0.2em] rounded-none">
+                    NODE: {loc.id}
                   </div>
                 </div>
                 <div>
-                  <h3 className="font-display font-bold text-2xl text-[#1B1C1C] mb-2 group-hover:text-[var(--primary)] transition-colors">{loc.name}</h3>
-                  <div className="flex items-center gap-2 text-[#616161] font-medium text-sm">
-                    <MapPin size={16} className="text-[var(--primary)]" />
-                    <span>View Location Details</span>
+                  <h3 className="font-display font-bold text-xl text-[#1B1C1C] mb-2 uppercase tracking-tight group-hover:text-[var(--primary)] transition-colors">{loc.name}</h3>
+                  <div className="flex items-center gap-2 text-[#9E9E9E] font-bold text-[9px] uppercase tracking-widest">
+                    <MapPin size={12} className="opacity-40" />
+                    <span>View Node operations</span>
                   </div>
                 </div>
               </motion.div>

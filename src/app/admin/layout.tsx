@@ -77,16 +77,16 @@ export default function AdminLayout({
       <aside 
         className={`${
           isSidebarOpen ? 'w-72' : 'w-20'
-        } bg-white border-r border-[#CFD8DC]/50 transition-all duration-300 ease-in-out flex flex-col z-50 relative`}
+        } bg-white border-r border-[var(--outline-variant)]/40 transition-all duration-300 ease-in-out flex flex-col z-50 relative`}
       >
         <button 
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="absolute -right-3 top-8 p-1.5 bg-white border border-[#CFD8DC] rounded-full text-[#006064] shadow-sm hover:bg-[#E0F7FA] transition-colors z-[60]"
+          className="absolute -right-3 top-8 p-1.5 bg-white border border-[var(--outline-variant)]/60 rounded-none text-[#1B1C1C] shadow-sm hover:bg-[var(--primary)] hover:text-white transition-all z-[60]"
         >
           {isSidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
         </button>
 
-        <div className="p-6 flex items-center justify-between overflow-hidden">
+        <div className="p-8 flex items-center justify-between overflow-hidden">
           <AnimatePresence mode="wait">
             {isSidebarOpen ? (
               <motion.div
@@ -94,9 +94,9 @@ export default function AdminLayout({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="font-bold text-xl text-[#006064] whitespace-nowrap"
+                className="font-display font-bold text-xl text-[#1B1C1C] whitespace-nowrap tracking-tighter"
               >
-                SSPACIA <span className="text-[#004D40]">Admin</span>
+                SSPACIA <span className="text-[var(--primary)]">ADMIN</span>
               </motion.div>
             ) : (
               <motion.div
@@ -104,7 +104,7 @@ export default function AdminLayout({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="font-bold text-xl text-[#006064] mx-auto"
+                className="font-display font-black text-xl text-[var(--primary)] mx-auto"
               >
                 S
               </motion.div>
@@ -112,27 +112,28 @@ export default function AdminLayout({
           </AnimatePresence>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-4 py-8 space-y-2 overflow-y-auto">
           {sidebarItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-4 px-4 py-3 rounded-lg transition-all group ${
+                className={`flex items-center gap-4 px-4 py-3.5 rounded-none transition-all group relative ${
                   isActive 
-                    ? 'bg-[#006064] text-white shadow-lg shadow-[#006064]/20' 
-                    : 'text-[#616161] hover:bg-[#E0F7FA] hover:text-[#006064]'
+                    ? 'bg-[var(--primary)] text-white' 
+                    : 'text-[#616161] hover:bg-neutral-50 hover:text-[#1B1C1C]'
                 }`}
               >
-                <item.icon size={22} className={isActive ? '' : 'group-hover:scale-110 transition-transform'} />
+                <item.icon size={20} className={`${isActive ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
                 {isSidebarOpen && (
-                  <span className="font-bold whitespace-nowrap">{item.name}</span>
+                  <span className="font-bold text-[10px] uppercase tracking-[0.2em] whitespace-nowrap">{item.name}</span>
                 )}
-                {!isSidebarOpen && isActive && (
-                  <div className="absolute left-full ml-4 px-3 py-1 bg-[#006064] text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                    {item.name}
-                  </div>
+                {isActive && (
+                  <motion.div 
+                    layoutId="active-indicator"
+                    className="absolute left-0 w-1 h-8 bg-white/40"
+                  />
                 )}
               </Link>
             );
@@ -140,20 +141,20 @@ export default function AdminLayout({
         </nav>
 
         {user && (
-          <div className="border-t border-[#CFD8DC]/30 p-4 shrink-0 flex flex-col gap-2">
+          <div className="border-t border-[var(--outline-variant)]/30 p-6 shrink-0 flex flex-col gap-4">
             {isSidebarOpen ? (
-              <div className="flex items-center gap-3 px-2 mb-2 w-full">
-                <div className="h-10 w-10 shrink-0 rounded-lg bg-[#E0F7FA] text-[#006064] flex items-center justify-center border border-[#006064]/10 shadow-inner font-bold">
+              <div className="flex items-center gap-4 px-2 w-full">
+                <div className="h-10 w-10 shrink-0 rounded-none bg-white text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)]/40 font-black text-sm">
                   {user.name?.charAt(0).toUpperCase()}
                 </div>
                 <div className="w-full min-w-0 overflow-hidden">
-                  <p className="text-sm font-bold text-[#004D40] truncate w-full">{user.name}</p>
-                  <p className="text-xs text-[#616161] uppercase tracking-widest truncate">{user.role}</p>
+                  <p className="text-[11px] font-black text-[#1B1C1C] truncate w-full uppercase tracking-widest">{user.name}</p>
+                  <p className="text-[9px] text-[#616161] font-bold uppercase tracking-[0.3em] truncate opacity-50">{user.role}</p>
                 </div>
               </div>
             ) : (
-              <div className="flex justify-center mb-2 w-full">
-                 <div className="h-10 w-10 shrink-0 rounded-lg bg-[#E0F7FA] text-[#006064] flex items-center justify-center border border-[#006064]/10 shadow-inner font-bold">
+              <div className="flex justify-center w-full">
+                 <div className="h-10 w-10 shrink-0 rounded-none bg-white text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)]/40 font-black text-sm">
                   {user.name?.charAt(0).toUpperCase()}
                 </div>
               </div>
@@ -161,11 +162,11 @@ export default function AdminLayout({
             
             <button
                onClick={handleLogout}
-               className="w-full flex items-center gap-4 px-3 py-2.5 text-[#616161] hover:bg-red-50 hover:text-red-600 rounded-lg transition-all group"
+               className="w-full flex items-center gap-4 px-3 py-3 text-[#616161] hover:bg-neutral-100 hover:text-red-600 rounded-none transition-all group border border-transparent hover:border-red-100"
                title="Logout"
             >
-               <LogOut size={20} className="shrink-0 group-hover:rotate-12 transition-transform" />
-               {isSidebarOpen && <span className="font-bold text-sm whitespace-nowrap">Logout</span>}
+               <LogOut size={18} className="shrink-0 group-hover:translate-x-1 transition-transform" />
+               {isSidebarOpen && <span className="font-bold text-[9px] uppercase tracking-[0.3em] whitespace-nowrap">DISPATCH NODE</span>}
             </button>
           </div>
         )}
@@ -173,7 +174,7 @@ export default function AdminLayout({
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 relative">
-        <div className="flex-1 p-8 overflow-y-auto relative z-0">
+        <div className="flex-1 p-10 overflow-y-auto relative z-0">
           {children}
         </div>
       </main>

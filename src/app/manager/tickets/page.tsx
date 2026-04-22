@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertCircle, Clock, CheckCircle, XCircle, Loader } from 'lucide-react';
+import { AlertCircle, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { FadeUp } from '@/components/ui/fade-up';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
@@ -115,75 +115,75 @@ export default function ManagerTicketsPage() {
 
   if (loading || authLoading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <Loader size={40} className="text-[var(--primary)] animate-spin mb-4" />
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
+        <Loader2 size={40} className="text-[var(--primary)] animate-spin" />
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#9E9E9E] animate-pulse">Initializing...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10">
+    <div className="max-w-7xl mx-auto space-y-10 pb-20 px-4">
       <FadeUp>
         <div className="flex items-center gap-4 mb-10">
-          <div className="inline-flex p-3.5 rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
-            <AlertCircle size={28} />
+          <div className="inline-flex p-3.5 bg-[var(--surface-low)] border border-[var(--outline-variant)] text-[var(--primary)]">
+            <AlertCircle size={24} />
           </div>
           <div>
-            <h1 className="text-3xl md:text-4xl font-display font-bold text-[#1B1C1C] tracking-tight">Support Tickets</h1>
-            <p className="text-[#616161] font-medium text-sm mt-1">Manage tickets from your assigned locations</p>
+            <h1 className="text-3xl md:text-4xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight">Service Threads</h1>
+            <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60">Maintenance and support dispatch</p>
           </div>
         </div>
 
-        <div className="bg-[var(--surface-lowest)] rounded-3xl p-8 border border-[var(--outline-variant)]/50 shadow-sm overflow-hidden">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10 overflow-x-auto pb-2 no-scrollbar border-b border-[var(--outline-variant)]/30">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Filter By Status:</span>
+        <div className="bg-[var(--surface-lowest)] rounded-none border border-[var(--outline-variant)] shadow-sm overflow-hidden">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-8 gap-4 border-b border-[var(--outline-variant)]/30 bg-[var(--surface-low)]/20">
+            <div className="flex items-center gap-3">
+              <span className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-[0.3em]">Lifecycle:</span>
               <select 
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as 'ALL' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED')}
-                className="bg-[var(--surface-low)] text-[#1B1C1C] border border-[var(--outline-variant)]/30 rounded-xl px-4 py-2 text-xs font-bold focus:ring-2 focus:ring-[var(--primary)] outline-none"
+                className="bg-white text-[#1B1C1C] border border-[var(--outline-variant)] rounded-none px-4 py-2 text-[10px] font-bold uppercase tracking-widest focus:border-[var(--primary)] outline-none"
               >
-                <option value="ALL">All Tickets</option>
-                <option value="OPEN">Open</option>
-                <option value="IN_PROGRESS">In Progress</option>
+                <option value="ALL">Full Registry</option>
+                <option value="OPEN">Open Nodes</option>
+                <option value="IN_PROGRESS">Active Work</option>
                 <option value="RESOLVED">Resolved</option>
               </select>
             </div>
-            <div className="text-[11px] font-bold text-[#616161] uppercase tracking-widest bg-[var(--surface-low)] px-4 py-2 rounded-xl">
-              Showing {filteredTickets.length} {statusFilter === 'ALL' ? '' : statusFilter.replace('_', ' ')} Tickets
+            <div className="text-[9px] font-bold text-[#616161] uppercase tracking-[0.2em] bg-white border border-[var(--outline-variant)] px-4 py-2">
+              Index count: {filteredTickets.length}
             </div>
           </div>
 
           {filteredTickets.length === 0 ? (
-            <div className="text-center py-20 text-[#9E9E9E]">
-              <div className="inline-flex p-6 rounded-3xl bg-[var(--surface-low)] text-[#9E9E9E] mb-6">
-                <AlertCircle size={48} />
-              </div>
-              <p className="font-display font-bold text-xl text-[#1B1C1C]">No {statusFilter === 'ALL' ? 'tickets' : statusFilter.toLowerCase()} found</p>
-              <p className="text-sm font-medium mt-2">There are currently no tickets in this category.</p>
+            <div className="text-center py-20 bg-white">
+              <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#9E9E9E]">No matching registry entries</p>
             </div>
           ) : (
-            <div className="overflow-x-auto -mx-8 px-8">
+            <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[700px]">
                 <thead>
-                  <tr className="border-b border-[var(--outline-variant)]/30">
-                    <th className="pb-5 px-4 text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Ticket #</th>
-                    <th className="pb-5 px-4 text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Name</th>
-                    <th className="pb-5 px-4 text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Location</th>
-                    <th className="pb-5 px-4 text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Status</th>
-                    <th className="pb-5 px-4 text-[11px] font-bold text-[#9E9E9E] uppercase tracking-widest">Created</th>
+                  <tr className="border-b border-[var(--outline-variant)]/30 bg-neutral-50/50">
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Registry ID</th>
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Subscriber / Issue</th>
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Origin Node</th>
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">State Logic</th>
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Timestamp</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--outline-variant)]/10">
+                <tbody className="divide-y divide-[var(--outline-variant)]/10 bg-white">
                   {filteredTickets.map((ticket) => (
                     <tr key={ticket.id} className="hover:bg-[var(--surface-low)]/30 transition-colors group">
-                      <td className="py-5 px-4 font-display font-bold text-[var(--primary)] group-hover:underline cursor-pointer">{ticket.ticketNumber}</td>
-                      <td className="py-5 px-4 font-bold text-[#1B1C1C]">{ticket.name}</td>
-                      <td className="py-5 px-4 text-[#616161] font-medium text-sm">{ticket.locationRel?.name || '—'}</td>
-                      <td className="py-5 px-4">
-                        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all whitespace-nowrap ${getStatusColor(ticket.status.name)}`}>
+                      <td className="py-8 px-8 font-display font-bold text-[var(--primary)] uppercase text-[13px] tracking-tight">{ticket.ticketNumber}</td>
+                      <td className="py-8 px-8">
+                         <p className="font-bold text-[#1B1C1C] text-[13px] uppercase tracking-tight">{ticket.name}</p>
+                         <p className="text-[9px] text-[#9E9E9E] font-bold uppercase mt-1">Ref ID: #{ticket.id}</p>
+                      </td>
+                      <td className="py-8 px-8 text-[#616161] font-bold text-[10px] uppercase tracking-widest">{ticket.locationRel?.name || 'GENERIC'}</td>
+                      <td className="py-8 px-8">
+                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-none text-[9px] font-black uppercase tracking-widest border transition-all ${getStatusColor(ticket.status.name)}`}>
                           {updatingStatus === ticket.id ? (
-                            <Loader size={12} className="animate-spin" />
+                            <Loader2 size={12} className="animate-spin" />
                           ) : (
                             getStatusIcon(ticket.status.name)
                           )}
@@ -191,17 +191,17 @@ export default function ManagerTicketsPage() {
                             value={ticket.status.name}
                             disabled={updatingStatus === ticket.id}
                             onChange={(e) => handleStatusUpdate(ticket.id, e.target.value)}
-                            className="bg-transparent border-none p-0 ml-1 text-[10px] font-bold uppercase focus:ring-0 cursor-pointer outline-none active:outline-none"
+                            className="bg-transparent border-none p-0 ml-1 text-[9px] font-bold uppercase focus:ring-0 cursor-pointer outline-none active:outline-none"
                           >
-                            <option value="OPEN" className="bg-white text-black">Open</option>
-                            <option value="IN_PROGRESS" className="bg-white text-black">In Progress</option>
-                            <option value="RESOLVED" className="bg-white text-black">Resolved</option>
-                            <option value="CLOSED" className="bg-white text-black">Closed</option>
+                            <option value="OPEN" className="bg-white text-black">OPEN</option>
+                            <option value="IN_PROGRESS" className="bg-white text-black">IN_PROGRESS</option>
+                            <option value="RESOLVED" className="bg-white text-black">RESOLVED</option>
+                            <option value="CLOSED" className="bg-white text-black">CLOSED</option>
                           </select>
                         </div>
                       </td>
-                      <td className="py-5 px-4 text-[#616161] font-bold text-[11px] uppercase tracking-tighter">
-                        {new Date(ticket.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      <td className="py-8 px-8 text-[#9E9E9E] font-bold text-[10px] uppercase tracking-widest">
+                        {new Date(ticket.createdAt).toLocaleDateString()}
                       </td>
                     </tr>
                   ))}

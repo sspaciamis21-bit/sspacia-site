@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Shield, Loader2, Check } from 'lucide-react';
+import { X, Shield, Loader2, Check, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Permission {
@@ -32,14 +32,14 @@ interface AddRoleModalProps {
 
 function Label({ htmlFor, children, required }: { htmlFor: string; children: React.ReactNode; required?: boolean }) {
   return (
-    <label htmlFor={htmlFor} className="block text-xs font-bold text-[#616161] uppercase tracking-widest mb-1.5">
-      {children} {required && <span className="text-red-500">*</span>}
+    <label htmlFor={htmlFor} className="block text-[10px] font-black text-[#616161] uppercase tracking-[0.2em] mb-2">
+      {children} {required && <span className="text-[var(--primary)]">*</span>}
     </label>
   );
 }
 
 const inputClass =
-  'w-full px-4 py-2.5 bg-[#F8F9FA] border border-[#CFD8DC]/50 rounded-lg text-sm text-[#212121] placeholder:text-[#9E9E9E] focus:outline-none focus:ring-4 focus:ring-[#006064]/8 focus:border-[#006064] transition-all';
+  'w-full px-5 py-4 bg-white border border-[var(--outline-variant)]/40 rounded-none text-sm text-[#1B1B1B] placeholder:text-[#9E9E9E] focus:outline-none focus:border-[var(--primary)] transition-all uppercase font-bold tracking-wider';
 
 export function AddRoleModal({ isOpen, onClose, onSuccess, role }: AddRoleModalProps) {
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -58,7 +58,7 @@ export function AddRoleModal({ isOpen, onClose, onSuccess, role }: AddRoleModalP
     fetch('/api/admin/permissions')
       .then((r) => r.json())
       .then((json) => setPermissions(json.data ?? []))
-      .catch(() => toast.error('Failed to load permissions'))
+      .catch(() => toast.error('Registry link failed'))
       .finally(() => setPermissionsLoading(false));
   }, [isOpen]);
 
@@ -89,7 +89,7 @@ export function AddRoleModal({ isOpen, onClose, onSuccess, role }: AddRoleModalP
     e.preventDefault();
 
     if (!name.trim()) {
-      toast.error('Role name is required.');
+      toast.error('Identity key required.');
       return;
     }
 
@@ -113,13 +113,13 @@ export function AddRoleModal({ isOpen, onClose, onSuccess, role }: AddRoleModalP
       });
 
       const json = await response.json();
-      if (!response.ok) throw new Error(json.error ?? `Failed to ${role ? 'update' : 'create'} role`);
+      if (!response.ok) throw new Error(json.error);
 
-      toast.success(`Role "${name}" ${role ? 'updated' : 'added'} successfully!`);
+      toast.success(`Access level ${role ? 'reconfigured' : 'initialized'}: ${name}`);
       onSuccess();
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : `Failed to ${role ? 'update' : 'create'} role`);
+      toast.error(err instanceof Error ? err.message : 'Registry update failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -128,146 +128,140 @@ export function AddRoleModal({ isOpen, onClose, onSuccess, role }: AddRoleModalP
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-10">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.3 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/80 backdrop-blur-md"
           />
 
           <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="relative flex flex-col w-full max-w-xl bg-white shadow-2xl h-full"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className="relative flex flex-col w-full max-w-2xl bg-white rounded-none border border-white/10 shadow-2xl overflow-hidden max-h-[90vh]"
           >
-            <div className="flex items-center justify-between px-6 py-5 border-b border-[#CFD8DC]/30 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-[#E0F7FA] text-[#006064]">
-                  <Shield size={20} />
+             <div className="absolute top-0 left-0 w-full h-1 bg-[var(--primary)]" />
+             
+            <div className="flex items-center justify-between px-10 py-8 border-b border-[var(--outline-variant)]/20 flex-shrink-0 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-[#1B1B1B] text-[var(--primary)] border border-white/10 shadow-xl">
+                  <Shield size={24} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-[#004D40]">
-                    {role ? 'Edit Role' : 'Add New Role'}
+                  <h2 className="text-xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">
+                    {role ? 'Modify Access' : 'Initialize Access Level'}
                   </h2>
-                  <p className="text-xs text-[#9E9E9E]">
-                    {role ? 'Update role and permissions' : 'Create a new user role with permissions'}
-                  </p>
+                  <p className="text-[10px] text-[#616161] font-bold uppercase tracking-[0.3em] mt-1 opacity-60">Security privilege configuration</p>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="p-2 rounded-lg text-[#9E9E9E] hover:text-[#212121] hover:bg-[#F8F9FA] transition-colors"
+                className="p-2 text-[#9E9E9E] hover:text-[#1B1B1B] hover:bg-neutral-100 transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div ref={bodyRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-              <form id="add-role-form" onSubmit={handleSubmit} className="space-y-6">
-                <section className="space-y-4">
-                  <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest border-b border-[#CFD8DC]/30 pb-2">
-                    Role Details
-                  </h3>
+            <div ref={bodyRef} className="flex-1 overflow-y-auto px-10 py-10 space-y-10 custom-scrollbar">
+              <form id="add-role-form" onSubmit={handleSubmit} className="space-y-10">
+                <section className="space-y-6">
+                  <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
+                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Core Parameters</span>
+                  </div>
 
-                  <div>
-                    <Label htmlFor="name" required>
-                      Role Name
-                    </Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="name" required>Role Designation</Label>
                     <input
                       id="name"
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Manager"
+                      placeholder="ACCESS_ROLE_ID"
                       className={inputClass}
                       required
                     />
                   </div>
 
-                  <div>
-                    <Label htmlFor="description">Description</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Mission Directives (Description)</Label>
                     <textarea
                       id="description"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Optional description for this role"
-                      rows={2}
-                      className={inputClass + ' resize-y'}
+                      placeholder="Optional role description"
+                      rows={3}
+                      className={inputClass + ' resize-none'}
                     />
                   </div>
                 </section>
 
-                <section className="space-y-4">
-                  <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest border-b border-[#CFD8DC]/30 pb-2">
-                    Permissions
-                  </h3>
+                <section className="space-y-6">
+                   <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
+                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Privilege Matrix</span>
+                  </div>
 
                   {permissionsLoading ? (
-                    <div className="text-center py-8">
-                      <Loader2 className="mx-auto h-5 w-5 text-[#006064] animate-spin" />
-                      <p className="text-xs text-[#9E9E9E] mt-2">Loading permissions…</p>
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 text-[var(--primary)] animate-spin mb-4" />
+                      <p className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-widest animate-pulse">Syncing Permissions...</p>
                     </div>
-                  ) : permissions.length === 0 ? (
-                    <p className="text-sm text-[#9E9E9E]">No permissions available.</p>
                   ) : (
-                    <div className="space-y-2">
-                      {permissions.map((perm) => (
-                        <label
-                          key={perm.id}
-                          className="flex items-start gap-3 p-3 border border-[#CFD8DC]/50 rounded-lg hover:bg-[#F8F9FA] transition-colors cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedPermissions.includes(perm.id)}
-                            onChange={() => togglePermission(perm.id)}
-                            className="mt-0.5 h-4 w-4 text-[#006064] border-[#CFD8DC] rounded focus:ring-[#006064]/8"
-                          />
-                          <div className="flex-1">
-                            <p className="text-sm font-bold text-[#212121]">{perm.name}</p>
-                            {perm.description && (
-                              <p className="text-xs text-[#9E9E9E]">{perm.description}</p>
-                            )}
+                    <div className="grid grid-cols-1 gap-3">
+                      {permissions.map((perm) => {
+                        const isSelected = selectedPermissions.includes(perm.id);
+                        return (
+                          <div
+                            key={perm.id}
+                            onClick={() => togglePermission(perm.id)}
+                            className={`flex items-center justify-between p-5 border transition-all cursor-pointer group ${isSelected ? 'bg-[#1B1B1B] text-white border-[#1B1B1B]' : 'bg-white text-[#616161] border-[var(--outline-variant)]/40 hover:border-[var(--primary)]/60'}`}
+                          >
+                            <div className="flex-1">
+                              <p className={`text-[11px] font-black uppercase tracking-wider ${isSelected ? 'text-[var(--primary)]' : 'text-[#1B1C1C]'}`}>{perm.name}</p>
+                              {perm.description && (
+                                <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 opacity-60 ${isSelected ? 'text-white/60' : 'text-[#616161]'}`}>{perm.description}</p>
+                              )}
+                            </div>
+                            <div className={`h-5 w-5 border flex items-center justify-center transition-colors ${isSelected ? 'bg-[var(--primary)] border-[var(--primary)]' : 'bg-neutral-50 border-[var(--outline-variant)]/40 text-transparent'}`}>
+                               <Check size={14} className={isSelected ? 'text-[#1B1B1B]' : ''} />
+                            </div>
                           </div>
-                          {selectedPermissions.includes(perm.id) && (
-                            <Check size={16} className="text-[#006064] flex-shrink-0 mt-0.5" />
-                          )}
-                        </label>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </section>
               </form>
             </div>
 
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#CFD8DC]/30 bg-white flex-shrink-0">
+            <div className="flex items-center justify-end gap-0 px-0 py-0 border-t border-[var(--outline-variant)]/20 bg-neutral-50 flex-shrink-0">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="px-5 py-2.5 rounded-lg border border-[#CFD8DC]/50 text-sm font-bold text-[#616161] hover:bg-[#F8F9FA] transition-colors disabled:opacity-50"
+                className="flex-1 py-6 text-[10px] font-black text-[#616161] uppercase tracking-[0.3em] hover:bg-neutral-100 transition-all border-r border-[var(--outline-variant)]/20 disabled:opacity-50"
               >
-                Cancel
+                Abort
               </button>
               <button
                 type="submit"
                 form="add-role-form"
                 disabled={isSubmitting}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#006064] text-white rounded-lg text-sm font-bold shadow-md shadow-[#006064]/20 hover:bg-[#004D40] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-[2] py-6 bg-[#1B1B1B] text-white font-black text-[10px] uppercase tracking-[0.3em] hover:bg-[var(--primary)] transition-all disabled:opacity-60"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 size={15} className="animate-spin" />
-                    Saving…
+                    <Loader2 size={16} className="animate-spin inline mr-3" />
+                    Synchronizing Registry…
                   </>
                 ) : (
                   <>
-                    <Shield size={15} />
-                    {role ? 'Update Role' : 'Add Role'}
+                    <Shield size={16} className="inline mr-3" />
+                    {role ? 'Commit Privilege Update' : 'Initialize Access Level'}
                   </>
                 )}
               </button>

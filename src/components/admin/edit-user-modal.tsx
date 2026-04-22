@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, User, Loader2, ChevronDown, Check } from 'lucide-react';
+import { X, UserPlus, Loader2, ChevronDown, Check, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Role {
@@ -34,17 +34,17 @@ interface EditUserModalProps {
 
 function Label({ htmlFor, children, required }: { htmlFor: string; children: React.ReactNode; required?: boolean }) {
   return (
-    <label htmlFor={htmlFor} className="block text-xs font-bold text-[#616161] uppercase tracking-widest mb-1.5">
-      {children} {required && <span className="text-red-500">*</span>}
+    <label htmlFor={htmlFor} className="block text-[10px] font-black text-[#616161] uppercase tracking-[0.2em] mb-2">
+      {children} {required && <span className="text-[var(--primary)]">*</span>}
     </label>
   );
 }
 
 const inputClass =
-  'w-full px-4 py-2.5 bg-[#F8F9FA] border border-[#CFD8DC]/50 rounded-lg text-sm text-[#212121] placeholder:text-[#9E9E9E] focus:outline-none focus:ring-4 focus:ring-[#006064]/8 focus:border-[#006064] transition-all';
+  'w-full px-5 py-4 bg-white border border-[var(--outline-variant)]/40 rounded-none text-sm text-[#1B1B1B] placeholder:text-[#9E9E9E] focus:outline-none focus:border-[var(--primary)] transition-all';
 
 const selectClass =
-  'w-full px-4 py-2.5 bg-[#F8F9FA] border border-[#CFD8DC]/50 rounded-lg text-sm text-[#212121] focus:outline-none focus:ring-4 focus:ring-[#006064]/8 focus:border-[#006064] transition-all appearance-none cursor-pointer';
+  'w-full px-5 py-4 bg-white border border-[var(--outline-variant)]/40 rounded-none text-sm text-[#1B1B1B] focus:outline-none focus:border-[var(--primary)] transition-all appearance-none cursor-pointer';
 
 export function EditUserModal({ isOpen, onClose, onSuccess, user }: EditUserModalProps) {
   const [roles, setRoles] = useState<Role[]>([]);
@@ -71,7 +71,7 @@ export function EditUserModal({ isOpen, onClose, onSuccess, user }: EditUserModa
     fetch('/api/admin/roles')
       .then((r) => r.json())
       .then((json) => setRoles(json.data ?? []))
-      .catch(() => toast.error('Failed to load roles'))
+      .catch(() => {})
       .finally(() => setRolesLoading(false));
 
     // Load locations
@@ -79,7 +79,7 @@ export function EditUserModal({ isOpen, onClose, onSuccess, user }: EditUserModa
     fetch('/api/admin/locations')
       .then((r) => r.json())
       .then((json) => setLocations(json.data ?? []))
-      .catch(() => toast.error('Failed to load locations'))
+      .catch(() => {})
       .finally(() => setLocationsLoading(false));
   }, [isOpen]);
 
@@ -123,28 +123,20 @@ export function EditUserModal({ isOpen, onClose, onSuccess, user }: EditUserModa
     e.preventDefault();
 
     if (!name || !email || !roleId) {
-      toast.error('Please fill in Name, Email, and Role.');
-      return;
-    }
-
-    if (user && !password && !passwordChanged) {
-      // Editing user without changing password
-    } else if (!user && !password) {
-      // Creating new user requires password
-      toast.error('Password is required for new users.');
+      toast.error('Required identity parameters missing.');
       return;
     }
 
     // Password validation if provided
     if (password && password.length < 6) {
-      toast.error('Password must be at least 6 characters long.');
+      toast.error('Secure passcode must be at least 6 characters.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const body: Record<string, unknown> = {
+      const body: Record<string, any> = {
         name,
         email,
         roleId: parseInt(roleId),
@@ -152,27 +144,24 @@ export function EditUserModal({ isOpen, onClose, onSuccess, user }: EditUserModa
         assignedLocationIds,
       };
 
-      if (password) {
+      if (passwordChanged && password) {
         body.password = password;
       }
 
-      const method = user ? 'PATCH' : 'POST';
-      const url = user ? `/api/admin/users/${user.id}` : '/api/admin/users';
-
-      const response = await fetch(url, {
-        method,
+      const response = await fetch(`/api/admin/users/${user?.id}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
       const json = await response.json();
-      if (!response.ok) throw new Error(json.error ?? `Failed to ${user ? 'update' : 'create'} user`);
+      if (!response.ok) throw new Error(json.error ?? 'Modification failed');
 
-      toast.success(`User "${name}" ${user ? 'updated' : 'added'} successfully!`);
+      toast.success(`Identity updated: ${name}`);
       onSuccess();
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : `Failed to ${user ? 'update' : 'create'} user`);
+      toast.error(err instanceof Error ? err.message : 'System modification failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -181,220 +170,214 @@ export function EditUserModal({ isOpen, onClose, onSuccess, user }: EditUserModa
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-10">
+          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.3 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/80 backdrop-blur-md"
           />
 
+          {/* Dialog Container */}
           <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="relative flex flex-col w-full max-w-md bg-white shadow-2xl h-full"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className="relative flex flex-col w-full max-w-3xl bg-white rounded-none border border-white/10 shadow-2xl overflow-hidden max-h-[90vh]"
           >
-            <div className="flex items-center justify-between px-6 py-5 border-b border-[#CFD8DC]/30 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-[#E0F7FA] text-[#006064]">
-                  <User size={20} />
+             {/* Industrial Accents */}
+             <div className="absolute top-0 left-0 w-full h-1 bg-[var(--primary)]" />
+             
+            {/* Header */}
+            <div className="flex items-center justify-between px-10 py-8 border-b border-[var(--outline-variant)]/20 flex-shrink-0 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-[#1B1B1B] text-[var(--primary)] border border-white/10 shadow-xl">
+                  <UserPlus size={24} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-[#004D40]">
-                    {user ? 'Edit Member' : 'Add New Member'}
-                  </h2>
-                  <p className="text-xs text-[#9E9E9E]">
-                    {user ? 'Update member details' : 'Create a new user account'}
-                  </p>
+                  <h2 className="text-xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Modify Identity</h2>
+                  <p className="text-[10px] text-[#616161] font-bold uppercase tracking-[0.3em] mt-1 opacity-60">Re-indexing personnel parameters</p>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="p-2 rounded-lg text-[#9E9E9E] hover:text-[#212121] hover:bg-[#F8F9FA] transition-colors"
+                className="p-2 text-[#9E9E9E] hover:text-[#1B1B1B] hover:bg-neutral-100 transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div ref={bodyRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-              <form id="edit-user-form" onSubmit={handleSubmit} className="space-y-6">
-                <section className="space-y-4">
-                  <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest border-b border-[#CFD8DC]/30 pb-2">
-                    Member Information
-                  </h3>
+            {/* Scrollable form body */}
+            <div ref={bodyRef} className="flex-1 overflow-y-auto px-10 py-10 space-y-12 custom-scrollbar">
+              <form id="edit-user-form" onSubmit={handleSubmit} className="space-y-12">
 
-                  <div>
-                    <Label htmlFor="name" required>
-                      Full Name
-                    </Label>
-                    <input
-                      id="name"
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. John Doe"
-                      className={inputClass}
-                      required
-                    />
+                {/* ── Basic Info ── */}
+                <section className="space-y-8">
+                  <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
+                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Core Parameters</span>
                   </div>
 
-                  <div>
-                    <Label htmlFor="email" required>
-                      Email Address
-                    </Label>
-                    <input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="e.g. john@example.com"
-                      className={inputClass}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="password">
-                      {user ? 'New Password (leave blank to keep current)' : 'Password'}
-                    </Label>
-                    <input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => handlePasswordChange(e.target.value)}
-                      placeholder="••••••••"
-                      className={inputClass}
-                      required={!user}
-                    />
-                    {user && (
-                      <p className="text-[10px] text-[#9E9E9E] mt-1">
-                        Leave blank to keep the current password
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <Label htmlFor="roleId" required>
-                      Role
-                    </Label>
-                    <div className="relative">
-                      <select
-                        id="roleId"
-                        value={roleId}
-                        onChange={(e) => setRoleId(e.target.value)}
-                        className={selectClass}
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-name" required>Assigned Name</Label>
+                      <input
+                        id="edit-name"
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="AUTHENTIC_NAME"
+                        className={`${inputClass} bg-neutral-50/50 uppercase font-bold tracking-wider`}
                         required
-                      >
-                        <option value="">
-                          {rolesLoading ? 'Loading roles…' : 'Select a role'}
-                        </option>
-                        {roles.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9E9E9E] pointer-events-none" />
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                       <Label htmlFor="edit-roleId" required>Clearance Level</Label>
+                       <div className="relative">
+                         <select
+                           id="edit-roleId"
+                           value={roleId}
+                           onChange={(e) => setRoleId(e.target.value)}
+                           className={`${selectClass} bg-neutral-50/50 font-bold uppercase tracking-wider`}
+                           required
+                         >
+                           <option value="" className="text-[#9E9E9E]">SELECT_CLEARANCE</option>
+                           {roles.map((role) => (
+                             <option key={role.id} value={role.id} className="text-[#1B1B1B]">
+                               {role.name}
+                             </option>
+                           ))}
+                         </select>
+                         <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9E9E9E] pointer-events-none" />
+                       </div>
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-email" required>Communication Link (Email)</Label>
+                      <input
+                        id="edit-email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="identity@sector.link"
+                        className={`${inputClass} bg-neutral-50/50 font-bold tracking-wider`}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-password">Secure Passcode Override</Label>
+                      <input
+                        id="edit-password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => handlePasswordChange(e.target.value)}
+                        placeholder="LEAVE_BLANK_FOR_NO_CHANGE"
+                        className={`${inputClass} bg-neutral-50/50 font-bold`}
+                      />
+                      <p className="text-[9px] text-[#9E9E9E] font-bold uppercase tracking-widest italic opacity-60">System only updates if field is populated</p>
                     </div>
                   </div>
                 </section>
 
-                <section className="space-y-4">
-                  <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest border-b border-[#CFD8DC]/30 pb-2">
-                    Location Assignment
-                  </h3>
+                {/* ── Location Assignment ── */}
+                <section className="space-y-8">
+                   <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
+                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Node Access Permissions</span>
+                  </div>
 
                   {locationsLoading ? (
-                    <div className="text-center py-4">
-                      <Loader2 className="mx-auto h-4 w-4 text-[#006064] animate-spin" />
-                      <p className="text-xs text-[#9E9E9E] mt-2">Loading locations…</p>
+                    <div className="flex flex-col items-center justify-center py-12 bg-neutral-50/50 border border-dashed border-[var(--outline-variant)]/40">
+                      <Loader2 className="h-6 w-6 text-[var(--primary)] animate-spin mb-3" />
+                      <p className="text-[10px] font-black text-[#616161] uppercase tracking-[0.3em] animate-pulse">Syncing nodes...</p>
                     </div>
                   ) : locations.length === 0 ? (
-                    <p className="text-sm text-[#9E9E9E]">No locations available.</p>
+                    <div className="py-12 bg-neutral-50/50 border border-dashed border-[var(--outline-variant)]/40 text-center">
+                      <p className="text-[10px] font-black text-[#616161] uppercase tracking-[0.3em]">No operational nodes detected</p>
+                    </div>
                   ) : (
-                    <div className="space-y-2">
-                      {locations.map((location) => (
-                        <label key={location.id} className="flex items-start gap-3 p-3 border border-[#CFD8DC]/50 rounded-lg hover:bg-[#F8F9FA] transition-colors cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={assignedLocationIds.includes(location.id)}
-                            onChange={() => toggleLocation(location.id)}
-                            className="mt-0.5 h-4 w-4 text-[#006064] border-[#CFD8DC] rounded focus:ring-[#006064]/8"
-                          />
-                          <div className="flex-1">
-                            <p className="text-sm font-bold text-[#212121]">{location.name}</p>
-                          </div>
-                          {assignedLocationIds.includes(location.id) && (
-                            <Check size={16} className="text-[#006064] flex-shrink-0 mt-0.5" />
-                          )}
-                        </label>
-                      ))}
+                    <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {locations.map((location) => {
+                        const isSelected = assignedLocationIds.includes(location.id);
+                        return (
+                          <button
+                            key={location.id}
+                            type="button"
+                            onClick={() => toggleLocation(location.id)}
+                            className={`flex items-center justify-between p-4 border transition-all text-left ${
+                              isSelected 
+                                ? 'bg-[#1B1B1B] text-white border-[#1B1B1B]' 
+                                : 'bg-white text-[#616161] border-[var(--outline-variant)]/40 hover:border-[var(--primary)]/60'
+                            }`}
+                          >
+                            <span className="text-[10px] font-black uppercase tracking-widest truncate mr-2">{location.name}</span>
+                            {isSelected && <Check size={14} className="text-[var(--primary)] shrink-0" />}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
-                  <p className="text-[10px] text-[#9E9E9E]">Select locations where this user has access.</p>
                 </section>
 
-                {user && (
-                  <section className="space-y-4">
-                    <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest border-b border-[#CFD8DC]/30 pb-2">
-                      Account Status
-                    </h3>
+                {/* ── Status ── */}
+                <section className="space-y-8 pt-4">
+                   <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
+                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Operating Status</span>
+                  </div>
 
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <div
-                        onClick={() => setIsActive((v) => !v)}
-                        className={`relative w-10 h-6 rounded-full transition-colors ${
-                          isActive ? 'bg-[#006064]' : 'bg-[#CFD8DC]'
-                        }`}
-                      >
-                        <div
-                          className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                            isActive ? 'translate-x-5' : 'translate-x-1'
-                          }`}
-                        />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-[#212121]">
-                          {isActive ? 'Active' : 'Inactive'}
-                        </p>
-                        <p className="text-[10px] text-[#9E9E9E]">
-                          Inactive members cannot log in
-                        </p>
-                      </div>
-                    </label>
-                  </section>
-                )}
+                  <div 
+                    onClick={() => setIsActive(!isActive)}
+                    className="flex items-center justify-between p-6 bg-neutral-50 border border-[var(--outline-variant)]/40 cursor-pointer group hover:border-[var(--primary)]/60 transition-all"
+                  >
+                    <div className="flex items-center gap-4">
+                       <div className={`h-3 w-3 ${isActive ? 'bg-[#4DB6AC]' : 'bg-red-400'} shadow-[0_0_8px_currentColor]`} />
+                       <div>
+                         <p className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-widest">
+                           Personnel {isActive ? 'Operational' : 'Decommissioned'}
+                         </p>
+                         <p className="text-[9px] text-[#616161] font-bold uppercase tracking-widest mt-1 opacity-60">
+                           {isActive ? 'Authorized for system interaction' : 'Identity locked - access denied'}
+                         </p>
+                       </div>
+                    </div>
+                    <div className={`w-12 h-6 rounded-none p-1 transition-colors ${isActive ? 'bg-[#1B1B1B]' : 'bg-neutral-300'}`}>
+                       <div className={`w-4 h-4 bg-[var(--primary)] transition-transform ${isActive ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </div>
+                  </div>
+                </section>
               </form>
             </div>
 
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#CFD8DC]/30 bg-white flex-shrink-0">
+            {/* Sticky Footer */}
+            <div className="flex items-center justify-end gap-0 px-0 py-0 border-t border-[var(--outline-variant)]/20 bg-neutral-50 flex-shrink-0">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="px-5 py-2.5 rounded-lg border border-[#CFD8DC]/50 text-sm font-bold text-[#616161] hover:bg-[#F8F9FA] transition-colors disabled:opacity-50"
+                className="flex-1 py-6 text-[10px] font-black text-[#616161] uppercase tracking-[0.3em] hover:bg-neutral-100 transition-all border-r border-[var(--outline-variant)]/20 disabled:opacity-50"
               >
-                Cancel
+                Abort
               </button>
               <button
                 type="submit"
                 form="edit-user-form"
                 disabled={isSubmitting}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#006064] text-white rounded-lg text-sm font-bold shadow-md shadow-[#006064]/20 hover:bg-[#004D40] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-[2] inline-flex items-center justify-center gap-3 py-6 bg-[#1B1B1B] text-white font-black text-[10px] uppercase tracking-[0.3em] hover:bg-[var(--primary)] transition-all disabled:opacity-60"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 size={15} className="animate-spin" />
-                    Saving…
+                    <Loader2 size={16} className="animate-spin" />
+                    Syncing Registry…
                   </>
                 ) : (
                   <>
-                    <User size={15} />
-                    {user ? 'Update Member' : 'Add Member'}
+                    <User size={16} />
+                    Update Identity
                   </>
                 )}
               </button>

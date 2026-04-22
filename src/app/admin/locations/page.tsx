@@ -31,17 +31,32 @@ async function fetchLocations() {
   return json.data || [];
 }
 
+import { MapPin } from 'lucide-react';
+
 export default async function AdminLocationsPage() {
   const locations = await fetchLocations();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[#004D40]">Manage Locations</h1>
-        <p className="text-[#616161]">Add, view, and organize SSPACIA locations</p>
+    <div className="space-y-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-center gap-6">
+          <div className="h-20 w-20 bg-white text-[var(--primary)] flex items-center justify-center rounded-none border border-[var(--outline-variant)]/40 shadow-xl">
+            <MapPin size={40} />
+          </div>
+          <div>
+            <h1 className="text-4xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Spatial Grid</h1>
+            <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60 italic">Mapping metropolitan vertices and nodes</p>
+          </div>
+        </div>
       </div>
 
-      <Suspense fallback={<div className="h-96 rounded-xl border border-[#CFD8DC]/50 bg-white shadow-sm animate-pulse" />}>
+      <Suspense fallback={
+        <div className="h-96 rounded-none border border-[var(--outline-variant)]/20 bg-white shadow-2xl animate-pulse flex flex-col items-center justify-center">
+           <div className="h-8 w-8 bg-neutral-100 animate-bounce" />
+           <p className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-widest mt-4">Syncing Coordinates...</p>
+        </div>
+      }>
         <LocationsClient initialLocations={locations} />
       </Suspense>
     </div>

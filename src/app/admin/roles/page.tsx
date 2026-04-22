@@ -6,10 +6,15 @@ import {
   Edit2,
   Trash2,
   Loader2,
+  Shield,
+  Search,
+  ChevronRight,
+  AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
 import { AddRoleModal } from '@/components/admin/add-role-modal';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface Role {
   id: number;
@@ -25,6 +30,7 @@ export default function AdminRolesPage() {
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [deletingRole, setDeletingRole] = useState<Role | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchRoles = async () => {
     setIsLoading(true);
@@ -56,11 +62,11 @@ export default function AdminRolesPage() {
       const json = await response.json();
       if (!response.ok) throw new Error(json.error ?? 'Failed to delete role');
 
-      toast.success(`Role "${deletingRole.name}" deleted.`);
+      toast.success(`Role "${deletingRole.name}" purged from registry.`);
       setDeletingRole(null);
       await fetchRoles();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to delete role');
+      toast.error(error instanceof Error ? error.message : 'System rejection: Clearances linked');
     } finally {
       setIsDeleting(false);
     }
@@ -76,89 +82,123 @@ export default function AdminRolesPage() {
     setIsAddModalOpen(true);
   };
 
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <FadeUp>
-          <h1 className="text-3xl font-bold text-[#004D40]">Role Management</h1>
-          <p className="text-[#616161]">Manage user roles and their permissions.</p>
-        </FadeUp>
+  const filteredRoles = roles.filter(r => 
+    r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (r.description && r.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
-        <FadeUp delay={0.1}>
-          <button
-            onClick={handleAddClick}
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#006064] text-white rounded-lg font-bold shadow-lg shadow-[#006064]/20 hover:bg-[#004D40] transition-all transform hover:-translate-y-0.5 active:translate-y-0"
-          >
-            <Plus size={20} />
-            Add New Role
-          </button>
-        </FadeUp>
+  return (
+    <div className="space-y-12 pb-20">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div className="flex items-center gap-6">
+          <div className="h-20 w-20 bg-white text-[var(--primary)] flex items-center justify-center rounded-none border border-[var(--outline-variant)]/40 shadow-xl">
+            <Shield size={40} />
+          </div>
+          <div>
+            <h1 className="text-4xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Clearance Registry</h1>
+            <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60 italic">Permission matrices and authentication thresholds</p>
+          </div>
+        </div>
+
+        <button
+          onClick={handleAddClick}
+          className="inline-flex items-center justify-center gap-3 px-10 py-5 bg-[var(--primary)] text-white rounded-none text-[11px] font-black uppercase tracking-[0.3em] hover:bg-[#1B1B1B] transition-all shadow-2xl border border-transparent group"
+        >
+          <Plus size={18} className="group-hover:scale-110 transition-transform" />
+          Initialize Clearance
+        </button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-white border border-[var(--outline-variant)]/40 p-2 flex flex-col md:flex-row items-stretch gap-2 shadow-sm rounded-none">
+        <div className="relative flex-1">
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-[#9E9E9E]" size={18} />
+          <input
+            type="text"
+            placeholder="FILTER_CLEARANCE_BY_NAME_OR_DATA…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-16 pr-6 py-5 bg-neutral-50 border-none focus:ring-0 text-[11px] font-bold uppercase tracking-widest text-[#1B1C1C] placeholder:text-[#9E9E9E]"
+          />
+        </div>
+        <div className="px-8 flex items-center gap-4 bg-neutral-50 text-[10px] font-black text-[#616161] uppercase tracking-widest border-l border-[var(--outline-variant)]/10">
+          <span>Active Definitions:</span>
+          <span className="bg-white text-[var(--primary)] px-3 py-1 font-black border border-[var(--outline-variant)]/30 shadow-sm">{roles.length}</span>
+        </div>
       </div>
 
       <FadeUp delay={0.2}>
-        <div className="bg-white rounded-xl border border-[#CFD8DC]/30 shadow-sm p-6">
+        <div className="bg-white rounded-none border border-[var(--outline-variant)]/40 shadow-2xl overflow-hidden">
           {isLoading ? (
-            <div className="text-center py-16">
-              <Loader2 className="mx-auto h-6 w-6 text-[#006064] animate-spin" />
-              <p className="text-sm font-bold text-[#616161] mt-3">Loading roles...</p>
+            <div className="px-10 py-40 flex flex-col items-center justify-center text-center">
+              <Loader2 className="h-10 w-10 text-[var(--primary)] animate-spin mb-6" />
+              <p className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em] animate-pulse">Syncing Permission Matrix...</p>
             </div>
-          ) : roles.length === 0 ? (
-            <div className="text-center text-[#616161] py-16">
-              <p className="text-lg font-bold">No roles found.</p>
-              <p className="text-sm mt-2">Create your first role to get started.</p>
+          ) : filteredRoles.length === 0 ? (
+            <div className="px-10 py-40 text-center">
+               <Shield size={48} className="mx-auto mb-6 text-[var(--primary)] opacity-20" />
+               <p className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Registry Empty</p>
+               <p className="text-[9px] text-[#616161] font-bold uppercase tracking-widest mt-2 opacity-60 italic">No access clearance definitions detected in the database.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-[#F8F9FA] uppercase text-xs font-bold text-[#9E9E9E] tracking-widest">
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Permissions</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                  <tr className="bg-neutral-50/50 border-b border-[var(--outline-variant)]/20">
+                    <th className="px-10 py-6 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Clearance Designation</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Functional Scope</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Authorized Vectors</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em] text-right">Directives</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#CFD8DC]/20">
-                  {roles.map((role) => (
-                    <tr key={role.id} className="hover:bg-[#E0F7FA]/20 transition-colors">
-                      <td className="px-4 py-3 text-sm font-bold text-[#212121]">{role.name}</td>
-                      <td className="px-4 py-3 text-sm text-[#616161]">
-                        {role.description || <span className="text-[#9E9E9E] italic">No description</span>}
+                <tbody className="divide-y divide-[var(--outline-variant)]/10 font-bold">
+                  {filteredRoles.map((role) => (
+                    <tr key={role.id} className="hover:bg-neutral-50/80 transition-colors group">
+                      <td className="px-10 py-6">
+                        <div className="flex items-center gap-4">
+                           <div className="h-2 w-2 bg-[var(--primary)] shadow-[0_0_8px_var(--primary)]" />
+                           <span className="text-xs font-black text-[#1B1C1C] uppercase tracking-wider group-hover:text-[var(--primary)] transition-colors">{role.name}</span>
+                        </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
+                      <td className="px-10 py-6 max-w-sm">
+                        <p className="text-[10px] text-[#616161] font-bold uppercase tracking-widest leading-relaxed">
+                          {role.description || 'GENERIC_ACCESS_PROFILE'}
+                        </p>
+                      </td>
+                      <td className="px-10 py-6">
+                        <div className="flex flex-wrap gap-2">
                           {role.permissions.length === 0 ? (
-                            <span className="text-xs text-[#9E9E9E]">No permissions</span>
+                            <span className="text-[9px] font-black text-[#9E9E9E] uppercase tracking-widest italic opacity-40">Zero Permissions Assigned</span>
                           ) : (
-                            role.permissions.slice(0, 2).map((perm) => (
+                            role.permissions.map((perm) => (
                               <span
                                 key={perm.id}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-[#E0F7FA] text-[#006064]"
+                                className="inline-flex items-center px-3 py-1 bg-neutral-100 text-[#1B1B1B] text-[8px] font-black uppercase tracking-widest border border-[var(--outline-variant)]/20"
                               >
                                 {perm.name}
                               </span>
                             ))
                           )}
-                          {role.permissions.length > 2 && (
-                            <span className="text-xs text-[#9E9E9E] font-bold">+{role.permissions.length - 2}</span>
-                          )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right space-x-1">
-                        <button
-                          onClick={() => handleEditRole(role)}
-                          className="p-1.5 text-[#9E9E9E] hover:text-[#006064] hover:bg-[#E0F7FA] rounded-md"
-                          title="Edit"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => setDeletingRole(role)}
-                          className="p-1.5 text-[#9E9E9E] hover:text-red-600 hover:bg-red-50 rounded-md"
-                          title="Delete"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                      <td className="px-10 py-6 text-right">
+                        <div className="flex justify-end gap-2 text-right">
+                          <button
+                            onClick={() => handleEditRole(role)}
+                            className="p-3 text-[#616161] hover:text-[var(--primary)] hover:bg-neutral-50 transition-all border border-transparent hover:border-[var(--outline-variant)]/20"
+                            title="Modify Clearance"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => setDeletingRole(role)}
+                            className="p-3 text-[#616161] hover:text-red-600 hover:bg-neutral-100 transition-all border border-transparent"
+                            title="Purge Definition"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -182,45 +222,64 @@ export default function AdminRolesPage() {
         }}
       />
 
-      {deletingRole && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md bg-white rounded-xl shadow-2xl border border-[#CFD8DC]/30 overflow-hidden">
-            <div className="px-6 py-5 border-b border-[#CFD8DC]/30 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-red-50 text-red-600">
-                <Trash2 size={20} />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-[#004D40]">Confirm Deletion</h3>
-                <p className="mt-1 text-sm text-[#616161]">
-                  Are you sure you want to delete the <strong>{deletingRole.name}</strong> role?
-                </p>
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-[#424242]">
-                This action cannot be undone. Users with this role will lose their permissions.
-              </p>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setDeletingRole(null)}
-                  disabled={isDeleting}
-                  className="px-4 py-2 rounded-lg border border-[#CFD8DC]/60 text-sm font-bold text-[#616161] hover:bg-[#F8F9FA] transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-50 inline-flex items-center gap-2"
-                >
-                  {isDeleting && <Loader2 size={14} className="animate-spin" />}
-                  {isDeleting ? 'Deleting…' : 'Yes, Delete'}
-                </button>
-              </div>
-            </div>
+      {/* Modern Industrial Deletion Modal */}
+      <AnimatePresence>
+        {deletingRole && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+             <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDeletingRole(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-none border border-white/10 shadow-2xl overflow-hidden"
+            >
+               <div className="absolute top-0 left-0 w-full h-1 bg-red-600" />
+               
+               <div className="p-10 text-center">
+                  <div className="w-20 h-20 bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-8 rounded-none border border-red-100 shadow-xl">
+                    <AlertCircle size={40} />
+                  </div>
+                  <h3 className="text-2xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase mb-4">
+                    Purge Clearance Definition?
+                  </h3>
+                  <p className="text-[11px] text-[#616161] font-bold uppercase tracking-widest leading-relaxed mb-10 opacity-70">
+                    Warning: Purging the <span className="text-[#1B1B1B] font-black decoration-red-600/30 underline decoration-2 underline-offset-4">{deletingRole.name}</span> matrix will disconnect all associated personnel. This operation is irreversible.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      onClick={() => setDeletingRole(null)}
+                      disabled={isDeleting}
+                      className="py-5 bg-white border border-[#1B1B1B] text-[#1B1B1B] text-[10px] font-black uppercase tracking-[0.3em] hover:bg-neutral-100 transition-all disabled:opacity-50"
+                    >
+                      Abort Command
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="py-5 bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.3em] hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-xl"
+                    >
+                      {isDeleting ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          Purging…
+                        </>
+                      ) : (
+                        'Confirm Purge'
+                      )}
+                    </button>
+                  </div>
+               </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }

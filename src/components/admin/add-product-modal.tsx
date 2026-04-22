@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Package, Loader2, Plus, Trash2 } from 'lucide-react';
+import { X, Package, Loader2, Plus, Trash2, ChevronDown, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface LocationOption {
@@ -106,17 +106,17 @@ const toSlug = (value: string) =>
 
 function Label({ htmlFor, children, required }: { htmlFor: string; children: React.ReactNode; required?: boolean }) {
   return (
-    <label htmlFor={htmlFor} className="block text-xs font-bold text-[#616161] uppercase tracking-widest mb-1.5">
-      {children} {required && <span className="text-red-500">*</span>}
+    <label htmlFor={htmlFor} className="block text-[10px] font-black text-[#616161] uppercase tracking-[0.2em] mb-2">
+      {children} {required && <span className="text-[var(--primary)]">*</span>}
     </label>
   );
 }
 
 const inputClass =
-  'w-full px-4 py-2.5 bg-[#F8F9FA] border border-[#CFD8DC]/50 rounded-lg text-sm text-[#212121] placeholder:text-[#9E9E9E] focus:outline-none focus:ring-4 focus:ring-[#006064]/8 focus:border-[#006064] transition-all';
+  'w-full px-5 py-4 bg-white border border-[var(--outline-variant)]/40 rounded-none text-sm text-[#1B1B1B] placeholder:text-[#9E9E9E] focus:outline-none focus:border-[var(--primary)] transition-all uppercase font-bold tracking-wider';
 
 const selectClass =
-  'w-full px-4 py-2.5 bg-[#F8F9FA] border border-[#CFD8DC]/50 rounded-lg text-sm text-[#212121] focus:outline-none focus:ring-4 focus:ring-[#006064]/8 focus:border-[#006064] transition-all appearance-none cursor-pointer';
+  'w-full px-5 py-4 bg-white border border-[var(--outline-variant)]/40 rounded-none text-sm text-[#1B1B1B] focus:outline-none focus:border-[var(--primary)] transition-all appearance-none cursor-pointer uppercase font-bold tracking-wider';
 
 export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProductModalProps) {
   const [locations, setLocations] = useState<LocationOption[]>([]);
@@ -167,24 +167,19 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
     setLocationsLoading(true);
     setOptionsLoading(true);
 
-    // Fetch Locations
     fetch('/api/admin/locations')
       .then((r) => r.json())
-      .then((json) => {
-        if (json.data) setLocations(json.data);
-      })
-      .catch(() => toast.error('Failed to load locations'))
+      .then((json) => { if (json.data) setLocations(json.data); })
+      .catch(() => {})
       .finally(() => setLocationsLoading(false));
 
-    // Fetch Amenities
     fetch('/api/admin/config/amenities')
       .then((r) => r.json())
       .then((json) => {
          if (json.data) setAmenitiesOptions(json.data.filter((a: Amenity & { isActive: boolean }) => a.isActive));
       })
-      .catch(() => console.error('Failed to load amenities'));
+      .catch(() => {});
 
-    // Fetch Dynamic Options
     Promise.all([
       fetch('/api/admin/config/product-types').then(r => r.json()),
       fetch('/api/admin/config/space-categories').then(r => r.json()),
@@ -195,11 +190,7 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       if (catsJson.data) setCategories(catsJson.data);
       if (accessJson.data) setAccessTimeOptionsList(accessJson.data);
       if (durationsJson.data) setDurationTypes(durationsJson.data);
-    }).catch(err => {
-      console.error('Failed to load configuration options', err);
-      toast.error('Failed to load configuration options');
-    }).finally(() => setOptionsLoading(false));
-
+    }).catch(() => {}).finally(() => setOptionsLoading(false));
   }, [isOpen]);
 
   useEffect(() => {
@@ -209,34 +200,18 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       setLocationId(String(product.locationId ?? product.location?.id ?? ''));
       setName(product.name);
       setSlug(product.slug);
-      
-      const typeName = typeof product.type === 'object' ? product.type.name : product.type;
-      setType(typeName);
-      
-      const catName = typeof product.category === 'object' ? product.category.name : product.category;
-      setCategory(catName);
-      
+      setType(typeof product.type === 'object' ? product.type.name : product.type);
+      setCategory(typeof product.category === 'object' ? product.category.name : product.category);
       setDescription(product.description ?? '');
-      
-      const accessName = typeof product.accessTime === 'object' ? product.accessTime.name : (product.accessTime ?? '');
-      setAccessTime(accessName);
-      
+      setAccessTime(typeof product.accessTime === 'object' ? product.accessTime.name : (product.accessTime ?? ''));
       setCapacity(product.capacity?.toString() ?? '');
       setQuantity(String(product.quantity ?? 1));
-      
       setSdr(product.sdr?.toString() ?? '');
       setAdv(product.adv?.toString() ?? '');
       setSecurityDepositMonths(product.securityDepositMonths?.toString() ?? '3');
       setComplementaryMeetingHours(product.complementaryMeetingHours?.toString() ?? '');
-      
-      const mappedPlans = product.pricingPlans?.map(p => ({
-        ...p,
-        durationType: typeof p.durationType === 'object' ? (p.durationType as any).name : p.durationType
-      })) ?? [];
-      setPricingPlans(mappedPlans);
-      
+      setPricingPlans(product.pricingPlans?.map(p => ({ ...p, durationType: typeof p.durationType === 'object' ? (p.durationType as any).name : p.durationType })) ?? []);
       setUnits(product.units ?? []);
-      
       setIsActive(product.isActive);
       setIsFeatured(product.isFeatured);
       setSortOrder(String(product.sortOrder ?? 0));
@@ -246,774 +221,270 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
       setImagePreviewUrls([]);
       setExistingImages(product.images ?? []);
     } else {
-      setLocationId('');
-      setName('');
-      setSlug('');
-      setType('');
-      setCategory('');
-      setDescription('');
-      setAccessTime('');
-      setCapacity('');
-      setQuantity('1');
-      setSdr('');
-      setAdv('');
-      setSecurityDepositMonths('3');
-      setComplementaryMeetingHours('');
-      setPricingPlans([]);
-      setUnits([]);
-      setIsActive(true);
-      setIsFeatured(false);
-      setSortOrder('0');
-      setSelectedAmenities([]);
-      setSlugManuallyEdited(false);
-      setImageFiles([]);
-      setImagePreviewUrls([]);
-      setExistingImages([]);
+      setLocationId(''); setName(''); setSlug(''); setType(''); setCategory(''); setDescription(''); setAccessTime(''); setCapacity(''); setQuantity('1'); setSdr(''); setAdv(''); setSecurityDepositMonths('3'); setComplementaryMeetingHours(''); setPricingPlans([]); setUnits([]); setIsActive(true); setIsFeatured(false); setSortOrder('0'); setSelectedAmenities([]); setSlugManuallyEdited(false); setImageFiles([]); setImagePreviewUrls([]); setExistingImages([]);
     }
   }, [isOpen, product]);
 
   const handleNameChange = (val: string) => {
     setName(val);
-    if (!slugManuallyEdited) {
-      setSlug(toSlug(val));
-    }
-  };
-
-  const handleSlugChange = (val: string) => {
-    setSlugManuallyEdited(true);
-    setSlug(val);
+    if (!slugManuallyEdited) setSlug(toSlug(val));
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) {
-      setImageFiles([]);
-      setImagePreviewUrls([]);
-      return;
-    }
-
+    if (files.length === 0) return;
     setImageFiles(files);
     setImagePreviewUrls(files.map((file) => URL.createObjectURL(file)));
   };
 
-  const removeNewImage = (index: number) => {
-    setImageFiles((prev) => prev.filter((_, idx) => idx !== index));
-    setImagePreviewUrls((prev) => prev.filter((_, idx) => idx !== index));
-  };
-
-  const uploadImageFiles = async (): Promise<string[]> => {
-    if (!imageFiles.length) return [];
-
-    setIsImageUploading(true);
-    try {
-      const uploadedUrls = await Promise.all(
-        imageFiles.map(async (file) => {
-          const formData = new FormData();
-          formData.append('file', file);
-
-          const res = await fetch('/api/admin/upload-image', {
-            method: 'POST',
-            body: formData,
-          });
-
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error ?? 'Image upload failed');
-          return json.data.url as string;
-        })
-      );
-      return uploadedUrls;
-    } finally {
-      setIsImageUploading(false);
-    }
-  };
-
   const handleRemoveExistingImage = async (imageId: number) => {
     if (!product) return;
-
     try {
-      const response = await fetch(`/api/admin/products/${product.id}/images/${imageId}`, {
-        method: 'DELETE',
-      });
-
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error ?? 'Unable to remove image');
-
+      const response = await fetch(`/api/admin/products/${product.id}/images/${imageId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error();
       setExistingImages((prev) => prev.filter((img) => img.id !== imageId));
-      toast.success('Image removed successfully.');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to remove image');
+      toast.success('Image purged.');
+    } catch {
+      toast.error('Purge failed.');
     }
-  };
-
-  const addPricingPlan = () => {
-    setPricingPlans(prev => [...prev, { durationType: '', price: 0, priceType: 'PER_SEAT' }]);
-  };
-
-  const updatePricingPlan = (index: number, field: keyof PricingPlanData, value: any) => {
-    setPricingPlans(prev => prev.map((plan, i) => i === index ? { ...plan, [field]: value } : plan));
-  };
-
-  const removePricingPlan = (index: number) => {
-    setPricingPlans(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const addUnit = () => {
-    setUnits(prev => [...prev, { name: '', code: '', capacity: 1, description: '' }]);
-  };
-
-  const updateUnit = (index: number, field: keyof ProductUnitData, value: any) => {
-    setUnits(prev => prev.map((unit, i) => i === index ? { ...unit, [field]: value } : unit));
-  };
-
-  const removeUnit = (index: number) => {
-    setUnits(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!locationId || !name || !slug || !type || !category) {
-      toast.error('Please fill in Location, Name, Slug, Type, and Category.');
+      toast.error('Required asset parameters missing.');
       return;
     }
-
-    if (isOwnedSpace && units.length > Number(quantity)) {
-      toast.error(`You cannot add more units than the total quantity (${quantity})`);
-      return;
-    }
-
     setIsSubmitting(true);
-
-    const body = {
-      locationId: Number(locationId),
-      name,
-      slug,
-      type,
-      category,
-      description: description || undefined,
-      accessTime: accessTime || undefined,
-      capacity: capacity ? Number(capacity) : undefined,
-      quantity: quantity ? Number(quantity) : 1,
-      sdr: sdr ? Number(sdr) : undefined,
-      adv: adv ? Number(adv) : undefined,
-      securityDepositMonths: Number(securityDepositMonths),
-      complementaryMeetingHours: complementaryMeetingHours ? Number(complementaryMeetingHours) : undefined,
-      isActive,
-      isFeatured,
-      sortOrder: sortOrder ? Number(sortOrder) : 0,
-      amenityIds: selectedAmenities,
-      pricingPlans: pricingPlans.filter(p => p.durationType && p.price > 0).map(p => ({
-        durationType: p.durationType,
-        price: p.price,
-        oldPrice: p.oldPrice,
-        discount: p.discount,
-        priceType: p.priceType || 'PER_SEAT',
-      })),
-      units: units.filter(u => u.name).map(u => ({
-        ...u,
-        capacity: Number(u.capacity) || 1,
-        description: u.description || '',
-      })),
-    };
-
     try {
-      const uploadedImageUrls = imageFiles.length ? await uploadImageFiles() : [];
+      const uploadedImageUrls = imageFiles.length ? await (async () => {
+        setIsImageUploading(true);
+        const urls = await Promise.all(imageFiles.map(async (file) => {
+          const formData = new FormData(); formData.append('file', file);
+          const res = await fetch('/api/admin/upload-image', { method: 'POST', body: formData });
+          const json = await res.json(); if (!res.ok) throw new Error();
+          return json.data.url as string;
+        }));
+        setIsImageUploading(false); return urls;
+      })() : [];
+
+      const body = {
+        locationId: Number(locationId), name, slug, type, category, description: description || undefined, accessTime: accessTime || undefined, capacity: capacity ? Number(capacity) : undefined, quantity: quantity ? Number(quantity) : 1, sdr: sdr ? Number(sdr) : undefined, adv: adv ? Number(adv) : undefined, securityDepositMonths: Number(securityDepositMonths), complementaryMeetingHours: complementaryMeetingHours ? Number(complementaryMeetingHours) : undefined, isActive, isFeatured, sortOrder: sortOrder ? Number(sortOrder) : 0, amenityIds: selectedAmenities,
+        pricingPlans: pricingPlans.filter(p => p.durationType && p.price > 0).map(p => ({ ...p, priceType: p.priceType || 'PER_SEAT' })),
+        units: units.filter(u => u.name).map(u => ({ ...u, capacity: Number(u.capacity) || 1 })),
+      };
 
       const method = product ? 'PATCH' : 'POST';
       const url = product ? `/api/admin/products/${product.id}` : '/api/admin/products';
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
+      const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const json = await response.json();
-      if (!response.ok) throw new Error(json.error ?? `Failed to ${product ? 'update' : 'create'} product`);
+      if (!response.ok) throw new Error(json.error);
 
-      const createdOrUpdatedProduct = json.data;
-
-      if (createdOrUpdatedProduct?.id && uploadedImageUrls.length > 0) {
-        const hasOtherImages = existingImages.length > 0;
-
-        await Promise.all(
-          uploadedImageUrls.map((url, index) =>
-            fetch(`/api/admin/products/${createdOrUpdatedProduct.id}/images`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                url,
-                isPrimary: !hasOtherImages && index === 0,
-                sortOrder: existingImages.length + index,
-              }),
-            })
-          )
-        );
+      if (json.data?.id && uploadedImageUrls.length > 0) {
+        await Promise.all(uploadedImageUrls.map((url, i) => fetch(`/api/admin/products/${json.data.id}/images`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, isPrimary: existingImages.length === 0 && i === 0, sortOrder: existingImages.length + i }) })));
       }
 
-      toast.success(`Product "${name}" ${product ? 'updated' : 'added'} successfully!`);
-      onSuccess();
-      onClose();
+      toast.success(`Asset ${product ? 'updated' : 'initialized'}: ${name}`);
+      onSuccess(); onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : `Failed to ${product ? 'update' : 'create'} product`);
+      toast.error(err instanceof Error ? err.message : 'System modification failed');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const selectedCategorySlug = categories.find(c => c.name === category)?.slug;
-  const isOwnedSpace = selectedCategorySlug === 'owned-space' || category === 'WORKSPACE'; // Fallback for old data
+  const isOwnedSpace = selectedCategorySlug === 'owned-space' || category === 'WORKSPACE';
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-10">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} onClick={onClose} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
 
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-            className="relative flex flex-col w-full max-w-4xl bg-white shadow-2xl max-h-[90vh] rounded-[2rem] overflow-hidden"
-          >
-            <div className="flex items-center justify-between px-6 py-5 border-b border-[#CFD8DC]/30 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-[#E0F7FA] text-[#006064]">
-                  <Package size={20} />
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 350 }} className="relative flex flex-col w-full max-w-5xl bg-white rounded-none border border-white/10 shadow-2xl overflow-hidden max-h-[90vh]">
+             <div className="absolute top-0 left-0 w-full h-1 bg-[var(--primary)]" />
+             
+            <div className="flex items-center justify-between px-10 py-8 border-b border-[var(--outline-variant)]/20 flex-shrink-0 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-white text-[var(--primary)] border border-[var(--outline-variant)]/40 shadow-xl">
+                  <Package size={24} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-[#004D40]">
-                    {product ? 'Edit Product' : 'Add New Product'}
-                  </h2>
-                  <p className="text-xs text-[#9E9E9E]">
-                    {product ? 'Update product details' : 'Create a new product listing'}
-                  </p>
+                  <h2 className="text-xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">{product ? 'Modify Asset' : 'Initialize Asset'}</h2>
+                  <p className="text-[10px] text-[#616161] font-bold uppercase tracking-[0.3em] mt-1 opacity-60">Catalogue re-indexing protocol</p>
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 rounded-lg text-[#9E9E9E] hover:text-[#212121] hover:bg-[#F8F9FA] transition-colors"
-              >
-                <X size={20} />
-              </button>
+              <button onClick={onClose} className="p-2 text-[#9E9E9E] hover:text-[#1B1B1B] hover:bg-neutral-100 transition-colors"><X size={20} /></button>
             </div>
 
-            <div ref={bodyRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-              <form id="add-product-form" onSubmit={handleSubmit} className="space-y-6">
-                <section className="space-y-4">
-                  <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest border-b border-[#CFD8DC]/30 pb-2">
-                    Product Details
-                  </h3>
+            <div ref={bodyRef} className="flex-1 overflow-y-auto px-10 py-10 space-y-12 custom-scrollbar">
+              <form id="add-product-form" onSubmit={handleSubmit} className="space-y-12">
+                
+                {/* ── Core Configuration ── */}
+                <section className="space-y-8">
+                  <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
+                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Core Parameters</span>
+                  </div>
 
-                  <div>
-                    <Label htmlFor="locationId" required>Location</Label>
-                    <div className="relative">
-                      <select
-                        id="locationId"
-                        value={locationId}
-                        onChange={(e) => setLocationId(e.target.value)}
-                        className={selectClass}
-                        required
-                      >
-                        <option value="">{locationsLoading ? 'Loading locations…' : 'Select a location'}</option>
-                        {locations.map((loc) => (
-                          <option key={loc.id} value={loc.id}>
-                            {loc.name}
-                          </option>
-                        ))}
-                      </select>
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                       <Label htmlFor="locationId" required>Operational Node (Location)</Label>
+                       <div className="relative">
+                         <select id="locationId" value={locationId} onChange={(e) => setLocationId(e.target.value)} className={selectClass} required>
+                           <option value="">SELECT_NODE</option>
+                           {locations.map((loc) => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
+                         </select>
+                         <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9E9E9E] pointer-events-none" />
+                       </div>
+                    </div>
+                    <div className="space-y-2">
+                       <Label htmlFor="name" required>Asset Designation (Name)</Label>
+                       <input id="name" type="text" value={name} onChange={(e) => handleNameChange(e.target.value)} placeholder="ASSET_ID" className={inputClass} required />
                     </div>
                   </div>
 
-                  <div>
-                    <Label htmlFor="productImage">Upload Images</Label>
-                    <input
-                      id="productImage"
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleImageChange}
-                      className="mt-1 block w-full text-sm text-[#616161] file:border file:border-[#CFD8DC] file:bg-white file:px-3 file:py-2 file:text-[#212121] file:rounded-lg"
-                    />
-                    <p className="text-[10px] text-[#9E9E9E] mt-1">Optional. You can select multiple images. Existing images are editable too.</p>
-
-                    {(existingImages.length > 0 || imagePreviewUrls.length > 0) && (
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        {existingImages.map((img) => (
-                          <div key={`existing-${img.id}`} className="relative border border-[#CFD8DC] rounded-lg overflow-hidden">
-                            <img src={img.url} alt={`Product image ${img.id}`} className="w-full h-20 object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveExistingImage(img.id)}
-                              className="absolute top-1 right-1 bg-white/90 text-red-600 p-1 rounded-full hover:bg-white"
-                              aria-label="Remove existing image"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
-
-                        {imagePreviewUrls.map((url, index) => (
-                          <div key={`new-${index}`} className="relative border border-[#CFD8DC] rounded-lg overflow-hidden">
-                            <img src={url} alt={`New product preview ${index + 1}`} className="w-full h-20 object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => removeNewImage(index)}
-                              className="absolute top-1 right-1 bg-white/90 text-red-600 p-1 rounded-full hover:bg-white"
-                              aria-label="Remove selected image"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {isImageUploading && (
-                      <p className="text-[10px] text-[#006064] mt-1">Uploading images…</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <Label htmlFor="name" required>Name</Label>
-                    <input
-                      id="name"
-                      type="text"
-                      value={name}
-                      onChange={(e) => handleNameChange(e.target.value)}
-                      placeholder="e.g. DSP Flex Desk"
-                      className={inputClass}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="slug" required>URL Slug</Label>
-                    <input
-                      id="slug"
-                      type="text"
-                      value={slug}
-                      onChange={(e) => handleSlugChange(e.target.value)}
-                      placeholder="dsp-flex-desk"
-                      className={inputClass}
-                      required
-                    />
-                    <p className="text-[10px] text-[#9E9E9E] mt-1">Auto-generated from name; must be unique.</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="type" required>Type</Label>
-                      <select
-                        id="type"
-                        value={type}
-                        onChange={(e) => setType(e.target.value)}
-                        className={selectClass}
-                        required
-                        disabled={optionsLoading}
-                      >
-                        <option value="">{optionsLoading ? 'Loading types...' : 'Select Type'}</option>
-                        {productTypes.map((opt) => (
-                          <option key={opt.id} value={opt.name}>
-                            {opt.displayName}
-                          </option>
-                        ))}
-                      </select>
+                  <div className="grid md:grid-cols-3 gap-8">
+                    <div className="space-y-2">
+                       <Label htmlFor="type" required>Module Type</Label>
+                       <div className="relative">
+                         <select id="type" value={type} onChange={(e) => setType(e.target.value)} className={selectClass} required>
+                           <option value="">TYPE_ENUM</option>
+                           {productTypes.map((opt) => (<option key={opt.id} value={opt.name}>{opt.displayName}</option>))}
+                         </select>
+                         <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9E9E9E] pointer-events-none" />
+                       </div>
                     </div>
-
-                    <div>
-                      <Label htmlFor="category" required>Category</Label>
-                      <select
-                        id="category"
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className={selectClass}
-                        required
-                        disabled={optionsLoading}
-                      >
-                        <option value="">{optionsLoading ? 'Loading categories...' : 'Select Category'}</option>
-                        {categories.map((opt) => (
-                          <option key={opt.id} value={opt.name}>
-                            {opt.displayName}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="space-y-2">
+                       <Label htmlFor="category" required>Sector Category</Label>
+                       <div className="relative">
+                         <select id="category" value={category} onChange={(e) => setCategory(e.target.value)} className={selectClass} required>
+                           <option value="">CAT_ENUM</option>
+                           {categories.map((opt) => (<option key={opt.id} value={opt.name}>{opt.displayName}</option>))}
+                         </select>
+                         <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9E9E9E] pointer-events-none" />
+                       </div>
+                    </div>
+                    <div className="space-y-2">
+                       <Label htmlFor="accessTime">Time-Gate Clearance</Label>
+                       <div className="relative">
+                         <select id="accessTime" value={accessTime} onChange={(e) => setAccessTime(e.target.value)} className={selectClass}>
+                           <option value="">ACCESS_LEVEL</option>
+                           {accessTimeOptionsList.map((opt) => (<option key={opt.id} value={opt.name}>{opt.displayName}</option>))}
+                         </select>
+                         <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9E9E9E] pointer-events-none" />
+                       </div>
                     </div>
                   </div>
+                </section>
 
-                  <div>
-                    <Label htmlFor="description">Description</Label>
-                    <textarea
-                      id="description"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Optional product details"
-                      rows={3}
-                      className={inputClass + ' resize-y'}
-                    />
+                {/* ── Media Protocol ── */}
+                <section className="space-y-8">
+                   <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
+                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Visual Arrays (Images)</span>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="accessTime">Access Time</Label>
-                      <select
-                        id="accessTime"
-                        value={accessTime}
-                        onChange={(e) => setAccessTime(e.target.value)}
-                        className={selectClass}
-                        disabled={optionsLoading}
-                      >
-                        <option value="">Choose an access option</option>
-                        {accessTimeOptionsList.map((opt) => (
-                          <option key={opt.id} value={opt.name}>
-                            {opt.displayName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {!isOwnedSpace && (
-                      <div>
-                        <Label htmlFor="capacity">Capacity (Pax)</Label>
-                        <input
-                          id="capacity"
-                          type="number"
-                          min={0}
-                          value={capacity}
-                          onChange={(e) => setCapacity(e.target.value)}
-                          placeholder="e.g. 5"
-                          className={inputClass}
-                        />
-                      </div>
-                    )}
+                  
+                  <div className="grid md:grid-cols-4 gap-4">
+                     <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-[var(--outline-variant)]/40 hover:border-[var(--primary)] transition-all cursor-pointer bg-neutral-50/50 group">
+                        <Plus size={24} className="text-[#9E9E9E] group-hover:text-[var(--primary)] mb-2" />
+                        <span className="text-[9px] font-black uppercase tracking-widest text-[#9E9E9E]">Add Frame</span>
+                        <input type="file" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
+                     </label>
+                     {existingImages.map((img) => (
+                       <div key={img.id} className="relative aspect-square border border-[var(--outline-variant)]/40 overflow-hidden group">
+                         <img src={img.url} className="w-full h-full object-cover" alt="prev" />
+                         <button type="button" onClick={() => handleRemoveExistingImage(img.id)} className="absolute top-2 right-2 p-1.5 bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"><X size={14} /></button>
+                       </div>
+                     ))}
+                     {imagePreviewUrls.map((url, i) => (
+                       <div key={i} className="relative aspect-square border border-[var(--outline-variant)]/40 overflow-hidden group">
+                         <img src={url} className="w-full h-full object-cover" alt="prev" />
+                         <button type="button" onClick={() => { setImageFiles(p => p.filter((_, idx) => idx !== i)); setImagePreviewUrls(p => p.filter((_, idx) => idx !== i)); }} className="absolute top-2 right-2 p-1.5 bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"><X size={14} /></button>
+                       </div>
+                     ))}
                   </div>
+                </section>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="sdr">Security Deposit (SDR)</Label>
-                      <input
-                        id="sdr"
-                        type="number"
-                        min={0}
-                        value={sdr}
-                        onChange={(e) => setSdr(e.target.value)}
-                        placeholder="0"
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="adv">Advance Rent (ADV)</Label>
-                      <input
-                        id="adv"
-                        type="number"
-                        min={0}
-                        value={adv}
-                        onChange={(e) => setAdv(e.target.value)}
-                        placeholder="0"
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="complementaryMeetingHours">Free Meeting Hrs (Per Month)</Label>
-                      <input
-                        id="complementaryMeetingHours"
-                        type="number"
-                        min={0}
-                        value={complementaryMeetingHours}
-                        onChange={(e) => setComplementaryMeetingHours(e.target.value)}
-                        placeholder="0"
-                        className={inputClass}
-                      />
-                    </div>
+                {/* ── Pricing Matrix ── */}
+                <section className="space-y-8">
+                   <div className="flex items-center justify-between border-b border-[var(--outline-variant)]/20 pb-4">
+                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Economic Parameters (Pricing)</span>
+                     <button type="button" onClick={() => setPricingPlans(p => [...p, { durationType: '', price: 0, priceType: 'PER_SEAT' }])} className="text-[9px] font-black text-[var(--primary)] uppercase tracking-widest hover:underline">+ New Tariff</button>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="quantity">Quantity</Label>
-                      <input
-                        id="quantity"
-                        type="number"
-                        min={1}
-                        value={quantity}
-                        onChange={(e) => setQuantity(e.target.value)}
-                        className={inputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="sortOrder">Sort Order</Label>
-                      <input
-                        id="sortOrder"
-                        type="number"
-                        min={0}
-                        value={sortOrder}
-                        onChange={(e) => setSortOrder(e.target.value)}
-                        className={inputClass}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 mt-6">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isFeatured}
-                          onChange={() => setIsFeatured((v) => !v)}
-                          className="h-4 w-4 text-[#006064] border-[#CFD8DC] rounded"
-                        />
-                        <span className="text-sm font-bold text-[#212121]">Featured</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <div
-                      onClick={() => setIsActive((v) => !v)}
-                      className={`relative w-10 h-6 rounded-full transition-colors ${isActive ? 'bg-[#006064]' : 'bg-[#CFD8DC]'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${isActive ? 'translate-x-5' : 'translate-x-1'}`} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-[#212121]">Active</p>
-                      <p className="text-[10px] text-[#9E9E9E]">Toggle to hide or show this product on listings</p>
-                    </div>
-                  </label>
-
-                  {/* Pricing Plans Section */}
-                  <div className="space-y-4 pt-4 border-t border-[#CFD8DC]/30">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest">
-                          Pricing Plans
-                        </h3>
-                        <p className="text-[10px] text-[#9E9E9E]">Set prices for different billing durations</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={addPricingPlan}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E0F7FA] text-[#006064] rounded-lg text-xs font-bold hover:bg-[#B2EBF2] transition-colors"
-                      >
-                        <Plus size={14} /> Add Plan
-                      </button>
-                    </div>
-
-                    <div className="space-y-3">
-                      {pricingPlans.map((plan, index) => (
-                        <div key={index} className="flex items-end gap-3 p-3 bg-[#F8F9FA] rounded-xl border border-[#CFD8DC]/30">
-                          <div className="flex-1">
-                            <Label htmlFor={`duration-${index}`}>Duration</Label>
-                            <select
-                              id={`duration-${index}`}
-                              value={plan.durationType}
-                              onChange={(e) => updatePricingPlan(index, 'durationType', e.target.value)}
-                              className={selectClass}
-                            >
-                              <option value="">Select Duration</option>
-                              {durationTypes.map(d => (
-                                <option key={d.id} value={d.name}>{d.displayName}</option>
-                              ))}
+                  
+                  <div className="space-y-4">
+                    {pricingPlans.map((plan, i) => (
+                      <div key={i} className="grid md:grid-cols-4 gap-4 items-end bg-neutral-50/50 p-6 border border-[var(--outline-variant)]/20">
+                         <div className="space-y-2">
+                            <Label htmlFor={`dur-${i}`}>Duration</Label>
+                            <select value={plan.durationType} onChange={(e) => setPricingPlans(prev => prev.map((p, idx) => idx === i ? { ...p, durationType: e.target.value } : p))} className={selectClass}>
+                               <option value="">SELECT</option>
+                               {durationTypes.map(d => <option key={d.id} value={d.name}>{d.displayName}</option>)}
                             </select>
-                          </div>
-                          <div className="w-28">
-                            <Label htmlFor={`price-${index}`}>Price (₹)</Label>
-                            <input
-                              id={`price-${index}`}
-                              type="number"
-                              value={plan.price}
-                              onChange={(e) => updatePricingPlan(index, 'price', Number(e.target.value))}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div className="w-32">
-                            <Label htmlFor={`priceType-${index}`}>Type</Label>
-                            <select
-                              id={`priceType-${index}`}
-                              value={plan.priceType || 'PER_SEAT'}
-                              onChange={(e) => updatePricingPlan(index, 'priceType', e.target.value)}
-                              className={selectClass}
-                            >
-                              <option value="PER_SEAT">Per Seat</option>
-                              <option value="FIXED">Fixed (Per Unit)</option>
+                         </div>
+                         <div className="space-y-2">
+                            <Label htmlFor={`pr-${i}`}>Unit Rate (₹)</Label>
+                            <input type="number" value={plan.price} onChange={(e) => setPricingPlans(prev => prev.map((p, idx) => idx === i ? { ...p, price: Number(e.target.value) } : p))} className={inputClass} />
+                         </div>
+                         <div className="space-y-2">
+                            <Label htmlFor={`ty-${i}`}>Metric</Label>
+                            <select value={plan.priceType || 'PER_SEAT'} onChange={(e) => setPricingPlans(prev => prev.map((p, idx) => idx === i ? { ...p, priceType: e.target.value as any } : p))} className={selectClass}>
+                               <option value="PER_SEAT">PER_SEAT</option>
+                               <option value="FIXED">FIXED_UNIT</option>
                             </select>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removePricingPlan(index)}
-                            className="p-2.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      ))}
-                      {pricingPlans.length === 0 && (
-                        <p className="text-center py-4 text-xs text-[#9E9E9E] italic underline decoration-[#CFD8DC]">No pricing plans added yet.</p>
-                      )}
-                    </div>
+                         </div>
+                         <button type="button" onClick={() => setPricingPlans(p => p.filter((_, idx) => idx !== i))} className="mb-4 text-red-400 hover:text-red-600 font-black text-[9px] uppercase tracking-widest text-right">Delete Tariff</button>
+                      </div>
+                    ))}
                   </div>
+                </section>
 
-                  {/* Product Units Section (Owned Space only) */}
-                  {isOwnedSpace && (
-                    <div className="space-y-4 pt-4 border-t border-[#CFD8DC]/30">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest">
-                            Physical Units
-                          </h3>
-                          <p className="text-[10px] text-[#9E9E9E]">Manage specific desks/cabins for this product</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <p className={`text-xs font-bold ${units.length > Number(quantity) ? 'text-red-500' : 'text-[#006064]'}`}>
-                            {units.length} / {quantity} Units
-                          </p>
-                          <button
-                            type="button"
-                            onClick={addUnit}
-                            disabled={units.length >= Number(quantity)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E0F7FA] text-[#006064] rounded-lg text-xs font-bold hover:bg-[#B2EBF2] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Plus size={14} /> Add Unit
-                          </button>
-                        </div>
-                      </div>
+                {/* ── Amenities Grid ── */}
+                <section className="space-y-8">
+                   <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
+                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Support Subsystems (Amenities)</span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                     {amenitiesOptions.map((amenity) => {
+                       const isSelected = selectedAmenities.includes(amenity.id);
+                       return (
+                         <button key={amenity.id} type="button" onClick={() => setSelectedAmenities(p => isSelected ? p.filter(id => id !== amenity.id) : [...p, amenity.id])} className={`flex items-center justify-between p-4 border transition-all ${isSelected ? 'bg-[var(--primary)] text-white border-[var(--primary)]' : 'bg-white text-[#616161] border-[var(--outline-variant)]/40 hover:border-[var(--primary)]/60'}`}>
+                           <span className="text-[10px] font-black uppercase tracking-widest truncate">{amenity.name}</span>
+                           {isSelected && <Check size={14} className="text-white shrink-0" />}
+                         </button>
+                       );
+                     })}
+                  </div>
+                </section>
 
-                      <div className="grid grid-cols-1 gap-3">
-                        {units.map((unit, index) => (
-                          <div key={index} className="flex items-end gap-3 p-3 bg-[#F8F9FA] rounded-xl border border-[#CFD8DC]/30">
-                            <div className="flex-1">
-                              <Label htmlFor={`unit-name-${index}`}>Unit Name (e.g. Desk #1)</Label>
-                              <input
-                                id={`unit-name-${index}`}
-                                type="text"
-                                value={unit.name}
-                                onChange={(e) => updateUnit(index, 'name', e.target.value)}
-                                className={inputClass}
-                                placeholder="Desk #1"
-                              />
-                            </div>
-                            <div className="w-20">
-                              <Label htmlFor={`unit-code-${index}`}>Code</Label>
-                              <input
-                                id={`unit-code-${index}`}
-                                type="text"
-                                value={unit.code ?? ''}
-                                onChange={(e) => updateUnit(index, 'code', e.target.value)}
-                                className={inputClass}
-                                placeholder="D1"
-                              />
-                            </div>
-                            <div className="w-20">
-                              <Label htmlFor={`unit-seats-${index}`}>Seats</Label>
-                              <input
-                                id={`unit-seats-${index}`}
-                                type="number"
-                                min={1}
-                                value={unit.capacity ?? 1}
-                                onChange={(e) => updateUnit(index, 'capacity', Number(e.target.value))}
-                                className={inputClass}
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <Label htmlFor={`unit-desc-${index}`}>Description / Notes</Label>
-                              <input
-                                id={`unit-desc-${index}`}
-                                type="text"
-                                value={unit.description ?? ''}
-                                onChange={(e) => updateUnit(index, 'description', e.target.value)}
-                                className={inputClass}
-                                placeholder="Near window, extra space..."
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeUnit(index)}
-                              className="p-2.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                        ))}
-                        {units.length === 0 && (
-                          <p className="text-center py-4 text-xs text-[#9E9E9E] italic underline decoration-[#CFD8DC]">No units added. This product will be booked without specific unit assignment.</p>
-                        )}
+                {/* ── Operational Status ── */}
+                <section className="space-y-8">
+                   <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
+                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Operating Status</span>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-8">
+                    <div onClick={() => setIsActive(!isActive)} className="flex items-center justify-between p-6 bg-neutral-50 border border-[var(--outline-variant)]/40 cursor-pointer group hover:border-[var(--primary)]/60 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className={`h-3 w-3 ${isActive ? 'bg-[#4DB6AC]' : 'bg-red-400'} shadow-[0_0_8px_currentColor]`} />
+                        <div><p className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-widest">Active: {isActive ? 'SYNCED' : 'LOCKED'}</p></div>
                       </div>
+                      <div className={`w-12 h-6 p-1 bg-neutral-300 transition-colors ${isActive ? 'bg-[var(--primary)]' : ''}`}><div className={`w-4 h-4 bg-white shadow-sm transition-transform ${isActive ? 'translate-x-6' : ''}`} /></div>
                     </div>
-                  )}
-
-                  {/* Amenities Selection */}
-                  <div className="space-y-4 pt-4 border-t border-[#CFD8DC]/30">
-                     <div className="flex items-center justify-between">
-                       <h3 className="text-xs font-bold text-[#9E9E9E] uppercase tracking-widest">
-                         Available Amenities
-                       </h3>
-                       <span className="text-[10px] bg-[#E0F7FA] text-[#006064] px-2 py-0.5 rounded-full font-bold">
-                         {selectedAmenities.length} Selected
-                       </span>
-                     </div>
-                     
-                     <div className="grid grid-cols-2 gap-3">
-                        {amenitiesOptions.map((amenity) => {
-                          const isSelected = selectedAmenities.includes(amenity.id);
-                          return (
-                            <div 
-                              key={amenity.id}
-                              onClick={() => {
-                                if (isSelected) {
-                                  setSelectedAmenities(prev => prev.filter(id => id !== amenity.id));
-                                } else {
-                                  setSelectedAmenities(prev => [...prev, amenity.id]);
-                                }
-                              }}
-                              className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                                isSelected 
-                                  ? 'bg-[#E0F7FA] border-[#006064] text-[#006064] shadow-sm' 
-                                  : 'bg-white border-[#CFD8DC]/50 text-[#616161] hover:border-[#006064]/30'
-                              }`}
-                            >
-                              <div className="text-lg">{amenity.icon || '✨'}</div>
-                              <span className="text-sm font-bold truncate">{amenity.name}</span>
-                            </div>
-                          );
-                        })}
-                     </div>
+                    <div onClick={() => setIsFeatured(!isFeatured)} className="flex items-center justify-between p-6 bg-neutral-50 border border-[var(--outline-variant)]/40 cursor-pointer group hover:border-[var(--primary)]/60 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className={`h-3 w-3 ${isFeatured ? 'text-[var(--primary)]' : 'text-neutral-400'} fill-current`}><Check size={12} /></div>
+                        <div><p className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-widest">Featured Priority</p></div>
+                      </div>
+                      <div className={`w-12 h-6 p-1 bg-neutral-300 transition-colors ${isFeatured ? 'bg-[var(--primary)]' : ''}`}><div className={`w-4 h-4 bg-white shadow-sm transition-transform ${isFeatured ? 'translate-x-6' : ''}`} /></div>
+                    </div>
                   </div>
                 </section>
               </form>
             </div>
 
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#CFD8DC]/30 bg-white flex-shrink-0">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="px-5 py-2.5 rounded-lg border border-[#CFD8DC]/50 text-sm font-bold text-[#616161] hover:bg-[#F8F9FA] transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="add-product-form"
-                disabled={isSubmitting}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#006064] text-white rounded-lg text-sm font-bold shadow-md shadow-[#006064]/20 hover:bg-[#004D40] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={15} className="animate-spin" />
-                    Saving
-                  </>
-                ) : (
-                  <>
-                    <Package size={15} />
-                    {product ? 'Update Product' : 'Add Product'}
-                  </>
-                )}
-              </button>
+            <div className="flex items-center justify-end gap-0 px-0 py-0 border-t border-[var(--outline-variant)]/20 bg-neutral-50 flex-shrink-0">
+              <button type="button" onClick={onClose} disabled={isSubmitting} className="flex-1 py-6 text-[10px] font-black text-[#616161] uppercase tracking-[0.3em] hover:bg-neutral-100 transition-all border-r border-[var(--outline-variant)]/20 disabled:opacity-50">Abort</button>
+              <button type="submit" form="add-product-form" disabled={isSubmitting} className="flex-[2] py-6 bg-[var(--primary)] text-white font-black text-[10px] uppercase tracking-[0.3em] hover:bg-neutral-900 transition-all disabled:opacity-60">{isSubmitting ? <><Loader2 size={16} className="animate-spin inline mr-3" />Synchronizing Registry…</> : <><Package size={16} className="inline mr-3" />{product ? 'Commit Changes' : 'Initialize Asset'}</>}</button>
             </div>
           </motion.div>
         </div>

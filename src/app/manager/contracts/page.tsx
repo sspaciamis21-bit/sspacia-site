@@ -130,90 +130,87 @@ export default function ManagerContractsPage() {
       </div>
 
       {loading ? (
-        <div className="min-h-[400px] flex flex-col items-center justify-center">
-           <Loader2 className="h-10 w-10 text-[var(--primary)] animate-spin mb-4" />
-           <p className="text-[#9E9E9E] font-bold text-xs uppercase tracking-widest italic">Synchronizing Fleet Data...</p>
+        <div className="min-h-[400px] flex flex-col items-center justify-center bg-white border border-[var(--outline-variant)] rounded-none gap-4">
+           <Loader2 className="h-10 w-10 text-[var(--primary)] animate-spin" />
+           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#9E9E9E] animate-pulse">Initializing Protocol Matrix...</p>
         </div>
       ) : activeTab === 'requests' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
            {filteredRequests.map((req, idx) => (
              <FadeUp key={req.id} delay={idx * 0.05}>
-               <div className="group bg-white rounded-[2.5rem] border border-[var(--outline-variant)]/30 p-10 hover:shadow-2xl hover:shadow-[var(--primary)]/10 transition-all duration-500 relative overflow-hidden h-full flex flex-col">
-                  {/* Glowing Accent */}
-                  <div className="absolute -top-10 -right-10 w-24 h-24 bg-[var(--primary)]/5 blur-[40px] group-hover:bg-[var(--primary)]/20 transition-all duration-700" />
-                  
+               <div className="group bg-white rounded-none border border-[var(--outline-variant)] p-10 hover:border-[var(--primary)] transition-all duration-500 relative h-full flex flex-col">
                   <div className="mb-8 flex justify-between items-start">
-                     <div className="p-3.5 rounded-2xl bg-orange-100/50 text-orange-600">
-                        <Clock size={24} />
+                     <div className="p-3 bg-orange-50 text-orange-600 border border-orange-100">
+                        <Clock size={20} />
                      </div>
-                     <span className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest italic bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
-                        Pending Admin Signal
+                     <span className="text-[8px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 px-3 py-1 border border-orange-100">
+                        PENDING SYNC
                      </span>
                   </div>
 
                   <div className="space-y-6 flex-1">
                      <div>
-                        <h3 className="text-xl font-bold text-[#1B1C1C] tracking-tight mb-1">{req.customer?.name || 'Unknown Associate'}</h3>
-                        <p className="text-[10px] text-[var(--primary)] font-bold uppercase tracking-widest">{req.customer?.organization || 'Private Associate'}</p>
+                        <h3 className="text-xl font-bold text-[#1B1C1C] tracking-tight mb-1 uppercase">{req.customer?.name || 'Unknown associate'}</h3>
+                        <p className="text-[9px] text-[var(--primary)] font-bold uppercase tracking-widest">{req.customer?.organization || 'Private Associate'}</p>
                      </div>
 
-                     <div className="p-6 rounded-2xl bg-[var(--surface-low)] border border-[var(--outline-variant)]/20 space-y-4 shadow-inner">
+                     <div className="p-6 bg-[var(--surface-low)] border border-[var(--outline-variant)] space-y-4">
                         <div className="flex items-center gap-3">
                            <FileText size={14} className="text-[#9E9E9E]"/>
-                           <p className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-tighter italic">{req.booking?.bookingNumber || 'No Linked Booking'}</p>
+                           <p className="text-[10px] font-bold text-[#1B1C1C] uppercase tracking-widest">{req.booking?.bookingNumber || 'No Linked Booking'}</p>
                         </div>
                         <div className="flex items-center gap-3">
                            <ShieldCheck size={14} className="text-[#9E9E9E]"/>
-                           <p className="text-[11px] font-bold text-[#616161]">{req.booking?.product?.name || 'Inquiry Service'} @ {req.booking?.location?.name || 'External'}</p>
+                           <p className="text-[10px] font-bold text-[#616161] uppercase tracking-tight">{req.booking?.product?.name || 'Inquiry Service'} @ {req.booking?.location?.name || 'External'}</p>
                         </div>
                      </div>
                   </div>
 
-                  <div className="mt-10 grid grid-cols-2 gap-4">
+                  <div className="mt-10 grid grid-cols-2 gap-px border border-[var(--outline-variant)] bg-[var(--outline-variant)]">
                      <button 
                        onClick={() => handleProcessRequest(req.id, 'REJECT')}
-                       className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-red-50 text-red-600 text-[10px] font-bold uppercase tracking-widest hover:bg-red-100 transition-all"
+                       className="flex items-center justify-center gap-2 py-4 bg-white text-red-600 text-[10px] font-bold uppercase tracking-widest hover:bg-red-50 transition-all rounded-none"
                      >
-                       <XCircle size={16} /> Reject
+                       REJECT
                      </button>
                      <button 
                        onClick={() => handleProcessRequest(req.id, 'ACCEPT')}
-                       className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#1B1B1B] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[var(--primary)] transition-all shadow-lg"
+                       className="flex items-center justify-center gap-2 py-4 bg-[var(--primary)] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-all rounded-none"
                      >
-                       <Plus size={16} /> Accept
+                       INITIALIZE
                      </button>
                   </div>
                </div>
              </FadeUp>
            ))}
            {filteredRequests.length === 0 && (
-             <div className="col-span-full py-20 text-center bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
-                <p className="text-gray-400 font-bold uppercase tracking-widest text-xs italic">Queue is currently clear.</p>
+             <div className="col-span-full py-20 text-center bg-white border border-[var(--outline-variant)] rounded-none">
+                <p className="text-[#9E9E9E] font-bold uppercase tracking-[0.4em] text-[10px]">Processing queue clear</p>
              </div>
            )}
         </div>
       ) : (
-        <div className="bg-white rounded-[3rem] border border-[var(--outline-variant)]/30 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-none border border-[var(--outline-variant)] overflow-hidden">
            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50/50 border-b border-[var(--outline-variant)]/20">
-                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Identification</th>
-                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">contractor</th>
-                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Lifecycle status</th>
-                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">creation sync</th>
-                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Actions</th>
+                <tr className="bg-neutral-50/50 border-b border-[var(--outline-variant)]">
+                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Protocol ID</th>
+                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Contractor Node</th>
+                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Lifecycle state</th>
+                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Sync Stamp</th>
+                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Access</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--outline-variant)]/10">
                  {filteredContracts.map(con => (
-                   <tr key={con.id} className="hover:bg-gray-50/30 transition-colors group cursor-pointer" onClick={() => router.push(`/manager/contracts/${con.id}`)}>
+                   <tr key={con.id} className="hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => router.push(`/manager/contracts/${con.id}`)}>
                       <td className="p-8">
-                         <p className="text-sm font-bold text-[#1B1C1C] group-hover:text-[var(--primary)] transition-colors">{con.contractNumber}</p>
-                         <p className="text-[10px] text-[#9E9E9E] font-bold uppercase tracking-widest mt-1 italic">{con.booking?.product?.name || 'Product Detail Offline'}</p>
+                         <p className="text-sm font-bold text-[#1B1C1C] group-hover:text-[var(--primary)] transition-colors uppercase tracking-tight">{con.contractNumber}</p>
+                         <p className="text-[9px] text-[#9E9E9E] font-bold uppercase tracking-widest mt-1 italic">{con.booking?.product?.name || 'GENERIC ASSET'}</p>
                       </td>
                       <td className="p-8">
-                         <p className="text-sm font-bold text-[#1B1C1C]">{con.customer?.name || 'Unknown'}</p>
-                         <p className="text-[10px] text-[#9E9E9E] font-bold uppercase tracking-widest mt-1 italic">{con.booking?.location?.name || 'HQ location'}</p>
+                         <p className="text-sm font-bold text-[#1B1C1C] uppercase tracking-tight">{con.customer?.name || 'Unknown ассоciate'}</p>
+                         <p className="text-[9px] text-[#9E9E9E] font-bold uppercase tracking-widest mt-1 italic">{con.booking?.location?.name || 'Node alpha'}</p>
                       </td>
                       <td className="p-8">
                          <div className="flex justify-center">
@@ -223,22 +220,21 @@ export default function ManagerContractsPage() {
                             />
                          </div>
                       </td>
-                      <td className="p-8 text-[11px] font-bold text-[#616161] uppercase tracking-tighter">
-                         {new Date(con.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      <td className="p-8 text-[10px] font-bold text-[#616161] uppercase tracking-widest">
+                         {new Date(con.createdAt).toLocaleDateString()}
                       </td>
                       <td className="p-8 text-right">
-                         <button className="p-3 rounded-xl bg-[var(--surface-low)] text-[#1B1C1C] group-hover:bg-[#1B1B1B] group-hover:text-white transition-all">
-                            <ChevronRight size={18} />
+                         <button className="px-4 py-2 text-[9px] font-bold uppercase tracking-widest border border-[var(--outline-variant)] text-[#1B1C1C] group-hover:bg-[#1B1B1B] group-hover:text-white transition-all rounded-none">
+                            MANAGE
                          </button>
                       </td>
-                   </tr>
+                    </tr>
                  ))}
               </tbody>
            </table>
            {filteredContracts.length === 0 && (
-              <div className="py-24 text-center">
-                 <FileText size={48} className="mx-auto text-gray-200 mb-6" />
-                 <p className="text-gray-400 font-bold uppercase tracking-widest text-xs italic">No active matrix identified.</p>
+              <div className="py-24 text-center bg-white">
+                 <p className="text-[#9E9E9E] font-bold uppercase tracking-[0.4em] text-[10px]">No protocol records identified</p>
               </div>
            )}
         </div>

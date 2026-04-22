@@ -17,43 +17,20 @@ export default function StatusBadge({ status, size = "md", pulse = false }: Prop
 
   return (
     <span
-      className="clm-status-badge"
+      className="inline-flex items-center gap-1.5 px-3 py-1 border font-bold uppercase tracking-widest text-[9px]"
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: size === "sm" ? 5 : 6,
-        padding: size === "sm" ? "2px 8px" : "4px 10px",
-        borderRadius: 20,
-        fontSize: size === "sm" ? 10 : 11,
-        fontWeight: 500,
-        textTransform: "uppercase",
-        letterSpacing: "0.5px",
-        fontFamily: "var(--font-mono)",
         color: meta.color,
-        background: meta.bg,
-        border: `1px solid ${meta.border}`,
+        backgroundColor: `${meta.color}08`,
+        borderColor: `${meta.color}33`,
       }}
     >
       <span
-        className="clm-status-dot"
+        className={`w-1.5 h-1.5 shrink-0 ${isPulse ? 'animate-pulse' : ''}`}
         style={{
-          width: size === "sm" ? 5 : 6,
-          height: size === "sm" ? 5 : 6,
-          borderRadius: "50%",
-          background: meta.color,
-          flexShrink: 0,
-          boxShadow: isPulse ? `0 0 0 0 ${meta.color}` : undefined,
-          animation: isPulse ? "statusPulse 1.5s infinite" : undefined,
+          backgroundColor: meta.color,
         }}
       />
       {meta.label}
-      <style jsx>{`
-        @keyframes statusPulse {
-          0% { box-shadow: 0 0 0 0 ${meta.color}66; }
-          70% { box-shadow: 0 0 0 6px ${meta.color}00; }
-          100% { box-shadow: 0 0 0 0 ${meta.color}00; }
-        }
-      `}</style>
     </span>
   );
 }

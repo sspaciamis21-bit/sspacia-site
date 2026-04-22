@@ -36,8 +36,10 @@ export default function UserContractsListPage() {
       setContracts(conData);
       setRequests(reqData);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to fetch agreements';
-      toast.error(msg);
+      console.error('Contracts fetch error:', err);
+      // Suppress toast for new users
+      setContracts([]);
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -57,42 +59,42 @@ export default function UserContractsListPage() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto pb-20 px-4 md:px-8 font-sans bg-[#0A0A0F] min-h-screen text-white">
+    <div className="max-w-7xl mx-auto pb-20 px-4 md:px-8 font-sans min-h-screen">
       <FadeUp>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 pt-10">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-               <ShieldCheck size={20} className="text-[#7C6FFF]" />
-               <h2 className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#7C6FFF] italic">Secure Agreement Vault</h2>
+            <div className="flex items-center gap-2 mb-2">
+               <div className="h-1 w-1 bg-[var(--primary)]"></div>
+               <h2 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[var(--primary)]">Legal Repository</h2>
             </div>
-            <h1 className="text-4xl md:text-6xl font-display font-bold text-white tracking-tighter italic uppercase">My Contracts</h1>
+            <h1 className="text-4xl md:text-5xl font-display font-bold text-[#1B1C1C] tracking-tight uppercase">My Contracts</h1>
           </div>
           
           <div className="relative w-full md:w-80">
-            <Search size={18} className="absolute left-5 top-1/2 -translate-y-1/2 text-[#5A5A72]" />
+            <Search size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-[#9E9E9E]" />
             <input 
               type="text" 
-              placeholder="Search IDs or titles..." 
+              placeholder="Search contracts..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-14 pr-6 py-4 rounded-[2rem] bg-[#12121A] border border-[#2A2A3E] focus:border-[#7C6FFF] outline-none text-sm transition-all shadow-2xl"
+              className="w-full pl-12 pr-6 py-4 rounded-none bg-[var(--surface-low)] border border-[var(--outline-variant)] focus:border-[var(--primary)] outline-none text-xs font-bold text-[#1B1C1C] transition-all"
             />
           </div>
         </div>
       </FadeUp>
 
       {loading ? (
-        <div className="min-h-[400px] flex flex-col items-center justify-center">
-           <Loader2 className="h-10 w-10 text-[#7C6FFF] animate-spin mb-4" />
-           <p className="text-[#5A5A72] font-bold text-xs uppercase tracking-widest italic text-center">Encrypting Connection to Vault...</p>
+        <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
+            <Loader2 size={40} className="text-[var(--primary)] animate-spin" />
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#9E9E9E] animate-pulse">Initializing...</p>
         </div>
       ) : (
         <div className="space-y-16">
           {/* Active Contracts Section */}
           <section>
             <div className="flex items-center gap-4 mb-8">
-               <LayoutGrid size={18} className="text-[#7C6FFF]" />
-               <h3 className="text-xs font-bold uppercase tracking-[0.3em] text-white/40">Active Matrices</h3>
+               <LayoutGrid size={16} className="text-[#1B1C1C]" />
+               <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#1B1C1C]/30">Active Agreements</h3>
             </div>
             
             {filteredContracts.length > 0 ? (
@@ -104,9 +106,12 @@ export default function UserContractsListPage() {
                 ))}
               </div>
             ) : (
-              <div className="py-20 text-center bg-[#12121A] rounded-[3rem] border border-dashed border-[#2A2A3E]">
-                 <FileText size={48} className="mx-auto text-[#2A2A3E] mb-6" />
-                 <p className="text-[#5A5A72] font-bold uppercase tracking-widest text-xs italic">No active agreements found.</p>
+              <div className="py-20 text-center bg-[var(--surface-low)]/30 rounded-none border border-[var(--outline-variant)]">
+                 <div className="inline-flex p-8 bg-white border border-[var(--outline-variant)] text-[#9E9E9E] mb-6">
+                    <FileText size={40} />
+                 </div>
+                 <p className="text-[#1B1C1C] font-display font-bold uppercase tracking-tight text-xl">No contracts found</p>
+                 <p className="text-[#9E9E9E] font-bold uppercase tracking-widest text-[10px] mt-2">You don&apos;t have any active legal documents yet.</p>
               </div>
             )}
           </section>
@@ -115,8 +120,8 @@ export default function UserContractsListPage() {
           {filteredRequests.length > 0 && (
             <section>
               <div className="flex items-center gap-4 mb-8">
-                 <History size={18} className="text-orange-500" />
-                 <h3 className="text-xs font-bold uppercase tracking-[0.3em] text-white/40">Pending Approval Flow</h3>
+                 <History size={16} className="text-[#1B1C1C]" />
+                 <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#1B1C1C]/40">Approval Workflow</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {filteredRequests.map((req) => (

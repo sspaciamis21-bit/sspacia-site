@@ -14,91 +14,92 @@ export default function LocationsClient({ initialLocations }: { initialLocations
   const router = useRouter();
 
   const handleSuccess = () => {
-    // Refresh the current route to fetch updated data from server
     router.refresh();
   };
 
   return (
     <>
-      <div className="bg-white border border-[#CFD8DC]/50 rounded-xl shadow-sm overflow-hidden flex flex-col">
+      <div className="bg-white border border-[var(--outline-variant)]/40 rounded-none shadow-2xl overflow-hidden flex flex-col">
         {/* Toolbar */}
-        <div className="p-4 border-b border-[#CFD8DC]/50 flex items-center justify-between bg-[#F8F9FA]/50">
-          <div className="flex items-center gap-2 text-sm font-bold text-[#616161]">
-            <MapPin size={18} className="text-[#006064]" />
-            {locations.length} Locations Total
+        <div className="px-10 py-8 border-b border-[var(--outline-variant)]/20 flex flex-col md:flex-row items-center justify-between gap-6 bg-neutral-50/30">
+          <div className="flex items-center gap-4 text-[10px] font-black text-[#616161] uppercase tracking-[0.3em]">
+            <div className="p-2 bg-white text-[var(--primary)] border border-[var(--outline-variant)]/40 shadow-sm">
+              <MapPin size={18} />
+            </div>
+            <span>Node Count:</span>
+            <span className="bg-neutral-50 text-[var(--primary)] px-3 py-1 font-black border border-[var(--outline-variant)]/40 shadow-sm">{locations.length}</span>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4 w-full md:w-auto">
             <button
               onClick={() => setIsAddCityModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-[#006064] border border-[#006064] rounded-lg text-sm font-bold shadow-sm hover:bg-[#E0F7FA] transition-colors"
+              className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-white text-[#1B1B1B] border border-[#1B1B1B] rounded-none text-[10px] font-black uppercase tracking-[0.2em] hover:bg-neutral-100 transition-all shadow-sm group"
             >
-              <Map size={16} />
-              Add City
+              <Map size={16} className="group-hover:rotate-12 transition-transform" />
+              Establish Hub
             </button>
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#006064] text-white rounded-lg text-sm font-bold shadow-md shadow-[#006064]/20 hover:bg-[#004D40] transition-colors"
+              className="flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-[var(--primary)] text-white rounded-none text-[10px] font-black uppercase tracking-[0.2em] hover:bg-neutral-900 transition-all shadow-xl group border border-transparent"
             >
-              <Plus size={16} />
-              Add Location
+              <Plus size={16} className="group-hover:scale-110 transition-transform" />
+              Initialize Node
             </button>
           </div>
         </div>
 
-        {/* Table */}
+        {/* Registry Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left">
             <thead>
-              <tr className="bg-[#F8F9FA] text-xs font-bold text-[#9E9E9E] uppercase tracking-widest border-b border-[#CFD8DC]/50">
-                <th className="px-6 py-4 font-bold">Location</th>
-                <th className="px-6 py-4 font-bold">City</th>
-                <th className="px-6 py-4 font-bold">Status</th>
-                <th className="px-6 py-4 font-bold">Sort</th>
-                <th className="px-6 py-4 font-bold text-right">Actions</th>
+              <tr className="bg-neutral-50/50 border-b border-[var(--outline-variant)]/20">
+                <th className="px-10 py-5 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Spatial Node</th>
+                <th className="px-10 py-5 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Metro Hub</th>
+                <th className="px-10 py-5 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Operating Mode</th>
+                <th className="px-10 py-5 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Sort Index</th>
+                <th className="px-10 py-5 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em] text-right">Directives</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#CFD8DC]/30">
+            <tbody className="divide-y divide-[var(--outline-variant)]/10 font-bold">
               {locations.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-[#9E9E9E]">
-                    <Building2 size={32} className="mx-auto mb-3 opacity-50 text-[#006064]" />
-                    <p className="font-bold text-[#616161]">No locations found</p>
-                    <p className="text-sm mt-1">Click &quot;Add Location&quot; to create your first one.</p>
+                  <td colSpan={5} className="px-10 py-32 text-center text-[#9E9E9E]">
+                    <div className="flex flex-col items-center justify-center">
+                       <Building2 size={48} className="mb-6 opacity-20 text-[#1B1C1C]" />
+                       <p className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.3em]">Registry Empty</p>
+                       <p className="text-[9px] text-[#616161] font-bold uppercase tracking-widest mt-2 opacity-60 italic">Zero coordinates detected in current sector</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
-                locations.map((loc) => (
-                  <tr key={loc.id} className="hover:bg-[#F8F9FA]/50 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-[#212121]">{loc.name}</span>
-                        <span className="text-xs text-[#9E9E9E] font-mono">{loc.slug}</span>
+                locations.map((loc, i) => (
+                  <tr key={loc.id} className="hover:bg-neutral-50/80 transition-colors group">
+                    <td className="px-10 py-6">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs font-black text-[#1B1C1C] uppercase tracking-wider group-hover:text-[var(--primary)] transition-colors">{loc.name}</span>
+                        <span className="text-[9px] text-[#9E9E9E] font-mono tracking-tighter uppercase opacity-60">REF_ID: {loc.slug}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-[#616161]">
-                      {loc.city?.name || '—'}
+                    <td className="px-10 py-6">
+                       <span className="inline-flex items-center px-3 py-1 bg-neutral-100 text-[#1B1B1B] text-[9px] font-black uppercase tracking-widest border border-[var(--outline-variant)]/20">
+                        {loc.city?.name || 'GENERIC_HUB'}
+                      </span>
                     </td>
-                    <td className="px-6 py-4">
-                      {loc.isActive ? (
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 w-fit px-2 py-1 rounded-md">
-                          <CheckCircle2 size={14} /> Active
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-[#9E9E9E] bg-[#F8F9FA] w-fit px-2 py-1 rounded-md">
-                          <XCircle size={14} /> Inactive
-                        </div>
-                      )}
+                    <td className="px-10 py-6">
+                      <div className={`flex items-center gap-3 text-[9px] font-black uppercase tracking-[0.2em] ${loc.isActive ? 'text-[#4DB6AC]' : 'text-red-400 opacity-60'}`}>
+                        <div className={`h-2 w-2 ${loc.isActive ? 'bg-[#4DB6AC]' : 'bg-red-400'} shadow-[0_0_6px_currentColor]`} />
+                        {loc.isActive ? 'Operational' : 'Decommissioned'}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-[#616161]">
-                      {loc.sortOrder}
+                    <td className="px-10 py-6 text-[10px] text-[#1B1C1C] font-mono">
+                      {String(loc.sortOrder).padStart(2, '0')}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-1.5 text-[#9E9E9E] hover:text-[#006064] hover:bg-[#E0F7FA] rounded-md transition-colors" title="Edit (Coming soon)">
+                    <td className="px-10 py-6 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button className="p-2.5 text-[#616161] hover:text-[var(--primary)] hover:bg-neutral-50 transition-all border border-transparent hover:border-[var(--outline-variant)]/20" title="Modify Index">
                           <Edit2 size={16} />
                         </button>
-                        <button className="p-1.5 text-[#9E9E9E] hover:text-red-500 hover:bg-red-50 rounded-md transition-colors" title="Delete (Coming soon)">
+                        <button className="p-2.5 text-[#616161] hover:text-red-600 hover:bg-neutral-100 transition-all border border-transparent" title="Purge Node">
                           <Trash2 size={16} />
                         </button>
                       </div>

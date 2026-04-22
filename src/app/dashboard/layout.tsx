@@ -29,11 +29,11 @@ import { useAuth } from '@/context/AuthContext';
 
 const sidebarItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'My Bookings', href: '/dashboard/bookings', icon: Calendar },
-  { name: 'Review Documents', href: '/dashboard/contracts', icon: ShieldCheck },
+  { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
+  { name: 'Contracts', href: '/dashboard/contracts', icon: ShieldCheck },
   { name: 'Documents', href: '/dashboard/documents', icon: FileText },
-  { name: 'Support', href: '/dashboard/support', icon: LifeBuoy },
-  { name: 'My Tickets', href: '/dashboard/tickets', icon: Ticket },
+  { name: 'Help', href: '/dashboard/support', icon: LifeBuoy },
+  { name: 'Tickets', href: '/dashboard/tickets', icon: Ticket },
   { name: 'Profile', href: '/dashboard/profile', icon: User },
 ];
 
@@ -163,42 +163,40 @@ export default function UserLayout({
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative max-w-lg w-full bg-[var(--surface-lowest)] shadow-[0_50px_100px_rgba(0,0,0,0.1)] p-12 md:p-14 border border-[var(--outline-variant)]/40 overflow-hidden rounded-[3.5rem] group"
+              className="relative max-w-lg w-full bg-[var(--surface-lowest)] shadow-[0_30px_60px_rgba(0,0,0,0.08)] p-12 md:p-14 border border-[var(--outline-variant)] overflow-hidden rounded-none group"
             >
                <div className="absolute top-0 right-0 w-48 h-48 bg-[var(--primary)]/5 blur-[80px] -mr-16 -mt-16 group-hover:bg-[var(--primary)]/10 transition-colors duration-1000" />
                <button 
                 onClick={closeWelcome}
-                className="absolute top-10 right-10 p-3 hover:bg-[var(--primary)]/10 rounded-full transition-all group/btn"
+                className="absolute top-10 right-10 p-3 hover:bg-[var(--primary)]/10 rounded-none transition-all group/btn"
                 title="Dismiss"
               >
-                <X className="h-5 w-5 text-[#616161] group-hover/btn:text-[var(--primary)] group-hover/btn:rotate-90 transition-all duration-300" />
+                <X className="h-5 w-5 text-[#616161] group-hover/btn:text-[var(--primary)] transition-all duration-300" />
               </button>
 
               <div className="relative z-10 space-y-10">
-                 <div className="h-20 w-20 bg-[var(--primary)]/10 rounded-[2rem] flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-700">
-                   <Sparkles className="h-10 w-10 text-[var(--primary)]" />
+                 <div className="h-16 w-16 bg-[var(--primary)]/10 rounded-none flex items-center justify-center border border-[var(--primary)]/10 group-hover:scale-105 transition-transform duration-500">
+                   <Sparkles className="h-8 w-8 text-[var(--primary)]" />
                  </div>
                  
-                 <div className="space-y-6">
-                    <h2 className="font-display text-4xl md:text-5xl font-bold tracking-tight text-[var(--primary)] italic uppercase leading-[0.9]">
+                 <div className="space-y-4">
+                    <h2 className="font-display text-4xl font-bold tracking-tight text-[var(--primary)] uppercase leading-none">
                       Welcome to <br />
-                      <span className="text-[#1B1C1C] not-italic">Sspacia.</span>
+                      <span className="text-[#1B1C1C]">Sspacia.</span>
                     </h2>
-                    <p className="text-lg text-[#616161] font-bold leading-relaxed opacity-80 uppercase tracking-tighter">
-                      Experience Ahmedabad&apos;s most dynamic workspace ecosystem. Redefining professional clusters.
+                    <p className="text-base text-[#616161] font-medium leading-relaxed opacity-70 uppercase tracking-tighter">
+                      Experience Ahmedabad&apos;s workspace ecosystem.
                     </p>
                  </div>
 
-                 <div className="pt-6 flex flex-col gap-6">
+                 <div className="pt-4 flex flex-col gap-4">
                     <button 
                       onClick={closeWelcome}
-                      className="w-full bg-[#1B1B1B] text-white py-6 rounded-[2rem] font-bold text-[11px] uppercase tracking-[0.3em] shadow-2xl hover:bg-[var(--primary)] active:scale-[0.97] transition-all duration-500"
+                      className="w-full bg-[#1B1B1B] text-white py-5 rounded-none font-bold text-[11px] uppercase tracking-[0.2em] shadow-lg hover:bg-[var(--primary)] active:scale-[0.98] transition-all duration-300"
                     >
                       Initialize Dashboard
                     </button>
-                    <div className="flex flex-col items-center gap-2">
-                       <p className="text-[10px] text-center text-[#9E9E9E] font-bold uppercase tracking-[0.2em] opacity-60">Verified Identity Node Active</p>
-                    </div>
+
                  </div>
               </div>
             </motion.div>
@@ -210,30 +208,27 @@ export default function UserLayout({
         {needsProfileCompletion && (
           <div className="fixed inset-0 z-[9999] bg-[var(--surface-lowest)] overflow-y-auto w-full h-full flex flex-col md:p-10">
             <motion.div 
-              initial={{ opacity: 0, filter: 'blur(10px)' }}
-              animate={{ opacity: 1, filter: 'blur(0px)' }}
-              className="relative max-w-5xl w-full mx-auto px-10 py-16 md:py-20 flex-1 flex flex-col justify-center bg-[var(--surface-lowest)] rounded-none md:rounded-[4rem] border-none md:border border-[var(--outline-variant)] shadow-none md:shadow-2xl overflow-hidden"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="relative max-w-5xl w-full mx-auto px-10 py-16 md:py-20 flex-1 flex flex-col justify-center bg-[var(--surface-lowest)] rounded-none border-none md:border border-[var(--outline-variant)] shadow-2xl overflow-hidden"
             >
                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[var(--primary)]/5 blur-[120px] -mr-[200px] -mt-[200px] pointer-events-none" />
                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[var(--primary)]/5 blur-[120px] -ml-[200px] -mb-[200px] pointer-events-none" />
 
                <button 
                 onClick={handleSkipProfile}
-                className="absolute top-8 right-8 md:top-12 md:right-12 p-4 hover:bg-[var(--primary)]/10 rounded-full transition-all group z-20"
+                className="absolute top-8 right-8 md:top-12 md:right-12 p-3 hover:bg-[var(--primary)]/5 rounded-none transition-all group z-20"
                 title="Dismiss"
               >
-                <X className="h-6 w-6 text-[#9E9E9E] group-hover:text-[var(--primary)] group-hover:rotate-90 transition-all duration-300" />
+                <X className="h-6 w-6 text-[#9E9E9E] group-hover:text-[var(--primary)] transition-all duration-300" />
               </button>
 
               <div className="space-y-14 relative z-10">
                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
                    <div>
-                      <h2 className="font-display text-5xl md:text-6xl font-bold text-[var(--primary)] tracking-tighter italic uppercase leading-none">Assemble <br /><span className="text-[#1B1C1C] not-italic">Identity</span></h2>
-                      <p className="text-[#616161] mt-4 font-bold text-sm max-w-md uppercase tracking-[0.05em] leading-relaxed opacity-70">
-                        Map your professional metadata to the ecosystem. Identity is currency.
-                      </p>
+                      <h2 className="font-display text-5xl md:text-6xl font-bold text-[var(--primary)] tracking-tighter italic uppercase leading-none">Update <br /><span className="text-[#1B1C1C] not-italic">Profile</span></h2>
                    </div>
-                   <div className="h-24 w-24 bg-[var(--primary)]/10 rounded-[2.5rem] flex items-center justify-center shrink-0 shadow-inner border border-[var(--primary)]/20">
+                   <div className="h-24 w-24 bg-[var(--primary)]/10 rounded-none flex items-center justify-center shrink-0 border border-[var(--primary)]/20">
                      <User className="h-10 w-10 text-[var(--primary)]" />
                    </div>
                  </div>
@@ -243,26 +238,26 @@ export default function UserLayout({
                       <div className="space-y-10">
                         <div className="space-y-4">
                            <div className="flex items-center gap-3 ml-1 mb-2">
-                              <div className="h-8 w-8 bg-[var(--primary)]/5 rounded-xl flex items-center justify-center text-[var(--primary)]">
-                                 <User size={16} />
+                              <div className="h-6 w-6 bg-[var(--primary)]/5 rounded-none flex items-center justify-center text-[var(--primary)]">
+                                 <User size={14} />
                               </div>
-                              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#1B1C1C] opacity-40 italic">Member Logistics</h3>
+                              <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#1B1C1C] opacity-40">Personal Information</h3>
                            </div>
                            
                            <div className="space-y-8">
                               <div className="space-y-2.5">
-                                <label className="text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">Legal Designation <span className="text-red-500">*</span></label>
+                                <label className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-[0.1em] ml-1">Designation <span className="text-red-500">*</span></label>
                                 <div className="relative group/field">
-                                  <Briefcase className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9E9E9E] group-focus-within/field:text-[var(--primary)] transition-colors" />
-                                  <input required type="text" value={profileData.designation} onChange={e => setProfileData(p => ({...p, designation: e.target.value}))} className="w-full pl-16 pr-6 py-5 rounded-2xl border border-[var(--outline-variant)] focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/5 outline-none text-[15px] transition-all bg-[var(--surface-low)]/50 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50" placeholder="E.g., Creative Director" />
+                                  <Briefcase className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9E9E9E] group-focus-within/field:text-[var(--primary)] transition-colors" />
+                                  <input required type="text" value={profileData.designation} onChange={e => setProfileData(p => ({...p, designation: e.target.value}))} className="w-full pl-14 pr-5 py-4 rounded-none border border-[var(--outline-variant)] focus:border-[var(--primary)] outline-none text-[14px] transition-all bg-[var(--surface-low)] font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/40" placeholder="E.g., Manager" />
                                 </div>
                               </div>
 
                               <div className="space-y-2.5">
-                                <label className="text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">Contact Protocol <span className="text-red-500">*</span></label>
+                                <label className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-[0.1em] ml-1">Contact Number <span className="text-red-500">*</span></label>
                                 <div className="relative group/field">
-                                  <Phone className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9E9E9E] group-focus-within/field:text-[var(--primary)] transition-colors" />
-                                  <input required type="tel" value={profileData.phone} onChange={e => setProfileData(p => ({...p, phone: e.target.value}))} className="w-full pl-16 pr-6 py-5 rounded-2xl border border-[var(--outline-variant)] focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/5 outline-none text-[15px] transition-all bg-[var(--surface-low)]/50 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50" placeholder="+91 90000 00000" />
+                                  <Phone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9E9E9E] group-focus-within/field:text-[var(--primary)] transition-colors" />
+                                  <input required type="tel" value={profileData.phone} onChange={e => setProfileData(p => ({...p, phone: e.target.value}))} className="w-full pl-14 pr-5 py-4 rounded-none border border-[var(--outline-variant)] focus:border-[var(--primary)] outline-none text-[14px] transition-all bg-[var(--surface-low)] font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/40" placeholder="+91 00000 00000" />
                                 </div>
                               </div>
                            </div>
@@ -272,29 +267,29 @@ export default function UserLayout({
                       <div className="space-y-10">
                         <div className="space-y-4">
                            <div className="flex items-center gap-3 ml-1 mb-2">
-                              <div className="h-8 w-8 bg-[var(--primary)]/5 rounded-xl flex items-center justify-center text-[var(--primary)]">
-                                 <Building2 size={16} />
+                              <div className="h-6 w-6 bg-[var(--primary)]/5 rounded-none flex items-center justify-center text-[var(--primary)]">
+                                 <Building2 size={14} />
                               </div>
-                              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#1B1C1C] opacity-40 italic">Organization Matrix</h3>
+                              <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#1B1C1C] opacity-40">Company Details</h3>
                            </div>
 
                            <div className="space-y-8">
                               <div className="space-y-2.5">
-                                <label className="text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">Firm Architecture <span className="text-red-500">*</span></label>
+                                <label className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-[0.1em] ml-1">Company Name <span className="text-red-500">*</span></label>
                                 <div className="relative group/field">
-                                  <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9E9E9E] group-focus-within/field:text-[var(--primary)] transition-colors" />
-                                  <input required type="text" value={profileData.companyName} onChange={e => setProfileData(p => ({...p, companyName: e.target.value}))} className="w-full pl-16 pr-6 py-5 rounded-2xl border border-[var(--outline-variant)] focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/5 outline-none text-[15px] transition-all bg-[var(--surface-low)]/50 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50" placeholder="Acme International" />
+                                  <Building2 className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9E9E9E] group-focus-within/field:text-[var(--primary)] transition-colors" />
+                                  <input required type="text" value={profileData.companyName} onChange={e => setProfileData(p => ({...p, companyName: e.target.value}))} className="w-full pl-14 pr-5 py-4 rounded-none border border-[var(--outline-variant)] focus:border-[var(--primary)] outline-none text-[14px] transition-all bg-[var(--surface-low)] font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/40" placeholder="Your Company" />
                                 </div>
                               </div>
 
                               <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2.5">
-                                  <label className="text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">City Node</label>
-                                  <input type="text" value={profileData.companyCity} onChange={e => setProfileData(p => ({...p, companyCity: e.target.value}))} className="w-full px-6 py-5 rounded-2xl border border-[var(--outline-variant)] focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/5 outline-none text-[15px] transition-all bg-[var(--surface-low)]/50 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50" placeholder="Ahmedabad" />
+                                  <label className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-[0.1em] ml-1">City</label>
+                                  <input type="text" value={profileData.companyCity} onChange={e => setProfileData(p => ({...p, companyCity: e.target.value}))} className="w-full px-5 py-4 rounded-none border border-[var(--outline-variant)] focus:border-[var(--primary)] outline-none text-[14px] transition-all bg-[var(--surface-low)] font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/40" placeholder="Ahmedabad" />
                                 </div>
                                 <div className="space-y-2.5">
-                                  <label className="text-[10px] font-bold text-[#9E9E9E] uppercase tracking-[0.2em] ml-1">Postal Map</label>
-                                  <input type="text" value={profileData.companyZip} onChange={e => setProfileData(p => ({...p, companyZip: e.target.value}))} className="w-full px-6 py-5 rounded-2xl border border-[var(--outline-variant)] focus:border-[var(--primary)] focus:ring-4 focus:ring-[var(--primary)]/5 outline-none text-[15px] transition-all bg-[var(--surface-low)]/50 font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/50" placeholder="380001" />
+                                  <label className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-[0.1em] ml-1">Postal Code</label>
+                                  <input type="text" value={profileData.companyZip} onChange={e => setProfileData(p => ({...p, companyZip: e.target.value}))} className="w-full px-5 py-4 rounded-none border border-[var(--outline-variant)] focus:border-[var(--primary)] outline-none text-[14px] transition-all bg-[var(--surface-low)] font-bold text-[#1B1C1C] placeholder:text-[#9E9E9E]/40" placeholder="380001" />
                                 </div>
                               </div>
                            </div>
@@ -306,18 +301,18 @@ export default function UserLayout({
                       <button 
                         type="button" 
                         onClick={handleSkipProfile} 
-                        className="w-full sm:w-auto px-8 py-5 rounded-2xl font-bold text-[11px] text-[#616161] hover:text-[var(--primary)] hover:bg-[var(--primary)]/5 transition-all uppercase tracking-[0.3em] italic"
+                        className="w-full sm:w-auto px-8 py-4 rounded-none font-bold text-[10px] text-[#616161] hover:text-[var(--primary)] hover:bg-[var(--primary)]/5 transition-all uppercase tracking-[0.2em]"
                       >
-                        Bypass Configuration
+                        Skip
                       </button>
                       <button 
                         disabled={savingProfile} 
                         type="submit" 
-                        className="w-full sm:w-auto bg-[#1B1B1B] text-white px-14 py-6 rounded-3xl font-bold text-[12px] uppercase tracking-[0.4em] shadow-2xl hover:bg-[var(--primary)] hover:-translate-y-2 active:translate-y-0 transition-all duration-700 disabled:opacity-70 disabled:hover:translate-y-0 flex items-center justify-center gap-4 group/btn"
+                        className="w-full sm:w-auto bg-[#1B1B1B] text-white px-12 py-5 rounded-none font-bold text-[11px] uppercase tracking-[0.3em] shadow-xl hover:bg-[var(--primary)] active:scale-[0.98] transition-all duration-300 disabled:opacity-70 flex items-center justify-center gap-4 group/btn"
                       >
                         {savingProfile ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                        {savingProfile ? 'Synchronizing Archive' : 'Commit Identity'}
-                        {!savingProfile && <ArrowRight className="w-6 h-6 group-hover/btn:translate-x-2 transition-transform duration-500" />}
+                        {savingProfile ? 'Updating...' : 'Save Profile'}
+                        {!savingProfile && <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform duration-300" />}
                       </button>
                     </div>
                  </form>
@@ -335,9 +330,9 @@ export default function UserLayout({
       >
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="absolute -right-4 top-10 h-8 w-8 bg-[var(--surface-lowest)] border border-[var(--outline-variant)]/50 rounded-full text-[var(--primary)] shadow-md hover:scale-110 active:scale-95 transition-all z-[60] flex items-center justify-center"
+          className="absolute -right-3.5 top-10 h-7 w-7 bg-[var(--surface-lowest)] border border-[var(--outline-variant)] text-[var(--primary)] shadow-sm hover:bg-[var(--primary)] hover:text-white transition-all z-[60] flex items-center justify-center rounded-none"
         >
-          {isSidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          {isSidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </button>
 
         <div className="p-8 flex items-center justify-between overflow-hidden">
@@ -348,9 +343,9 @@ export default function UserLayout({
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                className="font-display text-2xl font-bold text-[var(--primary)] whitespace-nowrap uppercase tracking-tighter italic"
+                className="font-display text-xl font-bold text-[var(--primary)] whitespace-nowrap uppercase tracking-tighter italic"
               >
-                SSPACIA <span className="text-[#1B1C1C] opacity-30 not-italic ml-1">MEMBER</span>
+                SSPACIA <span className="text-[#1B1C1C] opacity-30 ml-1">MEMBER</span>
               </motion.div>
             ) : (
               <motion.div
@@ -373,8 +368,8 @@ export default function UserLayout({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group relative ${isActive
-                    ? 'bg-[var(--primary)] text-white shadow-xl shadow-[var(--primary)]/20'
+                className={`flex items-center gap-4 px-5 py-4 rounded-none transition-all group relative ${isActive
+                    ? 'bg-[var(--primary)] text-white'
                     : 'text-[#616161] hover:bg-[var(--primary)]/5 hover:text-[var(--primary)]'
                   }`}
               >
@@ -383,12 +378,12 @@ export default function UserLayout({
                   <span className="font-bold text-[12px] whitespace-nowrap uppercase tracking-widest">{item.name}</span>
                 )}
                 {!isSidebarOpen && (
-                  <div className={`absolute left-full ml-4 px-4 py-2 bg-[#1B1C1C] text-white text-[10px] font-bold uppercase tracking-widest rounded-xl opacity-0 translate-x-[-10px] group-hover:opacity-100 group-hover:translate-x-0 transition-all shadow-2xl pointer-events-none whitespace-nowrap z-[100]`}>
+                  <div className={`absolute left-full ml-4 px-3 py-1.5 bg-[#1B1C1C] text-white text-[9px] font-bold uppercase tracking-widest rounded-none opacity-0 translate-x-[-5px] group-hover:opacity-100 group-hover:translate-x-0 transition-all shadow-xl pointer-events-none whitespace-nowrap z-[100]`}>
                     {item.name}
                   </div>
                 )}
                 {isActive && (
-                   <motion.div layoutId="active-pill" className="absolute right-2 w-1.5 h-1.5 rounded-full bg-white/40" />
+                   <motion.div layoutId="active-pill" className="absolute right-0 w-1 h-full bg-white/30" />
                 )}
               </Link>
             );
@@ -399,17 +394,17 @@ export default function UserLayout({
           <div className="border-t border-[var(--outline-variant)]/20 p-6 shrink-0 flex flex-col gap-4">
             {isSidebarOpen ? (
               <div className="flex items-center gap-4 px-1 mb-2 w-full group cursor-pointer">
-                <div className="h-12 w-12 shrink-0 rounded-2xl bg-[var(--surface-low)] text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)]/50 font-display font-bold text-lg shadow-inner group-hover:bg-[var(--primary)] group-hover:text-white transition-all">
+                <div className="h-10 w-10 shrink-0 rounded-none bg-[var(--surface-low)] text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)] font-display font-bold text-base transition-all group-hover:bg-[var(--primary)] group-hover:text-white">
                   {user.name?.charAt(0).toUpperCase()}
                 </div>
                 <div className="w-full min-w-0 overflow-hidden">
-                  <p className="text-[13px] font-bold text-[#1B1C1C] truncate w-full uppercase tracking-tight">{user.name}</p>
-                  <p className="text-[10px] text-[var(--primary)] font-bold uppercase tracking-[0.15em] opacity-80">{user.role || 'Member'}</p>
+                  <p className="text-[12px] font-bold text-[#1B1C1C] truncate w-full uppercase tracking-tight">{user.name}</p>
+                  <p className="text-[9px] text-[var(--primary)] font-bold uppercase tracking-widest opacity-60">{user.role || 'Member'}</p>
                 </div>
               </div>
             ) : (
               <div className="flex justify-center mb-2 w-full">
-                <div className="h-12 w-12 shrink-0 rounded-2xl bg-[var(--surface-low)] text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)]/50 font-display font-bold text-lg shadow-inner shadow-black/5">
+                <div className="h-10 w-10 shrink-0 rounded-none bg-[var(--surface-low)] text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)] font-display font-bold text-base shadow-inner shadow-black/5">
                   {user.name?.charAt(0).toUpperCase()}
                 </div>
               </div>
@@ -417,11 +412,11 @@ export default function UserLayout({
 
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-4 px-5 py-3.5 text-[#616161] hover:bg-red-50 hover:text-red-600 rounded-2xl transition-all group"
+              className="w-full flex items-center gap-4 px-5 py-3.5 text-[#616161] hover:bg-neutral-100 hover:text-black rounded-none transition-all group"
               title="Logout"
             >
-              <LogOut size={20} className="shrink-0 group-hover:-translate-x-1 transition-transform" />
-              {isSidebarOpen && <span className="font-bold text-[12px] uppercase tracking-widest">Logout</span>}
+              <LogOut size={18} className="shrink-0 group-hover:-translate-x-0.5 transition-transform" />
+              {isSidebarOpen && <span className="font-bold text-[11px] uppercase tracking-widest">Logout</span>}
             </button>
           </div>
         )}

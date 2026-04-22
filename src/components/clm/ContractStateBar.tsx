@@ -22,21 +22,21 @@ export default function ContractStateBar({ current }: Props) {
 
         return (
           <div key={step} className="flex items-center flex-shrink-0 group">
-            <div className={`flex items-center gap-2.5 px-4 py-2 rounded-xl transition-all duration-500 ${
+            <div className={`flex items-center gap-2.5 px-4 py-2 rounded-none transition-all duration-300 ${
               isCurrent 
-                ? 'bg-[#1B1B1B] shadow-lg shadow-black/10' 
+                ? 'bg-black text-white' 
                 : ''
             }`}>
               {isDone ? (
-                <div className="flex items-center justify-center h-5 w-5 rounded-full bg-emerald-500/10 text-emerald-500">
+                <div className="flex items-center justify-center h-5 w-5 rounded-none bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                     <path d="M2.5 6L5 8.5L9.5 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
               ) : isCurrent ? (
-                <div className="h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_8px_orange] animate-pulse"></div>
+                <div className="h-2 w-2 bg-[var(--primary)] animate-pulse"></div>
               ) : (
-                <div className="h-1.5 w-1.5 rounded-full bg-gray-200 group-hover:bg-gray-300"></div>
+                <div className="h-1.5 w-1.5 bg-gray-200 group-hover:bg-gray-400"></div>
               )}
               
               <span className={`text-[10px] uppercase tracking-[0.2em] font-bold ${

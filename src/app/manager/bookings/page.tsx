@@ -115,23 +115,22 @@ export default function ManagerBookingsPage() {
       <FadeUp>
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
           <div className="flex items-center gap-6">
-            <div className="h-20 w-20 rounded-[2.5rem] bg-[var(--primary)] text-white flex items-center justify-center shadow-2xl shadow-[var(--primary)]/30">
+            <div className="h-20 w-20 bg-[var(--primary)] text-white flex items-center justify-center rounded-none">
               <ShoppingBag size={40} />
             </div>
             <div>
-              <h1 className="text-4xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase italic italic-none">Purchase Logs</h1>
-              <p className="text-[#616161] font-medium text-lg mt-1 group">Confirm and manage system purchase requests</p>
+              <h1 className="text-4xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Purchase Logs</h1>
+              <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60">System acquisition and verification</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 p-1.5 bg-[var(--surface-low)] rounded-2xl border border-[var(--outline-variant)]/30 backdrop-blur-sm">
+          <div className="flex items-center gap-px bg-[var(--outline-variant)]/20 border border-[var(--outline-variant)]/30 rounded-none">
               {(['PENDING', 'CONFIRMED', 'ALL'] as const).map(tab => (
                   <button 
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${activeTab === tab ? 'bg-white text-[var(--primary)] shadow-sm border border-[var(--primary)]/10' : 'text-[#9E9E9E] hover:text-[#1B1C1C]'}`}
+                    className={`px-8 py-3 text-[9px] font-black uppercase tracking-[0.3em] transition-all rounded-none ${activeTab === tab ? 'bg-[var(--primary)] text-white' : 'bg-white text-[#9E9E9E] hover:text-[#1B1C1C]'}`}
                   >
-                      {tab === 'PENDING' && stats.pending > 0 && <span className="mr-2 h-2 w-2 rounded-full bg-amber-500 inline-block animate-pulse"></span>}
                       {tab}
                   </button>
               ))}
@@ -142,13 +141,13 @@ export default function ManagerBookingsPage() {
       {/* Control Strip */}
       <FadeUp delay={0.1}>
           <div className="relative group">
-              <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-[#BDBDBD] group-focus-within:text-[var(--primary)] transition-colors" size={20} />
+              <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-[#BDBDBD]" size={18} />
               <input 
                   type="text"
-                  placeholder="Search by Booking ID, Customer Name, or Cluster System..."
+                  placeholder="ID, CUSTOMER, OR CLUSTER..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white border border-[var(--outline-variant)]/40 rounded-[2rem] pl-16 pr-8 py-6 text-sm font-bold text-[#1B1C1C] focus:ring-4 focus:ring-[var(--primary)]/5 outline-none shadow-sm transition-all placeholder:text-[#BDBDBD] placeholder:font-medium"
+                  className="w-full bg-white border border-[var(--outline-variant)] rounded-none pl-16 pr-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-[#1B1C1C] focus:border-[var(--primary)] outline-none transition-all placeholder:text-[#BDBDBD]"
               />
           </div>
       </FadeUp>
@@ -156,56 +155,52 @@ export default function ManagerBookingsPage() {
       {/* Catalog Display */}
       <div className="grid grid-cols-1 gap-8 relative z-10">
           {loading ? (
-              <div className="min-h-[400px] flex flex-col items-center justify-center bg-white/50 rounded-[3rem] border border-dashed border-[var(--outline-variant)]">
-                  <Loader2 className="h-12 w-12 text-[var(--primary)] animate-spin mb-4 opacity-20" />
-                  <p className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.4em] italic">Synchronizing Logs...</p>
+              <div className="min-h-[400px] flex flex-col items-center justify-center bg-white border border-[var(--outline-variant)] rounded-none gap-4">
+                  <Loader2 size={40} className="text-[var(--primary)] animate-spin" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#9E9E9E] animate-pulse">Initializing Logs...</p>
               </div>
           ) : filteredBookings.length === 0 ? (
-              <div className="min-h-[400px] flex flex-col items-center justify-center bg-white/50 rounded-[3rem] border border-dashed border-[var(--outline-variant)]">
-                  <div className="p-8 bg-[var(--surface-low)] rounded-full mb-6 opacity-20">
-                      <ShoppingBag size={64} />
-                  </div>
-                  <p className="text-xl font-display font-black text-[#1B1C1C] uppercase tracking-tight">Zero Activity Found</p>
-                  <p className="text-sm font-medium text-[#9E9E9E] mt-2">No purchase requests match your current filters.</p>
+              <div className="min-h-[400px] flex flex-col items-center justify-center bg-white border border-[var(--outline-variant)] rounded-none">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#9E9E9E]">No Activity Logs Found</p>
               </div>
           ) : (
               <AnimatePresence mode="popLayout">
                   {filteredBookings.map((b, idx) => (
                       <motion.div 
                         key={b.id}
-                        initial={{ opacity: 0, y: 30 }}
+                        initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.05 }}
-                        className="bg-white rounded-[3rem] border border-[var(--outline-variant)]/40 shadow-sm hover:shadow-2xl hover:shadow-[#1B1C1C]/5 transition-all overflow-hidden group"
+                        className="bg-white rounded-none border border-[var(--outline-variant)] group hover:border-[var(--primary)] transition-all"
                       >
                           <div className="p-10 flex flex-col lg:flex-row lg:items-center justify-between gap-12">
                               {/* Left: Core Info */}
                               <div className="flex-1 space-y-8">
-                                  <div className="flex items-center gap-4">
-                                      <div className={`p-3 rounded-2xl border ${b.status.name === 'PENDING' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                                          <Clock size={20} />
+                                  <div className="flex items-center gap-5">
+                                      <div className={`p-3 rounded-none border ${b.status.name === 'PENDING' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
+                                          <Clock size={18} />
                                       </div>
                                       <div>
                                           <div className="flex items-center gap-3 mb-1">
-                                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--primary)] opacity-60 italic">Request ID</span>
-                                            <span className="text-lg font-black text-[#1B1C1C] tracking-tight">{b.bookingNumber}</span>
+                                            <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-[var(--primary)] opacity-40">REF</span>
+                                            <span className="text-lg font-bold text-[#1B1C1C] tracking-tight uppercase">{b.bookingNumber}</span>
                                           </div>
-                                          <div className="flex items-center gap-2 text-[#9E9E9E] text-xs font-bold uppercase tracking-widest leading-none">
-                                              <span>{new Date(b.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                                              <span className="h-1 w-1 bg-[#BDBDBD] rounded-full"></span>
-                                              <span>{new Date(b.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+                                          <div className="text-[#9E9E9E] text-[9px] font-bold uppercase tracking-[0.2em] flex items-center gap-3">
+                                              <span>{new Date(b.createdAt).toLocaleDateString()}</span>
+                                              <span className="h-1 w-1 bg-[var(--outline-variant)]"></span>
+                                              <span>{new Date(b.createdAt).toLocaleTimeString()}</span>
                                           </div>
                                       </div>
                                   </div>
 
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                                       {/* Product Detail */}
                                       <div className="space-y-4">
-                                          <h4 className="text-[10px] font-black text-[#1B1C1C] opacity-30 uppercase tracking-[0.3em] italic">System Configuration</h4>
+                                          <h4 className="text-[9px] font-bold text-[#1B1C1C] opacity-30 uppercase tracking-[0.4em]">Asset Config</h4>
                                           <div className="space-y-2">
-                                              <p className="text-2xl font-display font-black text-[#1B1C1C] max-w-sm leading-none">{b.product.name}</p>
-                                              <div className="flex items-center gap-2 text-[var(--primary)] font-bold text-xs uppercase tracking-wider italic">
-                                                  <MapPin size={14} />
+                                              <p className="text-xl font-display font-bold text-[#1B1C1C] leading-none uppercase tracking-tight">{b.product.name}</p>
+                                              <div className="flex items-center gap-2 text-[var(--primary)] font-bold text-[9px] uppercase tracking-widest">
+                                                  <MapPin size={12} />
                                                   {b.product.location.name}
                                               </div>
                                           </div>
@@ -213,14 +208,14 @@ export default function ManagerBookingsPage() {
 
                                       {/* Customer Detail */}
                                       <div className="space-y-4">
-                                          <h4 className="text-[10px] font-black text-[#1B1C1C] opacity-30 uppercase tracking-[0.3em] italic">Member Profile</h4>
+                                          <h4 className="text-[9px] font-bold text-[#1B1C1C] opacity-30 uppercase tracking-[0.4em]">Subscriber Node</h4>
                                           <div className="flex items-center gap-4">
-                                              <div className="h-12 w-12 rounded-2xl bg-[var(--surface-low)] flex items-center justify-center font-black text-[#1B1C1C] border border-[var(--outline-variant)]/40 shadow-inner group-hover:bg-[var(--primary)] group-hover:text-white transition-all">
+                                              <div className="h-10 w-10 bg-[var(--surface-low)] flex items-center justify-center font-bold text-[#1B1C1C] border border-[var(--outline-variant)]">
                                                   {b.customer.name.charAt(0)}
                                               </div>
                                               <div>
-                                                  <p className="font-black text-[#1B1C1C] leading-none mb-1.5">{b.customer.name}</p>
-                                                  <p className="text-[11px] text-[#9E9E9E] font-bold lowercase tracking-tight italic opacity-80">{b.customer.email}</p>
+                                                  <p className="font-bold text-[#1B1C1C] text-[13px] uppercase tracking-tight">{b.customer.name}</p>
+                                                  <p className="text-[9px] text-[#9E9E9E] font-bold uppercase tracking-widest mt-1 opacity-60">{b.customer.email}</p>
                                               </div>
                                           </div>
                                       </div>
@@ -228,35 +223,35 @@ export default function ManagerBookingsPage() {
                               </div>
 
                               {/* Right: Actions & Amount */}
-                              <div className="lg:w-80 flex flex-col items-center lg:items-end justify-between gap-10 lg:pl-12 lg:border-l border-[var(--outline-variant)]/20">
-                                  <div className="text-center lg:text-right space-y-1">
-                                      <p className="text-[10px] font-black text-[#1B1C1C] opacity-30 uppercase tracking-[0.3em] italic">Amount Payload</p>
-                                      <p className="text-4xl font-display font-black text-[#1B1C1C]">₹{parseFloat(b.grandTotal.toString()).toLocaleString()}</p>
-                                      <div className={`inline-flex px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border mt-2 ${b.status.name === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                                          Status: {b.status.displayName}
+                              <div className="lg:w-72 flex flex-col items-center lg:items-end justify-between gap-12 lg:pl-12 lg:border-l border-[var(--outline-variant)]/20">
+                                  <div className="text-center lg:text-right space-y-2">
+                                      <p className="text-[9px] font-bold text-[#1B1C1C] opacity-30 uppercase tracking-[0.4em]">Payload Value</p>
+                                      <p className="text-3xl font-display font-bold text-[#1B1C1C] tracking-tighter">₹{Math.round(b.grandTotal).toLocaleString()}</p>
+                                      <div className={`px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.2em] border inline-block ${b.status.name === 'CONFIRMED' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
+                                          STATUS: {b.status.displayName}
                                       </div>
                                   </div>
 
-                                  <div className="w-full flex gap-3">
+                                  <div className="w-full flex flex-col gap-2">
                                       {b.status.name === 'PENDING' ? (
                                           <>
                                               <button 
                                                 onClick={() => handleUpdateStatus(b.id, 'CONFIRMED')}
-                                                className="flex-1 bg-[var(--primary)] text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-[var(--primary)]/20 flex items-center justify-center gap-2"
+                                                className="w-full bg-[var(--primary)] text-white py-4 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-black transition-all flex items-center justify-center gap-2 rounded-none"
                                               >
-                                                  <CheckCircle2 size={16} /> Confirm
+                                                  Update
                                               </button>
                                               <button 
                                                 onClick={() => handleUpdateStatus(b.id, 'CANCELLED')}
-                                                className="flex-1 bg-white text-rose-600 border border-rose-100 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
+                                                className="w-full bg-white text-red-600 border border-red-100 py-3 text-[9px] font-bold uppercase tracking-[0.3em] hover:bg-red-50 transition-all flex items-center justify-center gap-2 rounded-none"
                                               >
-                                                  <XCircle size={16} /> Cancel
+                                                  Delete
                                               </button>
                                           </>
                                       ) : (
-                                          <button className="w-full bg-[var(--surface-low)] text-[#9E9E9E] py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] border border-[var(--outline-variant)]/30 cursor-not-allowed flex items-center justify-center gap-2">
-                                              Workflow Complete <CheckCircle2 size={16} />
-                                          </button>
+                                          <div className="w-full bg-neutral-50 text-neutral-400 py-4 text-[9px] font-bold uppercase tracking-[0.3em] border border-neutral-100 flex items-center justify-center gap-2 rounded-none">
+                                              ARCHIVED
+                                          </div>
                                       )}
                                   </div>
                               </div>

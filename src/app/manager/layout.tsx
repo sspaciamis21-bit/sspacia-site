@@ -88,8 +88,9 @@ export default function ManagerLayout({
 
   if (isLoading || !user || isRole('USER')) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--surface)]">
-        <Loader2 className="h-8 w-8 text-[var(--primary)] animate-spin" />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--surface)] gap-4">
+        <Loader2 size={40} className="text-[var(--primary)] animate-spin" />
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#9E9E9E] animate-pulse">Initializing...</p>
       </div>
     );
   }
@@ -103,9 +104,9 @@ export default function ManagerLayout({
       >
         <button 
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="absolute -right-4 top-10 h-8 w-8 bg-[var(--surface-lowest)] border border-[var(--outline-variant)]/50 rounded-full text-[var(--primary)] shadow-md hover:scale-110 active:scale-95 transition-all z-[60] flex items-center justify-center"
+          className="absolute -right-3.5 top-10 h-7 w-7 bg-[var(--surface-lowest)] border border-[var(--outline-variant)] text-[var(--primary)] shadow-sm hover:bg-[var(--primary)] hover:text-white transition-all z-[60] flex items-center justify-center rounded-none"
         >
-          {isSidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          {isSidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </button>
 
         <div className="p-8 flex items-center justify-between overflow-hidden">
@@ -116,7 +117,7 @@ export default function ManagerLayout({
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                className="font-display text-2xl font-bold text-[var(--primary)] whitespace-nowrap uppercase tracking-tighter italic"
+                className="font-display text-xl font-bold text-[var(--primary)] whitespace-nowrap uppercase tracking-tighter italic"
               >
                 SSPACIA <span className="text-[#1B1C1C] opacity-30 not-italic ml-1">{user.role?.split('_')[0] || 'PORTAL'}</span>
               </motion.div>
@@ -141,9 +142,9 @@ export default function ManagerLayout({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-4 px-5 py-4 rounded-2xl transition-all group relative ${
+                className={`flex items-center gap-4 px-5 py-4 rounded-none transition-all group relative ${
                   isActive 
-                    ? 'bg-[var(--primary)] text-white shadow-xl shadow-[var(--primary)]/20' 
+                    ? 'bg-[var(--primary)] text-white' 
                     : 'text-[#616161] hover:bg-[var(--primary)]/5 hover:text-[var(--primary)]'
                 }`}
               >
@@ -152,12 +153,12 @@ export default function ManagerLayout({
                   <span className="font-bold text-[12px] whitespace-nowrap uppercase tracking-widest">{item.name}</span>
                 )}
                 {!isSidebarOpen && (
-                  <div className={`absolute left-full ml-4 px-4 py-2 bg-[#1B1C1C] text-white text-[10px] font-bold uppercase tracking-widest rounded-xl opacity-0 translate-x-[-10px] group-hover:opacity-100 group-hover:translate-x-0 transition-all shadow-2xl pointer-events-none whitespace-nowrap z-[100]`}>
+                  <div className={`absolute left-full ml-4 px-3 py-1.5 bg-[#1B1C1C] text-white text-[9px] font-bold uppercase tracking-widest rounded-none opacity-0 translate-x-[-5px] group-hover:opacity-100 group-hover:translate-x-0 transition-all shadow-xl pointer-events-none whitespace-nowrap z-[100]`}>
                     {item.name}
                   </div>
                 )}
                 {isActive && (
-                   <motion.div layoutId="active-pill" className="absolute right-2 w-1.5 h-1.5 rounded-full bg-white/40" />
+                   <motion.div layoutId="active-pill" className="absolute right-0 w-1 h-full bg-white/30" />
                 )}
               </Link>
             );
@@ -167,18 +168,18 @@ export default function ManagerLayout({
         {user && (
           <div className="border-t border-[var(--outline-variant)]/20 p-6 shrink-0 flex flex-col gap-4">
             {isSidebarOpen ? (
-              <div className="flex items-center gap-4 px-1 mb-2 w-full group cursor-pointer transition-all">
-                <div className="h-12 w-12 shrink-0 rounded-2xl bg-[var(--surface-low)] text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)]/50 font-display font-bold text-lg shadow-inner group-hover:bg-[var(--primary)] group-hover:text-white transition-all">
+              <div className="flex items-center gap-4 px-1 mb-2 w-full group cursor-pointer">
+                <div className="h-10 w-10 shrink-0 rounded-none bg-[var(--surface-low)] text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)] font-display font-bold text-base transition-all group-hover:bg-[var(--primary)] group-hover:text-white">
                   {user.name?.charAt(0).toUpperCase()}
                 </div>
                 <div className="w-full min-w-0 overflow-hidden">
-                  <p className="text-[13px] font-bold text-[#1B1C1C] truncate w-full uppercase tracking-tight">{user.name}</p>
-                  <p className="text-[10px] text-[var(--primary)] font-bold uppercase tracking-[0.15em] opacity-80 truncate">{user.role}</p>
+                  <p className="text-[12px] font-bold text-[#1B1C1C] truncate w-full uppercase tracking-tight">{user.name}</p>
+                  <p className="text-[9px] text-[var(--primary)] font-bold uppercase tracking-widest opacity-60 truncate">{user.role}</p>
                 </div>
               </div>
             ) : (
               <div className="flex justify-center mb-2 w-full">
-                 <div className="h-12 w-12 shrink-0 rounded-2xl bg-[var(--surface-low)] text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)]/50 font-display font-bold text-lg shadow-inner">
+                 <div className="h-10 w-10 shrink-0 rounded-none bg-[var(--surface-low)] text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)] font-display font-bold text-base shadow-inner shadow-black/5">
                   {user.name?.charAt(0).toUpperCase()}
                 </div>
               </div>
@@ -186,11 +187,11 @@ export default function ManagerLayout({
             
             <button
                onClick={handleLogout}
-               className="w-full flex items-center gap-4 px-5 py-3.5 text-[#616161] hover:bg-red-50 hover:text-red-600 rounded-2xl transition-all group"
+               className="w-full flex items-center gap-4 px-5 py-3.5 text-[#616161] hover:bg-neutral-100 hover:text-black rounded-none transition-all group"
                title="Logout"
             >
-               <LogOut size={20} className="shrink-0 group-hover:-translate-x-1 transition-transform" />
-               {isSidebarOpen && <span className="font-bold text-[12px] uppercase tracking-widest">Logout</span>}
+               <LogOut size={18} className="shrink-0 group-hover:-translate-x-0.5 transition-transform" />
+               {isSidebarOpen && <span className="font-bold text-[11px] uppercase tracking-widest">Logout</span>}
             </button>
           </div>
         )}

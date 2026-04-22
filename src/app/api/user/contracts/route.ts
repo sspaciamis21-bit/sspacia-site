@@ -18,7 +18,7 @@ export async function GET() {
     });
 
     if (!customer) {
-      return NextResponse.json({ error: 'Customer profile not found' }, { status: 404 });
+      return NextResponse.json({ data: [] });
     }
 
     const contracts = await prisma.contract.findMany({
