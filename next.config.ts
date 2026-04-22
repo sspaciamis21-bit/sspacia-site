@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
     APPS_SCRIPT_URL: `https://script.google.com/macros/s/AKfycbwybDS3UOAwsqfHwhbCJLTl0dsTD_sq-u5OwYdIcb_unw5lrWHxtf97P9zc03RKWB5V5Q/exec`,
     APPS_SCRIPT_TOKEN: `6869ff576b8b0e210637b6a57afd39449c0abbc730fc07d09c626598d77b597c`,
     APPS_SCRIPT_DRIVE_URL: `https://script.google.com/macros/s/AKfycbwkLpPm6Y-vapzT2l4fmRi2FJSLWK4N1kxrxgI7iqnA3xh41xNoOD1l4EfIFIggdd35/exec`,
-    DATABASE_URL: `mysql://u434618106_sspacia:ShriShyam%231234@srv2088.hstgr.io:3306/u434618106_sspacia_app`,
+    DATABASE_URL: `mysql://u434618106_sspacia:ShriShyam%231234@127.0.0.1:3306/u434618106_sspacia_app`,
     JWT_SECRET: `201ab5f0e414254ad0ef94413cd3ed1e5ed6da188f9e198cd5025b5540dfa8d1`,
     CLOUDINARY_CLOUD_NAME: `dmgwi8dqd`,
     CLOUDINARY_API_KEY: `251964983343393`,

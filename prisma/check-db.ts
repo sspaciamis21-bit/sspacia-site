@@ -1,6 +1,12 @@
 import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
+// Use the same URL the production runtime will use (locally accessible)
+const DB_URL = process.env.DATABASE_URL || 
+  'mysql://u434618106_sspacia:ShriShyam%231234@127.0.0.1:3306/u434618106_sspacia_app'
+
+const prisma = new PrismaClient({
+  datasources: { db: { url: DB_URL } },
+})
 
 async function main() {
   console.log('Testing database connection...')
