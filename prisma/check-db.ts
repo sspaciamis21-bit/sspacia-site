@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client'
 
 // Use the same URL the production runtime will use (locally accessible)
 const DB_URL = process.env.DATABASE_URL || 
-  'mysql://u434618106_sspacia:ShriShyam%231234@127.0.0.1:3306/u434618106_sspacia_app'
+  'mysql://u434618106_sspacia:ShriShyam%231234@148.222.53.51:3306/u434618106_sspacia_app'
 
 const prisma = new PrismaClient({
   datasources: { db: { url: DB_URL } },
