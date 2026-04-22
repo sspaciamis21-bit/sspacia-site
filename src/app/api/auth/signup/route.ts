@@ -76,11 +76,11 @@ export async function POST(request: Request) {
       { status: 201 }
     )
 
-  } catch (error) {
-    console.error('Register error:', error)
+  } catch (error: any) {
+    console.error('Register error:', error);
     return NextResponse.json(
-      { error: 'Something went wrong' },
+      { error: 'Registration failed', details: error?.message || 'Unknown error' },
       { status: 500 }
-    )
+    );
   }
 } 
