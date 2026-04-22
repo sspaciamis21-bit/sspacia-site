@@ -5,6 +5,14 @@ const globalForPrisma = global as typeof global & {
 }
 
 const prisma = globalForPrisma.prisma ?? new PrismaClient({
+  datasources: {
+    db: {
+      // process.env.DATABASE_URL is statically replaced by webpack at build time
+      // via next.config.ts env{} block, so Prisma receives the value directly
+      // rather than reading from the OS environment at runtime (which is empty on Hostinger).
+      url: process.env.DATABASE_URL,
+    },
+  },
   log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
 })
 
