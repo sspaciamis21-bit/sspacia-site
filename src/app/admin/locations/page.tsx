@@ -45,8 +45,8 @@ export default async function AdminLocationsPage() {
             <MapPin size={40} />
           </div>
           <div>
-            <h1 className="text-4xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Spatial Grid</h1>
-            <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60 italic">Mapping metropolitan vertices and nodes</p>
+            <h1 className="text-4xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Locations</h1>
+            <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60 italic">Manage geographic locations and sites</p>
           </div>
         </div>
       </div>
@@ -54,7 +54,7 @@ export default async function AdminLocationsPage() {
       <Suspense fallback={
         <div className="h-96 rounded-none border border-[var(--outline-variant)]/20 bg-white shadow-2xl animate-pulse flex flex-col items-center justify-center">
            <div className="h-8 w-8 bg-neutral-100 animate-bounce" />
-           <p className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-widest mt-4">Syncing Coordinates...</p>
+           <p className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-widest mt-4">Loading Locations...</p>
         </div>
       }>
         <LocationsClient initialLocations={locations} />

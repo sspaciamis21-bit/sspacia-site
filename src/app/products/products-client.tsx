@@ -30,6 +30,7 @@ interface ProductsClientProps {
   amenities: Amenity[];
   categories: { id: number; name: string }[];
   productTypes: { id: number; name: string }[];
+  initialCategoryId?: number;
 }
 
 const fallbackImages = [
@@ -43,11 +44,12 @@ export default function ProductsClient({
   cities = [], 
   amenities = [], 
   categories = [], 
-  productTypes = [] 
+  productTypes = [],
+  initialCategoryId
 }: ProductsClientProps) {
   // ─── Filter States ─────────────────────────────────────────
   const [selectedCityId, setSelectedCityId] = useState<number | undefined>();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>();
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(initialCategoryId);
   const [selectedTypeId, setSelectedTypeId] = useState<number | undefined>();
   const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>();
   const [selectedAmenityIds, setSelectedAmenityIds] = useState<number[]>([]);
@@ -112,8 +114,12 @@ export default function ProductsClient({
     return productTypes.filter(t => validTypeIdSet.has(t.id));
   }, [selectedCategoryId, productTypes, products]);
 
-  const guestSpaces = useMemo(() => filteredProducts.filter(p => p.categoryId === 1), [filteredProducts]);
-  const workspaces = useMemo(() => filteredProducts.filter(p => p.categoryId !== 1), [filteredProducts]);
+  const guestCategoryId = useMemo(() => {
+    return categories.find(c => c.name === "GUEST_SPACE" || c.name === "Guest Space")?.id || 1;
+  }, [categories]);
+
+  const guestSpaces = useMemo(() => filteredProducts.filter(p => p.categoryId === guestCategoryId), [filteredProducts, guestCategoryId]);
+  const workspaces = useMemo(() => filteredProducts.filter(p => p.categoryId !== guestCategoryId), [filteredProducts, guestCategoryId]);
 
   const toggleAmenity = (id: number) => {
     setSelectedAmenityIds(prev => 

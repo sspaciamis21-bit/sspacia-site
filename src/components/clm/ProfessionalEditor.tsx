@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 
@@ -54,6 +55,8 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
           customerOrg: "________________",
           customerDesignation: "Authorized Signatory",
           customerPan: "________________",
+          customerPhone: "________________",
+          customerEmail: "________________",
           userId: "_____",
           productType: "Office Space",
           productName: "Workspace",
@@ -71,7 +74,8 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
           lockInPeriod: "12 Months",
           noticePeriod: "2 Months",
           escalationPercentage: "5%",
-          renewalDate: "____________"
+          renewalDate: "____________",
+          contractNumber: "[CONTRACT NUMBER]"
         });
       }
       return JSON.parse(c);
@@ -109,6 +113,18 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
       },
     },
   });
+
+  // Sync external content changes into TipTap (it's uncontrolled by default)
+  useEffect(() => {
+    if (!editor || !content || content === '') return;
+    const newContent = parseContent(content);
+    // Only update if content actually differs to avoid cursor jumping
+    const currentJson = JSON.stringify(editor.getJSON());
+    const newJson = JSON.stringify(newContent);
+    if (currentJson !== newJson) {
+      editor.commands.setContent(newContent, false);
+    }
+  }, [content]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!editor) return null;
 
@@ -211,6 +227,8 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
                     customerOrg: "[ORGANIZATION]",
                     customerDesignation: "Authorized Signatory",
                     customerPan: "[PAN]",
+                    customerPhone: "[PHONE]",
+                    customerEmail: "[EMAIL]",
                     userId: "[ID]",
                     productType: "Office Space",
                     productName: "Workspace",
@@ -228,7 +246,8 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
                     lockInPeriod: "12 Months",
                     noticePeriod: "2 Months",
                     escalationPercentage: "5%",
-                    renewalDate: "[RENEWAL DATE]"
+                    renewalDate: "[RENEWAL DATE]",
+                    contractNumber: "[CONTRACT NUMBER]"
                  });
                  editor.commands.setContent(template);
                }}
@@ -243,22 +262,22 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
 
       {editor && !readOnly && (
         <BubbleMenu editor={editor}>
-          <div className="flex items-center gap-0.5 bg-[#1B1B1B] text-white p-1 rounded-lg shadow-xl border border-white/10">
+          <div className="flex items-center gap-0.5 bg-white text-neutral-900 p-1 rounded-none shadow-xl border border-neutral-200">
             <button
               onClick={() => editor.chain().focus().toggleBold().run()}
-              className={`p-1.5 rounded hover:bg-white/10 transition-colors ${editor.isActive('bold') ? 'text-[var(--primary)]' : ''}`}
+              className={`p-1.5 rounded-none hover:bg-neutral-50 transition-colors ${editor.isActive('bold') ? 'text-[var(--primary)]' : ''}`}
             >
               <Bold size={14} />
             </button>
             <button
               onClick={() => editor.chain().focus().toggleItalic().run()}
-              className={`p-1.5 rounded hover:bg-white/10 transition-colors ${editor.isActive('italic') ? 'text-[var(--primary)]' : ''}`}
+              className={`p-1.5 rounded-none hover:bg-neutral-50 transition-colors ${editor.isActive('italic') ? 'text-[var(--primary)]' : ''}`}
             >
               <Italic size={14} />
             </button>
             <button
               onClick={() => editor.chain().focus().toggleUnderline().run()}
-              className={`p-1.5 rounded hover:bg-white/10 transition-colors ${editor.isActive('underline') ? 'text-[var(--primary)]' : ''}`}
+              className={`p-1.5 rounded-none hover:bg-neutral-50 transition-colors ${editor.isActive('underline') ? 'text-[var(--primary)]' : ''}`}
             >
               <UnderlineIcon size={14} />
             </button>
@@ -279,15 +298,15 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
               const text = editor.state.doc.textBetween(from, to, ' ');
               if (text.trim()) onNegotiate(text);
             }}
-            className="flex items-center gap-2 bg-[#7C6FFF] text-white px-4 py-2 rounded-xl shadow-xl hover:bg-[#6b5eee] transition-all font-bold text-[10px] uppercase tracking-widest italic"
+            className="flex items-center gap-2 bg-neutral-900 text-white px-4 py-2 rounded-none shadow-xl hover:bg-black transition-all font-bold text-[10px] uppercase tracking-widest"
           >
-            <MessageCircle size={14} /> Ask to add to negotiation
+            <MessageCircle size={14} /> Add to negotiation
           </button>
         </BubbleMenu>
       )}
 
       {/* A4 Workspace */}
-      <div className="flex-1 overflow-auto p-4 md:p-12 flex justify-center custom-scrollbar">
+      <div className="flex-1 overflow-auto p-4 md:p-6 flex justify-center custom-scrollbar">
         <div className="a4-page bg-white shadow-2xl border border-gray-200/50 relative">
           <EditorContent editor={editor} />
         </div>
@@ -297,7 +316,7 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
         .a4-page {
           width: 210mm;
           min-height: 297mm;
-          padding: 20mm 25mm; /* Standard margins */
+          padding: 15mm 20mm; /* Standard margins */
           margin-bottom: 2rem;
         }
 
@@ -317,7 +336,7 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
         }
         .ProseMirror {
           outline: none !important;
-          font-family: 'Times New Roman', Times, serif; /* Professional legal font */
+          font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
           font-size: 11pt;
           line-height: 1.5;
         }

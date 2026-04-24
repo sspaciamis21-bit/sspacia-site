@@ -22,8 +22,8 @@
   --clm-red: #FF5A5A;
   --clm-blue: #4A9EFF;
 
-  --font-mono: 'Space Grotesk', 'DM Mono', 'Courier New', monospace;
-  --font-display: 'Inter', 'Fraunces', Georgia, serif;
+  --font-mono: 'Inter', 'Space Grotesk', 'DM Mono', 'Courier New', monospace;
+  --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
 }
 
 

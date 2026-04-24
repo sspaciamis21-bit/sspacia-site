@@ -86,67 +86,66 @@ export default function AdminProductsPage() {
   return (
     <div className="space-y-12 pb-20">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 font-sans">
         <div className="flex items-center gap-6">
           <div className="h-20 w-20 bg-white text-[var(--primary)] flex items-center justify-center rounded-none border border-[var(--outline-variant)]/40 shadow-xl">
             <Package size={40} />
           </div>
           <div>
-            <h1 className="text-4xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Product Inventory</h1>
-            <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60 italic">Managing industrial assets and workspace modules</p>
+            <h1 className="text-4xl font-bold text-[#1B1C1C] tracking-tight uppercase">Product Inventory</h1>
+            <p className="text-[#616161] font-medium text-[11px] uppercase tracking-widest mt-1 opacity-60">Manage your workspace products and inventory levels</p>
           </div>
         </div>
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center justify-center gap-3 px-10 py-5 bg-[var(--primary)] text-white rounded-none text-[11px] font-black uppercase tracking-[0.3em] hover:bg-neutral-900 transition-all shadow-2xl border border-transparent group"
+          className="inline-flex items-center justify-center gap-3 px-10 py-5 bg-[var(--primary)] text-white rounded-none text-[11px] font-bold uppercase tracking-widest hover:bg-neutral-900 transition-all shadow-2xl border border-transparent group"
         >
           <Plus size={18} className="group-hover:scale-110 transition-transform" />
-          Deploy New Asset
+          Add New Product
         </button>
       </div>
 
       {/* Modern Toolbar */}
-      <div className="bg-white border border-[var(--outline-variant)]/40 p-2 flex flex-col md:flex-row items-stretch gap-2 shadow-sm rounded-none">
+      <div className="bg-white border border-[var(--outline-variant)]/40 p-2 flex flex-col md:flex-row items-stretch gap-2 shadow-sm rounded-none font-sans">
         <div className="relative flex-1">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-[#9E9E9E]" size={18} />
           <input
             type="text"
-            placeholder="FILTER_BY_DESIGNATION_OR_NODE..."
+            placeholder="Search products or locations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-16 pr-6 py-5 bg-neutral-50 border-none focus:ring-0 text-[11px] font-bold uppercase tracking-widest text-[#1B1C1C] placeholder:text-[#9E9E9E]"
           />
         </div>
-        <div className="px-8 flex items-center gap-4 bg-neutral-50 text-[10px] font-black text-[#616161] uppercase tracking-widest border-l border-[var(--outline-variant)]/10">
-          <span>Asset Count:</span>
-          <span className="bg-white text-[var(--primary)] px-3 py-1 font-black border border-[var(--outline-variant)]/30 shadow-sm">{filteredProducts.length}</span>
+        <div className="px-8 flex items-center gap-4 bg-neutral-50 text-[10px] font-bold text-[#616161] uppercase tracking-widest border-l border-[var(--outline-variant)]/10">
+          <span>Total Products:</span>
+          <span className="bg-white text-[var(--primary)] px-3 py-1 font-bold border border-[var(--outline-variant)]/30 shadow-sm">{filteredProducts.length}</span>
         </div>
       </div>
 
       {/* Registry Grid/Table */}
-      <div className="bg-white border border-[var(--outline-variant)]/40 rounded-none shadow-2xl overflow-hidden">
+      <div className="bg-white border border-[var(--outline-variant)]/40 rounded-none shadow-2xl overflow-hidden font-sans">
         {isLoading ? (
           <div className="px-10 py-40 flex flex-col items-center justify-center text-center">
             <Loader2 className="h-10 w-10 text-[var(--primary)] animate-spin mb-6" />
-            <p className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em] animate-pulse">Syncing Inventory Registry...</p>
+            <p className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest animate-pulse">Loading Inventory...</p>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="px-10 py-40 text-center">
              <Package size={48} className="mx-auto mb-6 text-[#1B1C1C] opacity-20" />
-             <p className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Zero Assets Detected</p>
-             <p className="text-[9px] text-[#616161] font-bold uppercase tracking-widest mt-2 opacity-60 italic">Check filter parameters or initialize new asset module</p>
+             <p className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest">No Products Found</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-neutral-50/50 border-b border-[var(--outline-variant)]/20">
-                  <th className="px-10 py-6 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Designation</th>
-                  <th className="px-10 py-6 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Operational Node</th>
-                  <th className="px-10 py-6 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Configuration</th>
-                  <th className="px-10 py-6 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em]">Status</th>
-                  <th className="px-10 py-6 text-[10px] font-black text-[#9E9E9E] uppercase tracking-[0.3em] text-right">Control</th>
+                  <th className="px-10 py-6 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Product</th>
+                  <th className="px-10 py-6 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Location</th>
+                  <th className="px-10 py-6 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Details</th>
+                  <th className="px-10 py-6 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Status</th>
+                  <th className="px-10 py-6 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--outline-variant)]/10">
@@ -154,37 +153,37 @@ export default function AdminProductsPage() {
                   <tr key={product.id} className="hover:bg-neutral-50/80 transition-colors group">
                     <td className="px-10 py-6">
                       <div className="flex flex-col gap-1">
-                        <span className="text-xs font-black text-[#1B1C1C] uppercase tracking-wider group-hover:text-[var(--primary)] transition-colors">{product.name}</span>
-                        <span className="text-[9px] text-[#9E9E9E] font-mono tracking-tighter uppercase opacity-60">REF: {product.slug}</span>
+                        <span className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wide group-hover:text-[var(--primary)] transition-colors">{product.name}</span>
+                        <span className="text-[9px] text-[#9E9E9E] font-medium tracking-tight uppercase opacity-60">ID: #{product.id}</span>
                       </div>
                     </td>
                     <td className="px-10 py-6">
-                       <span className="inline-flex items-center px-3 py-1 bg-neutral-100 text-[#1B1C1C] text-[8px] font-black uppercase tracking-widest border border-[var(--outline-variant)]/20">
+                       <span className="inline-flex items-center px-3 py-1 bg-neutral-100 text-[#1B1C1C] text-[8px] font-bold uppercase tracking-widest border border-[var(--outline-variant)]/20">
                         {product.location.name}
                       </span>
                     </td>
                     <td className="px-10 py-6">
                       <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black text-[#1B1C1C] uppercase tracking-wider">{typeof product.type === 'object' ? product.type.displayName : product.type?.replace('_', ' ')}</span>
-                        <span className="text-[9px] text-[#616161] font-bold uppercase tracking-widest opacity-60">{typeof product.category === 'object' ? product.category.displayName : product.category?.replace('_', ' ')}</span>
+                        <span className="text-[10px] font-bold text-[#1B1C1C] uppercase tracking-wide">
+                          {typeof product.type === 'object' ? product.type.displayName : product.type?.replace('_', ' ')}
+                          {product.capacity && ` (${product.capacity} Seater)`}
+                        </span>
+                        <span className="text-[9px] text-[#616161] font-medium uppercase tracking-widest opacity-60">{typeof product.category === 'object' ? product.category.displayName : product.category?.replace('_', ' ')}</span>
                       </div>
                     </td>
                     <td className="px-10 py-6">
-                       <div className={`flex items-center gap-3 text-[9px] font-black uppercase tracking-[0.2em] ${product.isActive ? 'text-[#4DB6AC]' : 'text-red-400 opacity-60'}`}>
-                        <div className={`h-2 w-2 ${product.isActive ? 'bg-[#4DB6AC]' : 'bg-red-400'} shadow-[0_0_6px_currentColor]`} />
-                        {product.isActive ? 'Operational' : 'Decommissioned'}
+                       <div className={`flex items-center gap-3 text-[9px] font-bold uppercase tracking-widest ${product.isActive ? 'text-[#4DB6AC]' : 'text-red-400 opacity-60'}`}>
+                        <div className={`h-2 w-2 ${product.isActive ? 'bg-[#4DB6AC]' : 'bg-red-400'}`} />
+                        {product.isActive ? 'Active' : 'Inactive'}
                       </div>
                     </td>
                     <td className="px-10 py-6 text-right">
                        <div className="flex justify-end gap-2">
-                        <button onClick={() => handleEditProduct(product)} className="p-3 text-[#616161] hover:text-[var(--primary)] hover:bg-[#1B1B1B] transition-all border border-transparent hover:border-white/10" title="Modify Index">
+                        <button onClick={() => handleEditProduct(product)} className="p-3 text-[#616161] hover:text-[var(--primary)] hover:bg-neutral-100 transition-all border border-transparent" title="Edit Product">
                           <Edit2 size={16} />
                         </button>
-                        <button onClick={() => setDeletingProduct(product)} className="p-3 text-[#616161] hover:text-red-600 hover:bg-neutral-100 transition-all border border-transparent" title="Purge Node">
+                        <button onClick={() => setDeletingProduct(product)} className="p-3 text-[#616161] hover:text-red-600 hover:bg-neutral-100 transition-all border border-transparent" title="Delete Product">
                           <Trash2 size={16} />
-                        </button>
-                        <button className="p-3 text-[#616161] hover:text-[var(--primary)] transition-all">
-                          <ChevronRight size={18} />
                         </button>
                       </div>
                     </td>

@@ -44,18 +44,34 @@ export function Header() {
 
         {/* Desktop Nav links - center */}
         <nav className="hidden md:flex flex-1 justify-center items-center gap-10 text-xs font-bold uppercase tracking-[0.2em] text-on-surface/60">
-          {siteConfig.navigation
-            .map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="relative transition-all hover:text-primary group py-2"
-            >
-              <span className="relative z-10">
-                {item.label}
-              </span>
-              <span className="absolute left-0 bottom-0 w-full h-[1px] bg-primary scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></span>
-            </Link>
+          {siteConfig.navigation.map((item) => (
+            <div key={item.href} className="relative group">
+              <Link
+                href={item.href}
+                className="relative transition-all hover:text-primary py-2 flex items-center gap-1"
+              >
+                <span className="relative z-10">{item.label}</span>
+                {item.subItems && <ChevronDown size={14} className="group-hover:rotate-180 transition-transform" />}
+                <span className="absolute left-0 bottom-0 w-full h-[1px] bg-primary scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></span>
+              </Link>
+              
+              {/* Dropdown Menu */}
+              {item.subItems && (
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white shadow-xl rounded-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform origin-top-left scale-95 group-hover:scale-100 border border-outline-variant/10 z-[120]">
+                  <div className="py-2 flex flex-col">
+                    {item.subItems.map((subItem) => (
+                      <Link
+                        key={subItem.href}
+                        href={subItem.href}
+                        className="px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] text-on-surface/70 hover:text-primary hover:bg-surface-low transition-colors"
+                      >
+                        {subItem.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           ))}
         </nav>
 
@@ -143,17 +159,30 @@ export function Header() {
             className="border-t border-surface-low bg-surface md:hidden overflow-hidden"
           >
             <div className="flex flex-col space-y-1 p-4">
-              {siteConfig.navigation
-                // .filter((item) => item.label !== "Careers")
-                .map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setIsOpen(false)}
-                  className="rounded-sm px-4 py-3 text-base font-medium text-on-surface transition-colors hover:bg-surface-low hover:text-primary"
-                >
-                  {item.label}
-                </Link>
+              {siteConfig.navigation.map((item) => (
+                <div key={item.href} className="flex flex-col">
+                  <Link
+                    href={item.href}
+                    onClick={() => setIsOpen(false)}
+                    className="rounded-sm px-4 py-3 text-base font-medium text-on-surface transition-colors hover:bg-surface-low hover:text-primary"
+                  >
+                    {item.label}
+                  </Link>
+                  {item.subItems && (
+                    <div className="flex flex-col pl-6 space-y-1 mt-1 border-l-2 border-surface-low ml-4">
+                      {item.subItems.map((subItem) => (
+                        <Link
+                          key={subItem.href}
+                          href={subItem.href}
+                          onClick={() => setIsOpen(false)}
+                          className="rounded-sm px-4 py-2 text-sm font-medium text-on-surface/70 transition-colors hover:bg-surface-low hover:text-primary"
+                        >
+                          {subItem.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
               <div className="pt-4 mt-2 flex flex-col gap-3">
                 {isLoggedIn ? (

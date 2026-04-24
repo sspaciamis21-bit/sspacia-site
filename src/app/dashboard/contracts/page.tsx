@@ -8,10 +8,12 @@ import {
   ShieldCheck,
   Search,
   History,
+  Clock,
   LayoutGrid
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { motion } from 'motion/react';
 import UserContractCard from '@/components/clm/UserContractCard';
 import { userContractsApi } from '@/lib/clm/api';
 import type { ContractRequest, ContractSummary } from '@/types/clm';
@@ -22,14 +24,12 @@ export default function UserContractsListPage() {
   const [contracts, setContracts] = useState<ContractSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'active' | 'pending'>('active');
 
   const fetchData = async () => {
     try {
-      // For users, we need to show both active contracts AND pending requests
-      // Note: userContractsApi.list() should return both or we fetch both
       const [conData, reqData] = await Promise.all([
         userContractsApi.list(),
-        // We fetch the pending agreement requests separately
         fetch('/api/user/contracts/request').then(r => r.json()).then(j => j.data || [])
       ]);
 
@@ -37,7 +37,6 @@ export default function UserContractsListPage() {
       setRequests(reqData);
     } catch (err: unknown) {
       console.error('Contracts fetch error:', err);
-      // Suppress toast for new users
       setContracts([]);
       setRequests([]);
     } finally {
@@ -55,6 +54,7 @@ export default function UserContractsListPage() {
   );
 
   const filteredRequests = requests.filter(r => 
+    (r.status === 'PENDING') &&
     r.booking?.bookingNumber?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -83,6 +83,28 @@ export default function UserContractsListPage() {
         </div>
       </FadeUp>
 
+      {/* Tabs */}
+      <div className="flex items-center gap-8 mb-12 border-b border-[var(--outline-variant)]/20 px-4">
+        {[
+          { id: 'active', label: 'Active Agreements', count: filteredContracts.length },
+          { id: 'pending', label: 'Pending Requests', count: filteredRequests.length },
+        ].map(tab => (
+          <button 
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as 'active' | 'pending')}
+            className={`pb-6 text-[10px] font-bold uppercase tracking-[0.2em] transition-all relative ${
+              activeTab === tab.id ? 'text-[var(--primary)]' : 'text-[#9E9E9E] hover:text-[#1B1C1C]'
+            }`}
+          >
+            {tab.label}
+            <span className="ml-2 opacity-40">({tab.count})</span>
+            {activeTab === tab.id && (
+              <motion.div layoutId="userContractTab" className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--primary)] rounded-none" />
+            )}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
             <Loader2 size={40} className="text-[var(--primary)] animate-spin" />
@@ -90,46 +112,71 @@ export default function UserContractsListPage() {
         </div>
       ) : (
         <div className="space-y-16">
-          {/* Active Contracts Section */}
-          <section>
-            <div className="flex items-center gap-4 mb-8">
-               <LayoutGrid size={16} className="text-[#1B1C1C]" />
-               <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#1B1C1C]/30">Active Agreements</h3>
-            </div>
-            
-            {filteredContracts.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {filteredContracts.map((con) => (
-                  <FadeUp key={con.id}>
-                    <UserContractCard contract={con} />
-                  </FadeUp>
-                ))}
-              </div>
-            ) : (
-              <div className="py-20 text-center bg-[var(--surface-low)]/30 rounded-none border border-[var(--outline-variant)]">
-                 <div className="inline-flex p-8 bg-white border border-[var(--outline-variant)] text-[#9E9E9E] mb-6">
-                    <FileText size={40} />
-                 </div>
-                 <p className="text-[#1B1C1C] font-display font-bold uppercase tracking-tight text-xl">No contracts found</p>
-                 <p className="text-[#9E9E9E] font-bold uppercase tracking-widest text-[10px] mt-2">You don&apos;t have any active legal documents yet.</p>
-              </div>
-            )}
-          </section>
-
-          {/* Pending Requests Section */}
-          {filteredRequests.length > 0 && (
+          {activeTab === 'active' ? (
             <section>
-              <div className="flex items-center gap-4 mb-8">
-                 <History size={16} className="text-[#1B1C1C]" />
-                 <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#1B1C1C]/40">Approval Workflow</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {filteredRequests.map((req) => (
-                  <FadeUp key={req.id}>
-                    <UserContractCard request={req} />
-                  </FadeUp>
-                ))}
-              </div>
+              {filteredContracts.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {filteredContracts.map((con) => (
+                    <FadeUp key={con.id}>
+                      <UserContractCard contract={con} />
+                    </FadeUp>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-20 text-center bg-[var(--surface-low)]/30 rounded-none border border-[var(--outline-variant)]">
+                   <div className="inline-flex p-8 bg-white border border-[var(--outline-variant)] text-[#9E9E9E] mb-6">
+                      <FileText size={40} />
+                   </div>
+                   <p className="text-[#1B1C1C] font-display font-bold uppercase tracking-tight text-xl">No active contracts</p>
+                   <p className="text-[#9E9E9E] font-bold uppercase tracking-widest text-[10px] mt-2">You don&apos;t have any active legal documents yet.</p>
+                </div>
+              )}
+            </section>
+          ) : (
+            <section>
+              {filteredRequests.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {filteredRequests.map((req) => (
+                    <FadeUp key={req.id}>
+                      <div className="bg-white border border-[var(--outline-variant)] p-10 shadow-sm rounded-none relative overflow-hidden group">
+                         <div className="absolute top-0 right-0 p-4">
+                            <span className="text-[8px] font-bold text-orange-500 uppercase tracking-widest bg-orange-50 px-3 py-1 border border-orange-100">
+                              PENDING
+                            </span>
+                         </div>
+                         <div className="mb-6">
+                            <p className="text-[8px] font-bold text-[#9E9E9E] uppercase tracking-[0.3em] mb-1">Contract Request</p>
+                            <h4 className="text-xl font-bold text-[#1B1C1C] uppercase tracking-tight italic">REQ/{req.id}</h4>
+                         </div>
+                         <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                               <FileText size={14} className="text-[#9E9E9E]"/>
+                               <p className="text-[10px] font-bold text-[#1B1C1C] uppercase tracking-widest">{req.booking?.bookingNumber || 'N/A'}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                               <ShieldCheck size={14} className="text-[#9E9E9E]"/>
+                               <p className="text-[10px] font-bold text-[#616161] uppercase tracking-tight">{req.booking?.product?.name || 'Inquiry Service'}</p>
+                            </div>
+                         </div>
+                         <div className="mt-10 pt-6 border-t border-neutral-100">
+                            <p className="text-[9px] text-neutral-400 font-bold uppercase tracking-widest leading-relaxed">
+                               Awaiting validation from management node. <br/>
+                               Submitted: {new Date(req.createdAt).toLocaleDateString()}
+                            </p>
+                         </div>
+                      </div>
+                    </FadeUp>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-20 text-center bg-[var(--surface-low)]/30 rounded-none border border-[var(--outline-variant)]">
+                   <div className="inline-flex p-8 bg-white border border-[var(--outline-variant)] text-[#9E9E9E] mb-6">
+                      <Clock size={40} />
+                   </div>
+                   <p className="text-[#1B1C1C] font-display font-bold uppercase tracking-tight text-xl">No pending requests</p>
+                   <p className="text-[#9E9E9E] font-bold uppercase tracking-widest text-[10px] mt-2">All your agreement requests have been processed.</p>
+                </div>
+              )}
             </section>
           )}
         </div>

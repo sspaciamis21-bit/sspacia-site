@@ -34,7 +34,18 @@ import '@/components/clm/clm.css';
 
 // ContentRenderer is replaced by ProfessionalEditor in readOnly mode for high-fidelity rendering
 
-
+const getPeriod = (start: string, end: string) => {
+    const s = new Date(start);
+    const e = new Date(end);
+    const diffTime = Math.abs(e.getTime() - s.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays >= 30) {
+        const months = Math.round(diffDays / 30);
+        return `${months} ${months === 1 ? 'Month' : 'Months'}`;
+    }
+    return `${diffDays} ${diffDays === 1 ? 'Day' : 'Days'}`;
+};
 export default function UserContractDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -244,43 +255,76 @@ export default function UserContractDetailPage() {
                </div>
                 <div className="flex-1 p-6 md:p-10 bg-[var(--surface-low)]/5">
 
-                   <ContractDocViewer
-                     content={contract.versions?.[0]?.content || undefined}
-                     templateParams={!contract.versions?.[0]?.content ? {
-                       date: contract.createdAt ? new Date(contract.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : undefined,
-                       customerName: contract.booking?.customer?.name,
-                       customerOrg: contract.booking?.customer?.name,
-                       productType: contract.booking?.product?.name,
-                       productName: contract.booking?.product?.name,
-                       centerAddress: contract.booking?.product?.location?.name,
-                     } : undefined}
-                     onNegotiate={handleStartNegotiation}
-                   />
+                    <ContractDocViewer
+                      content={contract.versions?.[0]?.content || undefined}
+                      templateParams={!contract.versions?.[0]?.content ? {
+                        date: contract.createdAt ? new Date(contract.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : undefined,
+                        customerName: contract.booking?.customer?.name,
+                        customerOrg: contract.booking?.customer?.organization || contract.booking?.customer?.name,
+                        productType: contract.booking?.product?.type?.displayName || contract.booking?.product?.name,
+                        productName: contract.booking?.product?.name,
+                        centerAddress: contract.booking?.product?.location?.address || contract.booking?.product?.location?.name,
+                        period: getPeriod(contract.booking.startDate, contract.booking.endDate),
+                        startDate: new Date(contract.booking.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
+                        expiryDate: new Date(contract.booking.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
+                      } : undefined}
+                      onNegotiate={handleStartNegotiation}
+                    />
 
                   
                   {isSigned && (contract.signature || contract.signatureData) && (
-                    <div className="mt-16 pt-16 border-t border-[var(--outline-variant)]/30">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-[#9E9E9E] mb-8 flex items-center gap-2">
-                         <CheckCircle2 size={16} className="text-emerald-500"/> Validated Digital Signature
-                      </p>
-                      
-                      {(contract.signature?.signatureData || contract.signatureData?.startsWith('data:image')) ? (
-                        <img 
-                          src={contract.signature?.signatureData || contract.signatureData} 
-                          alt="Signature" 
-                          className="h-20 opacity-80" 
-                        />
-                      ) : (
-                        <div className="flex items-center gap-3 p-4 rounded-none bg-emerald-500/5 border border-emerald-500/10 text-emerald-500">
-                          <ShieldCheck size={20} />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">{contract.signatureType || 'Cryptographic'} Verification Active</span>
+                    <div className="mt-16 pt-16 border-t border-[var(--outline-variant)]/30 flex flex-col md:flex-row gap-12">
+                      {/* Customer Signature */}
+                      <div className="flex-1">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-[#9E9E9E] mb-8 flex items-center gap-2">
+                           <CheckCircle2 size={16} className="text-emerald-500"/> Customer Signature
+                        </p>
+                        
+                        {(contract.signature?.signatureData || contract.signatureData?.startsWith('data:image')) ? (
+                          <img 
+                            src={contract.signature?.signatureData || contract.signatureData} 
+                            alt="Customer Signature" 
+                            className="h-20 opacity-80" 
+                          />
+                        ) : (
+                          <div className="flex items-center gap-3 p-4 rounded-none bg-emerald-500/5 border border-emerald-500/10 text-emerald-500">
+                            <ShieldCheck size={20} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">{contract.signatureType || 'Cryptographic'} Verification Active</span>
+                          </div>
+                        )}
+
+                        <div className="mt-6 text-[10px] text-[#9E9E9E] font-bold uppercase tracking-widest">
+                           Signed At: {new Date(contract.signature?.signedAt || contract.signedAt || '').toLocaleString()} <br />
+                           Signer: {contract.signerName || contract.booking?.customer?.name}
+                        </div>
+                      </div>
+
+                      {/* Manager Signature (Counter-Sign) */}
+                      {contract.counterSignatureData && (
+                        <div className="flex-1 md:border-l md:border-[var(--outline-variant)]/30 md:pl-12">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-[#9E9E9E] mb-8 flex items-center gap-2">
+                             <CheckCircle2 size={16} className="text-emerald-500"/> Manager Authorization
+                          </p>
+                          
+                          {contract.counterSignatureData.startsWith('data:image') ? (
+                            <img 
+                              src={contract.counterSignatureData} 
+                              alt="Manager Signature" 
+                              className="h-20 opacity-80" 
+                            />
+                          ) : (
+                            <div className="flex items-center gap-3 p-4 rounded-none bg-emerald-500/5 border border-emerald-500/10 text-emerald-500">
+                              <ShieldCheck size={20} />
+                              <span className="text-[10px] font-bold uppercase tracking-widest">Counter-Signature Verified</span>
+                            </div>
+                          )}
+
+                          <div className="mt-6 text-[10px] text-[#9E9E9E] font-bold uppercase tracking-widest">
+                             Signed At: {new Date(contract.counterSignedAt || '').toLocaleString()} <br />
+                             Signer: {contract.counterSignerName || 'Authorized Manager'}
+                          </div>
                         </div>
                       )}
-
-                      <div className="mt-6 text-[10px] text-[#9E9E9E] font-bold uppercase tracking-widest">
-                         Signed At: {new Date(contract.signature?.signedAt || contract.signedAt || '').toLocaleString()} <br />
-                         Signer: {contract.signerName || contract.booking?.customer?.name}
-                      </div>
                     </div>
                   )}
 
@@ -288,16 +332,12 @@ export default function UserContractDetailPage() {
                     <div className="mt-16 pt-16 border-t border-[var(--outline-variant)]/30">
                        <div className="flex items-center gap-3 mb-8">
                           <PenTool size={20} className="text-[var(--primary)]" />
-                          <h3 className="text-xl font-bold tracking-tight uppercase text-[#1B1C1C]">Authorization Terminal</h3>
+                          <h3 className="text-xl font-bold tracking-tight uppercase text-[#1B1C1C]">Digital Signature</h3>
                        </div>
                        <SignatureMethodSelector 
                          contractId={contract.id}
-                         onSigned={() => router.refresh()}
+                         onSigned={() => { fetchContract(); }}
                        />
-
-                       <p className="mt-6 text-[10px] text-[#9E9E9E] uppercase tracking-widest text-center opacity-50">
-                         By signing above, you agree to the terms and conditions outlined in this document.
-                       </p>
                     </div>
                   )}
                </div>

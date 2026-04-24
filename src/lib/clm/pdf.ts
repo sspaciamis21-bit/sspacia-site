@@ -88,29 +88,9 @@ export async function generateContractPDF(contractId: number, userId: number): P
   const margin = 50;
   let cursorY = height - margin;
 
-  // Title
-  page.drawText(contract.title, {
-    x: margin,
-    y: cursorY,
-    size: 20,
-    font: boldFont,
-    color: rgb(0, 0, 0),
-  });
-  cursorY -= 40;
+  // System-generated header (Title and Metadata) removed as requested.
+  // cursorY starts at height - margin.
 
-  // Metadata Box
-  page.drawRectangle({
-    x: margin,
-    y: cursorY - 60,
-    width: width - (2 * margin),
-    height: 60,
-    color: rgb(0.98, 0.98, 0.98),
-  });
-  
-  page.drawText(`Contract ID: ${contract.contractNumber}`, { x: margin + 10, y: cursorY - 20, size: 10, font });
-  page.drawText(`Execution Date: ${new Date(customerSignInfo.timestamp).toLocaleDateString()}`, { x: margin + 10, y: cursorY - 35, size: 10, font });
-  page.drawText(`Customer: ${customerSignInfo.name}`, { x: margin + 10, y: cursorY - 50, size: 10, font });
-  cursorY -= 80;
 
   // Helper for word wrap and drawing
   const drawWrappedText = (text: string, currentFont: PDFFont, size: number, spacing = 5) => {

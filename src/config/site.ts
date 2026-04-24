@@ -20,13 +20,20 @@ export const siteConfig = {
     },
   },
   navigation: [
-    { label: "Home", href: "/" },
-    { label: "About", href: "/about" },
-    { label: "Contact", href: "/contact" },
-    { label: "Products", href: "/products" },
-    { label: "Blog", href: "/blog" },
-    { label: "Gallery", href: "/gallery" },
-    // { label: "Careers", href: "/careers" }
+    { label: "Home", href: "/", subItems: undefined },
+    { label: "About", href: "/about", subItems: undefined },
+    { label: "Contact", href: "/contact", subItems: undefined },
+    { 
+      label: "Products", 
+      href: "/products",
+      subItems: [
+        { label: "Guest Spaces", href: "/guest-spaces" },
+        { label: "Co-working Spaces", href: "/coworking-spaces" }
+      ]
+    },
+    { label: "Blog", href: "/blog", subItems: undefined },
+    { label: "Gallery", href: "/gallery", subItems: undefined },
+    // { label: "Careers", href: "/careers", subItems: undefined }
   ],
   hero: {
     heading: "TOP Coworking Spaces",

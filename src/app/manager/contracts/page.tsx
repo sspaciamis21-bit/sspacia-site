@@ -28,7 +28,7 @@ export default function ManagerContractsPage() {
   const [requests, setRequests] = useState<ContractRequest[]>([]);
   const [contracts, setContracts] = useState<ContractSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'requests' | 'active' | 'archived'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'active'>('active');
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchData = async () => {
@@ -84,9 +84,9 @@ export default function ManagerContractsPage() {
           <div>
             <div className="flex items-center gap-3 mb-2">
                <ShieldCheck size={20} className="text-[var(--primary)]" />
-               <h2 className="text-[10px] font-bold uppercase tracking-[0.4em] text-[var(--primary)] italic">Protocol Management node</h2>
+               <h2 className="text-[10px] font-bold uppercase tracking-[0.4em] text-[var(--primary)] italic">Agreement Review</h2>
             </div>
-            <h1 className="text-4xl md:text-6xl font-display font-bold text-[#1B1C1C] tracking-tighter italic uppercase">Contract Lifecycle</h1>
+            <h1 className="text-4xl md:text-6xl font-display font-bold text-[#1B1C1C] tracking-tighter italic uppercase">Agreements</h1>
           </div>
           
           <div className="flex items-center gap-3 w-full md:w-auto">
@@ -109,13 +109,12 @@ export default function ManagerContractsPage() {
 
       <div className="flex items-center gap-8 mb-10 border-b border-[var(--outline-variant)]/20 px-4">
         {[
-          { id: 'requests', label: 'Processing', count: requests.filter(r => (r.status as string) === 'PENDING').length },
-          { id: 'active', label: 'Active Matrix', count: contracts.length },
-          { id: 'archived', label: 'Legacy Vault', count: 0 }
+          { id: 'active', label: 'Active', count: contracts.length },
+          { id: 'requests', label: 'Pending Requests', count: requests.filter(r => (r.status as string) === 'PENDING').length },
         ].map(tab => (
           <button 
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as 'requests' | 'active' | 'archived')}
+            onClick={() => setActiveTab(tab.id as 'requests' | 'active')}
             className={`pb-6 text-[10px] font-bold uppercase tracking-[0.2em] transition-all relative ${
               activeTab === tab.id ? 'text-[var(--primary)]' : 'text-[#9E9E9E] hover:text-[#1B1C1C]'
             }`}
@@ -143,9 +142,9 @@ export default function ManagerContractsPage() {
                      <div className="p-3 bg-orange-50 text-orange-600 border border-orange-100">
                         <Clock size={20} />
                      </div>
-                     <span className="text-[8px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 px-3 py-1 border border-orange-100">
-                        PENDING SYNC
-                     </span>
+                      <span className="text-[8px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 px-3 py-1 border border-orange-100">
+                        PENDING
+                      </span>
                   </div>
 
                   <div className="space-y-6 flex-1">
@@ -173,12 +172,12 @@ export default function ManagerContractsPage() {
                      >
                        REJECT
                      </button>
-                     <button 
-                       onClick={() => handleProcessRequest(req.id, 'ACCEPT')}
-                       className="flex items-center justify-center gap-2 py-4 bg-[var(--primary)] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-all rounded-none"
-                     >
-                       INITIALIZE
-                     </button>
+                      <button 
+                        onClick={() => handleProcessRequest(req.id, 'ACCEPT')}
+                        className="flex items-center justify-center gap-2 py-4 bg-[var(--primary)] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-all rounded-none"
+                      >
+                        APPROVE
+                      </button>
                   </div>
                </div>
              </FadeUp>
@@ -193,13 +192,13 @@ export default function ManagerContractsPage() {
         <div className="bg-white rounded-none border border-[var(--outline-variant)] overflow-hidden">
            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-neutral-50/50 border-b border-[var(--outline-variant)]">
-                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Protocol ID</th>
-                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Contractor Node</th>
-                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Lifecycle state</th>
-                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Sync Stamp</th>
-                  <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Access</th>
-                </tr>
+                  <tr className="bg-neutral-50/50 border-b border-[var(--outline-variant)]">
+                    <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">ID</th>
+                    <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">User</th>
+                    <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Status</th>
+                    <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Date</th>
+                    <th className="p-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Action</th>
+                  </tr>
               </thead>
               <tbody className="divide-y divide-[var(--outline-variant)]/10">
                  {filteredContracts.map(con => (
@@ -225,7 +224,7 @@ export default function ManagerContractsPage() {
                       </td>
                       <td className="p-8 text-right">
                          <button className="px-4 py-2 text-[9px] font-bold uppercase tracking-widest border border-[var(--outline-variant)] text-[#1B1C1C] group-hover:bg-[#1B1B1B] group-hover:text-white transition-all rounded-none">
-                            MANAGE
+                            VIEW
                          </button>
                       </td>
                     </tr>

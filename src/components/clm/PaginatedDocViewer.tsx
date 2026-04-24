@@ -72,13 +72,13 @@ export function PaginatedDocViewer({ htmlContent, charsPerPage = 3200 }: Paginat
             background: '#fff',
             width: '210mm',
             minHeight: '297mm',
-            padding: '25mm 20mm',
-            boxShadow: '0 4px 40px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.08)',
-            borderRadius: '2px',
+            padding: '20mm 15mm',
+            boxShadow: '0 1px 10px rgba(0,0,0,0.05)',
+            borderRadius: '0',
             position: 'relative',
-            fontFamily: "'Times New Roman', Times, serif",
-            fontSize: '11pt',
-            lineHeight: '1.75',
+            fontFamily: 'var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            fontSize: '10pt',
+            lineHeight: '1.6',
             color: '#111',
             maxWidth: '100%',
             boxSizing: 'border-box',
@@ -105,14 +105,14 @@ export function PaginatedDocViewer({ htmlContent, charsPerPage = 3200 }: Paginat
       </div>
 
       {/* Navigation bar */}
-      <div className="flex items-center gap-4 bg-[#12121A] border border-[#2A2A3E] rounded-2xl px-6 py-3 shadow-xl">
+      <div className="flex items-center gap-4 bg-white border border-neutral-200 rounded-none px-4 py-2 shadow-sm">
         <button
           onClick={() => goTo(currentPage - 1)}
           disabled={currentPage === 0}
           className={`p-2 rounded-xl transition-all flex items-center justify-center
             ${currentPage === 0
-              ? 'opacity-30 cursor-not-allowed text-[#5A5A72]'
-              : 'text-white hover:bg-[#2A2A3E] cursor-pointer'
+              ? 'opacity-30 cursor-not-allowed text-neutral-300'
+              : 'text-neutral-600 hover:bg-neutral-50 cursor-pointer'
             }`}
           title="Previous page"
         >
@@ -127,8 +127,8 @@ export function PaginatedDocViewer({ htmlContent, charsPerPage = 3200 }: Paginat
               onClick={() => goTo(idx)}
               className={`transition-all rounded-lg text-xs font-bold px-3 py-1.5
                 ${idx === currentPage
-                  ? 'bg-[#7C6FFF] text-white shadow-lg shadow-[#7C6FFF]/30'
-                  : 'text-[#5A5A72] hover:bg-[#2A2A3E] hover:text-white'
+                  ? 'bg-[var(--clm-primary)] text-white shadow-sm'
+                  : 'text-neutral-400 hover:bg-neutral-50 hover:text-neutral-900'
                 }`}
             >
               {idx + 1}
@@ -141,8 +141,8 @@ export function PaginatedDocViewer({ htmlContent, charsPerPage = 3200 }: Paginat
           disabled={currentPage === totalPages - 1}
           className={`p-2 rounded-xl transition-all flex items-center justify-center
             ${currentPage === totalPages - 1
-              ? 'opacity-30 cursor-not-allowed text-[#5A5A72]'
-              : 'text-white hover:bg-[#2A2A3E] cursor-pointer'
+              ? 'opacity-30 cursor-not-allowed text-neutral-300'
+              : 'text-neutral-600 hover:bg-neutral-50 cursor-pointer'
             }`}
           title="Next page"
         >
@@ -151,14 +151,17 @@ export function PaginatedDocViewer({ htmlContent, charsPerPage = 3200 }: Paginat
       </div>
 
       {/* Page info */}
-      <div className="flex items-center gap-2 text-[#5A5A72]">
+      <div className="flex items-center gap-2 text-neutral-400">
         <FileText size={12} />
-        <span className="text-[10px] font-bold uppercase tracking-widest italic">
+        <span className="text-[10px] font-bold uppercase tracking-widest">
           Page {currentPage + 1} of {totalPages}
         </span>
       </div>
 
       <style>{`
+        .agreement-content, .agreement-content * {
+          font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        }
         .agreement-content h1 {
           font-size: 14pt;
           font-weight: bold;

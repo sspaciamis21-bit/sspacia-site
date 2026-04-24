@@ -27,7 +27,9 @@ export const PATCH = withPermission('clm', 'update', async (
           include: { 
             product: {
               include: {
-                location: true
+                location: true,
+                type: true,
+                category: true
               }
             }
           } 
@@ -53,39 +55,56 @@ export const PATCH = withPermission('clm', 'update', async (
       const { generateContractNumber } = await import('@/lib/clm/contractNumber');
       const contractNumber = await generateContractNumber(request.booking.product.locationId);
 
-
       // Status object for DRAFT
       const draftStatus = await prisma.contractStatus.findUnique({ where: { name: 'DRAFT' } });
       if (!draftStatus) throw new Error('DRAFT status not seeded');
 
-      const { generateInitialAgreement } = await import('@/lib/clm/templates');
+      const { generateInitialAgreement, numberToWordsIndian } = await import('@/lib/clm/templates');
       const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
       
+      // Fetch PAN from documents
+      const panDoc = await prisma.document.findFirst({
+        where: {
+          customerId: request.customerId,
+          title: { contains: 'PAN' }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      // Safely handle Decimals for math
+      const totalAmount = Number(request.booking.totalAmount);
+      const unitPrice = Number(request.booking.unitPrice || request.booking.product?.price || 0);
+      const seats = request.booking.seats || 1;
+      const depositAmount = totalAmount * 3;
+
       const initialContent = JSON.stringify(generateInitialAgreement({
         date: today,
-        companyAddress: "Sspacia India Private Limited", 
-        customerName: request.customer.name,
+        companyAddress: "Sspacia India Private Limited, Ahmedabad", 
+        customerName: panDoc?.nameOnDocument || request.customer.name,
         customerOrg: request.customer.organization || request.customer.name,
         customerDesignation: "Authorized Signatory", 
-        customerPan: (request.customer as { pan?: string }).pan || "PAN_REQUIRED",
+        customerPan: panDoc?.documentNumber || "PAN_REQUIRED",
+        customerPhone: request.customer.phone || "Not Provided",
+        customerEmail: request.customer.email || "Not Provided",
         userId: String(request.customerId),
-        productType: request.booking.product?.type || "Office Space",
+        productType: request.booking.product?.type?.displayName || "Office Space",
         productName: request.booking.product?.name || "Workspace",
-        centerAddress: request.booking.product?.location?.name || "Sspacia Center",
+        centerAddress: request.booking.product?.location?.address || request.booking.product?.location?.name || "Sspacia Center",
         period: "12 Months",
         startDate: new Date(request.booking.startDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
         expiryDate: new Date(request.booking.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
-        cost: String(request.booking.product?.price || 0),
-        costInWords: "Rupees Only", 
-        calculatedCost: String(request.booking.totalAmount),
-        calculatedCostInWords: "Rupees Only",
-        capacity: String((request.booking as { seats?: number }).seats || 1),
-        depositAmount: String(request.booking.totalAmount * 3), 
-        depositAmountInWords: "Three months equivalent",
+        cost: String(unitPrice),
+        costInWords: numberToWordsIndian(unitPrice), 
+        calculatedCost: String(totalAmount),
+        calculatedCostInWords: numberToWordsIndian(totalAmount),
+        capacity: String(seats),
+        depositAmount: String(depositAmount), 
+        depositAmountInWords: numberToWordsIndian(depositAmount),
         lockInPeriod: "12 Months",
         noticePeriod: "2 Months",
         escalationPercentage: "5%",
-        renewalDate: new Date(request.booking.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+        renewalDate: new Date(request.booking.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
+        contractNumber: contractNumber
       }));
 
 

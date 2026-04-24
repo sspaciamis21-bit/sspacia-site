@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { canTransition } from '@/lib/clm/transitions';
-import { generateContractPDF } from '@/lib/clm/pdf';
 import type { ContractStatusName } from '@/types/clm';
 
 
@@ -107,18 +106,12 @@ export async function POST(
       return { updatedContract, signature };
     });
 
-    // 4. Trigger Automatic PDF Generation
-    try {
-      await generateContractPDF(contractId, Number(auth.id));
-    } catch (pdfErr) {
-
-      console.error('[ContractSign] Automatic PDF Generation failed:', pdfErr);
-      // We don't fail the whole sign process if only the PDF gen fails, 
-      // but we log it so the manager can "Finalise" manually if needed.
-    }
+    // NOTE: PDF generation is intentionally NOT triggered here.
+    // The document must be signed by BOTH the customer AND the manager (counter-sign)
+    // before the final PDF is generated. PDF generation happens in the counter-sign route.
 
     return NextResponse.json({
-      message: 'Contract signed successfully and PDF generated',
+      message: 'Contract signed successfully. Awaiting management counter-signature.',
       data: result
     });
 

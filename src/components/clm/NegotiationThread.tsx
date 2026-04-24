@@ -39,14 +39,15 @@ export default function NegotiationThread({ negotiation, role, onReply }: {
 
   return (
     <div
-      className="clm-negotiation-thread group"
+      className="clm-negotiation-thread group font-sans"
       style={{
         border: "1px solid var(--outline-variant)",
         borderRadius: 0,
         overflow: "hidden",
         marginBottom: 20,
         background: "var(--surface-low)",
-        boxShadow: "none"
+        boxShadow: "none",
+        fontFamily: 'var(--font-inter), sans-serif'
       }}
     >
 

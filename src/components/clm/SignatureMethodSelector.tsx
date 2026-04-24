@@ -1,454 +1,256 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react";
-import SignaturePad from "./SignaturePad";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { userContractsApi } from "@/lib/clm/api";
+import { toast } from "sonner";
+import {
+  Loader2, PenTool, RotateCcw, Check, FileSignature,
+  Fingerprint, AlertCircle, Upload, Download,
+  Image as ImageIcon, X
+} from "lucide-react";
 
 interface Props {
   contractId: string | number;
   onSigned: () => void;
 }
 
-type Method = "CANVAS" | "DSC" | "MANUAL";
+type Method = "CANVAS" | "MANUAL";
 
 export default function SignatureMethodSelector({ contractId, onSigned }: Props) {
-  const [selectedMethod, setSelectedMethod] = useState<Method>("CANVAS");
+  const [method, setMethod] = useState<Method>("CANVAS");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [signed, setSigned] = useState(false);
 
-  // DSC States
-  const [dscStep, setDscStep] = useState(1);
-  const [dscChallenge, setDscChallenge] = useState<any>(null);
-  const [dscPayload, setDscPayload] = useState({ signedData: "", certificate: "" });
-  const [dscTimeLeft, setDscTimeLeft] = useState(600);
-  const [dscSigner, setDscSigner] = useState("");
-  const [dscPin, setDscPin] = useState("");
-  const [showPin, setShowPin] = useState(false);
+  // Canvas
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [hasDrawn, setHasDrawn] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const lastPos = useRef<{ x: number; y: number } | null>(null);
 
-  // Manual States
+  // Manual
   const [manualFile, setManualFile] = useState<File | null>(null);
   const [manualPreview, setManualPreview] = useState<string | null>(null);
 
+  // ── Canvas ─────────────────────────────────────────────────────────
+  const drawGuide = (ctx: CanvasRenderingContext2D, w: number) => {
+    ctx.save(); ctx.strokeStyle = "#E5E5E5"; ctx.lineWidth = 1; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(32, 150); ctx.lineTo(w - 32, 150); ctx.stroke();
+    ctx.setLineDash([]); ctx.restore();
+    ctx.save(); ctx.font = "600 9px 'Inter', sans-serif"; ctx.fillStyle = "#C4C4C4";
+    ctx.fillText("✕  SIGN HERE", 32, 170); ctx.restore();
+  };
+
+  const initCanvas = useCallback(() => {
+    const c = canvasRef.current, ct = containerRef.current;
+    if (!c || !ct) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = ct.getBoundingClientRect();
+    c.style.width = rect.width + "px"; c.style.height = "200px";
+    c.width = rect.width * dpr; c.height = 200 * dpr;
+    const ctx = c.getContext("2d")!;
+    ctx.scale(dpr, dpr); ctx.strokeStyle = "#1B1B1B"; ctx.lineWidth = 2.5;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    drawGuide(ctx, rect.width);
+  }, []);
+
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (dscStep === 3 && dscTimeLeft > 0) {
-      timer = setInterval(() => {
-        setDscTimeLeft((prev) => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [dscStep, dscTimeLeft]);
+    if (method === "CANVAS") { const t = setTimeout(initCanvas, 120); return () => clearTimeout(t); }
+  }, [method, initCanvas]);
 
-  // --- CANVAS HANDLER ---
-  const handleCanvasSign = async (dataURL: string) => {
-    setLoading(true);
-    setError(null);
+  const getPos = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    const c = canvasRef.current; if (!c) return null;
+    const r = c.getBoundingClientRect();
+    if ("touches" in e) return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
+    return { x: (e as React.MouseEvent).clientX - r.left, y: (e as React.MouseEvent).clientY - r.top };
+  }, []);
+
+  const onDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (loading || signed) return; const p = getPos(e); if (!p) return;
+    setIsDrawing(true); lastPos.current = p;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (ctx) { ctx.strokeStyle = "#1B1B1B"; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+  }, [loading, signed, getPos]);
+
+  const onMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawing || loading || signed) return; const p = getPos(e);
+    if (!p || !lastPos.current) return;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (ctx) { ctx.lineTo(p.x, p.y); ctx.stroke(); setHasDrawn(true); }
+    lastPos.current = p;
+  }, [isDrawing, loading, signed, getPos]);
+
+  const onUp = useCallback(() => { setIsDrawing(false); lastPos.current = null; }, []);
+
+  const clearCanvas = () => {
+    const c = canvasRef.current, ct = containerRef.current;
+    if (!c || !ct) return;
+    const ctx = c.getContext("2d")!; const dpr = window.devicePixelRatio || 1;
+    ctx.clearRect(0, 0, c.width, c.height); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr); drawGuide(ctx, ct.getBoundingClientRect().width);
+    setHasDrawn(false);
+  };
+
+  // ── Canvas Sign ────────────────────────────────────────────────────
+  const handleCanvasSign = async () => {
+    const c = canvasRef.current; if (!c || !hasDrawn) return;
+    setLoading(true); setError(null);
     try {
-      const res = await fetch(`/api/contracts/${contractId}/sign-canvas`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signatureData: dataURL }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      await userContractsApi.sign(Number(contractId), c.toDataURL("image/png"));
+      setSigned(true);
+      toast.success("Agreement signed. Awaiting management counter-signature.");
       onSigned();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err: any) { setError(err.message || "Failed to sign"); }
+    finally { setLoading(false); }
   };
 
-  // --- DSC HANDLERS ---
-  const connectDSC = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/contracts/${contractId}/sign-dsc`);
-      const { data, error } = await res.json();
-      if (error) throw new Error(error);
-      setDscChallenge(data);
-      setDscStep(2);
-      setDscTimeLeft(600);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const verifyDSC = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/contracts/${contractId}/sign-dsc`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          challengeToken: dscChallenge.challengeToken,
-          signedData: dscPayload.signedData,
-          certificate: dscPayload.certificate,
-          algorithm: "SHA256withRSA",
-          pin: dscPin
-        }),
-      });
-      const { data, error } = await res.json();
-      if (error) throw new Error(error);
-      setDscSigner(data.signerName);
-      setDscStep(4);
-      onSigned();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // --- MANUAL HANDLERS ---
-  const downloadPDF = () => {
-    window.location.href = `/api/contracts/${contractId}/sign-manual`;
-  };
+  // ── Manual Handlers ────────────────────────────────────────────────
+  const downloadPDF = () => { window.location.href = `/api/contracts/${contractId}/sign-manual`; };
 
   const handleManualFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setManualFile(file);
-      if (file.type.startsWith("image/")) {
-        setManualPreview(URL.createObjectURL(file));
-      } else {
-        setManualPreview(null);
-      }
-    }
+    const f = e.target.files?.[0];
+    if (f) { setManualFile(f); setManualPreview(f.type.startsWith("image/") ? URL.createObjectURL(f) : null); }
   };
 
   const uploadManual = async () => {
     if (!manualFile) return;
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     const formData = new FormData();
     formData.append("file", manualFile);
-
     try {
-      const res = await fetch(`/api/contracts/${contractId}/sign-manual`, {
-        method: "POST",
-        body: formData,
-      });
-      const { data, error } = await res.json();
-      if (error) throw new Error(error);
-      onSigned();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+      const res = await fetch(`/api/contracts/${contractId}/sign-manual`, { method: "POST", body: formData });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setSigned(true); toast.success("Signed copy uploaded."); onSigned();
+    } catch (err: any) { setError(err.message || "Upload failed"); }
+    finally { setLoading(false); }
   };
 
-  return (
-    <div className="space-y-4 max-w-2xl mx-auto">
-      <h3 className="text-lg font-semibold text-gray-900">Choose Signature Method</h3>
+  // ── Success ────────────────────────────────────────────────────────
+  if (signed) {
+    return (
+      <div className="p-10 bg-emerald-50 border border-emerald-200 text-center space-y-4">
+        <div className="w-14 h-14 mx-auto flex items-center justify-center bg-emerald-500 text-white"><Check size={28} /></div>
+        <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-widest">Signature Applied</h4>
+        <p className="text-[10px] text-emerald-600 font-medium uppercase tracking-widest">
+          Your signature has been recorded. The final document will be generated after management counter-signs.
+        </p>
+      </div>
+    );
+  }
 
+  const methods: { key: Method; icon: any; label: string }[] = [
+    { key: "CANVAS", icon: PenTool, label: "Draw Signature" },
+    { key: "MANUAL", icon: Upload, label: "Print & Sign" },
+  ];
+
+  return (
+    <div className="space-y-6" style={{ fontFamily: "var(--font-inter), 'Inter', sans-serif" }}>
       {error && (
-        <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-200">
-          {error}
+        <div className="p-4 bg-red-50 border border-red-200 flex items-center gap-3">
+          <AlertCircle size={16} className="text-red-500 shrink-0" />
+          <p className="text-[10px] font-bold text-red-600 uppercase tracking-widest flex-1">{error}</p>
+          <button onClick={() => setError(null)}><X size={14} className="text-red-300" /></button>
         </div>
       )}
 
-      {/* CARD 1: CANVAS */}
-      <div 
-        className={`bg-white border rounded-xl overflow-hidden transition-all shadow-sm ${
-          selectedMethod === "CANVAS" ? "ring-2 ring-[var(--primary)] border-transparent" : "border-gray-200 hover:border-gray-300"
-        }`}
-        onClick={() => setSelectedMethod("CANVAS")}
-      >
-        <div className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-            </div>
-            <div>
-              <div className="font-medium text-gray-900">Draw Signature</div>
-              <p className="text-xs text-gray-500">Sign using your mouse, trackpad, or touchscreen</p>
-            </div>
-          </div>
-        </div>
-        {selectedMethod === "CANVAS" && (
-          <div className="p-4 pt-0 border-t border-gray-100">
-            <div className="mt-4">
-              <SignaturePad 
-                label="Sign here" 
-                initials="JD" 
-                onCapture={handleCanvasSign}
-                disabled={loading}
-              />
-            </div>
-          </div>
-        )}
+      {/* Tab selector */}
+      <div className="grid grid-cols-2 gap-2 p-1.5 bg-neutral-100 border border-neutral-200">
+        {methods.map(m => (
+          <button key={m.key} onClick={() => { setMethod(m.key); setError(null); }}
+            className={`flex items-center justify-center gap-3 py-4 transition-all ${
+              method === m.key ? "bg-white shadow-lg text-[var(--primary)] border border-neutral-200" : "text-neutral-400 hover:text-neutral-600"
+            }`}>
+            <m.icon size={16} />
+            <span className="text-[9px] font-black uppercase tracking-[0.15em]">{m.label}</span>
+          </button>
+        ))}
       </div>
 
-      {/* CARD 2: DSC */}
-      <div 
-        className={`bg-white border rounded-xl overflow-hidden transition-all shadow-sm ${
-          selectedMethod === "DSC" ? "ring-2 ring-[var(--primary)] border-transparent" : "border-gray-200 hover:border-gray-300"
-        }`}
-        onClick={() => setSelectedMethod("DSC")}
-      >
-        <div className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
+      {/* ── CANVAS ──────────────────────────────────── */}
+      {method === "CANVAS" && (
+        <div className="space-y-5 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <PenTool size={14} className="text-neutral-400" />
+              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500">Draw Your Signature</span>
             </div>
-            <div>
-              <div className="font-medium text-gray-900">USB Digital Signature (DSC)</div>
-              <p className="text-xs text-gray-500">Secure cryptographic signing via your USB Token</p>
-            </div>
-          </div>
-        </div>
-        {selectedMethod === "DSC" && (
-          <div className="p-4 pt-0 border-t border-gray-100 space-y-4">
-            {/* Step 1: Connect USB Token */}
-            {dscStep === 1 && (
-              <button 
-                onClick={connectDSC}
-                disabled={loading}
-                className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {loading ? "Connecting..." : "Connect USB Token"}
-              </button>
-            )}
-
-            {/* Step 2: Enter USB Token PIN */}
-            {dscStep === 2 && (
-              <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2">
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-amber-100 rounded-lg mt-0.5 flex-shrink-0">
-                      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-amber-800">USB Token Detected</p>
-                      <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                        Your USB token is password-protected. Enter your token PIN/password to unlock the signing key. This is the PIN you set when configuring your DSC dongle.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-2">USB Token PIN / Password</label>
-                  <div className="relative">
-                    <input 
-                      type={showPin ? "text" : "password"}
-                      value={dscPin}
-                      onChange={(e) => setDscPin(e.target.value)}
-                      placeholder="Enter your USB token PIN"
-                      autoFocus
-                      className="w-full p-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all pr-12"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && dscPin.trim()) {
-                          setDscStep(3);
-                          setDscTimeLeft(600);
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPin(!showPin)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      {showPin ? (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-gray-400 mt-1.5 italic">Your PIN is transmitted securely and never stored in plain text.</p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => { setDscStep(1); setDscPin(""); setError(null); }}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 rounded-lg transition-colors text-sm"
-                  >
-                    Back
-                  </button>
-                  <button 
-                    onClick={() => { setDscStep(3); setDscTimeLeft(600); }}
-                    disabled={!dscPin.trim()}
-                    className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 text-sm"
-                  >
-                    Unlock &amp; Proceed
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Paste signed output & certificate */}
-            {dscStep === 3 && (
-              <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-gray-500">Hash: <code className="bg-gray-100 px-1 rounded">{dscChallenge.documentHash.substring(0, 16)}...</code></span>
-                  <span className={`font-mono ${dscTimeLeft < 60 ? 'text-red-500' : 'text-blue-500'}`}>
-                    {Math.floor(dscTimeLeft / 60)}:{(dscTimeLeft % 60).toString().padStart(2, '0')}
-                  </span>
-                </div>
-
-                <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
-                  <div className="flex items-center gap-2 mb-1">
-                    <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                    <span className="text-xs font-semibold text-indigo-700">Token unlocked successfully</span>
-                  </div>
-                  <p className="text-xs text-indigo-600 leading-relaxed">
-                    Open your DSC middleware (eMudhra SafeSign / Sify ePass), select your certificate, and paste the signed output below.
-                  </p>
-                </div>
-                
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Signed Output (Base64)</label>
-                    <textarea 
-                      className="w-full h-20 p-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                      placeholder="Paste base64 signed output here"
-                      value={dscPayload.signedData}
-                      onChange={(e) => setDscPayload({...dscPayload, signedData: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Certificate (Base64 PEM)</label>
-                    <textarea 
-                      className="w-full h-20 p-2 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                      placeholder="Paste your certificate (base64 PEM)"
-                      value={dscPayload.certificate}
-                      onChange={(e) => setDscPayload({...dscPayload, certificate: e.target.value})}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setDscStep(2)}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg transition-colors text-sm"
-                  >
-                    Back
-                  </button>
-                  <button 
-                    onClick={verifyDSC}
-                    disabled={loading || !dscPayload.signedData || !dscPayload.certificate}
-                    className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {loading ? "Verifying..." : "Verify & Sign"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Success */}
-            {dscStep === 4 && (
-              <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl flex items-center gap-3">
-                <div className="p-1.5 bg-green-500 text-white rounded-full">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-green-800">Signed Successfully</div>
-                  <div className="text-xs text-green-600">Signed as {dscSigner}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* CARD 3: MANUAL */}
-      <div 
-        className={`bg-white border rounded-xl overflow-hidden transition-all shadow-sm ${
-          selectedMethod === "MANUAL" ? "ring-2 ring-[var(--primary)] border-transparent" : "border-gray-200 hover:border-gray-300"
-        }`}
-        onClick={() => setSelectedMethod("MANUAL")}
-      >
-        <div className="p-4 cursor-pointer hover:bg-gray-50 transition-colors">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-teal-50 text-teal-600 rounded-lg">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-            </div>
-            <div>
-              <div className="font-medium text-gray-900">Print & Sign Manually</div>
-              <p className="text-xs text-gray-500">Download, physically sign, and upload a scan</p>
-            </div>
-          </div>
-        </div>
-        {selectedMethod === "MANUAL" && (
-          <div className="p-4 pt-0 border-t border-gray-100 space-y-4">
-            <button 
-              onClick={downloadPDF}
-              className="w-full mt-4 flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 rounded-lg transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Download PDF
+            <button onClick={clearCanvas} disabled={!hasDrawn || loading}
+              className="flex items-center gap-2 px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 transition-all disabled:opacity-30">
+              <RotateCcw size={12} /> Clear
             </button>
-
-            <div className="text-sm text-gray-600 space-y-1 mt-2">
-              <p>1. Download and print the contract PDF</p>
-              <p>2. Sign it physically</p>
-              <p>3. Scan or photograph the signed copy</p>
-              <p>4. Upload it below</p>
-            </div>
-
-            <div className="space-y-4">
-              <label className="block">
-                <span className="sr-only">Choose file</span>
-                <input 
-                  type="file" 
-                  accept="image/*,application/pdf"
-                  onChange={handleManualFile}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-[var(--primary)] hover:file:bg-blue-100"
-                />
-              </label>
-
-              {manualPreview && (
-                <div className="relative aspect-[4/3] rounded-lg overflow-hidden border border-gray-200">
-                  <img src={manualPreview} alt="Preview" className="object-cover w-full h-full" />
-                </div>
-              )}
-
-              {manualFile && !manualPreview && (
-                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-600 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9 2a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V6.414L14.586 2H9z" />
-                    <path d="M11 2a2 2 0 012 2v4a2 2 0 012 2v4a2 2 0 11-4 0V4a2 2 0 012-2z" />
-                  </svg>
-                  {manualFile.name}
-                </div>
-              )}
-
-              <button 
-                onClick={uploadManual}
-                disabled={loading || !manualFile}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {loading ? "Uploading..." : "Upload Signed Copy"}
-              </button>
-            </div>
           </div>
-        )}
+          <div ref={containerRef} className="w-full border-2 border-dashed overflow-hidden bg-white transition-colors"
+            style={{ borderColor: isDrawing ? "var(--primary)" : hasDrawn ? "#22C55E" : "#E5E5E5" }}>
+            <canvas ref={canvasRef} className="block w-full cursor-crosshair touch-none" style={{ height: "200px" }}
+              onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+              onTouchStart={e => { e.preventDefault(); onDown(e); }}
+              onTouchMove={e => { e.preventDefault(); onMove(e); }}
+              onTouchEnd={onUp} />
+          </div>
+          <button onClick={handleCanvasSign} disabled={!hasDrawn || loading}
+            className="w-full py-4 flex items-center justify-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-white bg-[var(--primary)] hover:brightness-110 transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed">
+            {loading ? <><Loader2 size={16} className="animate-spin" /> Signing...</> : <><FileSignature size={16} /> Confirm & Sign</>}
+          </button>
+        </div>
+      )}
+
+      {/* ── MANUAL ──────────────────────────────────── */}
+      {method === "MANUAL" && (
+        <div className="space-y-5 animate-in fade-in duration-300">
+          <div className="p-6 bg-neutral-50 border border-neutral-200 space-y-4">
+            <p className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest">Step-by-Step</p>
+            <ol className="text-[9px] text-neutral-400 font-medium space-y-2 list-decimal list-inside">
+              <li>Download and print the contract PDF</li>
+              <li>Sign it physically with pen</li>
+              <li>Scan or photograph the signed copy</li>
+              <li>Upload the file below</li>
+            </ol>
+            <button onClick={downloadPDF}
+              className="w-full py-3 flex items-center justify-center gap-3 bg-white border border-neutral-200 text-neutral-700 text-[10px] font-bold uppercase tracking-widest hover:bg-neutral-100 transition-all">
+              <Download size={16} /> Download Contract PDF
+            </button>
+          </div>
+          <label className="block w-full cursor-pointer">
+            <div className="p-8 border-2 border-dashed border-neutral-200 bg-white hover:border-[var(--primary)] transition-colors text-center">
+              <Upload size={24} className="mx-auto text-neutral-300 mb-3" />
+              <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">{manualFile ? manualFile.name : "Click to upload signed scan"}</p>
+              <p className="text-[8px] text-neutral-300 uppercase tracking-widest mt-1">Images or PDF</p>
+            </div>
+            <input type="file" accept="image/*,application/pdf" onChange={handleManualFile} className="hidden" />
+          </label>
+          {manualPreview && (
+            <div className="relative aspect-[4/3] border border-neutral-200 overflow-hidden bg-neutral-50">
+              <img src={manualPreview} alt="Preview" className="object-contain w-full h-full" />
+              <button onClick={() => { setManualFile(null); setManualPreview(null); }}
+                className="absolute top-2 right-2 p-1.5 bg-white/90 border border-neutral-200"><X size={12} /></button>
+            </div>
+          )}
+          {manualFile && !manualPreview && (
+            <div className="p-4 bg-neutral-50 border border-neutral-200 flex items-center gap-3">
+              <ImageIcon size={16} className="text-neutral-400" />
+              <span className="text-[10px] font-bold text-neutral-600 uppercase truncate flex-1">{manualFile.name}</span>
+              <button onClick={() => { setManualFile(null); setManualPreview(null); }}><X size={14} className="text-neutral-300" /></button>
+            </div>
+          )}
+          <button onClick={uploadManual} disabled={loading || !manualFile}
+            className="w-full py-4 flex items-center justify-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-white bg-[var(--primary)] hover:brightness-110 transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed">
+            {loading ? <><Loader2 size={16} className="animate-spin" /> Uploading...</> : <><Upload size={16} /> Upload Signed Copy</>}
+          </button>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-2">
+        <div className="flex items-center gap-2">
+          <Fingerprint size={10} className="text-neutral-300" />
+          <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-neutral-300">Sspacia Digital Signature Module</span>
+        </div>
+        <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-neutral-300">
+          {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+        </span>
       </div>
     </div>
   );

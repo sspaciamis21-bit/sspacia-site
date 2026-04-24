@@ -69,6 +69,13 @@ function tiptapToHtml(json: object): string {
         return `<li>${inner}</li>`;
       case 'hardBreak':
         return '<br/>';
+      case 'table':
+        return `<table style="width:100%; border-collapse:collapse; margin-top:20pt;">${inner}</table>`;
+      case 'tableRow':
+        return `<tr>${inner}</tr>`;
+      case 'tableCell':
+        const cellAlign = node.attrs?.textAlign ? `text-align:${node.attrs.textAlign};` : '';
+        return `<td style="${cellAlign} width:50%; vertical-align:top; padding:10pt 0;">${inner}</td>`;
       default:
         return inner;
     }
@@ -129,8 +136,8 @@ export function ContractDocViewer({ content, templateParams, onNegotiate }: Cont
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <Loader2 className="h-8 w-8 text-[#7C6FFF] animate-spin" />
-        <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A72] italic">
+        <Loader2 className="h-8 w-8 text-[var(--clm-primary)] animate-spin" />
+        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
           Loading Document...
         </p>
       </div>
@@ -148,8 +155,8 @@ export function ContractDocViewer({ content, templateParams, onNegotiate }: Cont
   if (!html) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-[#5A5A72] italic">
-          No document content available.
+        <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+          No content available
         </p>
       </div>
     );
@@ -194,9 +201,9 @@ export function ContractDocViewer({ content, templateParams, onNegotiate }: Cont
                    setSelectedText(null);
                    window.getSelection()?.removeAllRanges();
                }}
-               className="flex items-center gap-2 bg-[#7C6FFF] text-white px-4 py-2 rounded-xl shadow-xl hover:bg-[#6b5eee] transition-all font-bold text-[10px] uppercase tracking-widest italic whitespace-nowrap"
+               className="flex items-center gap-2 bg-neutral-900 text-white px-4 py-2 rounded-none shadow-xl hover:bg-black transition-all font-bold text-[10px] uppercase tracking-widest whitespace-nowrap"
             >
-               <MessageCircle size={14} /> Ask to add to negotiation
+               <MessageCircle size={14} /> Add to negotiation
             </button>
           </div>
       )}

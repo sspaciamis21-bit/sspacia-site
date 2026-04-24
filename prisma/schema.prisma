@@ -620,6 +620,10 @@ model Document {
   fileName         String?          // original file name for display
   fileSize         Int?             // bytes, optional
   mimeType         String?          // e.g. "application/pdf", "image/jpeg"
+  /// Name printed on the uploaded document (e.g., Aadhaar/PAN Name)
+  nameOnDocument   String?
+  /// Unique identifier on the document (e.g., Aadhaar/PAN Number)
+  documentNumber   String?
   /// Reason populated only when status = Rejected.
   rejectionReason  String?          @db.Text
   /// When set, a scheduled job flips status to Expired after this date.

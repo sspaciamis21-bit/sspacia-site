@@ -43,7 +43,17 @@ export default function UserContractCard({ contract, request }: Props) {
           {productName && (
             <div className="flex items-center gap-3 text-[11px] font-bold text-[#616161]">
               <div className="w-1.5 h-1.5 bg-[var(--primary)]" />
-              <span className="uppercase tracking-widest leading-relaxed">{productName} <br /> <span className="text-[#9E9E9E] opacity-70">@ {locationName}</span></span>
+              <div className="flex flex-col gap-1">
+                <span className="uppercase tracking-widest leading-none">{productName}</span>
+                <span className="text-[9px] text-[#9E9E9E] uppercase tracking-widest leading-tight">
+                  {isContract ? (contract.booking?.location?.address || locationName) : locationName}
+                </span>
+                {isContract && contract.booking && (
+                  <span className="text-[9px] text-[var(--primary)] font-black uppercase tracking-widest">
+                    Period: {new Date(contract.booking.startDate).toLocaleDateString()} - {new Date(contract.booking.endDate).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>

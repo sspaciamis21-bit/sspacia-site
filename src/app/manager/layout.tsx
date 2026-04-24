@@ -73,8 +73,8 @@ export default function ManagerLayout({
     items.push({ name: 'Products', href: '/manager/products', icon: Package });
     items.push({ name: 'Bookings', href: '/manager/bookings', icon: Calendar });
     items.push({ name: 'Tickets', href: '/manager/tickets', icon: Ticket });
-    items.push({ name: 'Review Documents', href: '/manager/contracts', icon: ShieldCheck });
-    items.push({ name: 'Documents', href: '/manager/documents', icon: ShieldCheck });
+    items.push({ name: 'Contracts', href: '/manager/contracts', icon: ShieldCheck });
+    items.push({ name: 'Documents', href: '/manager/documents', icon: FileText });
     items.push({ name: 'Agreements', href: '/manager/agreements', icon: FileText });
     items.push({ name: 'Users', href: '/manager/users', icon: Users });
 
@@ -117,9 +117,9 @@ export default function ManagerLayout({
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                className="font-display text-xl font-bold text-[var(--primary)] whitespace-nowrap uppercase tracking-tighter italic"
+                className="font-display text-xl font-bold text-[var(--primary)] whitespace-nowrap uppercase tracking-widest"
               >
-                SSPACIA <span className="text-[#1B1C1C] opacity-30 not-italic ml-1">{user.role?.split('_')[0] || 'PORTAL'}</span>
+                SSPACIA <span className="text-[#1B1C1C] opacity-30 ml-1">{user.role?.split('_')[0] || 'PORTAL'}</span>
               </motion.div>
             ) : (
               <motion.div
@@ -127,7 +127,7 @@ export default function ManagerLayout({
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                className="font-display font-bold text-2xl text-[var(--primary)] mx-auto italic"
+                className="font-display font-bold text-2xl text-[var(--primary)] mx-auto"
               >
                 S
               </motion.div>

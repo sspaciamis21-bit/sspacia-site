@@ -12,6 +12,7 @@ export async function GET() {
             select: {
                 id: true,
                 name: true,
+                capacity: true,
                 location: { select: { name: true } },
                 pricingPlans: {
                     where: { isActive: true },

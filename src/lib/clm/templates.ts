@@ -12,6 +12,8 @@ export interface TemplateData {
   customerOrg: string;
   customerDesignation: string;
   customerPan: string;
+  customerPhone: string;
+  customerEmail: string;
   userId: string;
   productType: string;
   productName: string;
@@ -30,9 +32,69 @@ export interface TemplateData {
   noticePeriod: string;
   escalationPercentage: string;
   renewalDate: string;
+  contractNumber: string;
+}
+
+export function formatIndianCurrency(amount: string | number): string {
+    const x = amount.toString();
+    const lastThree = x.substring(x.length - 3);
+    const otherNumbers = x.substring(0, x.length - 3);
+    if (otherNumbers !== '') {
+        return otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + lastThree;
+    }
+    return lastThree;
+}
+
+export function numberToWordsIndian(num: number): string {
+    if (num === 0) return "Zero";
+    const singleDigits = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+    const teenDigits = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+    const doubleDigits = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+    function getWords(n: number): string {
+        let str = "";
+        if (n > 99) {
+            str += singleDigits[Math.floor(n / 100)] + " Hundred ";
+            n %= 100;
+        }
+        if (n > 19) {
+            str += doubleDigits[Math.floor(n / 10)] + " ";
+            n %= 10;
+        } else if (n > 9) {
+            str += teenDigits[n - 10] + " ";
+            return str;
+        }
+        if (n > 0) {
+            str += singleDigits[n] + " ";
+        }
+        return str;
+    }
+
+    let n = Math.floor(num);
+    let result = "";
+    if (Math.floor(n / 10000000) > 0) {
+        result += getWords(Math.floor(n / 10000000)) + "Crore ";
+        n %= 10000000;
+    }
+    if (Math.floor(n / 100000) > 0) {
+        result += getWords(Math.floor(n / 100000)) + "Lakh ";
+        n %= 100000;
+    }
+    if (Math.floor(n / 1000) > 0) {
+        result += getWords(Math.floor(n / 1000)) + "Thousand ";
+        n %= 1000;
+    }
+    if (n > 0) {
+        result += getWords(n);
+    }
+    return result.trim() + " Rupees Only";
 }
 
 export function generateInitialAgreement(data: TemplateData) {
+  const formattedCost = formatIndianCurrency(data.cost);
+  const formattedCalculatedCost = formatIndianCurrency(data.calculatedCost);
+  const formattedDeposit = formatIndianCurrency(data.depositAmount);
+
   return {
     type: "doc",
     content: [
@@ -84,7 +146,7 @@ export function generateInitialAgreement(data: TemplateData) {
         attrs: { textAlign: "justify" },
         content: [
           { type: "text", text: "WHEREAS the Client has been allotted a Client Id as " },
-          { type: "text", marks: [{ type: "bold" }], text: `SSPACIA/AHD/CGM/PC/${data.userId}` },
+          { type: "text", marks: [{ type: "bold" }], text: data.contractNumber },
           { type: "text", text: " This Client Id will be used for all future correspondences." }
         ] 
       },
@@ -130,13 +192,13 @@ export function generateInitialAgreement(data: TemplateData) {
         content: [
           { type: "text", marks: [{ type: "bold" }], text: "2. LICENCE FEE: " },
           { type: "text", text: "That during the period of this leave and license Agreement, the Client, the party of the second part shall pay to the Provider, the party of the first part, the fee of " },
-          { type: "text", marks: [{ type: "bold" }], text: `Rs. ${data.cost} (${data.costInWords})` },
+          { type: "text", marks: [{ type: "bold" }], text: `Rs. ${formattedCost} (${data.costInWords})` },
           { type: "text", text: " + GST (as applicable time to time) per person per month. The payment shall be made in advance, via electronic transfer, to the designated account of the Provider, on or before 10 days from the date of the invoice. Presently, Provider is providing a " },
           { type: "text", marks: [{ type: "bold" }], text: data.productType },
           { type: "text", text: " of " },
           { type: "text", marks: [{ type: "bold" }], text: data.capacity },
           { type: "text", text: " to the client against which an agreed amount of " },
-          { type: "text", marks: [{ type: "bold" }], text: `Rs. ${data.calculatedCost} (${data.calculatedCostInWords})` },
+          { type: "text", marks: [{ type: "bold" }], text: `Rs. ${formattedCalculatedCost} (${data.calculatedCostInWords})` },
           { type: "text", text: " + GST (as applicable time to time) per month will be paid by the Client to the Provider through NEFT/Bank Transfers. This fee includes access to office accommodation as offered, cleaning, electricity, internet, tea and coffee. If the no. of person increases, invoice will be raised as per total no. of person of the Client. It is the express understanding between the parties that the limited rights given to the client shall only be confined to the area and Space allotted to the client. The client shall not claim any rights whatsoever for the common areas or any other area in the co-working space premises." }
         ]
       },
@@ -145,9 +207,11 @@ export function generateInitialAgreement(data: TemplateData) {
         attrs: { textAlign: "justify" },
         content: [
           { type: "text", marks: [{ type: "bold" }], text: "3. DEPOSIT: " },
-          { type: "text", text: "The Provider shall retain security deposit of 3 months which presently for 5 seats comes out to be " },
-          { type: "text", marks: [{ type: "bold" }], text: `Rs. ${data.depositAmount} (${data.depositAmountInWords})` },
-          { type: "text", text: " to be paid by the Client to the Provider through NEFT/ bank transfer vide this Leave and License Agreement, by way of interest free refundable security deposit. Client has been allotted Security Deposit Id as SSPACIA/AHD/CGA/SD/14. This security deposit shall be refundable on demand by the Client simultaneously on completion of the term of this Agreement after adjusting the outstanding dues if any payable by the Client. If number of seats increases, additional security deposit as applicable will be required to be provided to the Provider by the Client." }
+          { type: "text", text: `The Provider shall retain security deposit of 3 months which presently for ${data.capacity} seats comes out to be ` },
+          { type: "text", marks: [{ type: "bold" }], text: `Rs. ${formattedDeposit} (${data.depositAmountInWords})` },
+          { type: "text", text: " to be paid by the Client to the Provider through NEFT/ bank transfer vide this Leave and License Agreement, by way of interest free refundable security deposit. Client has been allotted Security Deposit Id as " },
+          { type: "text", marks: [{ type: "bold" }], text: data.contractNumber },
+          { type: "text", text: ". This security deposit shall be refundable on demand by the Client simultaneously on completion of the term of this Agreement after adjusting the outstanding dues if any payable by the Client. If number of seats increases, additional security deposit as applicable will be required to be provided to the Provider by the Client." }
         ]
       },
       {
@@ -188,8 +252,8 @@ export function generateInitialAgreement(data: TemplateData) {
         content: [{ type: "text", marks: [{ type: "bold" }], text: "7. Contact details for the Client at the time of agreement will be as under:" }] 
       },
       { type: "paragraph", content: [{ type: "text", text: `Name of Contact Person: ${data.customerName}` }] },
-      { type: "paragraph", content: [{ type: "text", text: `Contact Number: ${data.customerPan}` }] },
-      { type: "paragraph", content: [{ type: "text", text: "Email Address: adminexpro@360.one" }] },
+      { type: "paragraph", content: [{ type: "text", text: `Contact Number: ${data.customerPhone}` }] },
+      { type: "paragraph", content: [{ type: "text", text: `Email Address: ${data.customerEmail}` }] },
       
       { type: "paragraph", attrs: { textAlign: "justify" }, content: [
         { type: "text", marks: [{ type: "bold" }], text: "8. COMPLY with CODE OF CONDUCT: " },
@@ -317,44 +381,48 @@ export function generateInitialAgreement(data: TemplateData) {
       ] },
       
       { type: "paragraph", content: [{ type: "text", text: "" }] },
+      { type: "paragraph", content: [{ type: "text", text: "" }] },
       { type: "paragraph", attrs: { textAlign: "center" }, content: [{ type: "text", text: "IN WITNESS WHEREOF, the parties to this leave and license Agreement is signed on the day, month and year mentioned here in above in presence of the following witnesses." }] },
       { type: "paragraph", content: [{ type: "text", text: "" }] },
-      { 
-        type: "paragraph", 
+      
+      {
+        type: "paragraph",
         attrs: { textAlign: "center" },
         content: [
           { type: "text", marks: [{ type: "bold" }], text: "Provider" },
-          { type: "text", text: " ".repeat(40) },
+          { type: "text", text: "                                                                        " },
           { type: "text", marks: [{ type: "bold" }], text: "Client" }
-        ] 
+        ]
       },
       { type: "paragraph", content: [{ type: "text", text: "" }] },
-      { 
-        type: "paragraph", 
+      { type: "paragraph", content: [{ type: "text", text: "" }] },
+      {
+        type: "paragraph",
         attrs: { textAlign: "center" },
         content: [
           { type: "text", text: "Mr. Praveen Agarwal" },
-          { type: "text", text: " ".repeat(45) },
+          { type: "text", text: "                                                      " },
           { type: "text", marks: [{ type: "bold" }], text: data.customerName }
-        ] 
+        ]
       },
-      { 
-        type: "paragraph", 
+      {
+        type: "paragraph",
         attrs: { textAlign: "center" },
         content: [
           { type: "text", text: "Director" },
-          { type: "text", text: " ".repeat(45) },
-          { type: "text", text: `M/s ${data.customerOrg}` }
-        ] 
+          { type: "text", text: "                                                                        " },
+          { type: "text", text: `Director M/s ${data.customerOrg}` }
+        ]
       },
-      { 
-        type: "paragraph", 
+      {
+        type: "paragraph",
         attrs: { textAlign: "center" },
         content: [
-          { type: "text", text: "M/s Sspacia India Private Limited" }
-        ] 
+          { type: "text", text: "M/s Sspacia India Private Limited" },
+          { type: "text", text: "                                          " },
+          { type: "text", marks: [{ type: "bold" }], text: "Witness" }
+        ]
       }
     ]
   };
 }
-

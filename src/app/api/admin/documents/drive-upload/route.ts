@@ -21,6 +21,8 @@ export const POST = withPermission('documents', 'update', async (req: NextReques
     const categoryIdStr = formData.get('categoryId') as string;
     const bookingIdStr = formData.get('bookingId') as string | null;
     const notes = formData.get('notes') as string | null;
+    const nameOnDocument = formData.get('nameOnDocument') as string | null;
+    const documentNumber = formData.get('documentNumber') as string | null;
 
     if (!title || !categoryIdStr) {
       return NextResponse.json({ error: 'Title and categoryId are required' }, { status: 400 });
@@ -93,6 +95,8 @@ export const POST = withPermission('documents', 'update', async (req: NextReques
             customerId: customer.id,
             statusId:   pendingStatus?.id ?? 1,
             notes,
+            nameOnDocument,
+            documentNumber,
         },
         include: {
             category: { select: { name: true } },

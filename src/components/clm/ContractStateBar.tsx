@@ -11,7 +11,7 @@ export default function ContractStateBar({ current }: Props) {
   const currentIdx = STATE_FLOW.indexOf(current);
 
   return (
-    <div className="flex items-center w-full px-2 py-6 overflow-x-auto no-scrollbar">
+    <div className="flex items-center w-full px-2 py-6 overflow-x-auto no-scrollbar font-sans">
       {STATE_FLOW.map((step, i) => {
         const meta = STATUS_META[step];
         const isDone = i < currentIdx;
@@ -24,7 +24,7 @@ export default function ContractStateBar({ current }: Props) {
           <div key={step} className="flex items-center flex-shrink-0 group">
             <div className={`flex items-center gap-2.5 px-4 py-2 rounded-none transition-all duration-300 ${
               isCurrent 
-                ? 'bg-black text-white' 
+                ? 'bg-[var(--clm-primary)]/10 text-[var(--clm-primary)] border border-[var(--clm-primary)]/20' 
                 : ''
             }`}>
               {isDone ? (
@@ -41,7 +41,7 @@ export default function ContractStateBar({ current }: Props) {
               
               <span className={`text-[10px] uppercase tracking-[0.2em] font-bold ${
                 isCurrent 
-                  ? 'text-white' 
+                  ? 'text-[var(--clm-primary)]' 
                   : isDone 
                     ? 'text-emerald-500' 
                     : 'text-gray-400 group-hover:text-gray-600'

@@ -123,7 +123,7 @@ export const GET = withPermission('clm', 'view', async (req: NextRequest) => {
             product: { 
               select: { 
                 name: true, 
-                location: { select: { name: true } } 
+                location: { select: { name: true, address: true } } 
               } 
             }
           }

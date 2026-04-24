@@ -101,7 +101,11 @@ async function seedUnitsForProduct(
   for (const group of groups) {
     const names = generateUnitNames(group, offset);
     await prisma.productUnit.createMany({
-      data: names.map((name) => ({ productId, name })),
+      data: names.map((name) => ({ 
+        productId, 
+        name,
+        capacity: group.seaters 
+      })),
     });
     offset += group.count;
   }

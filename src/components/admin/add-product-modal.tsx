@@ -106,7 +106,7 @@ const toSlug = (value: string) =>
 
 function Label({ htmlFor, children, required }: { htmlFor: string; children: React.ReactNode; required?: boolean }) {
   return (
-    <label htmlFor={htmlFor} className="block text-[10px] font-black text-[#616161] uppercase tracking-[0.2em] mb-2">
+    <label htmlFor={htmlFor} className="block text-[10px] font-bold text-[#616161] uppercase tracking-widest mb-2 font-sans">
       {children} {required && <span className="text-[var(--primary)]">*</span>}
     </label>
   );
@@ -305,89 +305,114 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 350 }} className="relative flex flex-col w-full max-w-5xl bg-white rounded-none border border-white/10 shadow-2xl overflow-hidden max-h-[90vh]">
              <div className="absolute top-0 left-0 w-full h-1 bg-[var(--primary)]" />
              
-            <div className="flex items-center justify-between px-10 py-8 border-b border-[var(--outline-variant)]/20 flex-shrink-0 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex items-center justify-between px-10 py-8 border-b border-[var(--outline-variant)]/20 flex-shrink-0">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-white text-[var(--primary)] border border-[var(--outline-variant)]/40 shadow-xl">
                   <Package size={24} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">{product ? 'Modify Asset' : 'Initialize Asset'}</h2>
-                  <p className="text-[10px] text-[#616161] font-bold uppercase tracking-[0.3em] mt-1 opacity-60">Catalogue re-indexing protocol</p>
+                  <h2 className="text-xl font-sans font-bold text-[#1B1C1C] uppercase tracking-tight">{product ? 'Update Product' : 'Add New Product'}</h2>
+                  <p className="text-[10px] text-[#616161] font-medium uppercase tracking-widest mt-1 opacity-60">Complete the details below to register the asset</p>
                 </div>
               </div>
               <button onClick={onClose} className="p-2 text-[#9E9E9E] hover:text-[#1B1B1B] hover:bg-neutral-100 transition-colors"><X size={20} /></button>
             </div>
 
-            <div ref={bodyRef} className="flex-1 overflow-y-auto px-10 py-10 space-y-12 custom-scrollbar">
-              <form id="add-product-form" onSubmit={handleSubmit} className="space-y-12">
+            <div ref={bodyRef} className="flex-1 overflow-y-auto px-10 py-10 space-y-10 custom-scrollbar font-sans">
+              <form id="add-product-form" onSubmit={handleSubmit} className="space-y-10">
                 
-                {/* ── Core Configuration ── */}
-                <section className="space-y-8">
+                {/* ── Basic Info ── */}
+                <section className="space-y-6">
                   <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
-                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Core Parameters</span>
+                     <span className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest">Basic Information</span>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-8">
+                  <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                       <Label htmlFor="locationId" required>Operational Node (Location)</Label>
+                       <Label htmlFor="locationId" required>Location</Label>
                        <div className="relative">
                          <select id="locationId" value={locationId} onChange={(e) => setLocationId(e.target.value)} className={selectClass} required>
-                           <option value="">SELECT_NODE</option>
+                           <option value="">Select Location</option>
                            {locations.map((loc) => (<option key={loc.id} value={loc.id}>{loc.name}</option>))}
                          </select>
                          <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9E9E9E] pointer-events-none" />
                        </div>
                     </div>
                     <div className="space-y-2">
-                       <Label htmlFor="name" required>Asset Designation (Name)</Label>
-                       <input id="name" type="text" value={name} onChange={(e) => handleNameChange(e.target.value)} placeholder="ASSET_ID" className={inputClass} required />
+                       <Label htmlFor="name" required>Product Name</Label>
+                       <input id="name" type="text" value={name} onChange={(e) => handleNameChange(e.target.value)} placeholder="e.g. Dedicated Cabin A" className={inputClass} required />
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-3 gap-8">
+                  <div className="grid md:grid-cols-3 gap-6">
                     <div className="space-y-2">
-                       <Label htmlFor="type" required>Module Type</Label>
+                       <Label htmlFor="type" required>Product Type</Label>
                        <div className="relative">
                          <select id="type" value={type} onChange={(e) => setType(e.target.value)} className={selectClass} required>
-                           <option value="">TYPE_ENUM</option>
+                           <option value="">Select Type</option>
                            {productTypes.map((opt) => (<option key={opt.id} value={opt.name}>{opt.displayName}</option>))}
                          </select>
                          <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9E9E9E] pointer-events-none" />
                        </div>
                     </div>
                     <div className="space-y-2">
-                       <Label htmlFor="category" required>Sector Category</Label>
+                       <Label htmlFor="category" required>Category</Label>
                        <div className="relative">
                          <select id="category" value={category} onChange={(e) => setCategory(e.target.value)} className={selectClass} required>
-                           <option value="">CAT_ENUM</option>
+                           <option value="">Select Category</option>
                            {categories.map((opt) => (<option key={opt.id} value={opt.name}>{opt.displayName}</option>))}
                          </select>
                          <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9E9E9E] pointer-events-none" />
                        </div>
                     </div>
                     <div className="space-y-2">
-                       <Label htmlFor="accessTime">Time-Gate Clearance</Label>
+                       <Label htmlFor="accessTime">Access Time</Label>
                        <div className="relative">
                          <select id="accessTime" value={accessTime} onChange={(e) => setAccessTime(e.target.value)} className={selectClass}>
-                           <option value="">ACCESS_LEVEL</option>
+                           <option value="">Select Access Time</option>
                            {accessTimeOptionsList.map((opt) => (<option key={opt.id} value={opt.name}>{opt.displayName}</option>))}
                          </select>
                          <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9E9E9E] pointer-events-none" />
                        </div>
                     </div>
                   </div>
+
+                  <div className="grid md:grid-cols-2 gap-6 pt-2">
+                    <div className="space-y-2">
+                       <Label htmlFor="capacity">Capacity (Seats)</Label>
+                       <input 
+                         id="capacity" 
+                         type="number" 
+                         value={capacity} 
+                         onChange={(e) => setCapacity(e.target.value)} 
+                         placeholder="0" 
+                         className={inputClass} 
+                       />
+                    </div>
+                    <div className="space-y-2">
+                       <Label htmlFor="quantity">Quantity</Label>
+                       <input 
+                         id="quantity" 
+                         type="number" 
+                         value={quantity} 
+                         onChange={(e) => setQuantity(e.target.value)} 
+                         placeholder="1" 
+                         className={inputClass} 
+                       />
+                    </div>
+                  </div>
                 </section>
 
-                {/* ── Media Protocol ── */}
-                <section className="space-y-8">
+                {/* ── Images ── */}
+                <section className="space-y-6">
                    <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
-                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Visual Arrays (Images)</span>
+                     <span className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest">Product Images</span>
                   </div>
                   
                   <div className="grid md:grid-cols-4 gap-4">
                      <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-[var(--outline-variant)]/40 hover:border-[var(--primary)] transition-all cursor-pointer bg-neutral-50/50 group">
                         <Plus size={24} className="text-[#9E9E9E] group-hover:text-[var(--primary)] mb-2" />
-                        <span className="text-[9px] font-black uppercase tracking-widest text-[#9E9E9E]">Add Frame</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-[#9E9E9E]">Add Image</span>
                         <input type="file" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
                      </label>
                      {existingImages.map((img) => (
@@ -405,11 +430,11 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                   </div>
                 </section>
 
-                {/* ── Pricing Matrix ── */}
-                <section className="space-y-8">
+                {/* ── Pricing ── */}
+                <section className="space-y-6">
                    <div className="flex items-center justify-between border-b border-[var(--outline-variant)]/20 pb-4">
-                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Economic Parameters (Pricing)</span>
-                     <button type="button" onClick={() => setPricingPlans(p => [...p, { durationType: '', price: 0, priceType: 'PER_SEAT' }])} className="text-[9px] font-black text-[var(--primary)] uppercase tracking-widest hover:underline">+ New Tariff</button>
+                     <span className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest">Pricing Details</span>
+                     <button type="button" onClick={() => setPricingPlans(p => [...p, { durationType: '', price: 0, priceType: 'PER_SEAT' }])} className="text-[9px] font-bold text-[var(--primary)] uppercase tracking-widest hover:underline">+ Add Plan</button>
                   </div>
                   
                   <div className="space-y-4">
@@ -418,38 +443,38 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                          <div className="space-y-2">
                             <Label htmlFor={`dur-${i}`}>Duration</Label>
                             <select value={plan.durationType} onChange={(e) => setPricingPlans(prev => prev.map((p, idx) => idx === i ? { ...p, durationType: e.target.value } : p))} className={selectClass}>
-                               <option value="">SELECT</option>
+                               <option value="">Select</option>
                                {durationTypes.map(d => <option key={d.id} value={d.name}>{d.displayName}</option>)}
                             </select>
                          </div>
                          <div className="space-y-2">
-                            <Label htmlFor={`pr-${i}`}>Unit Rate (₹)</Label>
+                            <Label htmlFor={`pr-${i}`}>Price (₹)</Label>
                             <input type="number" value={plan.price} onChange={(e) => setPricingPlans(prev => prev.map((p, idx) => idx === i ? { ...p, price: Number(e.target.value) } : p))} className={inputClass} />
                          </div>
                          <div className="space-y-2">
-                            <Label htmlFor={`ty-${i}`}>Metric</Label>
+                            <Label htmlFor={`ty-${i}`}>Price Type</Label>
                             <select value={plan.priceType || 'PER_SEAT'} onChange={(e) => setPricingPlans(prev => prev.map((p, idx) => idx === i ? { ...p, priceType: e.target.value as any } : p))} className={selectClass}>
-                               <option value="PER_SEAT">PER_SEAT</option>
-                               <option value="FIXED">FIXED_UNIT</option>
+                               <option value="PER_SEAT">Per Seat</option>
+                               <option value="FIXED">Fixed</option>
                             </select>
                          </div>
-                         <button type="button" onClick={() => setPricingPlans(p => p.filter((_, idx) => idx !== i))} className="mb-4 text-red-400 hover:text-red-600 font-black text-[9px] uppercase tracking-widest text-right">Delete Tariff</button>
+                         <button type="button" onClick={() => setPricingPlans(p => p.filter((_, idx) => idx !== i))} className="mb-4 text-red-500 hover:text-red-700 font-bold text-[9px] uppercase tracking-widest text-right">Remove</button>
                       </div>
                     ))}
                   </div>
                 </section>
 
-                {/* ── Amenities Grid ── */}
-                <section className="space-y-8">
+                {/* ── Amenities ── */}
+                <section className="space-y-6">
                    <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
-                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Support Subsystems (Amenities)</span>
+                     <span className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest">Amenities</span>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                      {amenitiesOptions.map((amenity) => {
                        const isSelected = selectedAmenities.includes(amenity.id);
                        return (
                          <button key={amenity.id} type="button" onClick={() => setSelectedAmenities(p => isSelected ? p.filter(id => id !== amenity.id) : [...p, amenity.id])} className={`flex items-center justify-between p-4 border transition-all ${isSelected ? 'bg-[var(--primary)] text-white border-[var(--primary)]' : 'bg-white text-[#616161] border-[var(--outline-variant)]/40 hover:border-[var(--primary)]/60'}`}>
-                           <span className="text-[10px] font-black uppercase tracking-widest truncate">{amenity.name}</span>
+                           <span className="text-[10px] font-bold uppercase tracking-widest truncate">{amenity.name}</span>
                            {isSelected && <Check size={14} className="text-white shrink-0" />}
                          </button>
                        );
@@ -457,23 +482,23 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                   </div>
                 </section>
 
-                {/* ── Operational Status ── */}
-                <section className="space-y-8">
+                {/* ── Status ── */}
+                <section className="space-y-6">
                    <div className="flex items-center gap-4 border-b border-[var(--outline-variant)]/20 pb-4">
-                     <span className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-[0.4em]">Operating Status</span>
+                     <span className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest">Status</span>
                   </div>
                   <div className="grid md:grid-cols-2 gap-8">
                     <div onClick={() => setIsActive(!isActive)} className="flex items-center justify-between p-6 bg-neutral-50 border border-[var(--outline-variant)]/40 cursor-pointer group hover:border-[var(--primary)]/60 transition-all">
                       <div className="flex items-center gap-4">
                         <div className={`h-3 w-3 ${isActive ? 'bg-[#4DB6AC]' : 'bg-red-400'} shadow-[0_0_8px_currentColor]`} />
-                        <div><p className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-widest">Active: {isActive ? 'SYNCED' : 'LOCKED'}</p></div>
+                        <div><p className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest">Active Product</p></div>
                       </div>
                       <div className={`w-12 h-6 p-1 bg-neutral-300 transition-colors ${isActive ? 'bg-[var(--primary)]' : ''}`}><div className={`w-4 h-4 bg-white shadow-sm transition-transform ${isActive ? 'translate-x-6' : ''}`} /></div>
                     </div>
                     <div onClick={() => setIsFeatured(!isFeatured)} className="flex items-center justify-between p-6 bg-neutral-50 border border-[var(--outline-variant)]/40 cursor-pointer group hover:border-[var(--primary)]/60 transition-all">
                       <div className="flex items-center gap-4">
                         <div className={`h-3 w-3 ${isFeatured ? 'text-[var(--primary)]' : 'text-neutral-400'} fill-current`}><Check size={12} /></div>
-                        <div><p className="text-[11px] font-black text-[#1B1C1C] uppercase tracking-widest">Featured Priority</p></div>
+                        <div><p className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-widest">Featured Product</p></div>
                       </div>
                       <div className={`w-12 h-6 p-1 bg-neutral-300 transition-colors ${isFeatured ? 'bg-[var(--primary)]' : ''}`}><div className={`w-4 h-4 bg-white shadow-sm transition-transform ${isFeatured ? 'translate-x-6' : ''}`} /></div>
                     </div>
@@ -483,8 +508,8 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
             </div>
 
             <div className="flex items-center justify-end gap-0 px-0 py-0 border-t border-[var(--outline-variant)]/20 bg-neutral-50 flex-shrink-0">
-              <button type="button" onClick={onClose} disabled={isSubmitting} className="flex-1 py-6 text-[10px] font-black text-[#616161] uppercase tracking-[0.3em] hover:bg-neutral-100 transition-all border-r border-[var(--outline-variant)]/20 disabled:opacity-50">Abort</button>
-              <button type="submit" form="add-product-form" disabled={isSubmitting} className="flex-[2] py-6 bg-[var(--primary)] text-white font-black text-[10px] uppercase tracking-[0.3em] hover:bg-neutral-900 transition-all disabled:opacity-60">{isSubmitting ? <><Loader2 size={16} className="animate-spin inline mr-3" />Synchronizing Registry…</> : <><Package size={16} className="inline mr-3" />{product ? 'Commit Changes' : 'Initialize Asset'}</>}</button>
+              <button type="button" onClick={onClose} disabled={isSubmitting} className="flex-1 py-6 text-[10px] font-bold text-[#616161] uppercase tracking-[0.3em] hover:bg-neutral-100 transition-all border-r border-[var(--outline-variant)]/20 disabled:opacity-50">Cancel</button>
+              <button type="submit" form="add-product-form" disabled={isSubmitting} className="flex-[2] py-6 bg-[var(--primary)] text-white font-bold text-[10px] uppercase tracking-[0.3em] hover:bg-neutral-900 transition-all disabled:opacity-60">{isSubmitting ? <><Loader2 size={16} className="animate-spin inline mr-3" />Updating Registry...</> : <><Package size={16} className="inline mr-3" />{product ? 'Save Changes' : 'Add Product'}</>}</button>
             </div>
           </motion.div>
         </div>

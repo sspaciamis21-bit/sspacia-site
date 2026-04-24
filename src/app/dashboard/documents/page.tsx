@@ -35,6 +35,7 @@ interface ProductUnit {
 interface Product {
     id: number;
     name: string;
+    capacity?: number;
     location: { name: string };
     pricingPlans: PricingPlan[];
     units: ProductUnit[];
@@ -57,6 +58,8 @@ interface Document {
   };
   createdAt: string;
   fileUrl: string;
+  nameOnDocument?: string;
+  documentNumber?: string;
 }
 
 export default function UserDocumentsPage() {
@@ -67,6 +70,11 @@ export default function UserDocumentsPage() {
 
   const [isUploading, setIsUploading] = useState(false);
   const [kycDocs, setKycDocs] = useState<{ aadhaar?: Document; pan?: Document }>({});
+
+  const [aadhaarName, setAadhaarName] = useState('');
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [panName, setPanName] = useState('');
+  const [panNumber, setPanNumber] = useState('');
 
   // Product Selection State
   const [products, setProducts] = useState<Product[]>([]);
@@ -161,6 +169,25 @@ export default function UserDocumentsPage() {
   };
 
   const handleUpload = async (type: 'Aadhaar' | 'PAN') => {
+    let name = '';
+    let number = '';
+
+    if (type === 'Aadhaar') {
+        name = aadhaarName;
+        number = aadhaarNumber;
+        if (!name || !number) {
+            toast.error("Please enter Name and Aadhaar Number");
+            return;
+        }
+    } else {
+        name = panName;
+        number = panNumber;
+        if (!name || !number) {
+            toast.error("Please enter Name and PAN Number");
+            return;
+        }
+    }
+
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*,application/pdf';
@@ -185,6 +212,8 @@ export default function UserDocumentsPage() {
         formData.append('title', `${type} Card`);
         formData.append('categoryId', kycCategory.id.toString());
         formData.append('notes', `Uploaded via User Dashboard KYC flow`);
+        formData.append('nameOnDocument', name);
+        formData.append('documentNumber', number);
 
         // 3. Upload to Drive & Save in one step
         const uploadRes = await fetch('/api/admin/documents/drive-upload', {
@@ -312,13 +341,31 @@ export default function UserDocumentsPage() {
                         <p className="text-[9px] text-[#5A5A72] font-bold uppercase tracking-widest mb-6">Front & Back Combined</p>
                         
                         {!kycDocs.aadhaar || kycDocs.aadhaar.status.name === 'REJECTED' ? (
-                            <button 
-                                onClick={() => handleUpload('Aadhaar')}
-                                disabled={isUploading}
-                                className="w-full py-3 rounded-none bg-white text-black text-[9px] font-black uppercase tracking-widest hover:bg-[var(--primary)] hover:text-white transition-all disabled:opacity-50"
-                            >
-                                {isUploading ? 'Uploading...' : 'Upload Now'}
-                            </button>
+                            <>
+                                <div className="space-y-3 mb-4">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Name on Aadhaar" 
+                                        value={aadhaarName}
+                                        onChange={(e) => setAadhaarName(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 rounded-none px-4 py-2 text-xs font-bold outline-none focus:border-[var(--primary)] transition-all placeholder:text-[#5A5A72] text-white"
+                                    />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Aadhaar Number" 
+                                        value={aadhaarNumber}
+                                        onChange={(e) => setAadhaarNumber(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 rounded-none px-4 py-2 text-xs font-bold outline-none focus:border-[var(--primary)] transition-all placeholder:text-[#5A5A72] text-white"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={() => handleUpload('Aadhaar')}
+                                    disabled={isUploading || !aadhaarName || !aadhaarNumber}
+                                    className="w-full py-3 rounded-none bg-white text-black text-[9px] font-black uppercase tracking-widest hover:bg-[var(--primary)] hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isUploading ? 'Uploading...' : 'Upload Now'}
+                                </button>
+                            </>
                         ) : (
                             <button 
                                 onClick={() => window.open(kycDocs.aadhaar?.fileUrl, '_blank')}
@@ -347,13 +394,31 @@ export default function UserDocumentsPage() {
                         <p className="text-[9px] text-[#5A5A72] font-bold uppercase tracking-widest mb-6">Clear digital copy</p>
                         
                         {!kycDocs.pan || kycDocs.pan.status.name === 'REJECTED' ? (
-                            <button 
-                                onClick={() => handleUpload('PAN')}
-                                disabled={isUploading}
-                                className="w-full py-3 rounded-none bg-white text-black text-[9px] font-black uppercase tracking-widest hover:bg-[var(--primary)] hover:text-white transition-all disabled:opacity-50"
-                            >
-                                {isUploading ? 'Uploading...' : 'Upload Now'}
-                            </button>
+                            <>
+                                <div className="space-y-3 mb-4">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Name on PAN" 
+                                        value={panName}
+                                        onChange={(e) => setPanName(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 rounded-none px-4 py-2 text-xs font-bold outline-none focus:border-[var(--primary)] transition-all placeholder:text-[#5A5A72] text-white"
+                                    />
+                                    <input 
+                                        type="text" 
+                                        placeholder="PAN Number" 
+                                        value={panNumber}
+                                        onChange={(e) => setPanNumber(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 rounded-none px-4 py-2 text-xs font-bold outline-none focus:border-[var(--primary)] transition-all placeholder:text-[#5A5A72] text-white"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={() => handleUpload('PAN')}
+                                    disabled={isUploading || !panName || !panNumber}
+                                    className="w-full py-3 rounded-none bg-white text-black text-[9px] font-black uppercase tracking-widest hover:bg-[var(--primary)] hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isUploading ? 'Uploading...' : 'Upload Now'}
+                                </button>
+                            </>
                         ) : (
                             <button 
                                 onClick={() => window.open(kycDocs.pan?.fileUrl, '_blank')}
@@ -377,7 +442,7 @@ export default function UserDocumentsPage() {
                         <ShoppingBag size={16} />
                         <span className="text-[9px] font-black uppercase tracking-[0.2em]">Purchase Hub</span>
                     </div>
-                    <h2 className="text-3xl font-display font-black text-[#1B1C1C] uppercase tracking-tight leading-none">
+                    <h2 className="text-3xl font-display font-black text-neutral-800 uppercase tracking-tight leading-none">
                         Select Your <span className="text-[var(--primary)]">Service Node</span>
                     </h2>
                     <p className="text-[#616161] font-bold text-[10px] uppercase tracking-widest max-w-sm leading-relaxed opacity-50">
@@ -413,11 +478,31 @@ export default function UserDocumentsPage() {
                             className="w-full bg-[var(--surface-low)]/50 border border-[var(--outline-variant)] rounded-none px-6 py-4 text-xs font-bold text-[#1B1C1C] outline-none focus:border-[var(--primary)] transition-all appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             <option value="">-- SELECT SEATS OPTION --</option>
-                            {products.find(p => p.id === Number(selectedProductId))?.units.map(unit => (
-                                <option key={unit.id} value={unit.id}>
-                                    {unit.name} ({unit.capacity} Seater)
-                                </option>
-                            ))}
+                            {(() => {
+                                const product = products.find(p => p.id === Number(selectedProductId));
+                                if (!product) return null;
+                                
+                                // Group units by capacity to show one option per seater size
+                                // Fallback to product.capacity if units are out of sync or missing
+                                const unitCapacities = product.units.map(u => u.capacity);
+                                const baseCapacities = unitCapacities.length > 0 ? Array.from(new Set(unitCapacities)) : [product.capacity || 1];
+                                
+                                // If all units show 1-seater but product is defined as more, prioritize product definition
+                                const finalCapacities = (baseCapacities.length === 1 && baseCapacities[0] === 1 && (product.capacity || 1) > 1)
+                                   ? [product.capacity!]
+                                   : baseCapacities;
+
+                                const uniqueCapacities = finalCapacities.sort((a, b) => a - b);
+                                
+                                return uniqueCapacities.map(cap => {
+                                    const firstUnitOfCap = product.units.find(u => u.capacity === cap) || product.units[0];
+                                    return (
+                                        <option key={cap} value={firstUnitOfCap?.id}>
+                                            {cap} Seater
+                                        </option>
+                                    );
+                                });
+                            })()}
                         </select>
                     </div>
 
@@ -427,21 +512,60 @@ export default function UserDocumentsPage() {
                             value={selectedPlanId}
                             onChange={(e) => setSelectedPlanId(e.target.value)}
                             disabled={!selectedProductId}
-                            className="w-full bg-[var(--surface-low)]/50 border border-[var(--outline-variant)] rounded-none px-6 py-4 text-xs font-bold text-[#1B1C1C] outline-none focus:border-[var(--primary)] transition-all appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="w-full bg-[var(--surface-low)]/50 border border-[var(--outline-variant)] rounded-none px-6 py-4 text-xs font-bold text-neutral-800 outline-none focus:border-[var(--primary)] transition-all appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             <option value="">-- SELECT PERIOD --</option>
                             {products.find(p => p.id === Number(selectedProductId))?.pricingPlans.map(plan => (
                                 <option key={plan.id} value={plan.id}>
-                                    ₹{plan.price.toLocaleString()} / Month ({plan.durationType.displayName})
+                                    ₹{plan.price.toLocaleString()} / seat ({plan.durationType.displayName})
                                 </option>
                             ))}
                         </select>
                     </div>
 
+                    {selectedPlanId && (
+                        <div className="bg-[var(--primary)] p-6 space-y-3 shadow-2xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 blur-[50px] -mr-16 -mt-16" />
+                            <div className="flex justify-between items-end border-b border-white/20 pb-3">
+                                <div>
+                                    <p className="text-[7px] font-black text-white/60 uppercase tracking-[0.2em] mb-1">Unit Pricing</p>
+                                    <p className="text-sm font-bold text-white">
+                                        ₹{Number(products.find(p => p.id === Number(selectedProductId))?.pricingPlans.find(pl => pl.id === Number(selectedPlanId))?.price || 0).toLocaleString()} <span className="text-white/60 text-[9px] font-medium">/ seat</span>
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[7px] font-black text-white/60 uppercase tracking-[0.2em] mb-1">Seats</p>
+                                    <p className="text-sm font-bold text-white">
+                                        × {(() => {
+                                            const p = products.find(p => p.id === Number(selectedProductId));
+                                            if (!p) return 1;
+                                            if (selectedUnitId) {
+                                                return p.units.find(u => u.id === Number(selectedUnitId))?.capacity || p.capacity || 1;
+                                            }
+                                            return p.capacity || 1;
+                                        })()}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex justify-between items-center pt-1">
+                                <p className="text-[9px] font-black text-white uppercase tracking-[0.3em]">Total Monthly Rent</p>
+                                <p className="text-xl font-display font-black text-white tracking-tighter">
+                                    ₹{(() => {
+                                        const p = products.find(p => p.id === Number(selectedProductId));
+                                        const plan = p?.pricingPlans.find(pl => pl.id === Number(selectedPlanId));
+                                        if (!p || !plan) return 0;
+                                        const seats = selectedUnitId ? (p.units.find(u => u.id === Number(selectedUnitId))?.capacity || p.capacity || 1) : (p.capacity || 1);
+                                        return (Number(plan.price) * seats).toLocaleString();
+                                    })()}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     <button 
                         onClick={handleSubmitRequest}
                         disabled={isSubmitting || !selectedProductId || !selectedPlanId}
-                        className="w-full mt-4 bg-[#1B1C1C] text-white py-5 rounded-none text-[10px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 shadow-xl hover:bg-black transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="w-full mt-4 bg-[var(--primary)] text-white py-5 rounded-none text-[10px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 shadow-xl hover:opacity-90 transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -464,7 +588,7 @@ export default function UserDocumentsPage() {
               <div className="inline-flex p-10 bg-[var(--surface-low)] border border-[var(--outline-variant)] text-[#9E9E9E] mb-8">
                 <FileText size={40} />
               </div>
-              <h3 className="text-2xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight">No Documents Available</h3>
+              <h3 className="text-2xl font-display font-bold text-neutral-800 uppercase tracking-tight">No Documents Available</h3>
               <p className="max-w-xs mx-auto mt-4 text-[#616161] font-bold text-[10px] uppercase tracking-widest opacity-40 leading-relaxed">
                 Your archive is currently empty. Agreements will appear here once finalized.
               </p>
@@ -480,10 +604,12 @@ export default function UserDocumentsPage() {
               <table className="w-full text-left border-separate border-spacing-y-4">
                 <thead>
                   <tr className="text-[#9E9E9E] border-b border-[var(--outline-variant)]">
-                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">Archive ID</th>
-                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">Document Meta</th>
-                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">Timeline</th>
-                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-right">Interaction</th>
+                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">ID</th>
+                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">Document</th>
+                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">Name</th>
+                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">Card Number</th>
+                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest">Status</th>
+                    <th className="px-6 py-4 text-[9px] font-black uppercase tracking-widest text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -494,16 +620,22 @@ export default function UserDocumentsPage() {
                       </td>
                       <td className="px-6 py-6">
                         <div>
-                          <p className="font-bold text-[#1C1C1C] text-sm uppercase tracking-tight">{doc.title}</p>
+                          <p className="font-bold text-neutral-800 text-sm uppercase tracking-tight">{doc.title}</p>
                           <p className="text-[9px] font-black text-[#9E9E9E] uppercase tracking-widest mt-1">{doc.category.displayName}</p>
                         </div>
+                      </td>
+                      <td className="px-6 py-6">
+                          <p className="text-[12px] font-bold text-neutral-800 uppercase tracking-tight">{doc.nameOnDocument || '-'}</p>
+                      </td>
+                      <td className="px-6 py-6">
+                          <p className="text-[12px] font-bold text-neutral-800 uppercase tracking-tight">{doc.documentNumber || '-'}</p>
                       </td>
                       <td className="px-6 py-6">
                          <div className="flex items-center gap-2">
                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-[8px] font-black uppercase tracking-widest border transition-all`} 
                                  style={{ backgroundColor: `${doc.status.color}10`, color: doc.status.color, borderColor: `${doc.status.color}30` }}>
                              {doc.status.name === 'APPROVED' ? <CheckCircle size={10} /> : <Clock size={10} />}
-                             {doc.status.displayName}
+                             {doc.status.name === 'APPROVED' ? 'APPROVED' : doc.status.name === 'REJECTED' ? 'REJECTED' : doc.status.displayName}
                            </span>
                            <span className="text-[10px] font-bold text-[#9E9E9E]">
                              {new Date(doc.createdAt).toLocaleDateString()}
@@ -511,13 +643,12 @@ export default function UserDocumentsPage() {
                          </div>
                       </td>
                       <td className="px-6 py-6 text-right">
-                        <div className="flex items-center justify-end gap-3 translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all">
+                        <div className="flex items-center justify-end">
                           <button 
                             onClick={() => window.open(doc.fileUrl, '_blank')}
-                            className="p-2.5 rounded-none bg-white text-[#616161] border border-[var(--outline-variant)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-all"
-                            title="Preview"
+                            className="px-3 py-1.5 bg-white border border-neutral-200 text-[#1B1C1C] hover:bg-black hover:text-white transition-all text-[9px] font-bold uppercase tracking-widest"
                           >
-                            <Eye size={14} />
+                            VIEW
                           </button>
                         </div>
                       </td>

@@ -180,16 +180,21 @@ export const POST = withPermission('products', 'create', async (req: NextRequest
                 })),
               }
             : undefined,
-          units: units.length > 0
-            ? {
-                create: units.map((u) => ({
+          units: {
+            create: units.length > 0 
+              ? units.map((u) => ({
                   name: u.name,
                   code: u.code,
-                  capacity: u.capacity ? Number(u.capacity) : 1,
+                  capacity: u.capacity ? Number(u.capacity) : (body.capacity ? Number(body.capacity) : 1),
                   description: u.description || '',
-                })),
-              }
-            : undefined,
+                }))
+              : [{
+                  name: `${String(name)} Unit`,
+                  code: `${String(slug)}-UNIT-1`,
+                  capacity: body.capacity ? Number(body.capacity) : 1,
+                  description: `Default unit for ${String(name)}`,
+                }],
+          },
           amenities: amenityIds.length > 0
             ? {
                 create: amenityIds.map((aId) => ({ amenityId: aId })),

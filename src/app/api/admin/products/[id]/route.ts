@@ -169,13 +169,13 @@ export const PATCH = withPermission('products', 'update', async (
               })),
             }
           }),
-          ...(units !== undefined && {
+          ...(units !== undefined && units.length > 0 && {
             units: {
               deleteMany: {},
               create: units.map((u) => ({
                 name: u.name,
                 code: u.code,
-                capacity: u.capacity ? Number(u.capacity) : 1,
+                capacity: u.capacity ? Number(u.capacity) : (body.capacity ? Number(body.capacity) : 1),
                 description: u.description || '',
               })),
             }
@@ -190,6 +190,14 @@ export const PATCH = withPermission('products', 'update', async (
           updatedAt: true,
         },
       });
+
+      // Synchronize unit capacities if product capacity changed and no specific units were provided
+      if (body.capacity !== undefined && (units === undefined || units.length === 0)) {
+        await tx.productUnit.updateMany({
+          where: { productId },
+          data: { capacity: Number(body.capacity) }
+        });
+      }
 
       // 4. Activity log
       await tx.activityLog.create({

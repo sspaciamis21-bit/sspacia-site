@@ -10,10 +10,12 @@ interface City {
   name: string;
 }
 
-interface AddLocationModalProps {
+interface EditLocationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  location: any;
 }
 
 const toSlug = (name: string) =>
@@ -37,7 +39,7 @@ const inputClass =
 const selectClass =
   'w-full px-4 py-2.5 bg-[#F8F9FA] border border-[#CFD8DC]/50 rounded-lg text-sm text-[#212121] focus:outline-none focus:ring-4 focus:ring-[#006064]/8 focus:border-[#006064] transition-all appearance-none cursor-pointer';
 
-export function AddLocationModal({ isOpen, onClose, onSuccess }: AddLocationModalProps) {
+export function EditLocationModal({ isOpen, onClose, onSuccess, location }: EditLocationModalProps) {
   const [cities, setCities] = useState<City[]>([]);
   const [citiesLoading, setCitiesLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,22 +69,22 @@ export function AddLocationModal({ isOpen, onClose, onSuccess }: AddLocationModa
       .finally(() => setCitiesLoading(false));
   }, [isOpen]);
 
-  // Reset form when modal closes
+  // Set initial data
   useEffect(() => {
-    if (!isOpen) {
-      setName('');
-      setSlug('');
-      setCityId('');
-      setAddress('');
-      setMapUrl('');
-      setMapEmbed('');
-      setPhone('');
-      setEmail('');
-      setIsActive(true);
-      setSortOrder('0');
-      setSlugManuallyEdited(false);
+    if (isOpen && location) {
+      setName(location.name || '');
+      setSlug(location.slug || '');
+      setCityId(location.city?.id?.toString() || '');
+      setAddress(location.address || '');
+      setMapUrl(location.mapUrl || '');
+      setMapEmbed(location.mapEmbed || '');
+      setPhone(location.phone || '');
+      setEmail(location.email || '');
+      setIsActive(location.isActive ?? true);
+      setSortOrder(location.sortOrder?.toString() || '0');
+      setSlugManuallyEdited(true);
     }
-  }, [isOpen]);
+  }, [isOpen, location]);
 
   const handleNameChange = (val: string) => {
     setName(val);
@@ -119,16 +121,16 @@ export function AddLocationModal({ isOpen, onClose, onSuccess }: AddLocationModa
         sortOrder: Number(sortOrder) || 0,
       };
 
-      const response = await fetch('/api/admin/locations', {
-        method: 'POST',
+      const response = await fetch(`/api/admin/locations/${location.id}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
       const json = await response.json();
-      if (!response.ok) throw new Error(json.error ?? 'Location initialization failed');
+      if (!response.ok) throw new Error(json.error ?? 'Location update failed');
 
-      toast.success(`Location added: ${name}`);
+      toast.success(`Location updated: ${name}`);
       onSuccess();
       onClose();
     } catch (err) {
@@ -170,8 +172,8 @@ export function AddLocationModal({ isOpen, onClose, onSuccess }: AddLocationModa
                   <MapPin size={24} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Add Location</h2>
-                  <p className="text-[10px] text-[#616161] font-bold uppercase tracking-[0.3em] mt-1 opacity-60">Registering new location</p>
+                  <h2 className="text-xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Edit Location</h2>
+                  <p className="text-[10px] text-[#616161] font-bold uppercase tracking-[0.3em] mt-1 opacity-60">Updating location details</p>
                 </div>
               </div>
               <button
@@ -184,7 +186,7 @@ export function AddLocationModal({ isOpen, onClose, onSuccess }: AddLocationModa
 
             {/* Scrollable form body */}
             <div ref={bodyRef} className="flex-1 overflow-y-auto px-10 py-10 space-y-12 custom-scrollbar">
-              <form id="add-location-form" onSubmit={handleSubmit} className="space-y-12">
+              <form id="edit-location-form" onSubmit={handleSubmit} className="space-y-12">
 
                 {/* ── Basic Info ── */}
                 <section className="space-y-8">
@@ -356,7 +358,7 @@ export function AddLocationModal({ isOpen, onClose, onSuccess }: AddLocationModa
               </button>
               <button
                 type="submit"
-                form="add-location-form"
+                form="edit-location-form"
                 disabled={isSubmitting}
                 className="flex-[2] inline-flex items-center justify-center gap-3 py-6 bg-[var(--primary)] text-white font-black text-[10px] uppercase tracking-[0.3em] hover:bg-neutral-900 transition-all disabled:opacity-60"
               >
@@ -368,7 +370,7 @@ export function AddLocationModal({ isOpen, onClose, onSuccess }: AddLocationModa
                 ) : (
                   <>
                     <MapPin size={16} />
-                    Save Location
+                    Save Changes
                   </>
                 )}
               </button>

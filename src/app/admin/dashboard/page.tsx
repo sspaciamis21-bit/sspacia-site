@@ -251,6 +251,38 @@ export default function AdminDashboardPage() {
           </div>
         </FadeUp>
 
+        {/* Agreement & Identity Status */}
+        <FadeUp delay={0.45} className="lg:col-span-8">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-[var(--outline-variant)]/20 border border-[var(--outline-variant)]/40 shadow-xl">
+              <div className="bg-white p-10 flex flex-col h-full">
+                 <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-3">
+                       <div className="h-1.5 w-6 bg-indigo-600"></div>
+                       <h3 className="text-[10px] font-black text-[#1B1C1C] uppercase tracking-[0.3em]">Agreement Registry</h3>
+                    </div>
+                    <Link href="/manager/contracts" className="text-[9px] font-bold text-[var(--primary)] uppercase tracking-widest">Open Center</Link>
+                 </div>
+                 <div className="flex-1 flex flex-col items-center justify-center py-10 border border-dashed border-neutral-100">
+                    <ShieldCheck size={32} className="text-[var(--primary)] opacity-20 mb-4" />
+                    <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-[#9E9E9E]">Legal Protocol Matrix Active</p>
+                 </div>
+              </div>
+              <div className="bg-white p-10 flex flex-col h-full">
+                 <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-3">
+                       <div className="h-1.5 w-6 bg-amber-500"></div>
+                       <h3 className="text-[10px] font-black text-[#1B1C1C] uppercase tracking-[0.3em]">Identity Queue</h3>
+                    </div>
+                    <Link href="/manager/documents" className="text-[9px] font-bold text-[var(--primary)] uppercase tracking-widest">Open Center</Link>
+                 </div>
+                 <div className="flex-1 flex flex-col items-center justify-center py-10 border border-dashed border-neutral-100">
+                    <FileText size={32} className="text-[var(--primary)] opacity-20 mb-4" />
+                    <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-[#9E9E9E]">Verification Engine Syncing</p>
+                 </div>
+              </div>
+           </div>
+        </FadeUp>
+
         {/* Quick Actions */}
         <FadeUp delay={0.5} className="lg:col-span-4">
           <div className="bg-white p-10 rounded-none border border-[var(--outline-variant)]/40 shadow-2xl h-full flex flex-col justify-between">
@@ -286,6 +318,26 @@ export default function AdminDashboardPage() {
                   <span className="flex items-center gap-3">
                     <Users size={18} />
                     Personnel Hub
+                  </span>
+                  <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition-all translate-x--2 group-hover:translate-x-0" />
+                </Link>
+                <Link
+                  href="/manager/contracts"
+                  className="w-full flex items-center justify-between px-6 py-5 bg-neutral-50 border border-[var(--outline-variant)]/40 text-[#1B1B1B] rounded-none font-black text-[10px] uppercase tracking-[0.2em] hover:border-[var(--primary)] transition-all group"
+                >
+                  <span className="flex items-center gap-3">
+                    <ShieldCheck size={18} />
+                    Agreements Center
+                  </span>
+                  <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition-all translate-x--2 group-hover:translate-x-0" />
+                </Link>
+                <Link
+                  href="/manager/documents"
+                  className="w-full flex items-center justify-between px-6 py-5 bg-neutral-50 border border-[var(--outline-variant)]/40 text-[#1B1B1B] rounded-none font-black text-[10px] uppercase tracking-[0.2em] hover:border-[var(--primary)] transition-all group"
+                >
+                  <span className="flex items-center gap-3">
+                    <FileText size={18} />
+                    Identity Audit
                   </span>
                   <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition-all translate-x--2 group-hover:translate-x-0" />
                 </Link>

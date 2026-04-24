@@ -49,6 +49,8 @@ interface Document {
   fileSize: number;
   mimeType: string;
   createdAt: string;
+  nameOnDocument?: string;
+  documentNumber?: string;
 }
 
 interface DocumentStatus {
@@ -355,9 +357,11 @@ export default function DocumentVerificationPage() {
                                         <table className="w-full text-left mt-4 border-separate border-spacing-y-2">
                                             <thead>
                                                 <tr>
-                                                    <th className="py-4 px-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Protocol Type</th>
-                                                    <th className="py-4 px-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Lifecycle</th>
-                                                    <th className="py-4 px-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Access</th>
+                                                    <th className="py-4 px-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Document</th>
+                                                    <th className="py-4 px-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Name</th>
+                                                    <th className="py-4 px-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Card Number</th>
+                                                    <th className="py-4 px-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Status</th>
+                                                    <th className="py-4 px-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Action</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="space-y-px">
@@ -374,6 +378,12 @@ export default function DocumentVerificationPage() {
                                                                 </div>
                                                             </div>
                                                         </td>
+                                                        <td className="py-6 px-4">
+                                                            <div className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-wide">{doc.nameOnDocument || '-'}</div>
+                                                        </td>
+                                                        <td className="py-6 px-4">
+                                                            <div className="text-[11px] font-bold text-[#1B1C1C] uppercase tracking-wide">{doc.documentNumber || '-'}</div>
+                                                        </td>
                                                         <td className="py-6 px-4 text-center">
                                                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-none text-[8px] font-black uppercase tracking-widest border ${getStatusStyle(doc.status.name)}`}>
                                                                 {doc.status.displayName}
@@ -381,29 +391,29 @@ export default function DocumentVerificationPage() {
                                                         </td>
                                                         <td className="py-6 px-4 text-right">
                                                             <div className="flex items-center justify-end gap-2 text-[var(--primary)]">
-                                                                <a 
-                                                                    href={doc.fileUrl} 
-                                                                    target="_blank" 
-                                                                    className="px-3 py-1.5 bg-white border border-neutral-200 text-[#1B1C1C] hover:bg-black hover:text-white transition-all text-[9px] font-bold uppercase tracking-widest"
-                                                                >
-                                                                    INSPECT
-                                                                </a>
-                                                                {doc.status.name === 'PENDING' && (
-                                                                    <>
-                                                                        <button 
-                                                                            onClick={() => handleReview(doc.id, 'APPROVED')}
-                                                                            className="px-3 py-1.5 bg-[var(--primary)] text-white border border-[var(--primary)] hover:bg-black transition-all text-[9px] font-bold uppercase tracking-widest"
-                                                                        >
-                                                                            VERIFY
-                                                                        </button>
-                                                                        <button 
-                                                                            onClick={() => handleReview(doc.id, 'REJECTED')}
-                                                                            className="px-3 py-1.5 bg-white text-red-600 border border-red-100 hover:bg-red-50 transition-all text-[9px] font-bold uppercase tracking-widest"
-                                                                        >
-                                                                            NULLIFY
-                                                                        </button>
-                                                                    </>
-                                                                )}
+                                                                    <a 
+                                                                        href={doc.fileUrl} 
+                                                                        target="_blank" 
+                                                                        className="px-3 py-1.5 bg-white border border-neutral-200 text-[#1B1C1C] hover:bg-black hover:text-white transition-all text-[9px] font-bold uppercase tracking-widest"
+                                                                    >
+                                                                        VIEW
+                                                                    </a>
+                                                                    {doc.status.name === 'PENDING' && (
+                                                                        <>
+                                                                            <button 
+                                                                                onClick={() => handleReview(doc.id, 'APPROVED')}
+                                                                                className="px-3 py-1.5 bg-[var(--primary)] text-white border border-[var(--primary)] hover:bg-black transition-all text-[9px] font-bold uppercase tracking-widest"
+                                                                            >
+                                                                                APPROVE
+                                                                            </button>
+                                                                            <button 
+                                                                                onClick={() => handleReview(doc.id, 'REJECTED')}
+                                                                                className="px-3 py-1.5 bg-white text-red-600 border border-red-100 hover:bg-red-50 transition-all text-[9px] font-bold uppercase tracking-widest"
+                                                                            >
+                                                                                REJECT
+                                                                            </button>
+                                                                        </>
+                                                                    )}
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -424,10 +434,12 @@ export default function DocumentVerificationPage() {
                     <table className="w-full text-left border-collapse min-w-[1000px]">
                       <thead>
                         <tr className="bg-neutral-50/50 border-b border-[var(--outline-variant)]">
-                          <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Protocol Classification</th>
-                          <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Assigned Node</th>
-                          <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Lifecycle</th>
-                          <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Operations</th>
+                          <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Document</th>
+                          <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">User</th>
+                          <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Name</th>
+                          <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Card Number</th>
+                          <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Status</th>
+                          <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--outline-variant)]/10 bg-white">
@@ -459,6 +471,12 @@ export default function DocumentVerificationPage() {
                                     </div>
                                 </div>
                             </td>
+                            <td className="py-8 px-8">
+                                <div className="text-[12px] font-bold text-[#1B1C1C] uppercase tracking-wide">{doc.nameOnDocument || '-'}</div>
+                            </td>
+                            <td className="py-8 px-8">
+                                <div className="text-[12px] font-bold text-[#1B1C1C] uppercase tracking-wide">{doc.documentNumber || '-'}</div>
+                            </td>
                             <td className="py-8 px-8 text-center">
                                 <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-none text-[8px] font-black uppercase tracking-widest border ${getStatusStyle(doc.status.name)}`}>
                                     {doc.status.displayName}
@@ -471,7 +489,7 @@ export default function DocumentVerificationPage() {
                                         target="_blank" 
                                         className="px-4 py-2 bg-white text-[#1B1C1C] border border-neutral-200 hover:bg-black hover:text-white transition-all text-[9px] font-bold uppercase tracking-widest"
                                     >
-                                        INSPECT
+                                        VIEW
                                     </a>
                                     {doc.status.name === 'PENDING' && (
                                         <>
@@ -479,13 +497,13 @@ export default function DocumentVerificationPage() {
                                                 onClick={() => handleReview(doc.id, 'APPROVED')}
                                                 className="px-4 py-2 bg-[var(--primary)] text-white border border-[var(--primary)] hover:bg-black transition-all text-[9px] font-bold uppercase tracking-widest"
                                             >
-                                                VERIFY
+                                                APPROVE
                                             </button>
                                             <button 
                                                 onClick={() => handleReview(doc.id, 'REJECTED')}
                                                 className="px-4 py-2 bg-white text-red-600 border border-red-100 hover:bg-red-50 transition-all text-[9px] font-bold uppercase tracking-widest"
                                             >
-                                                NULLIFY
+                                                REJECT
                                             </button>
                                         </>
                                     )}

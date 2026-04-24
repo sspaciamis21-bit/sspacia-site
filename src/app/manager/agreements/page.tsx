@@ -101,8 +101,8 @@ export default function ManagerAgreementsPage() {
               <FileText size={24} />
             </div>
             <div>
-              <h1 className="text-3xl md:text-4xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight">Legal Registry</h1>
-              <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60">Lease contracts and member protocol agreements</p>
+              <h1 className="text-3xl md:text-4xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight">Agreements Registry</h1>
+              <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60">View and manage member agreements</p>
             </div>
           </div>
         </div>
@@ -147,11 +147,11 @@ export default function ManagerAgreementsPage() {
               <table className="w-full text-left border-collapse min-w-[950px]">
                 <thead>
                   <tr className="border-b border-[var(--outline-variant)]/30 bg-neutral-50/50">
-                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Protocol Title</th>
-                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Node Subscriber</th>
-                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Effective Date</th>
-                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Legal State</th>
-                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Dispatch</th>
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Document</th>
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">User</th>
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Date</th>
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Status</th>
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--outline-variant)]/10 bg-white">
@@ -199,13 +199,13 @@ export default function ManagerAgreementsPage() {
                             rel="noopener noreferrer"
                             className="px-4 py-2 bg-white text-[9px] font-bold uppercase tracking-widest border border-[var(--outline-variant)] hover:bg-[var(--primary)] hover:text-white transition-all"
                           >
-                            Inspection
+                            VIEW
                           </a>
                           <button 
                              onClick={() => window.open(agr.fileUrl, '_blank')}
                              className="px-4 py-2 bg-[var(--primary)] text-white text-[9px] font-bold uppercase tracking-widest border border-[var(--primary)] hover:bg-black transition-all"
                           >
-                            Archive
+                            SAVE
                           </button>
                         </div>
                       </td>

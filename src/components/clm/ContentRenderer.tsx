@@ -65,7 +65,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, class
           3: 'text-lg font-bold mb-3 mt-6 uppercase',
         };
         return (
-          <Tag key={index} className={`${headingStyles[level] || headingStyles[1]} ${alignClass} font-serif text-black`}>
+          <Tag key={index} className={`${headingStyles[level] || headingStyles[1]} ${alignClass} font-sans text-black`}>
             {renderContent(node.content)}
           </Tag>
         );
@@ -73,13 +73,13 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, class
 
       case 'paragraph':
         return (
-          <p key={index} className={`mb-5 text-[15px] leading-relaxed text-gray-800 font-serif ${alignClass}`}>
+          <p key={index} className={`mb-5 text-[15px] leading-relaxed text-gray-800 font-sans ${alignClass}`}>
             {renderContent(node.content)}
           </p>
         );
       case 'bulletList':
         return (
-          <ul key={index} className="list-disc pl-8 mb-6 space-y-3 font-serif text-gray-800">
+          <ul key={index} className="list-disc pl-8 mb-6 space-y-3 font-sans text-gray-800">
             {node.content?.map((li: any, i: number) => (
               <li key={i}>{li.content?.map((p: any) => renderContent(p.content))}</li>
             ))}
@@ -87,7 +87,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, class
         );
       case 'orderedList':
         return (
-          <ol key={index} className="list-decimal pl-8 mb-6 space-y-3 font-serif text-gray-800">
+          <ol key={index} className="list-decimal pl-8 mb-6 space-y-3 font-sans text-gray-800">
             {node.content?.map((li: any, i: number) => (
               <li key={i}>{li.content?.map((p: any) => renderContent(p.content))}</li>
             ))}
@@ -95,7 +95,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, class
         );
       case 'blockquote':
         return (
-          <blockquote key={index} className="border-l-4 border-gray-200 pl-6 my-8 italic text-gray-600 font-serif">
+          <blockquote key={index} className="border-l-4 border-gray-200 pl-6 my-8 italic text-gray-600 font-sans">
             {node.content?.map((p: any) => renderContent(p.content))}
           </blockquote>
         );
@@ -113,7 +113,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, class
       <style jsx global>{`
         .clm-content-renderer strong { font-weight: 700; }
         .clm-content-renderer {
-           font-family: 'Times New Roman', Times, serif;
+           font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
         }
       `}</style>
     </div>

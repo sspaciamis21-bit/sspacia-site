@@ -1,10 +1,12 @@
 import { NextResponse, NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { withPermission, type PermissionContext } from '@/lib/auth/withPermission';
+import { generateContractPDF } from '@/lib/clm/pdf';
 
 /**
  * POST /api/admin/contracts/[id]/sign-counter
  * Manager counter-signs the contract using Canvas method.
+ * PDF is generated ONLY after both customer and manager have signed.
  */
 export const POST = withPermission('clm', 'approve', async (
   req: NextRequest,
@@ -56,8 +58,17 @@ export const POST = withPermission('clm', 'approve', async (
       });
     });
 
+    // BOTH parties have now signed — generate the final PDF document
+    try {
+      await generateContractPDF(contractId, Number(payload.id));
+      console.log(`[CounterSign] PDF generated for contract ${contractId} after both signatures.`);
+    } catch (pdfErr) {
+      console.error('[CounterSign] PDF generation failed:', pdfErr);
+      // Don't fail the counter-sign; manager can use "Finalise" button as fallback
+    }
+
     return NextResponse.json({
-      message: 'Contract counter-signed successfully'
+      message: 'Contract counter-signed successfully. Final document generated.'
     });
 
   } catch (error) {

@@ -16,7 +16,9 @@ import {
   Ticket,
   Shield,
   Calendar,
-  Sparkles
+  Sparkles,
+  ShieldCheck,
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -31,6 +33,8 @@ const sidebarItems = [
   { name: 'Roles', href: '/admin/roles', icon: Shield },
   { name: 'Tickets', href: '/admin/tickets', icon: Ticket },
   { name: 'Bookings', href: '/admin/bookings', icon: Calendar },
+  { name: 'Contracts', href: '/manager/contracts', icon: ShieldCheck },
+  { name: 'Documents', href: '/manager/documents', icon: FileText },
 ];
 
 export default function AdminLayout({

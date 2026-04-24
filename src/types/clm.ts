@@ -55,8 +55,10 @@ export interface ContractSummary {
   booking?: {
     id: number;
     bookingNumber: string;
+    startDate: string;
+    endDate: string;
     product?: { name: string };
-    location?: { name: string };
+    location?: { name: string; address: string };
   };
   _count?: { versions: number; negotiations: number };
 }
@@ -123,8 +125,18 @@ export interface Contract {
   booking: {
     id: number;
     bookingNumber: string;
+    startDate: string;
+    endDate: string;
     customer?: { id: number; name: string; email: string; organization?: string };
-    product?: { id: number; name: string; location?: { name: string } };
+    product?: { 
+      id: number; 
+      name: string; 
+      type?: { id: number; name: string; displayName: string };
+      location?: { 
+        name: string;
+        address?: string;
+      } 
+    };
   };
 
   versions: ContractVersion[];

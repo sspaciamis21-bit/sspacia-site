@@ -52,6 +52,20 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Selected pricing plan not found' }, { status: 404 });
         }
 
+        // Get Product and Unit info for capacity
+        const product = await prisma.product.findUnique({
+            where: { id: Number(productId) },
+            include: { units: { where: { id: unitId ? Number(unitId) : -1 } } }
+        });
+
+        if (!product) {
+            return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+        }
+
+        const seats = unitId && product.units[0] ? product.units[0].capacity : (product.capacity || 1);
+        const unitPrice = Number(pricing.price);
+        const totalAmount = unitPrice * seats;
+
         // Get PENDING status ID
         const pendingStatus = await prisma.bookingStatus.findUnique({
             where: { name: 'PENDING' }
@@ -76,9 +90,10 @@ export async function POST(req: Request) {
                     statusId: pendingStatus.id,
                     startDate: new Date(startDate),
                     endDate: endDate ? new Date(endDate) : new Date(new Date(startDate).setDate(new Date(startDate).getDate() + 30)),
-                    unitPrice: pricing.price,
-                    totalAmount: pricing.price,
-                    grandTotal: pricing.price,
+                    unitPrice: unitPrice,
+                    totalAmount: totalAmount,
+                    grandTotal: totalAmount,
+                    seats: seats,
                     notes: notes || 'Product purchase request via dashboard'
                 }
             });

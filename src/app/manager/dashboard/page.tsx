@@ -163,7 +163,7 @@ export default function ManagerDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         {/* Recent Bookings */}
         <FadeUp delay={0.2}>
-          <div className="bg-white rounded-none border border-[var(--outline-variant)] shadow-sm overflow-hidden h-full">
+          <div className="bg-white rounded-none border border-[var(--outline-variant)] shadow-sm overflow-hidden h-full flex flex-col">
             <div className="px-8 py-6 border-b border-[var(--outline-variant)] flex justify-between items-center bg-neutral-50/50">
               <div className="flex items-center gap-3">
                 <div className="h-1.5 w-6 bg-[var(--primary)]"></div>
@@ -171,7 +171,7 @@ export default function ManagerDashboardPage() {
               </div>
               <Link href="/manager/bookings" className="text-[9px] font-bold uppercase tracking-[0.2em] text-[var(--primary)] hover:text-black transition-colors">Audit trail</Link>
             </div>
-            <div className="divide-y divide-neutral-100">
+            <div className="divide-y divide-neutral-100 flex-1 overflow-y-auto">
               {bookings.length > 0 ? (
                 bookings.map((booking) => (
                   <div key={booking.id} className="p-8 hover:bg-neutral-50 transition-colors group">
@@ -204,9 +204,55 @@ export default function ManagerDashboardPage() {
           </div>
         </FadeUp>
 
-        {/* Recent Tickets */}
+        {/* Agreement Registry */}
+        <FadeUp delay={0.25}>
+          <div className="bg-white rounded-none border border-[var(--outline-variant)] shadow-sm overflow-hidden h-full flex flex-col">
+            <div className="px-8 py-6 border-b border-[var(--outline-variant)] flex justify-between items-center bg-neutral-50/50">
+              <div className="flex items-center gap-3">
+                <div className="h-1.5 w-6 bg-indigo-600"></div>
+                <h2 className="text-[10px] font-bold text-[#1B1C1C] uppercase tracking-[0.4em]">Agreement Registry</h2>
+              </div>
+              <Link href="/manager/contracts" className="text-[9px] font-bold uppercase tracking-[0.2em] text-[var(--primary)] hover:text-black transition-colors">Protocol Sync</Link>
+            </div>
+            <div className="divide-y divide-neutral-100 flex-1 overflow-y-auto">
+               <div className="p-10 text-center py-24">
+                  <ShieldCheck size={32} className="mx-auto text-[var(--primary)] opacity-20 mb-4" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#9E9E9E]">Contract Engine Active</p>
+                  <p className="text-[8px] text-[#BDBDBD] font-bold uppercase tracking-widest mt-2">All legal protocols currently synchronized.</p>
+                  <Link 
+                    href="/manager/contracts"
+                    className="inline-block mt-8 px-6 py-2 border border-[var(--outline-variant)] text-[9px] font-black uppercase tracking-widest hover:bg-[var(--primary)] hover:text-white transition-all"
+                  >
+                    Open Contract Center
+                  </Link>
+               </div>
+            </div>
+          </div>
+        </FadeUp>
+
+        {/* Pending Verifications */}
         <FadeUp delay={0.3}>
-          <div className="bg-white rounded-none border border-[var(--outline-variant)] shadow-sm overflow-hidden h-full">
+          <div className="bg-white rounded-none border border-[var(--outline-variant)] shadow-sm overflow-hidden h-full flex flex-col">
+            <div className="px-8 py-6 border-b border-[var(--outline-variant)] flex justify-between items-center bg-neutral-50/50">
+              <div className="flex items-center gap-3">
+                <div className="h-1.5 w-6 bg-amber-500"></div>
+                <h2 className="text-[10px] font-bold text-[#1B1C1C] uppercase tracking-[0.4em]">Identity Queue</h2>
+              </div>
+              <Link href="/manager/documents" className="text-[9px] font-bold uppercase tracking-[0.2em] text-[var(--primary)] hover:text-black transition-colors">Audit Node</Link>
+            </div>
+            <div className="divide-y divide-neutral-100 flex-1 overflow-y-auto">
+               <div className="p-10 text-center py-24">
+                  <FileText size={32} className="mx-auto text-[var(--primary)] opacity-20 mb-4" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#9E9E9E]">Verification Engine Active</p>
+                  <p className="text-[8px] text-[#BDBDBD] font-bold uppercase tracking-widest mt-2">All subscriber nodes currently synchronized.</p>
+               </div>
+            </div>
+          </div>
+        </FadeUp>
+
+        {/* Recent Tickets */}
+        <FadeUp delay={0.35}>
+          <div className="bg-white rounded-none border border-[var(--outline-variant)] shadow-sm overflow-hidden h-full flex flex-col">
             <div className="px-8 py-6 border-b border-[var(--outline-variant)] flex justify-between items-center bg-neutral-50/50">
               <div className="flex items-center gap-3">
                 <div className="h-1.5 w-6 bg-red-600"></div>
@@ -214,7 +260,7 @@ export default function ManagerDashboardPage() {
               </div>
               <Link href="/manager/tickets" className="text-[9px] font-bold uppercase tracking-[0.2em] text-[var(--primary)] hover:text-black transition-colors">Dispatch</Link>
             </div>
-            <div className="divide-y divide-neutral-100">
+            <div className="divide-y divide-neutral-100 flex-1 overflow-y-auto">
               {tickets.length > 0 ? (
                 tickets.map((ticket) => (
                   <div key={ticket.id} className="p-8 hover:bg-neutral-50 transition-colors group">
@@ -261,7 +307,7 @@ export default function ManagerDashboardPage() {
                     { name: 'Assets', href: '/manager/products', icon: Package, desc: 'SPACE INVENTORY' },
                     { name: 'Reservations', href: '/manager/bookings', icon: Clock, desc: 'SCHEDULES' },
                     { name: 'Support', href: '/manager/tickets', icon: AlertCircle, desc: 'DISPATCH' },
-                    { name: 'Subscribers', href: '/manager/users', icon: Briefcase, desc: 'USER NODES' },
+                    { name: 'Identity', href: '/manager/documents', icon: ShieldCheck, desc: 'VERIFICATION' },
                   ].map((item, idx) => (
                     <Link
                       key={idx}
