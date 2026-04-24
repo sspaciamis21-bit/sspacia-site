@@ -41,6 +41,39 @@ interface ProfessionalEditorProps {
   onNegotiate?: (selectedText: string) => void;
 }
 
+type TiptapNode = {
+  type?: string;
+  text?: string;
+  content?: TiptapNode[];
+  [key: string]: unknown;
+};
+
+function sanitizeTiptapNode(node: TiptapNode | null | undefined): TiptapNode | null {
+  if (!node || typeof node !== 'object') return null;
+
+  if (node.type === 'text') {
+    return node.text && node.text.length > 0 ? node : null;
+  }
+
+  if (!Array.isArray(node.content)) {
+    return node;
+  }
+
+  const sanitizedContent = node.content
+    .map((child) => sanitizeTiptapNode(child))
+    .filter((child): child is TiptapNode => child !== null);
+
+  if (sanitizedContent.length === 0) {
+    const { content, ...rest } = node;
+    return rest;
+  }
+
+  return {
+    ...node,
+    content: sanitizedContent,
+  };
+}
+
 
 export function ProfessionalEditor({ content, onChange, readOnly = false, onNegotiate }: ProfessionalEditorProps) {
 
@@ -78,7 +111,7 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
           contractNumber: "[CONTRACT NUMBER]"
         });
       }
-      return JSON.parse(c);
+      return sanitizeTiptapNode(JSON.parse(c));
     } catch {
       return { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: c }] }] };
     }
@@ -116,15 +149,17 @@ export function ProfessionalEditor({ content, onChange, readOnly = false, onNego
 
   // Sync external content changes into TipTap (it's uncontrolled by default)
   useEffect(() => {
-    if (!editor || !content || content === '') return;
-    const newContent = parseContent(content);
+    if (!editor) return;
+
+    const nextContent = parseContent(content);
     // Only update if content actually differs to avoid cursor jumping
     const currentJson = JSON.stringify(editor.getJSON());
-    const newJson = JSON.stringify(newContent);
+    const newJson = JSON.stringify(nextContent);
+
     if (currentJson !== newJson) {
-      editor.commands.setContent(newContent, false);
+      editor.commands.setContent(nextContent, { emitUpdate: false });
     }
-  }, [content]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [content, editor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!editor) return null;
 

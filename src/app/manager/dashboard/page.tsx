@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Briefcase, AlertCircle, Package, Clock, Loader2, ChevronRight } from 'lucide-react';
+import { Briefcase, AlertCircle, Package, Clock, Loader2, ChevronRight, ShieldCheck, FileText } from 'lucide-react';
 import { FadeUp } from '@/components/ui/fade-up';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';

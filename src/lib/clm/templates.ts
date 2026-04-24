@@ -380,10 +380,10 @@ export function generateInitialAgreement(data: TemplateData) {
         { type: "text", text: "The Parties agree that in case of any dispute or difference arising in respect of this License between the parties, the same shall be settled by conciliation. The conciliation panel would consist of one representative each of the Provider and the Client. If any Dispute arising between the Parties is not amicably settled within thirty (30) days of commencement of amicable attempts to settle the same as provided above, the Dispute shall be referred to, and be finally settled by, arbitration and shall be submitted to a sole arbitrator, appointed by both the parties, and such submission shall be a submission to arbitration in accordance with the Indian Law as presently in force by which the Parties in dispute agree to be so bound. The Parties agree that the Dispute shall be adjudicated by a single arbitrator. The decision of the arbitrator shall be final and binding on the Parties." }
       ] },
       
-      { type: "paragraph", content: [{ type: "text", text: "" }] },
-      { type: "paragraph", content: [{ type: "text", text: "" }] },
+      { type: "paragraph" },
+      { type: "paragraph" },
       { type: "paragraph", attrs: { textAlign: "center" }, content: [{ type: "text", text: "IN WITNESS WHEREOF, the parties to this leave and license Agreement is signed on the day, month and year mentioned here in above in presence of the following witnesses." }] },
-      { type: "paragraph", content: [{ type: "text", text: "" }] },
+      { type: "paragraph" },
       
       {
         type: "paragraph",
@@ -394,8 +394,8 @@ export function generateInitialAgreement(data: TemplateData) {
           { type: "text", marks: [{ type: "bold" }], text: "Client" }
         ]
       },
-      { type: "paragraph", content: [{ type: "text", text: "" }] },
-      { type: "paragraph", content: [{ type: "text", text: "" }] },
+      { type: "paragraph" },
+      { type: "paragraph" },
       {
         type: "paragraph",
         attrs: { textAlign: "center" },

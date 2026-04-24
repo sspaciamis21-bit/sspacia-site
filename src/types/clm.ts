@@ -34,6 +34,7 @@ export interface ContractRequest {
     name: string;
     email: string;
     organization?: string;
+    phone?: string;
   };
   booking?: {
     id: number;
@@ -127,7 +128,11 @@ export interface Contract {
     bookingNumber: string;
     startDate: string;
     endDate: string;
-    customer?: { id: number; name: string; email: string; organization?: string };
+    userId?: number;
+    totalAmount?: number;
+    seats?: number;
+    securityDeposit?: number;
+    customer?: { id: number; name: string; email: string; phone?: string; organization?: string };
     product?: { 
       id: number; 
       name: string; 

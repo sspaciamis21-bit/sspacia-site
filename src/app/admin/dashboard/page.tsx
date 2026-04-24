@@ -17,6 +17,8 @@ import {
   Plus,
   LayoutDashboard,
   ChevronRight,
+  ShieldCheck,
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';

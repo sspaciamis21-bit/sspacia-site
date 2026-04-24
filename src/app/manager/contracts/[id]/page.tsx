@@ -181,7 +181,7 @@ export default function ManagerContractDetailPage() {
 
   return (
     <div className="max-w-7xl mx-auto pb-12 px-4 md:px-8 font-sans" style={{ fontFamily: 'var(--font-inter), sans-serif' }}>
-      <FadeUp text="Agreement Detail View">
+      <FadeUp>
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-8 border-b border-neutral-100 pb-8">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -342,6 +342,7 @@ export default function ManagerContractDetailPage() {
                     <div className="flex-1 p-8 bg-neutral-50/30 overflow-y-auto">
                        <div className="max-w-[850px] mx-auto bg-white border border-neutral-200 shadow-2xl rounded-none overflow-hidden">
                         <ProfessionalEditor 
+                          key={`${contract.id}:${contract.versions?.[0]?.id ?? 'draft'}:${editing ? 'editing' : 'view'}`}
                           content={richTextContent} 
                           onChange={setRichTextContent} 
                         />
