@@ -174,25 +174,214 @@ export const siteConfig = {
     ],
     jobs: [
       {
-        id: "community-manager",
-        title: "Community Manager",
-        type: "Full-time",
-        location: "CG Road – Agarwal Complex",
-        description: "Be the face of SSPACIA. Manage day-to-day operations and foster a thriving community for our members."
-      },
-      {
-        id: "sales-executive",
-        title: "Sales Executive",
-        type: "Full-time",
-        location: "Ahmedabad (Multi-site)",
-        description: "Drive growth by connecting entrepreneurs with the perfect workspace solutions across our prime locations."
-      },
-      {
-        id: "operations-specialist",
-        title: "Operations Specialist",
+        id: "ea-to-md",
+        title: "Executive Assistant to MD",
         type: "Full-time",
         location: "Ahmedabad",
-        description: "Ensure seamless experiences for our members by managing infrastructure and facility logistics."
+        description: "Act as the Managing Director’s voice and execution engine across both businesses. Manage tasks, calls, research, and coordination.",
+        content: `
+          <div class="space-y-6 text-[#424242]">
+            <p>The Executive Assistant (EA) acts as the Managing Director’s (MD’s) voice and execution engine across both businesses. The EA is responsible for capturing every task, tracking and following up till closure, handling calls, conducting research (using internet and AI tools), and ensuring that the MD’s instructions and decisions are implemented accurately and on time.</p>
+            <p>This is a high-responsibility role suited for a highly organised, proactive, and trustworthy person who enjoys follow-up, coordination, and problem-solving.</p>
+            
+            <h4 class="text-xl font-bold text-[#212121] mt-6 mb-3">Key Responsibilities</h4>
+            <ol class="list-decimal pl-5 space-y-4">
+              <li><strong>Task & Follow-Up Management</strong>
+                <ul class="list-disc pl-5 mt-2 space-y-1">
+                  <li>Maintain a comprehensive, daily-updated task tracker for the MD (business and personal): task, owner, deadline, status, and next action.</li>
+                  <li>Capture tasks from all sources: meetings, calls, WhatsApp, emails, and casual conversations.</li>
+                  <li>Follow up relentlessly with internal team members, vendors, and external stakeholders until closure; escalate delays or issues to the MD when needed.</li>
+                  <li>Send the MD a concise daily summary of key pending items, priorities, risks, and completed work.</li>
+                </ul>
+              </li>
+              <li><strong>Calls, Communication & Calendar</strong>
+                <ul class="list-disc pl-5 mt-2 space-y-1">
+                  <li>Handle incoming calls to the MD, filter and prioritise them, and respond or schedule callbacks/meetings as appropriate.</li>
+                  <li>Make outgoing calls on behalf of the MD to clients, government officers, vendors, and team members in a clear, polite, and professional manner.</li>
+                  <li>Manage the MD’s calendar for both businesses: schedule meetings, reviews, and travel; avoid clashes and last-minute firefighting.</li>
+                  <li>Prepare for meetings (agenda, background notes) and capture minutes and action items; ensure action items are added to the task tracker.</li>
+                </ul>
+              </li>
+              <li><strong>Research & Project Support (AI + Internet)</strong>
+                <ul class="list-disc pl-5 mt-2 space-y-1">
+                  <li>Convert any idea, thought, or project from the MD into structured research tasks.</li>
+                  <li>Conduct internet and AI-based research on topics such as: <br>– Government departments, schemes, vendors, products, and policies relevant to the trading business.<br>– Coworking space trends, pricing, competitors, partnerships, and marketing ideas for SSPACIA.</li>
+                  <li>Use AI tools (e.g., ChatGPT/Perplexity or similar, as provided by the MD) plus the internet to create:<br>– 1–3 page briefs with key insights, options, pros/cons, and relevant links.<br>– First drafts of emails, proposals, SOPs, checklists, and presentations.</li>
+                  <li>Present research in a simple, decision-friendly format that the MD can review quickly (bullet points, tables, short summaries).</li>
+                </ul>
+              </li>
+              <li><strong>Coordination Across Two Businesses</strong>
+                <ul class="list-disc pl-5 mt-2 space-y-1">
+                  <li>Coordinate with operations, sales, accounts, and admin teams in both businesses to ensure that the MD’s instructions are clearly communicated and executed.</li>
+                  <li>Be the central follow-up point: ensure tasks given by the MD to any team member are tracked and completed on time.</li>
+                  <li>Work with a runner/office boy and other support staff for physical tasks such as document collection, courier, bank visits, and office/house coordination.</li>
+                </ul>
+              </li>
+              <li><strong>Documentation, Reporting & Systems</strong>
+                <ul class="list-disc pl-5 mt-2 space-y-1">
+                  <li>Maintain organised digital and physical files for both businesses (contracts, proposals, government documents, vendor details, etc.).</li>
+                  <li>Maintain and update trackers in Excel/Google Sheets (tasks, leads, followups, payments, etc.) and generate simple reports as required by the MD.</li>
+                  <li>Create and update basic PowerPoint/Google Slides presentations for reviews, proposals, and internal meetings.</li>
+                  <li>Support implementation and usage of systems/tools (task managers, CRMs, spreadsheets) and ensure data is updated accurately.</li>
+                </ul>
+              </li>
+              <li><strong>Personal Assistance to the MD</strong>
+                <ul class="list-disc pl-5 mt-2 space-y-1">
+                  <li>Handle certain personal tasks of the MD such as appointments, travel bookings, family events, and home-related coordination, as assigned by the MD.</li>
+                  <li>Maintain strict confidentiality and discretion regarding all personal and professional information.</li>
+                </ul>
+              </li>
+            </ol>
+
+            <h4 class="text-xl font-bold text-[#212121] mt-8 mb-4">Candidate Profile</h4>
+            
+            <h5 class="text-lg font-semibold text-[#212121] mt-4 mb-2">Education & Experience</h5>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Graduate in any discipline; secretarial, commerce, management, or admin background preferred.</li>
+              <li>3–6 years of experience as an Executive Assistant/EA/Office Coordinator/Secretary to a senior leader (MD/Director/Owner).</li>
+              <li>Demonstrated job stability (reasonable tenure in previous roles, not frequent job hopping).</li>
+            </ul>
+            
+            <h5 class="text-lg font-semibold text-[#212121] mt-6 mb-2">Skills & Competencies</h5>
+            <ul class="list-disc pl-5 space-y-3">
+              <li><strong>Follow-Up & Organisation (Non-Negotiable):</strong><br>– Very strong follow-up and task-tracking skills; uses some system (notebook, planner, or digital tool) to manage tasks.<br>– Does not forget tasks; takes ownership until closure.</li>
+              <li><strong>Communication:</strong><br>– Very good spoken Hindi and English; Gujarati is an added advantage.<br>– Confident on phone calls with senior officers, clients, and vendors.<br>– Good written English for drafting emails, letters, and WhatsApp messages.</li>
+              <li><strong>Technology & Tools:</strong><br>– Comfortable with MS Office / Google Workspace (Excel/Sheets, Word/Docs, PowerPoint/Slides).<br>– Good Google search skills; can compare multiple sources and verify information.<br>– Willing and able to learn and use AI tools for drafting, summarising, and research (training will be provided if required).</li>
+              <li><strong>Business Understanding (Preferred):</strong><br>– Prior exposure to government work/GeM and/or real estate/coworking/office space business will be an advantage.</li>
+            </ul>
+
+            <h5 class="text-lg font-semibold text-[#212121] mt-6 mb-2">Behaviour & Attitude</h5>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Extremely reliable, disciplined, and detail-oriented.</li>
+              <li>High integrity, ethical conduct, and respect for confidentiality.</li>
+              <li>Calm, mature, and emotionally stable; able to handle pressure and occasional urgent/late-hour tasks.</li>
+              <li>Respectful yet assertive in follow-ups with senior people.</li>
+              <li>Willing to handle both high-level work (research, presentations) and ground-level work (coordination, small errands).</li>
+            </ul>
+
+            <h5 class="text-lg font-semibold text-[#212121] mt-6 mb-2">Other Requirements</h5>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Married, preferably settled in Ahmedabad.</li>
+              <li>Presentable, well-groomed, and professional appearance.</li>
+              <li>Comfortable with full-time work from office; not a work-from-home or part-time role.</li>
+            </ul>
+
+            <h5 class="text-lg font-semibold text-[#212121] mt-6 mb-2">Reporting & Work Conditions</h5>
+            <ul class="list-disc pl-5 space-y-1 mb-4">
+              <li><strong>Reporting To:</strong> Managing Director</li>
+              <li><strong>Location:</strong> Company offices in Ahmedabad</li>
+            </ul>
+            <p class="italic text-sm text-gray-500">This Job Description is intended to capture the key responsibilities and expectations from the Executive Assistant to the MD. Duties may evolve over time.</p>
+          </div>
+        `
+      },
+      {
+        id: "sales-coordinator",
+        title: "Sales Coordinator",
+        type: "Full-time",
+        location: "Ahmedabad",
+        description: "Manage inbound inquiries, handle client calls, coordinate sales activities, and support the sales team in converting leads.",
+        content: `
+          <div class="space-y-6 text-[#424242]">
+            <p>The Sales Coordinator will be responsible for managing inbound inquiries, handling client calls, coordinating sales activities, and supporting the sales team in converting leads into clients for the co-working space. The role requires strong communication skills, customer handling, and basic sales coordination abilities.</p>
+
+            <h4 class="text-xl font-bold text-[#212121] mt-6 mb-3">Key Responsibilities</h4>
+            <ul class="list-disc pl-5 space-y-2">
+              <li>Handle inbound leads via calls, emails, website inquiries, and walk-ins</li>
+              <li>Respond promptly to client queries and provide accurate information about workspace offerings</li>
+              <li>Conduct initial qualification of leads and understand client requirements</li>
+              <li>Coordinate with the sales team to ensure smooth follow-ups and closures</li>
+              <li>Perform call handling professionally and maintain high customer satisfaction</li>
+              <li>Assist in preparing proposals, quotations, and agreements</li>
+              <li>Track daily, weekly, and monthly lead conversion reports</li>
+              <li>Support marketing campaigns by following up on generated leads</li>
+              <li>Maintain strong relationships with potential and existing clients</li>
+            </ul>
+
+            <h4 class="text-xl font-bold text-[#212121] mt-8 mb-3">Required Skills & Qualifications</h4>
+            <ul class="list-disc pl-5 space-y-2">
+              <li>Bachelor’s degree in Business Administration, Marketing, or related field</li>
+              <li>1–3 years of experience in sales coordination / customer support / inside sales</li>
+              <li>Excellent verbal and written communication skills</li>
+              <li>Strong phone etiquette and call handling skills</li>
+              <li>Good organizational and multitasking abilities</li>
+              <li>Customer-focused with a positive attitude</li>
+              <li>Basic knowledge of co-working / real estate industry is a plus</li>
+            </ul>
+          </div>
+        `
+      },
+      {
+        id: "front-office-executive",
+        title: "Front Office Executive",
+        type: "Full-time",
+        location: "Ahmedabad",
+        description: "Manage the reception area, greet visitors, and handle basic administrative tasks.",
+        content: `
+          <div class="space-y-6 text-[#424242]">
+            <p><strong>Location:</strong> Ahmedabad</p>
+
+            <h4 class="text-xl font-bold text-[#212121] mt-6 mb-3">Job Summary</h4>
+            <p>We are looking for a friendly and professional Front Office Executive to manage the reception area, greet visitors, and handle basic administrative tasks. The ideal candidate should have good communication skills and a presentable personality.</p>
+
+            <h4 class="text-xl font-bold text-[#212121] mt-6 mb-3">Key Responsibilities</h4>
+            <ul class="list-disc pl-5 space-y-2">
+              <li>Welcome and greet visitors in a polite and professional manner</li>
+              <li>Answer phone calls and direct them to the appropriate person</li>
+              <li>Manage incoming and outgoing mail/couriers</li>
+              <li>Maintain visitor records and front desk logs</li>
+              <li>Handle basic administrative and coordination tasks</li>
+              <li>Keep the reception area clean and organized</li>
+            </ul>
+
+            <h4 class="text-xl font-bold text-[#212121] mt-8 mb-3">Requirements</h4>
+            <ul class="list-disc pl-5 space-y-2">
+              <li>Graduate in any field</li>
+              <li>Good communication skills (English & Hindi; Gujarati is a plus)</li>
+              <li>Basic knowledge of MS Office</li>
+              <li>Pleasant personality and professional attitude</li>
+              <li>Prior experience in a similar role is preferred but not mandatory</li>
+            </ul>
+
+            <h4 class="text-xl font-bold text-[#212121] mt-8 mb-2">Salary</h4>
+            <p>As per industry standards</p>
+          </div>
+        `
+      },
+      {
+        id: "hr-recruiter",
+        title: "HR Recruiter",
+        type: "Full-time",
+        location: "Ahmedabad",
+        description: "Manage the full recruitment cycle, from identifying potential hires to interviewing and evaluating candidates.",
+        content: `
+          <div class="space-y-6 text-[#424242]">
+            <p>We are looking for a motivated HR Recruiter to manage the full recruitment cycle, from identifying potential hires to interviewing and evaluating candidates. The ideal candidate will have strong communication skills and a keen eye for talent.</p>
+
+            <h4 class="text-xl font-bold text-[#212121] mt-6 mb-3">Key Responsibilities</h4>
+            <ul class="list-disc pl-5 space-y-2">
+              <li>Manage end-to-end recruitment process (sourcing to onboarding)</li>
+              <li>Post job openings on job portals, social media, and company career pages</li>
+              <li>Screen resumes and shortlist candidates based on job requirements</li>
+              <li>Conduct initial HR interviews and coordinate technical rounds</li>
+              <li>Schedule interviews and follow up with candidates</li>
+              <li>Maintain candidate databases and recruitment trackers</li>
+              <li>Work closely with hiring managers to understand hiring needs</li>
+              <li>Negotiate offers and manage onboarding process</li>
+              <li>Ensure a positive candidate experience throughout the hiring journey</li>
+            </ul>
+
+            <h4 class="text-xl font-bold text-[#212121] mt-8 mb-3">Required Skills & Qualifications</h4>
+            <ul class="list-disc pl-5 space-y-2">
+              <li>Bachelor’s degree in Human Resources, Business Administration, or related field</li>
+              <li>Proven experience in recruitment or talent acquisition (0–3 years for junior roles)</li>
+              <li>Strong communication and interpersonal skills</li>
+              <li>Familiarity with job portals (e.g., Naukri, LinkedIn, Indeed)</li>
+              <li>Basic understanding of HR practices and labor laws</li>
+              <li>Ability to multitask and work in a fast-paced environment</li>
+            </ul>
+          </div>
+        `
       }
     ]
   },

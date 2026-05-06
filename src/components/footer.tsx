@@ -73,6 +73,14 @@ export function Footer() {
                   </Link>
                 </li>
               ))}
+              <li>
+                <Link
+                  href="/careers"
+                  className="text-sm text-[#616161] hover:text-[#006064] transition-colors font-medium"
+                >
+                  Careers
+                </Link>
+              </li>
             </ul>
           </div>
 

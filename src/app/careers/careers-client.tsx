@@ -1,20 +1,21 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { FadeUp } from "@/components/ui/fade-up";
 import { SectionLabel } from "@/components/ui/section-label";
-import { 
-  Users, 
-  Rocket, 
-  Heart, 
-  Coffee, 
-  MapPin, 
-  Clock, 
-  Briefcase, 
+import {
+  Users,
+  Rocket,
+  Heart,
+  Coffee,
+  MapPin,
+  Clock,
+  Briefcase,
   ArrowRight,
   Sparkles,
   Zap,
-  CheckCircle2
+  X
 } from "lucide-react";
 import { siteConfig } from "@/config/site";
 
@@ -27,6 +28,15 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export default function CareersClient() {
   const { careers } = siteConfig;
+  const [selectedJob, setSelectedJob] = useState<any>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // Reset scroll position when a new job is opened
+  useEffect(() => {
+    if (selectedJob && bodyRef.current) {
+      bodyRef.current.scrollTop = 0;
+    }
+  }, [selectedJob]);
   return (
     <div className="space-y-24 py-12 container mx-auto px-4 sm:px-6 lg:px-8">
       {/* ── Hero Section ── */}
@@ -35,13 +45,13 @@ export default function CareersClient() {
         <div className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-[#006064]/20 blur-3xl opacity-60" />
         <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-[#4DB6AC]/15 blur-3xl opacity-40" />
         <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[400px] w-[400px] border border-white/5 rounded-full scale-150" />
-        
+
         <div className="relative z-10 max-w-4xl mx-auto space-y-6">
           <FadeUp className="flex justify-center">
             <SectionLabel className="bg-white/10 text-white border-white/20 px-4 py-1.5">
               <Sparkles className="h-3 w-3" /> Join the Team
             </SectionLabel>
-          </FadeUp> 
+          </FadeUp>
           <FadeUp delay={0.1}>
             <h1 className="text-3xl font-bold tracking-tight sm:text-5xl leading-tight">
               {careers.heading.split(' Ahmedabad')[0]} <br />
@@ -79,7 +89,7 @@ export default function CareersClient() {
           </FadeUp>
           <FadeUp delay={0.1}>
             <p className="text-lg text-[#616161] leading-relaxed">
-              We believe that an inspired team builds an inspired community. Our culture is built on 
+              We believe that an inspired team builds an inspired community. Our culture is built on
               trust, empowerment, and a shared mission to redefine the professional landscape.
             </p>
           </FadeUp>
@@ -96,9 +106,9 @@ export default function CareersClient() {
           </div>
         </div>
         <FadeUp delay={0.4} className="relative aspect-square rounded-[3rem] overflow-hidden shadow-2xl">
-          <img 
-            src="https://static.wixstatic.com/media/38bf31_ab6cf1c9730341ca86013938519b8374~mv2.png/v1/fill/w_713,h_475,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/38bf31_ab6cf1c9730341ca86013938519b8374~mv2.png" 
-            alt="Life at SSPACIA" 
+          <img
+            src="https://static.wixstatic.com/media/38bf31_ab6cf1c9730341ca86013938519b8374~mv2.png/v1/fill/w_713,h_475,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/38bf31_ab6cf1c9730341ca86013938519b8374~mv2.png"
+            alt="Life at SSPACIA"
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#004D40]/60 to-transparent" />
@@ -141,12 +151,12 @@ export default function CareersClient() {
                   <p className="text-[#616161] mt-2 leading-relaxed">{job.description}</p>
                 </div>
               </div>
-              <a 
-                href={`mailto:${siteConfig.site.contact.careersEmail}?subject=Job Application: ${job.title}`}
+              <button
+                onClick={() => setSelectedJob(job)}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-[#006064] px-8 py-4 text-sm font-bold text-white transition-all hover:bg-[#004D40] group-hover:shadow-lg active:scale-95"
               >
-                Apply Now <ArrowRight className="h-4 w-4" />
-              </a>
+                View Details <ArrowRight className="h-4 w-4" />
+              </button>
             </FadeUp>
           ))}
         </div>
@@ -158,7 +168,7 @@ export default function CareersClient() {
           <FadeUp>
             <h2 className="text-2xl font-bold sm:text-4xl text-[#212121]">Don&apos;t see a fit?</h2>
             <p className="text-base text-[#616161] mt-4 leading-relaxed">
-              We&apos;re always on the lookout for talented individuals. If you share our values, 
+              We&apos;re always on the lookout for talented individuals. If you share our values,
               send us your resume and tell us how you can make a difference.
             </p>
           </FadeUp>
@@ -169,6 +179,58 @@ export default function CareersClient() {
           </FadeUp>
         </div>
       </section>
+      {/* ── Job Details Modal ── */}
+      {selectedJob && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setSelectedJob(null)}
+          />
+          <div className="relative z-10 w-full max-w-3xl max-h-[80vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-start justify-between p-6 sm:p-8 border-b border-gray-100 bg-gray-50/50 shrink-0">
+              <div>
+                <div className="flex flex-wrap gap-3 mb-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E0F7FA] px-3 py-1 text-[11px] font-bold text-[#006064] uppercase tracking-wider">
+                    <Zap className="h-3 w-3" /> {selectedJob.type}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F5F5F5] px-3 py-1 text-[11px] font-bold text-[#616161] uppercase tracking-wider">
+                    <MapPin className="h-3 w-3" /> {selectedJob.location}
+                  </span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-bold text-[#212121]">{selectedJob.title}</h2>
+              </div>
+              <button
+                onClick={() => setSelectedJob(null)}
+                className="p-2 rounded-full hover:bg-gray-200 transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div ref={bodyRef} className="p-6 sm:p-8 overflow-y-auto">
+              <div dangerouslySetInnerHTML={{ __html: selectedJob.content }} />
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-4 shrink-0">
+              <button
+                onClick={() => setSelectedJob(null)}
+                className="px-6 py-3 rounded-xl font-bold text-gray-600 hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+              <a
+                href={`mailto:${siteConfig.site.contact.careersEmail}?subject=Job Application: ${selectedJob.title}`}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#006064] px-8 py-3 text-sm font-bold text-white transition-all hover:bg-[#004D40] shadow-md hover:shadow-lg active:scale-95"
+              >
+                Apply Now <ArrowRight className="h-4 w-4" />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
