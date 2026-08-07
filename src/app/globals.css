@@ -1,55 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+@import "tailwindcss";
+
 /* Animated underline for nav links */
 .group:hover .group-hover\:scale-x-100 {
   transform: scaleX(1);
 }
+
 .group-hover\:scale-x-100 {
   transform: scaleX(0);
 }
-@import "tailwindcss";
 
 :root {
-  --background: #f8f9fa; /* light background */
-  --foreground: #212121; /* charcoal */
-  --accent: #006064; /* teal */
+  --background: #fbf9f8;
+  --foreground: #1b1c1c;
+
+  /* Sspacia Structural Colors */
+  --surface: #fbf9f8;
+  --surface-lowest: #ffffff;
+  --surface-low: #f5f3f3;
+  --surface-high: #e9e8e7;
+
+  /* Sspacia Action Colors */
+  --primary: #00696f;
+  --primary-container: #1dbac3;
+  --on-primary-container: #004549;
+
+  /* Accents & Outlines */
+  --outline-variant: #bbc9ca;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-surface-lowest: var(--surface-lowest);
+  --color-surface-low: var(--surface-low);
+  --color-surface-high: var(--surface-high);
+
+  --color-primary: var(--primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+
+  --color-outline-variant: var(--outline-variant);
+
+  --font-sans: var(--font-inter), var(--font-inter);
+  --font-display: var(--font-inter);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+h1, h2, h3, h4, h5, h6, p, span, div, button, input, textarea {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+* {
+  font-family: inherit !important;
 }
 
 @keyframes shiny-move {
   0% {
     background-position: 200% center;
   }
+
   100% {
     background-position: -200% center;
   }
 }
-
-/* .shiny-text {
-  background: linear-gradient(
-    120deg,
-    #006064 20%,
-    #4DB6AC 35%,
-    #ffffff 10%,
-    #B2EBF2 55%,
-    #4DB6AC 65%,
-    #006064 80%
-  );
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: shiny-move 3s linear infinite;
-} */
 
 .shiny-text {
   display: inline-block;
@@ -62,8 +82,221 @@ body {
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
+/* Sspacia Special Effects */
+.liquid-hover {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
 
+.liquid-hover::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(0, 105, 111, 0.1);
+  border-radius: 0;
+  transform: translate(-50%, -50%);
+  transition: width 0.6s ease, height 0.6s ease;
+}
+
+.liquid-hover:hover::after {
+  width: 300%;
+  height: 300%;
+}
+
+.broken-grid-item {
+  transition: transform 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.pulse-node {
+  animation: pulse-node 2s infinite;
+}
+
+@keyframes pulse-node {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(29, 186, 195, 0.7);
+  }
+
+  70% {
+    transform: scale(1.2);
+    opacity: 0.5;
+    box-shadow: 0 0 0 10px rgba(29, 186, 195, 0);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(29, 186, 195, 0);
+  }
+}
+
+.outer-container {
+  display: flex;
+  min-height: 100%;
+  flex: 1 1 0%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+@media (min-width: 640px) {
+  .outer-container {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+@media (min-width: 768px) {
+  .outer-container {
+    aspect-ratio: 2 / 1;
+  }
+}
+
+.step-circle-container {
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  max-width: 28rem;
+  border-radius: 0;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.05);
+}
+
+.step-indicator-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  padding: 2rem;
+}
+
+.step-content-default {
+  position: relative;
+  overflow: hidden;
+}
+
+.step-default {
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+
+.footer-container {
+  padding-left: 2rem;
+  padding-right: 2rem;
+  padding-bottom: 2rem;
+}
+
+.footer-nav {
+  margin-top: 2.5rem;
+  display: flex;
+}
+
+.footer-nav.spread {
+  justify-content: space-between;
+}
+
+.footer-nav.end {
+  justify-content: flex-end;
+}
+
+.back-button {
+  transition: all 350ms;
+  border-radius: 0;
+  padding: 0.25rem 0.5rem;
+  color: #a3a3a3;
+  cursor: pointer;
+}
+
+.back-button:hover {
+  color: #52525b;
+}
+
+.back-button.inactive {
+  pointer-events: none;
+  opacity: 0.5;
+  color: #a3a3a3;
+}
+
+.next-button {
+  transition: all 350ms;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  background-color: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.5rem 1.25rem;
+  cursor: pointer;
+}
+
+.next-button:hover {
+  background-color: #000;
+}
+
+.next-button:active {
+  background-color: #000;
+}
+
+.step-indicator {
+  position: relative;
+  cursor: pointer;
+  outline: none;
+}
+
+.step-indicator-inner {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  font-weight: 600;
+}
+
+.active-dot {
+  height: 0.75rem;
+  width: 0.75rem;
+  border-radius: 0;
+  background-color: #fff;
+}
+
+.step-number {
+  font-size: 0.875rem;
+}
+
+.step-connector {
+  position: relative;
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
+  height: 0.125rem;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 0;
+  background-color: #52525b;
+}
+
+.step-connector-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+}
+
+.check-icon {
+  height: 1rem;
+  width: 1rem;
+  color: #fff;
+}

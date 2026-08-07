@@ -1,0 +1,86 @@
+import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
+import prisma from '@/lib/prisma'
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const { name, email, password } = body
+
+    // ─── Validate Fields ──────────────────────────────────
+    if (!name || !email || !password) {
+      return NextResponse.json(
+        { error: 'All fields are required' },
+        { status: 400 }
+      )
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: 'Password must be at least 6 characters' },
+        { status: 400 }
+      )
+    }
+
+    // ─── Check if User Exists ─────────────────────────────
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    })
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'User already exists with this email' },
+        { status: 400 }
+      )
+    }
+
+    // ─── Get Default USER Role ────────────────────────────
+    const userRole = await prisma.role.findUnique({
+      where: { name: 'USER' },
+    })
+
+    if (!userRole) {
+      return NextResponse.json(
+        { error: 'Roles not setup. Please call POST /api/setup first' },
+        { status: 500 }
+      )
+    }
+
+    // ─── Hash Password ────────────────────────────────────
+    const hashedPassword = await bcrypt.hash(password, 12)
+
+    // ─── Create User ──────────────────────────────────────
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        roleId: userRole.id,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+        role: {
+          select: { name: true },
+        },
+      },
+    })
+
+    return NextResponse.json(
+      {
+        message: 'User registered successfully',
+        user,
+      },
+      { status: 201 }
+    )
+
+  } catch (error: any) {
+    console.error('Register error:', error);
+    return NextResponse.json(
+      { error: 'Registration failed', details: error?.message || 'Unknown error' },
+      { status: 500 }
+    );
+  }
+} 

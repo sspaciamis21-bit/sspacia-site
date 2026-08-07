@@ -1,0 +1,1068 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEST TABLE (DELETE AFTER TESTING)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Fake {
+  id   Int    @id @default(autoincrement())
+  name String
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOOKUP / REFERENCE TABLES
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Admin-managed product types (Flex Desk, Fixed Desk, Dedicated Cabin, etc.)
+/// Replaces the old ProductType enum — add/rename/retire types without migrations.
+model ProductType {
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  displayName    String
+  slug           String          @unique
+  description    String?         @db.Text
+  isActive       Boolean         @default(true)
+  sortOrder      Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  products       Product[]
+  supportTickets SupportTicket[]
+}
+
+/// Admin-managed billing durations (Per Hour, Per Day, Per Month, etc.)
+/// Replaces the old DurationType enum.
+model DurationType {
+  id            Int           @id @default(autoincrement())
+  name          String        @unique
+  displayName   String
+  slug          String        @unique
+  durationDays  Int?
+  durationHours Int?
+  sortOrder     Int           @default(0)
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  bookings      Booking[]
+  pricingPlans  PricingPlan[]
+}
+
+/// Admin-managed space categories (Workspace, Guest Space, etc.)
+/// Replaces the old SpaceCategory enum.
+/// KEY: slug = 'owned-space' | 'guest-space' drives business logic throughout the app.
+model SpaceCategory {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  displayName String
+  slug        String    @unique
+  description String?   @db.Text
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+}
+
+/// Admin-managed access-time options (Business Hours, 24/7, Custom)
+/// Replaces the old AccessTime enum.
+model AccessTimeOption {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  displayName String
+  startTime   String?
+  endTime     String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+}
+
+/// Admin-managed ticket statuses (Open, In Progress, Resolved, Closed, etc.)
+/// Replaces the old TicketStatus enum.
+model TicketStatus {
+  id          Int             @id @default(autoincrement())
+  name        String          @unique
+  displayName String
+  color       String?
+  isFinal     Boolean         @default(false)
+  sortOrder   Int             @default(0)
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  tickets     SupportTicket[]
+}
+
+/// Admin-managed booking statuses (Pending, Confirmed, Active, Completed, Cancelled)
+model BookingStatus {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  displayName String
+  color       String?
+  isFinal     Boolean   @default(false)
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  bookings    Booking[]
+}
+
+/// Admin-managed payment statuses (Pending, Partial, Paid, Refunded, Failed)
+model PaymentStatus {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  displayName String
+  color       String?
+  isFinal     Boolean   @default(false)
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  payments    Payment[]
+}
+
+/// Admin-managed document categories (KYC, Agreement, Invoice, General, etc.)
+/// Fully dynamic — admin adds/retires categories without migrations.
+model DocumentCategory {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  displayName String
+  slug        String     @unique
+  description String?    @db.Text
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  documents   Document[]
+}
+
+/// Admin-managed document verification statuses (Pending, Approved, Rejected, Expired)
+model DocumentStatus {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  displayName String
+  color       String?
+  isFinal     Boolean    @default(false)
+  sortOrder   Int        @default(0)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  documents   Document[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USERS, ROLES & PERMISSIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Internal admin/staff users who manage the platform.
+model User {
+  id                Int             @id @default(autoincrement())
+  name              String
+  email             String          @unique
+  password          String
+  phone             String?
+  contactNumber     String?
+  companyName       String?
+  companyStreet     String?         @db.Text
+  companyCity       String?
+  companyState      String?
+  companyZip        String?
+  designation       String?
+  avatar            String?
+  isActive          Boolean         @default(true)
+  roleId            Int
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  activityLogs      ActivityLog[]
+  clientMasterEntries ClientMaster[]
+  invoiceRecords    InvoiceRecord[]
+  uploadedInvoices  AttachedInvoice[]
+  storedDocuments   StoredDocument[]
+  supportTickets    SupportTicket[] @relation("TicketAssignee")
+  role              Role            @relation(fields: [roleId], references: [id])
+  assignedLocations UserLocation[]
+  reviewedDocuments Document[]      @relation("DocumentReviewer")
+  contractsCreated  Contract[]      @relation("ContractCreator")
+  contractVersions  ContractVersion[] @relation("VersionCreator")
+  negotiationMessages NegotiationMessage[]
+
+  @@index([email])
+  @@index([roleId])
+}
+
+/// Roles are fully dynamic — admin creates them at runtime (Admin, Manager, etc.)
+model Role {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  displayName String
+  description String?          @db.Text
+  isSystem    Boolean          @default(false)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  permissions RolePermission[]
+  users       User[]
+}
+
+/// Permissions are fully dynamic — admin defines granular access controls.
+model Permission {
+  id          Int              @id @default(autoincrement())
+  module      String
+  action      String
+  name        String           @unique
+  displayName String
+  description String?          @db.Text
+  createdAt   DateTime         @default(now())
+  roles       RolePermission[]
+
+  @@index([module])
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  assignedAt   DateTime   @default(now())
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CUSTOMERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// External customers — businesses or freelancers who rent your spaces.
+model Customer {
+  id             Int             @id @default(autoincrement())
+  name           String
+  email          String          @unique
+  phone          String?
+  organization   String?
+  gstNumber      String?
+  billingAddress String?         @db.Text
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  bookings       Booking[]
+  supportTickets SupportTicket[]
+  documents      Document[]
+  contractRequests    ContractRequest[]
+  negotiations        ContractNegotiation[]
+  negotiationMessages NegotiationMessage[]
+  signatures          ContractSignature[]
+
+  @@index([email])
+  @@index([phone])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOCATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model City {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  slug      String     @unique
+  state     String?
+  isActive  Boolean    @default(true)
+  sortOrder Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  locations Location[]
+}
+
+model Location {
+  id             Int                     @id @default(autoincrement())
+  cityId         Int
+  name           String
+  slug           String                  @unique
+  area           String?
+  address        String?                 @db.Text
+  mapUrl         String?                 @db.Text
+  mapEmbed       String?                 @db.Text
+  phone          String?
+  email          String?
+  gstNumber      String?
+  isActive       Boolean                 @default(true)
+  sortOrder      Int                     @default(0)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  city           City                    @relation(fields: [cityId], references: [id])
+  images         LocationImage[]
+  operatingHours LocationOperatingHour[]
+  products       Product[]
+  assignedUsers  UserLocation[]
+  supportTickets SupportTicket[]
+
+
+  @@index([cityId])
+  @@index([slug])
+}
+
+/// Per-location operating hours (so each branch can have different timings).
+model LocationOperatingHour {
+  id         Int      @id @default(autoincrement())
+  locationId Int
+  dayOfWeek  Int
+  openTime   String
+  closeTime  String
+  isClosed   Boolean  @default(false)
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, dayOfWeek])
+  @@index([locationId])
+}
+
+model LocationImage {
+  id         Int      @id @default(autoincrement())
+  locationId Int
+  url        String
+  alt        String?
+  isPrimary  Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([locationId])
+}
+
+/// Many-to-many: which staff users are assigned to which locations.
+model UserLocation {
+  userId     Int
+  locationId Int
+  assignedAt DateTime @default(now())
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, locationId])
+  @@index([userId])
+  @@index([locationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRODUCTS & PRICING
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A bookable space at a specific location.
+///
+/// Owned Spaces (Flex Desk, Fixed Desk, Cabin, etc.):
+///   - Have physical named units tracked via ProductUnit.
+///   - quantity field = total number of units (must match ProductUnit rows).
+///   - complementaryMeetingHours = free guest space hours included per billing period.
+///
+/// Guest Spaces (Meeting Room, Board Room, Event Room, etc.):
+///   - No ProductUnit rows — booked purely by time slot via Booking.startTime/endTime.
+///   - quantity is irrelevant (leave as 1 or omit).
+model Product {
+  id                        Int               @id @default(autoincrement())
+  locationId                Int
+  typeId                    Int
+  categoryId                Int
+  accessTimeId              Int?
+  name                      String
+  slug                      String
+  description               String?           @db.Text
+  capacity                  Int?
+  quantity                  Int               @default(1)
+  securityDepositMonths     Int               @default(3)
+  complementaryMeetingHours Int?
+  sdr                       Int?
+  adv                       Int?
+  isActive                  Boolean           @default(true)
+  isFeatured                Boolean           @default(false)
+  sortOrder                 Int               @default(0)
+  createdAt                 DateTime          @default(now())
+  updatedAt                 DateTime          @updatedAt
+  bookings                  Booking[]
+  pricingPlans              PricingPlan[]
+  accessTime                AccessTimeOption? @relation(fields: [accessTimeId], references: [id])
+  category                  SpaceCategory     @relation(fields: [categoryId], references: [id])
+  location                  Location          @relation(fields: [locationId], references: [id])
+  type                      ProductType       @relation(fields: [typeId], references: [id])
+  amenities                 ProductAmenity[]
+  images                    ProductImage[]
+  /// Physical units — only populated for Owned Space products.
+  units                     ProductUnit[]
+
+  @@unique([locationId, slug])
+  @@index([locationId])
+  @@index([typeId])
+  @@index([categoryId])
+  @@index([accessTimeId], map: "Product_accessTimeId_fkey")
+}
+
+/// A single named physical unit of an Owned Space product.
+/// e.g. Product = "Flex Desk" (qty 4) → units: "Desk #1", "Desk #2", "Desk #3", "Desk #4"
+/// Not used for Guest Space products (Meeting Room, Board Room, etc.)
+model ProductUnit {
+  id          Int           @id @default(autoincrement())
+  productId   Int
+  name        String        // e.g. "Desk #1", "Cabin A", "Suite 101"
+  code        String?       // Optional short code e.g. "D1", "CA"
+  capacity    Int           @default(1)
+  description String?       @db.Text
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  product     Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  bookingUnits BookingUnit[]
+
+  @@unique([productId, name])
+  @@index([productId])
+}
+
+/// Pricing per product × duration combination.
+/// e.g. Dedicated Cabin at Mercado → Per Month → ₹11,000
+model PricingPlan {
+  id             Int          @id @default(autoincrement())
+  productId      Int
+  durationTypeId Int
+  price          Decimal      @db.Decimal(10, 2)
+  oldPrice       Decimal?     @db.Decimal(10, 2)
+  discount       Decimal?     @db.Decimal(5, 2)
+  priceType      PriceType    @default(PER_SEAT)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  durationType   DurationType @relation(fields: [durationTypeId], references: [id])
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, durationTypeId])
+  @@index([productId])
+  @@index([durationTypeId])
+}
+
+enum PriceType {
+  PER_SEAT
+  FIXED
+}
+
+model ProductImage {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  url       String
+  alt       String?
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+/// Amenities are fully dynamic — admin creates them.
+model Amenity {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
+  slug        String           @unique
+  icon        String?
+  description String?          @db.Text
+  isActive    Boolean          @default(true)
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  products    ProductAmenity[]
+}
+
+model ProductAmenity {
+  productId Int
+  amenityId Int
+  amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([productId, amenityId])
+  @@index([productId])
+  @@index([amenityId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOKINGS & UNIT ASSIGNMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Core booking record — ties a customer to a product for a duration.
+///
+/// Owned Space bookings:
+///   - Have one or more BookingUnit rows assigning named units.
+///   - complementaryHoursUsed tracks consumed free guest space hours from this booking's product allowance.
+///
+/// Guest Space bookings:
+///   - No BookingUnit rows.
+///   - startTime / endTime define the slot.
+///   - If the customer has an active Owned Space booking with complementaryMeetingHours,
+///     deduct from that booking's complementaryHoursUsed before charging.
+model Booking {
+  id                     Int           @id @default(autoincrement())
+  bookingNumber          String        @unique
+  customerId             Int
+  productId              Int
+  durationTypeId         Int
+  statusId               Int
+  startDate              DateTime
+  endDate                DateTime
+  startTime              String?
+  endTime                String?
+  durationUnits          Int           @default(1)
+  unitPrice              Decimal       @db.Decimal(10, 2)
+  totalAmount            Decimal       @db.Decimal(12, 2)
+  taxRate                Decimal?      @db.Decimal(5, 2)
+  taxAmount              Decimal?      @db.Decimal(10, 2)
+  grandTotal             Decimal       @db.Decimal(12, 2)
+  securityDeposit        Decimal?      @db.Decimal(10, 2)
+  depositReturned        Boolean       @default(false)
+  seats                  Int           @default(1)
+  /// Tracks how many complimentary guest space hours have been consumed
+  /// against this booking's product.complementaryMeetingHours allowance.
+  /// Only relevant for Owned Space bookings.
+  complementaryHoursUsed Decimal       @default(0) @db.Decimal(6, 2)
+  notes                  String?       @db.Text
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  customer               Customer      @relation(fields: [customerId], references: [id])
+  durationType           DurationType  @relation(fields: [durationTypeId], references: [id])
+  product                Product       @relation(fields: [productId], references: [id])
+  status                 BookingStatus @relation(fields: [statusId], references: [id])
+  payments               Payment[]
+  /// Named unit assignments — only populated for Owned Space bookings.
+  units                  BookingUnit[]
+  /// Documents attached to this specific booking (e.g. signed agreement).
+  documents              Document[]
+  contractRequests       ContractRequest[]
+  contracts              Contract[]
+
+  @@index([customerId])
+  @@index([productId])
+  @@index([statusId])
+  @@index([startDate, endDate])
+  @@index([bookingNumber])
+  @@index([durationTypeId], map: "Booking_durationTypeId_fkey")
+}
+
+/// Assigns a specific named unit to a booking for a defined agreement period.
+/// One booking can have multiple units (e.g. customer takes 2 Flex Desks).
+/// One unit can appear in multiple BookingUnits over time (history preserved).
+///
+/// Availability check: a unit is free if no BookingUnit with isActive = true
+/// overlaps the requested date range.
+///
+/// When a booking ends/is cancelled: isActive flips to false automatically
+/// (via a scheduled job or on status change), returning the unit to the pool.
+model BookingUnit {
+  id            Int         @id @default(autoincrement())
+  bookingId     Int
+  productUnitId Int
+  startDate     DateTime
+  endDate       DateTime
+  /// false = unit has been returned to the available pool.
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  booking       Booking     @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  productUnit   ProductUnit @relation(fields: [productUnitId], references: [id])
+
+  /// Prevents the same physical unit being double-booked for the exact same period.
+  /// For overlap checks (partial date overlaps) enforce this in application logic.
+  @@unique([productUnitId, startDate, endDate])
+  @@index([bookingId])
+  @@index([productUnitId])
+  @@index([isActive])
+  @@index([startDate, endDate])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Payment records against bookings (supports partial payments, deposits, refunds).
+model Payment {
+  id               Int           @id @default(autoincrement())
+  paymentNumber    String        @unique
+  bookingId        Int
+  statusId         Int
+  amount           Decimal       @db.Decimal(12, 2)
+  method           String?
+  gatewayOrderId   String?
+  gatewayPaymentId String?
+  currency         String        @default("INR")
+  transactionRef   String?
+  type             String        @default("PAYMENT")
+  notes            String?       @db.Text
+  paidAt           DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  booking          Booking       @relation(fields: [bookingId], references: [id])
+  status           PaymentStatus @relation(fields: [statusId], references: [id])
+
+  @@index([bookingId])
+  @@index([statusId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOCUMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A document link (stored externally in Google Drive, S3, etc.) belonging
+/// to either a Customer or a Booking — never both simultaneously.
+///
+/// Ownership rule (enforced in app logic):
+///   - Customer-level: customerId set, bookingId null  (e.g. KYC, ID proof)
+///   - Booking-level:  bookingId set, customerId null  (e.g. signed agreement)
+///
+/// Verification workflow:
+///   Pending → Approved  (admin reviews and approves)
+///   Pending → Rejected  (admin rejects; rejectionReason must be set)
+///   Any     → Expired   (scheduled job sets this when expiresAt is past)
+model Document {
+  id               Int              @id @default(autoincrement())
+  /// Belongs to a customer (KYC, ID proof, etc.) — null if booking-level.
+  customerId       Int?
+  /// Belongs to a specific booking (signed agreement, etc.) — null if customer-level.
+  bookingId        Int?
+  categoryId       Int
+  statusId         Int
+  /// Admin/manager who last reviewed this document (approved or rejected).
+  reviewedById     Int?
+  title            String           // e.g. "Aadhaar Card", "6-Month Agreement"
+  fileUrl          String           @db.Text  // drive / S3 link
+  fileName         String?          // original file name for display
+  fileSize         Int?             // bytes, optional
+  mimeType         String?          // e.g. "application/pdf", "image/jpeg"
+  /// Name printed on the uploaded document (e.g., Aadhaar/PAN Name)
+  nameOnDocument   String?
+  /// Unique identifier on the document (e.g., Aadhaar/PAN Number)
+  documentNumber   String?
+  /// Reason populated only when status = Rejected.
+  rejectionReason  String?          @db.Text
+  /// When set, a scheduled job flips status to Expired after this date.
+  expiresAt        DateTime?
+  /// When the admin last reviewed (approved/rejected) this document.
+  reviewedAt       DateTime?
+  notes            String?          @db.Text
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  customer         Customer?        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  booking          Booking?         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  category         DocumentCategory @relation(fields: [categoryId], references: [id])
+  status           DocumentStatus   @relation(fields: [statusId], references: [id])
+  reviewedBy       User?            @relation("DocumentReviewer", fields: [reviewedById], references: [id])
+
+  @@index([customerId])
+  @@index([bookingId])
+  @@index([categoryId])
+  @@index([statusId])
+  @@index([reviewedById])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPPORT TICKETS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SupportTicket {
+  id            Int                @id @default(autoincrement())
+  ticketNumber  String             @unique
+  customerId    Int?
+  assigneeId    Int?
+  statusId      Int
+  name          String
+  email         String?
+  phone         String?
+  organization  String?
+  spaceType     String?            // Deprecated: use productTypeId
+  location      String?            // Deprecated: use locationId
+  productTypeId Int?
+  locationId    Int?
+  category      String?
+  subCategory   String?
+  description   String             @db.Text
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  assignee      User?              @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  customer      Customer?          @relation(fields: [customerId], references: [id])
+  status        TicketStatus       @relation(fields: [statusId], references: [id])
+  productType   ProductType?       @relation(fields: [productTypeId], references: [id])
+  locationRel   Location?          @relation(fields: [locationId], references: [id])
+  attachments   TicketAttachment[]
+
+  @@index([customerId])
+  @@index([assigneeId])
+  @@index([statusId])
+  @@index([productTypeId])
+  @@index([locationId])
+  @@index([ticketNumber])
+}
+
+model TicketAttachment {
+  id              Int           @id @default(autoincrement())
+  supportTicketId Int
+  url             String
+  fileName        String?
+  fileSize        Int?
+  mimeType        String?
+  createdAt       DateTime      @default(now())
+  supportTicket   SupportTicket @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
+
+  @@index([supportTicketId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT & SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Tracks all admin actions for accountability and debugging.
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String
+  module    String
+  recordId  Int?
+  oldData   String?  @db.LongText
+  newData   String?  @db.LongText
+  ipAddress String?
+  userAgent String?  @db.Text
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([module])
+  @@index([createdAt])
+}
+
+/// Global settings the admin can tweak without redeployment.
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String @db.Text
+  group String @default("general")
+
+  @@index([group])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTRACT LIFECYCLE MANAGEMENT (CLM)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── CONTRACT STATUS LOOKUP ───────────────────────────────────────────────────
+model ContractStatus {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  displayName String
+  color       String?
+  isFinal     Boolean    @default(false)
+  sortOrder   Int        @default(0)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  contracts   Contract[]
+}
+
+// ── CONTRACT REQUEST (customer initiates) ───────────────────────────────────
+model ContractRequest {
+  id           Int       @id @default(autoincrement())
+  customerId   Int
+  bookingId    Int?
+  requestNote  String?   @db.Text
+  status       String    @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  rejectedNote String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  customer     Customer  @relation(fields: [customerId], references: [id])
+  booking      Booking?  @relation(fields: [bookingId], references: [id])
+  contract     Contract?
+
+  @@index([customerId])
+  @@index([status])
+}
+
+// ── CONTRACT ─────────────────────────────────────────────────────────────────
+model Contract {
+  id               Int                   @id @default(autoincrement())
+  contractNumber   String                @unique
+  requestId        Int                   @unique
+  bookingId        Int
+  statusId         Int
+  title            String
+  expiresAt        DateTime?
+  notes            String?               @db.Text
+  createdById      Int
+  finalDriveFileId String?
+  finalDriveUrl    String?               @db.Text
+  finalVersionId   Int?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  request          ContractRequest       @relation(fields: [requestId], references: [id])
+  booking          Booking               @relation(fields: [bookingId], references: [id])
+  status           ContractStatus        @relation(fields: [statusId], references: [id])
+  createdBy        User                  @relation("ContractCreator", fields: [createdById], references: [id])
+  versions         ContractVersion[]
+  negotiations     ContractNegotiation[]
+  signature        ContractSignature?
+  
+  // Signature Method Additions
+  signatureType        String?   // "CANVAS" | "DSC" | "MANUAL"
+  signatureData        String?   @db.LongText // base64 canvas OR base64 signed bytes (DSC)
+  signerCertificate    String?   @db.LongText // X.509 cert PEM (DSC only)
+  signerName           String?   // extracted from cert (DSC) or typed (MANUAL)
+  signedAt             DateTime?
+  manualUploadUrl      String?   @db.Text    // uploaded scan URL (MANUAL only)
+
+  // Manager Counter-Signature
+  counterSignatureType     String?   // "CANVAS" | "DSC" | "MANUAL"
+  counterSignatureData     String?   @db.LongText
+  counterSignerCertificate String?   @db.LongText // X.509 cert PEM (DSC only)
+  counterSignerName        String?   
+  counterSignedAt          DateTime?
+
+  @@index([bookingId])
+  @@index([statusId])
+  @@index([contractNumber])
+}
+
+// ── CONTRACT VERSION (rich text in DB) ───────────────────────────────────────
+model ContractVersion {
+  id            Int      @id @default(autoincrement())
+  contractId    Int
+  versionNumber Int
+  content       String   @db.LongText  // Tiptap JSON stringified
+  changeNote    String?  @db.Text
+  createdById   Int
+  createdAt     DateTime @default(now())
+  contract      Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  createdBy     User     @relation("VersionCreator", fields: [createdById], references: [id])
+
+  @@unique([contractId, versionNumber])
+  @@index([contractId])
+}
+
+// ── CONTRACT NEGOTIATION ─────────────────────────────────────────────────────
+model ContractNegotiation {
+  id          Int                  @id @default(autoincrement())
+  contractId  Int
+  customerId  Int?
+  status      String               @default("OPEN") // OPEN | ACCEPTED | REJECTED | WITHDRAWN
+  title       String
+  resolvedAt  DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  contract    Contract             @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  customer    Customer?            @relation(fields: [customerId], references: [id])
+  messages    NegotiationMessage[]
+
+  @@index([contractId])
+  @@index([status])
+}
+
+// ── NEGOTIATION MESSAGE ───────────────────────────────────────────────────────
+model NegotiationMessage {
+  id               Int                 @id @default(autoincrement())
+  negotiationId    Int
+  authorType       String              // CUSTOMER | STAFF
+  authorCustomerId Int?
+  authorUserId     Int?
+  body             String              @db.Text
+  attachmentUrl    String?             @db.Text
+  createdAt        DateTime            @default(now())
+  negotiation      ContractNegotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
+  authorCustomer   Customer?           @relation(fields: [authorCustomerId], references: [id])
+  authorUser       User?               @relation(fields: [authorUserId], references: [id])
+
+  @@index([negotiationId])
+}
+
+// ── CONTRACT SIGNATURE ────────────────────────────────────────────────────────
+model ContractSignature {
+  id                Int      @id @default(autoincrement())
+  contractId        Int      @unique
+  contractVersionId Int
+  signedById        Int
+  signatureData     String   @db.LongText  // base64 PNG
+  ipAddress         String?
+  userAgent         String?  @db.Text
+  signedAt          DateTime @default(now())
+  contract          Contract @relation(fields: [contractId], references: [id])
+  signedBy          Customer @relation(fields: [signedById], references: [id])
+
+  @@index([contractId])
+}
+
+// ── SIGNING CHALLENGE (for DSC) ────────────────────────────────────────────────
+model SigningChallenge {
+  id          String   @id @default(cuid())
+  contractId  String
+  token       String   @unique
+  used        Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+// ── STORED DOCUMENTS (DB-backed file storage for serverless deploys) ─────────
+model StoredDocument {
+  id           Int      @id @default(autoincrement())
+  fileName     String
+  mimeType     String   @default("application/pdf")
+  fileData     Bytes    @db.LongBlob
+  fileSize     Int?
+  uploadedById Int
+  createdAt    DateTime @default(now())
+
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+
+  @@index([uploadedById])
+}
+
+// ── CLIENT MASTER (REPOSITORY / DATA ENTRY) ─────────────────────────────────
+model ClientMaster {
+  id                     Int                    @id @default(autoincrement())
+  srNo                   Int                    @unique
+  companyName            String
+  hoAddress              String?                @db.Text
+  hoAddressLine1         String?
+  hoAddressLine2         String?
+  hoCity                 String?
+  hoState                String?
+  hoCountry              String?
+  hoPinCode              String?
+  gstStatus              String                 @default("UNREGISTERED") // "REGISTERED" | "UNREGISTERED"
+  gstNo                  String?
+  gstPdfUrl              String?                @db.Text
+  gstPdfName             String?
+  agreementStartDate     DateTime?
+  agreementEndDate       DateTime?
+  agreementPdfUrl        String?                @db.Text
+  agreementPdfName       String?
+  lockinEndDate          DateTime?
+  noticePeriodMonths     Int?
+  noticePeriodApplicable String?                // "AFTER_LOCKIN" | "BEFORE_LOCKIN"
+  escalationPercent      Decimal?               @db.Decimal(5, 2)
+  escalationApplicable   DateTime?
+  documentationCharges   Decimal?               @db.Decimal(12, 2)
+  cabinName              String?
+  noOfSeats              Int?
+  ratePerAgreement       Decimal?               @db.Decimal(12, 2)
+  amount                 Decimal?               @db.Decimal(12, 2) // noOfSeats * ratePerAgreement (editable)
+  gstPercent             Decimal?               @db.Decimal(5, 2)
+  totalAmount            Decimal?               @db.Decimal(12, 2) // amount + GST (editable)
+  willDeductTds          Boolean                @default(false)
+  tanNo                  String?
+  tdsPdfUrl              String?                @db.Text
+  tdsPdfName             String?
+  clientId               String?
+  hasBrokerCommission    Boolean                @default(false)
+  brokerCommissionPercent Decimal?              @db.Decimal(5, 2)
+  invoiceToBeRaised      String?                // "CLIENT" | "BROKER"
+  sorAmount              Decimal?               @db.Decimal(12, 2)
+  sorRecdDate            DateTime?
+  paymentDueDay          Int?
+  clientStatus           String?                @default("Active") // "Active" | "Inactive" | "On Notice" | "Terminated"
+  createdById            Int
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  createdBy              User                   @relation(fields: [createdById], references: [id])
+  contactPersons         ClientContactPerson[]
+  products               ClientMasterProduct[]
+  invoiceRecords         InvoiceRecord[]
+
+  @@index([createdById])
+  @@index([companyName])
+  @@index([clientStatus])
+}
+
+model ClientMasterProduct {
+  id               Int          @id @default(autoincrement())
+  clientMasterId   Int
+  cabinName        String?
+  noOfSeats        Int?
+  ratePerAgreement Decimal?     @db.Decimal(12, 2)
+  amount           Decimal?     @db.Decimal(12, 2)
+  gstPercent       Decimal?     @db.Decimal(5, 2)
+  totalAmount      Decimal?     @db.Decimal(12, 2)
+  sortOrder        Int          @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  clientMaster     ClientMaster @relation(fields: [clientMasterId], references: [id], onDelete: Cascade)
+
+  @@index([clientMasterId])
+}
+
+model ClientContactPerson {
+  id             Int          @id @default(autoincrement())
+  clientMasterId Int
+  name           String
+  designation    String?
+  mobileNo       String?
+  email          String?
+  sortOrder      Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  clientMaster   ClientMaster @relation(fields: [clientMasterId], references: [id], onDelete: Cascade)
+
+  @@index([clientMasterId])
+}
+
+// ── INVOICE RECORDS (GENERATED MONTHLY WORKFLOW ENTRIES) ─────────────────────
+model InvoiceRecord {
+  id                     Int                    @id @default(autoincrement())
+  clientMasterId         Int
+  srNo                   Int
+  companyName            String
+  cabinName              String?
+  noOfSeats              Int?
+  ratePerAgreement       Decimal?               @db.Decimal(12, 2)
+  amount                 Decimal?               @db.Decimal(12, 2)
+  gstPercent             Decimal?               @db.Decimal(5, 2)
+  totalAmount            Decimal?               @db.Decimal(12, 2)
+  gstNo                  String?
+  billingMonth           String?                // e.g. "July 2026"
+  sendType               String                 @default("MANUAL") // "MANUAL" | "AUTOMATIC_MONTH_END"
+  sentAt                 DateTime               @default(now())
+  status                 String                 @default("PENDING_CM_REVIEW") // "PENDING_CM_REVIEW" | "SENT_TO_ACCOUNTANT" | "INVOICE_ATTACHED" | "APPROVED" | "REJECTED_WITH_REMARKS"
+  remarks                String?                @db.Text
+  createdById            Int
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  clientMaster           ClientMaster           @relation(fields: [clientMasterId], references: [id], onDelete: Cascade)
+  createdBy              User                   @relation(fields: [createdById], references: [id])
+  attachedInvoice        AttachedInvoice?
+
+  @@index([clientMasterId])
+  @@index([createdById])
+  @@index([status])
+  @@index([sendType])
+}
+
+model AttachedInvoice {
+  id              Int            @id @default(autoincrement())
+  invoiceRecordId Int?           @unique
+  clientMasterId  Int?           @unique
+  fileUrl         String         @db.Text
+  fileName        String
+  fileSize        Int?
+  uploadedById    Int
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  invoiceRecord   InvoiceRecord? @relation(fields: [invoiceRecordId], references: [id], onDelete: Cascade)
+  uploadedBy      User           @relation(fields: [uploadedById], references: [id])
+
+  @@index([invoiceRecordId])
+  @@index([uploadedById])
+}
+
+model InvoiceProduct {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}

@@ -8,14 +8,26 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "static.wixstatic.com",
       },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
     ],
   },
-   output: 'standalone', // ✅ Critical for VPS deployment
+  output: 'standalone', // ✅ Critical for VPS deployment
   poweredByHeader: false,
-  compress: true,
+  serverExternalPackages: ["@prisma/client"],
   env: {
-    APPS_SCRIPT_URL:`https://script.google.com/macros/s/AKfycbwybDS3UOAwsqfHwhbCJLTl0dsTD_sq-u5OwYdIcb_unw5lrWHxtf97P9zc03RKWB5V5Q/exec`,
-    APPS_SCRIPT_TOKEN:`6869ff576b8b0e210637b6a57afd39449c0abbc730fc07d09c626598d77b597c`,
+    APPS_SCRIPT_URL: process.env.APPS_SCRIPT_URL,
+    APPS_SCRIPT_TOKEN: process.env.APPS_SCRIPT_TOKEN,
+    APPS_SCRIPT_DRIVE_URL: process.env.APPS_SCRIPT_DRIVE_URL,
+    DATABASE_URL: process.env.DATABASE_URL,
+    JWT_SECRET: process.env.JWT_SECRET,
+    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
+    RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
+    RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
   }
 };
 

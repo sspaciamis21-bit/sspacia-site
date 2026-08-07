@@ -1,327 +1,514 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
-import productsData from "@/config/products.json";
-import { FadeUp } from "@/components/ui/fade-up";
-import { SectionLabel } from "@/components/ui/section-label";
-import { 
-  Briefcase, 
-  Clock, 
-  Users, 
-  ShieldCheck, 
-  Coffee,
-  Calendar,
-  Layers,
-  ArrowRight
-} from "lucide-react";
 import Link from "next/link";
+import { FilterDropdown } from "@/components/ui/filter-dropdown";
+import { 
+  X, 
+  Filter, 
+  MapPin, 
+  Zap, 
+  Coffee, 
+  Wifi, 
+  Monitor,
+  ShieldCheck,
+  Loader2,
+  AlertCircle
+} from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 import { BookOnlineForm } from "@/components/book-online-form";
-import { X } from "lucide-react";
+import { AvailabilityTimeline } from "@/components/ui/availability-timeline";
 
-// Types
-interface CommitmentPeriods {
-  [key: string]: number | null;
+import type { Product, City, Amenity } from "./page";
+
+interface ProductsClientProps {
+  products: Product[];
+  cities: City[];
+  amenities: Amenity[];
+  categories: { id: number; name: string }[];
+  productTypes: { id: number; name: string }[];
+  initialCategoryId?: number;
 }
 
-interface Workspace {
-  type: string;
-  commitment_periods: CommitmentPeriods;
-  access_time: string;
-  complementary_meeting_room: string | null;
-  image: string;
-}
+const fallbackImages = [
+  "/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg",
+  "/IMAGES_SSPACIA/PREMIER HOUSE/Reception.JPG",
+  "/IMAGES_SSPACIA/AGARWAL IMAGES/Meeting_Room_1.jpg",
+];
 
-interface GuestSpace {
-  type: string;
-  capacity: string;
-  commitment_periods: CommitmentPeriods;
-  image: string;
-}
-
-interface LocationData {
-  location: string;
-  workspaces: Workspace[];
-  guest_spaces: GuestSpace[];
-}
-
-const locations = productsData as unknown as LocationData[];
-
-export default function ProductsClient() {
-  const [activeLocation, setActiveLocation] = useState(locations[0].location);
+export default function ProductsClient({ 
+  products = [], 
+  cities = [], 
+  amenities = [], 
+  categories = [], 
+  productTypes = [],
+  initialCategoryId
+}: ProductsClientProps) {
+  // ─── Filter States ─────────────────────────────────────────
+  const [selectedCityId, setSelectedCityId] = useState<number | undefined>();
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(initialCategoryId);
+  const [selectedTypeId, setSelectedTypeId] = useState<number | undefined>();
+  const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>();
+  const [selectedAmenityIds, setSelectedAmenityIds] = useState<number[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const now = new Date();
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  });
+  const [selectedTime, setSelectedTime] = useState<string>("");
+  const [selectedSlotsByProduct, setSelectedSlotsByProduct] = useState<Record<number, string[]>>({});
+  
+  const { user } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState({ location: "", spaceType: "" });
+  const [isVerified, setIsVerified] = useState<boolean | null>(null);
+  const [requestingPurchaseId, setRequestingPurchaseId] = useState<number | null>(null);
 
-  const currentLocationData = locations.find(l => l.location === activeLocation) || locations[0];
+  React.useEffect(() => {
+     if (user) {
+         fetch('/api/user/documents/status')
+            .then(r => r.json())
+            .then(json => setIsVerified(json.isVerified))
+            .catch(() => setIsVerified(false));
+     } else {
+         setIsVerified(false);
+     }
+  }, [user]);
 
-  const formatPeriodLabel = (key: string) => {
-    return key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  const handleToggleSlot = (productId: number, slot: string) => {
+    setSelectedSlotsByProduct(prev => {
+      const current = prev[productId] || [];
+      const updated = current.includes(slot) 
+        ? current.filter(s => s !== slot) 
+        : [...current, slot];
+      return { ...prev, [productId]: updated };
+    });
   };
 
-  const getCommitmentLabels = (periods: CommitmentPeriods) => {
-    return Object.entries(periods)
-      .filter(([_, value]) => value !== null)
-      .map(([key]) => formatPeriodLabel(key))
-      .join(", ");
+  const handleCityChange = (cityId: number | string | undefined) => {
+    const id = cityId ? Number(cityId) : undefined;
+    setSelectedCityId(id);
+    setSelectedLocationId(undefined); 
   };
 
-  const openInquiryModal = (location: string, spaceType: string) => {
-    setModalData({ location, spaceType });
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      if (selectedCityId && p.location.cityId !== selectedCityId) return false;
+      if (selectedCategoryId && p.categoryId !== selectedCategoryId) return false;
+      if (selectedTypeId && p.typeId !== selectedTypeId) return false;
+      if (selectedLocationId && p.location.id !== selectedLocationId) return false;
+      if (selectedAmenityIds.length > 0) {
+        const productAmenityIds = p.amenities.map(pa => pa.amenity.id);
+        const hasAllAmenities = selectedAmenityIds.every(id => productAmenityIds.includes(id));
+        if (!hasAllAmenities) return false;
+      }
+      return true;
+    });
+  }, [products, selectedCityId, selectedLocationId, selectedAmenityIds, selectedCategoryId, selectedTypeId]);
+
+  const filteredTypeOptions = useMemo(() => {
+    if (!selectedCategoryId) return [];
+    const validTypeIdSet = new Set(products.filter(p => p.categoryId === selectedCategoryId).map(p => p.typeId));
+    return productTypes.filter(t => validTypeIdSet.has(t.id));
+  }, [selectedCategoryId, productTypes, products]);
+
+  const guestCategoryId = useMemo(() => {
+    return categories.find(c => c.name === "GUEST_SPACE" || c.name === "Guest Space")?.id || 1;
+  }, [categories]);
+
+  const guestSpaces = useMemo(() => filteredProducts.filter(p => p.categoryId === guestCategoryId), [filteredProducts, guestCategoryId]);
+  const workspaces = useMemo(() => filteredProducts.filter(p => p.categoryId !== guestCategoryId), [filteredProducts, guestCategoryId]);
+
+  const toggleAmenity = (id: number) => {
+    setSelectedAmenityIds(prev => 
+      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
+    );
+  };
+
+  const openInquiryModal = (locationName: string, spaceType: string) => {
+    setModalData({ location: locationName, spaceType });
     setIsModalOpen(true);
   };
 
+  const handlePurchaseRequest = async (product: Product) => {
+      if (!user) {
+          toast.error("Please login to request a purchase");
+          return;
+      }
+
+      if (!isVerified) {
+          toast.error("Account Verification Required", {
+              description: "Please complete your KYC verification in the dashboard before purchasing.",
+              action: {
+                  label: "Go to KYC",
+                  onClick: () => window.location.href = "/dashboard/documents"
+              }
+          });
+          return;
+      }
+
+      setRequestingPurchaseId(product.id);
+      const toastId = toast.loading("Submitting purchase request...");
+
+      try {
+          // Pick the first pricing plan (usually monthly for workspaces)
+          const plan = product.pricingPlans[0];
+          if (!plan) throw new Error("No pricing plan selected");
+
+          const res = await fetch('/api/user/bookings/request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  productId: product.id,
+                  durationTypeId: plan.durationTypeId,
+                  startDate: new Date().toISOString()
+              })
+          });
+
+          const json = await res.json();
+          if (res.ok) {
+              toast.success("Request Submitted", {
+                id: toastId,
+                description: "Your request is now visible to our managers. They will contact you shortly."
+              });
+          } else {
+              toast.error(json.error || "Failed", { id: toastId });
+          }
+      } catch (err) {
+          const message = err instanceof Error ? err.message : "Something went wrong";
+          toast.error(message, { id: toastId });
+      } finally {
+          setRequestingPurchaseId(null);
+      }
+  };
+
+  const formatPrice = (price: number) => `₹${price.toLocaleString()}/-`;
+
+  const getAmenityIcon = (slug: string) => {
+    switch (slug) {
+      case 'wifi': return <Wifi className="w-3.5 h-3.5" />;
+      case 'coffee': return <Coffee className="w-3.5 h-3.5" />;
+      case 'monitor': return <Monitor className="w-3.5 h-3.5" />;
+      case 'power': return <Zap className="w-3.5 h-3.5" />;
+      default: return <Zap className="w-3.5 h-3.5" />;
+    }
+  };
+
   return (
-    <div className="space-y-16 py-12 container mx-auto px-4 sm:px-6 lg:px-8">
-      {/* ── Header ── */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#E0F7FA] via-[#F8F9FA] to-[#E0F2F1] px-6 py-16 sm:px-12 sm:py-24 text-center">
-        <div className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-[#006064]/10 blur-3xl opacity-50" />
-        <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 rounded-full bg-[#4DB6AC]/15 blur-3xl opacity-50" />
+    <div className="min-h-screen py-16 bg-[#FBF9F8]">
+      <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        <div className="relative z-10 space-y-6">
-          <FadeUp className="flex justify-center">
-            <SectionLabel>
-              <Briefcase className="h-3 w-3" /> Our Solutions
-            </SectionLabel>
-          </FadeUp>
-          <FadeUp delay={0.1}>
-            <h1 className="text-4xl font-bold tracking-tight text-[#004D40] sm:text-6xl">
-              Workspaces & Plans
-            </h1>
-          </FadeUp>
-          <FadeUp delay={0.2}>
-            <p className="mx-auto max-w-2xl text-lg text-[#616161]">
-              Explore our flexible workspace options across Ahmedabad. 
-              Find the perfect environment to grow your business.
-            </p>
-          </FadeUp>
-        </div>
-      </section>
-
-      {/* ── Location Selector ── */}
-      <FadeUp delay={0.3}>
-        <div className="flex flex-wrap justify-center gap-3">
-          {locations.map((loc) => (
-            <button
-              key={loc.location}
-              onClick={() => setActiveLocation(loc.location)}
-              className={`rounded-full px-6 py-2 text-sm font-semibold transition-all ${
-                activeLocation === loc.location
-                  ? "bg-[#006064] text-white shadow-lg shadow-[#006064]/30"
-                  : "bg-white text-[#616161] border border-[#CFD8DC] hover:border-[#006064] hover:text-[#006064]"
-              }`}
-            >
-              {loc.location}
-            </button>
-          ))}
-        </div>
-      </FadeUp>
-
-      {/* ── Workspaces Section ── */}
-      <section className="space-y-10">
-        <FadeUp className="space-y-3 flex flex-col items-center">
-          <SectionLabel>
-            <Layers className="h-3 w-3" /> Product Categories
-          </SectionLabel>
-          <h2 className="text-3xl font-semibold tracking-tight text-[#212121] sm:text-4xl text-center">
-            Professional Workspaces
-          </h2>
-        </FadeUp>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <AnimatePresence mode="wait">
-            {currentLocationData.workspaces.map((ws, index) => (
-              <motion.article
-                key={`${activeLocation}-workspace-${ws.type}`}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ delay: index * 0.1 }}
-                className="group flex flex-col overflow-hidden rounded-3xl border border-[#CFD8DC] bg-white shadow-sm shadow-[#006064]/5 transition-all hover:shadow-xl hover:-translate-y-1"
-              >
-                <div className="relative h-56 overflow-hidden">
-                  <Image
-                    src={ws.image}
-                    alt={ws.type}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    priority={index < 3}
+        {/* ── SIDEBAR: MASTER FILTER ── */}
+        <aside className="w-full lg:w-72 flex-shrink-0">
+          <div className="sticky top-28 bg-white/80 p-8 rounded-sm border border-outline-variant/5 shadow-[0_40px_100px_rgba(0,105,111,0.06)] backdrop-blur-3xl max-h-[calc(100vh-140px)] overflow-y-auto no-scrollbar">
+            <div className="space-y-8">
+               {/* Category Hub */}
+               <div className="space-y-2">
+                  <label className="text-[9px] font-sans font-bold text-tertiary/50 uppercase tracking-[0.2em]">CATEGORY</label>
+                  <FilterDropdown 
+                    label="" 
+                    options={categories} 
+                    selectedId={selectedCategoryId}
+                    onSelect={(id) => {
+                      setSelectedCategoryId(id ? Number(id) : undefined);
+                      setSelectedTypeId(undefined);
+                    }}
+                    placeholder="Select Category"
+                    icon={<Zap className="w-3.5 h-3.5" />}
                   />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-                  <span className="absolute bottom-3 left-4 rounded-full bg-[#006064]/90 px-3 py-1 text-[11px] font-bold text-white backdrop-blur-sm">
-                    {ws.type}
-                  </span>
-                </div>
+               </div>
 
-                <div className="flex flex-1 flex-col p-6 space-y-5">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E0F7FA] text-[#006064]">
-                        <Clock className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-[#757575] tracking-wider">Access</p>
-                        <p className="text-sm font-semibold text-[#424242]">{ws.access_time}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E0F7FA] text-[#006064]">
-                        <Calendar className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-[#757575] tracking-wider">Plans</p>
-                        <p className="text-sm font-semibold text-[#424242]">{getCommitmentLabels(ws.commitment_periods)}</p>
-                      </div>
-                    </div>
-
-                    {ws.complementary_meeting_room && (
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E0F7FA] text-[#006064]">
-                          <Coffee className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] uppercase font-bold text-[#757575] tracking-wider">Perks</p>
-                          <p className="text-sm font-semibold text-[#424242] truncate">{ws.complementary_meeting_room} Meeting Room Access</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <button 
-                    onClick={() => openInquiryModal(activeLocation, ws.type)}
-                    className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#006064] px-4 py-2.5 text-sm font-bold text-white transition-all hover:bg-[#007C91] hover:shadow-md active:scale-95"
-                  >
-                    Inquire Now <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.article>
-            ))}
-          </AnimatePresence>
-        </div>
-      </section>
-
-      {/* ── Guest Spaces Section ── */}
-      <section className="space-y-10">
-        <FadeUp className="space-y-3 flex flex-col items-center">
-          <SectionLabel>
-            <Users className="h-3 w-3" /> Shared Spaces
-          </SectionLabel>
-          <h2 className="text-3xl font-semibold tracking-tight text-[#212121] sm:text-4xl text-center">
-            Meeting & Event Rooms
-          </h2>
-        </FadeUp>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <AnimatePresence mode="wait">
-            {currentLocationData.guest_spaces.map((gs, index) => (
-              <motion.article
-                key={`${activeLocation}-guest-${gs.type}`}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ delay: index * 0.1 }}
-                className="group flex flex-col overflow-hidden rounded-3xl border border-[#CFD8DC] bg-white shadow-sm shadow-[#006064]/5 transition-all hover:shadow-xl hover:-translate-y-1"
-              >
-                <div className="relative h-56 overflow-hidden">
-                  <Image
-                    src={gs.image}
-                    alt={gs.type}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
+               {/* Type Hub */}
+               <div className="space-y-2">
+                  <label className="text-[9px] font-sans font-bold text-tertiary/50 uppercase tracking-[0.2em]">SPACE TYPE</label>
+                  <FilterDropdown 
+                    label="" 
+                    options={filteredTypeOptions} 
+                    selectedId={selectedTypeId}
+                    onSelect={(id) => setSelectedTypeId(id ? Number(id) : undefined)}
+                    placeholder="Select Type"
+                    disabled={!selectedCategoryId}
+                    icon={<Filter className="w-3.5 h-3.5" />}
                   />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-                  <div className="absolute top-3 right-4 rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold text-[#006064] backdrop-blur-sm shadow-sm flex items-center gap-1.5">
-                    <Users className="w-3 h-3" /> {gs.capacity}
+               </div>
+
+               {/* City Hub */}
+               <div className="space-y-2">
+                  <label className="text-[9px] font-sans font-bold text-tertiary/50 uppercase tracking-[0.2em]">CITY</label>
+                  <FilterDropdown 
+                    label="" 
+                    options={cities} 
+                    selectedId={selectedCityId}
+                    onSelect={handleCityChange}
+                    placeholder="Select City"
+                    icon={<MapPin className="w-3.5 h-3.5" />}
+                  />
+               </div>
+
+               {/* Date Selector */}
+               <div className="space-y-2">
+                  <label className="text-[9px] font-sans font-bold text-tertiary/50 uppercase tracking-[0.2em]">DATE</label>
+                  <input 
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="w-full h-10 bg-transparent text-[13px] border-b border-outline-variant/30 focus:border-cyan-500 outline-none transition-all placeholder:text-tertiary/20"
+                  />
+               </div>
+
+               {/* Time Selector */}
+               <div className="space-y-2">
+                  <label className="text-[9px] font-sans font-bold text-tertiary/50 uppercase tracking-[0.2em]">TIME</label>
+                  <input 
+                    type="time"
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                    className="w-full h-10 bg-transparent text-[13px] border-b border-outline-variant/30 focus:border-cyan-500 outline-none transition-all"
+                  />
+               </div>
+
+               {/* Amenities Stack */}
+               <div className="space-y-4">
+                  <label className="text-[9px] font-sans font-bold text-tertiary/50 uppercase tracking-[0.2em]">AMENITIES</label>
+                  <div className="flex flex-wrap gap-2 pb-2 border-b border-outline-variant/30">
+                    {amenities.slice(0, 4).map(amenity => (
+                        <button
+                          key={amenity.id}
+                          onClick={() => toggleAmenity(amenity.id)}
+                          className={`p-2 rounded-lg transition-all ${
+                              selectedAmenityIds.includes(amenity.id)
+                              ? "text-cyan-500 scale-110"
+                              : "text-tertiary/20 hover:text-tertiary/60"
+                          }`}
+                          title={amenity.name}
+                        >
+                          {getAmenityIcon(amenity.slug)}
+                        </button>
+                    ))}
                   </div>
-                  <span className="absolute bottom-3 left-4 rounded-full bg-[#4DB6AC]/90 px-3 py-1 text-[11px] font-bold text-white backdrop-blur-sm">
-                    {gs.type}
-                  </span>
-                </div>
+               </div>
 
-                <div className="flex flex-1 flex-col p-6 space-y-5">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E0F7FA] text-[#006064]">
-                        <Clock className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-[#757575] tracking-wider">Booking</p>
-                        <p className="text-sm font-semibold text-[#424242]">{getCommitmentLabels(gs.commitment_periods)}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#E0F7FA] text-[#006064]">
-                        <ShieldCheck className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-[#757575] tracking-wider">Features</p>
-                        <p className="text-sm font-semibold text-[#424242]">Hi-Speed WiFi & Facilities</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button 
-                    onClick={() => openInquiryModal(activeLocation, gs.type)}
-                    className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl border border-[#006064] px-4 py-2.5 text-sm font-bold text-[#006064] transition-all hover:bg-[#006064] hover:text-white active:scale-95"
-                  >
-                    Inquire Now <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.article>
-            ))}
-          </AnimatePresence>
-        </div>
-      </section>
-
-      {/* ── CTA Section ── */}
-      <FadeUp>
-        <section className="rounded-3xl bg-[#004D40] px-6 py-12 text-center text-white sm:px-12 sm:py-20">
-          <div className="mx-auto max-w-2xl space-y-6">
-            <h2 className="text-3xl font-bold sm:text-4xl text-white">Experience it in person</h2>
-            <p className="text-[#B2DFDB]">
-              Not sure which plan fits you best? Schedule a free tour to explore 
-              all our workspaces and find your perfect spot at SSPACIA.
-            </p>
-            <button 
-              onClick={() => openInquiryModal(activeLocation, "")}
-              className="inline-block rounded-full bg-[#006064] px-8 py-4 text-base font-bold text-white transition-all hover:bg-[#007C91] hover:scale-105 active:scale-95 shadow-lg shadow-[#00251A]/40"
-            >
-              Book a Free Tour
-            </button>
+               {/* Main CTA */}
+               <div className="pt-4">
+                 <button className="w-full bg-[#1ab0bc] text-white py-4 rounded-sm text-[10px] font-bold uppercase tracking-[0.1em] hover:brightness-95 transition-all shadow-lg active:scale-95">
+                   SEARCH SPACES
+                 </button>
+                 
+                 {(selectedCityId || selectedLocationId || selectedAmenityIds.length > 0 || selectedCategoryId || selectedTypeId) && (
+                   <button 
+                    onClick={() => {
+                        setSelectedCityId(undefined);
+                        setSelectedLocationId(undefined);
+                        setSelectedAmenityIds([]);
+                        setSelectedCategoryId(undefined);
+                        setSelectedTypeId(undefined);
+                        setSelectedDate(new Date().toISOString().split('T')[0]);
+                        setSelectedTime("");
+                    }}
+                    className="w-full mt-4 text-[9px] font-bold text-tertiary/30 uppercase tracking-[0.1em] hover:text-cyan-600 transition-colors"
+                   >
+                     Reset Filters
+                   </button>
+                 )}
+               </div>
+            </div>
           </div>
-        </section>
-      </FadeUp>
+        </aside>
 
-      {/* ── Inquiry Modal ── */}
+        {/* ── MAIN CONTENT: CATALOG ── */}
+        <main className="flex-1 space-y-24">
+          {filteredProducts.length === 0 ? (
+            <div className="py-32 text-center space-y-6 bg-surface-container-low/5 rounded-none border border-dashed border-outline-variant/20">
+               <div className="w-16 h-16 bg-surface-container-low mx-auto rounded-full flex items-center justify-center text-primary/5">
+                  <Filter className="w-8 h-8" />
+               </div>
+               <p className="text-xl font-medium text-tertiary/40 italic">No matches for your current system filters.</p>
+            </div>
+          ) : (
+            <section className="space-y-20">
+              {/* Collaborative Nodes */}
+              {guestSpaces.length > 0 && (
+                <div className="space-y-12">
+                  <div className="flex items-center gap-6">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.5em] text-secondary/40">COLLABORATION_NODES</span>
+                    <div className="h-[1px] flex-1 bg-outline-variant/10"></div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 gap-12">
+                    {guestSpaces.map((gs) => {
+                      const primaryImage = gs.images.find(img => img.isPrimary)?.url || gs.images[0]?.url || fallbackImages[gs.id % 3];
+                      return (
+                        <motion.div
+                          key={gs.id}
+                          layout
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="group bg-white rounded-none overflow-hidden border border-outline-variant/5 shadow-[0_20px_50px_rgba(27,28,28,0.03)] hover:shadow-[0_40px_80px_rgba(0,105,111,0.08)] transition-all duration-700 flex flex-col md:flex-row h-full"
+                        >
+                           <div className="w-full md:w-[40%] aspect-[4/3] md:aspect-auto relative overflow-hidden">
+                              <Image 
+                                src={primaryImage} 
+                                alt={gs.name} 
+                                fill 
+                                className="object-cover transform group-hover:scale-110 transition-transform duration-[2000ms] grayscale group-hover:grayscale-0" 
+                              />
+                              <div className="absolute top-6 left-6">
+                                  <span className="bg-primary/95 text-white text-[8px] font-bold px-4 py-2 uppercase tracking-[0.3em] rounded-none backdrop-blur-md">GUEST_O{gs.id}</span>
+                              </div>
+                           </div>
+                           <div className="p-8 flex-1 min-w-0 flex flex-col justify-between gap-8">
+                              <div className="space-y-6">
+                                  <div className="flex justify-between items-start gap-4">
+                                      <h3 className="font-display text-xl md:text-2xl font-bold tracking-tight text-on-surface leading-tight">{gs.name} @ {gs.location.name}</h3>
+                                      <div className="bg-surface-container-low px-3 py-1 rounded-none border border-outline-variant/10 whitespace-nowrap">
+                                          <span className="text-[8px] font-bold uppercase tracking-widest text-primary">{gs.capacity} SEATER</span>
+                                      </div>
+                                  </div>
+                                  
+                                  <div className="space-y-4">
+                                      <AvailabilityTimeline 
+                                          productId={gs.id} 
+                                          selectedDate={selectedDate} 
+                                          selectedSlots={selectedSlotsByProduct[gs.id] || []}
+                                          onToggleSlot={(slot) => handleToggleSlot(gs.id, slot)}
+                                      />
+                                  </div>
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 pt-6 border-t border-outline-variant/5">
+                                   <div className="space-y-1">
+                                      <span className="text-[9px] font-bold text-tertiary/40 uppercase tracking-widest block">Total Price</span>
+                                      <div className="text-2xl font-display font-black text-secondary leading-none">
+                                          {(() => {
+                                              const numSelected = selectedSlotsByProduct[gs.id]?.length || 0;
+                                              const basePrice = parseFloat(gs.pricingPlans.find(p => p.type?.toLowerCase().includes("hour"))?.price || gs.pricingPlans[0]?.price || "0");
+                                              const displayPrice = numSelected > 0 ? numSelected * basePrice : basePrice;
+                                              return formatPrice(displayPrice);
+                                          })()}
+                                      </div>
+                                      {selectedSlotsByProduct[gs.id]?.length > 0 && (
+                                          <span className="text-[8px] font-bold text-primary/60 uppercase tracking-widest">{selectedSlotsByProduct[gs.id].length} slots selected</span>
+                                      )}
+                                   </div>
+                                   <Link 
+                                       href={
+                                          selectedSlotsByProduct[gs.id]?.length > 0 
+                                          ? `/checkout?productId=${gs.id}&slots=${selectedSlotsByProduct[gs.id].join(',')}&date=${selectedDate}`
+                                          : `/products/${gs.id}`
+                                       }
+                                       className="bg-[#1ab0bc] text-white px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(26,176,188,0.2)] hover:shadow-[0_25px_50px_rgba(26,176,188,0.3)] transition-all transform hover:-translate-y-1 active:scale-95 text-center"
+                                   >
+                                       BOOK NOW
+                                   </Link>
+                               </div>
+                           </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Work Systems */}
+              {workspaces.length > 0 && (
+                <div className="space-y-12 pt-12">
+                  <div className="flex items-center gap-6">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.5em] text-primary/40">WORK_SYSTEMS</span>
+                    <div className="h-[1px] flex-1 bg-outline-variant/10"></div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    {workspaces.map((ws) => {
+                      const primaryImage = ws.images.find(img => img.isPrimary)?.url || ws.images[0]?.url || fallbackImages[ws.id % 3];
+                      return (
+                        <motion.div
+                          key={`ws-${ws.id}`}
+                          initial={{ opacity: 0, y: 20 }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ once: true }}
+                          className="group bg-white rounded-none overflow-hidden border border-outline-variant/5 shadow-[0_20px_50px_rgba(27,28,28,0.03)] hover:shadow-[0_40px_80px_rgba(0,105,111,0.08)] transition-all duration-700 flex flex-col h-full"
+                        >
+                           <div className="aspect-[16/9] relative overflow-hidden">
+                              <Image 
+                                src={primaryImage} 
+                                alt={ws.name} 
+                                fill 
+                                className="object-cover transform group-hover:scale-110 transition-transform duration-[2000ms] grayscale group-hover:grayscale-0" 
+                              />
+                              <div className="absolute top-6 left-6">
+                                  <span className="bg-primary/95 text-white text-[8px] font-bold px-4 py-2 uppercase tracking-[0.3em] rounded-none backdrop-blur-md">SYSTEM_O{ws.id}</span>
+                              </div>
+                           </div>
+                           <div className="p-8 flex-1 flex flex-col justify-between gap-8">
+                              <div className="space-y-4">
+                                  <h3 className="font-display text-xl font-bold tracking-tight text-on-surface leading-tight">{ws.name} @ {ws.location.name}</h3>
+                                  <div className="flex flex-wrap gap-2">
+                                    {ws.amenities.slice(0, 4).map(pa => (
+                                      <div key={pa.amenity.id} className="p-2 bg-surface-container-low/50 rounded-sm text-primary border border-outline-variant/5 shadow-sm" title={pa.amenity.name}>
+                                        {getAmenityIcon(pa.amenity.slug)}
+                                      </div>
+                                    ))}
+                                  </div>
+                              </div>
+                              
+                               <div className="flex flex-col gap-4 pt-6 border-t border-outline-variant/5">
+                                   {user ? (
+                                       <button 
+                                           disabled={requestingPurchaseId === ws.id}
+                                           onClick={() => handlePurchaseRequest(ws)}
+                                           className={`w-full bg-[#1B1C1C] text-white px-10 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-sm shadow-xl transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 ${isVerified === false ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:bg-[var(--primary)]'}`}
+                                       >
+                                           {requestingPurchaseId === ws.id ? (
+                                               <Loader2 className="w-4 h-4 animate-spin" />
+                                           ) : isVerified ? (
+                                               <ShieldCheck className="w-4 h-4" />
+                                           ) : (
+                                               <AlertCircle className="w-4 h-4" />
+                                           )}
+                                           {isVerified ? 'REQUEST PURCHASE' : 'VERIFICATION PENDING'}
+                                       </button>
+                                   ) : (
+                                       <button 
+                                           onClick={() => openInquiryModal(ws.location.name, ws.name)}
+                                           className="w-full bg-[#1ab0bc] text-white px-10 py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-sm shadow-[0_20px_40px_rgba(26,176,188,0.2)] hover:shadow-[0_25px_50px_rgba(26,176,188,0.3)] transition-all transform hover:-translate-y-1 active:scale-95 text-center"
+                                       >
+                                           ENQUIRE NOW
+                                       </button>
+                                   )}
+                                   
+                                   {user && isVerified === false && (
+                                       <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest text-center italic">
+                                           KYC Approval is required to initiate purchase.
+                                       </p>
+                                   )}
+                                </div>
+                           </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+        </main>
+      </div>
+
+      {/* Inquiry Modal */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar"
-            >
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="absolute right-6 top-6 z-[110] rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors backdrop-blur-md"
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-on-surface/90 backdrop-blur-xl" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar bg-white shadow-2xl rounded-2xl">
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="absolute right-8 top-8 z-[110] bg-surface-high p-3 text-tertiary hover:bg-primary transition-all rounded-sm"
               >
-                <X className="h-6 w-6" />
+                <X className="h-4 w-4" />
               </button>
-              <BookOnlineForm 
-                initialLocation={modalData.location} 
-                initialSpaceType={modalData.spaceType}
-                onSuccess={() => setIsModalOpen(false)}
-              />
+              <BookOnlineForm initialLocation={modalData.location} initialSpaceType={modalData.spaceType} onSuccess={() => setIsModalOpen(false)} />
             </motion.div>
           </div>
         )}
@@ -329,4 +516,3 @@ export default function ProductsClient() {
     </div>
   );
 }
-

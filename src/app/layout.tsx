@@ -1,11 +1,14 @@
+import "reflect-metadata";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { siteConfig } from "../config/site";
-import { Header } from "../components/header";
-import { Footer } from "../components/footer";
 import { StructuredData } from "../components/structured-data";
+import { seoConfig } from "../config/seo";
+import { AuthProvider } from "../context/AuthContext";
+import { SidebarProvider } from "../context/SidebarContext";
+import { MainWrapper } from "../components/main-wrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,7 +20,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-import { seoConfig } from "../config/seo";
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+});
 
 const siteUrl = seoConfig.baseUrl;
 
@@ -166,7 +177,7 @@ export default function RootLayout({
         "streetAddress": "Premier House, SG Highway",
         "addressLocality": "Ahmedabad",
         "addressRegion": "GJ",
-        "postalCode": "380054",
+        "postalCode": "38054",
         "addressCountry": "IN",
       },
       "geo": {
@@ -188,17 +199,15 @@ export default function RootLayout({
         ))}
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} bg-[#F8F9FA] text-[#212121] antialiased`}
+        className={`${inter.variable} ${spaceGrotesk.variable} ${geistSans.variable} ${geistMono.variable} font-sans bg-[#FBF9F8] text-[#1B1C1C] antialiased`}
         suppressHydrationWarning
       >
-        <div className="flex flex-col min-h-screen bg-gradient-to-b from-[#F8F9FA] via-[#F8F9FA] to-[#F8F9FA]">
-          <Header />
-          <main className="flex-1 mx-auto w-full max-w-6xl px-4 pb-16 pt-20 sm:px-6 lg:px-8">
-            {children}
-          </main>
-          <Footer />
-        </div>
-        <Toaster position="top-right" />
+        <AuthProvider>
+          <SidebarProvider>
+            <MainWrapper>{children}</MainWrapper>
+            <Toaster position="top-right" />
+          </SidebarProvider>
+        </AuthProvider>
       </body>
     </html>
   );
