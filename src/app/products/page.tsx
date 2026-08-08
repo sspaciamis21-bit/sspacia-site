@@ -48,9 +48,12 @@ export interface Product {
   isActive: boolean;
   isFeatured: boolean;
   location: ProductLocation;
+  locationId?: number;
   images: ProductImage[];
   pricingPlans: PricingPlan[];
   amenities: { amenity: Amenity }[];
+  category?: { id: number; name: string; slug?: string };
+  type?: { id: number; name: string };
 }
 
 export interface City {

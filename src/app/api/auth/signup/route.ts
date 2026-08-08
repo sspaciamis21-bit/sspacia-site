@@ -68,6 +68,20 @@ export async function POST(request: Request) {
       },
     })
 
+    // ─── Auto-remove from UnregisteredCustomer Lead Table ───
+    try {
+      await (prisma as any).unregisteredCustomer.deleteMany({
+        where: {
+          OR: [
+            { email: user.email },
+            ...(body.phone || body.mobileNo ? [{ mobileNo: String(body.phone || body.mobileNo) }] : []),
+          ],
+        },
+      });
+    } catch (cleanupErr) {
+      console.warn('[Signup] Unregistered lead cleanup notice:', cleanupErr);
+    }
+
     return NextResponse.json(
       {
         message: 'User registered successfully',

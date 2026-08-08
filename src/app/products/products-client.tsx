@@ -15,8 +15,15 @@ import {
   Wifi, 
   Monitor,
   ShieldCheck,
+  ChevronDown,
+  Sparkles,
+  Building,
+  MapPin,
+  CheckCircle,
+  HelpCircle,
 } from "lucide-react";
 import { AvailabilityTimeline } from "@/components/ui/availability-timeline";
+import { Footer } from "@/components/ui/footer";
 
 import type { Product, City, Amenity } from "./page";
 
@@ -83,10 +90,11 @@ export default function ProductsClient({
   };
 
   const availableLocations = useMemo(() => {
-    if (!selectedCityId) return [];
-    const filtered = products.filter(p => p.location?.cityId === selectedCityId);
+    const targetProducts = selectedCityId
+      ? products.filter(p => (p.location?.cityId ?? (p.location as any)?.city?.id) === selectedCityId)
+      : products;
     const locMap = new Map<number, { id: number; name: string }>();
-    filtered.forEach(p => {
+    targetProducts.forEach(p => {
       if (p.location) locMap.set(p.location.id, { id: p.location.id, name: p.location.name });
     });
     return Array.from(locMap.values());
@@ -94,12 +102,18 @@ export default function ProductsClient({
 
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
-      if (selectedCategoryId && product.categoryId !== selectedCategoryId) return false;
-      if (selectedTypeId && product.typeId !== selectedTypeId) return false;
-      if (selectedCityId && product.location?.cityId !== selectedCityId) return false;
-      if (selectedLocationId && product.location?.id !== selectedLocationId) return false;
-      if (selectedAmenityIds.length > 0) {
-        const productAmenityIds = product.amenities.map(a => a.amenity.id);
+      const catId = product.categoryId ?? product.category?.id;
+      const typeId = product.typeId ?? product.type?.id;
+      const cityId = product.location?.cityId ?? (product.location as any)?.city?.id;
+      const locId = product.locationId ?? product.location?.id;
+
+      if (selectedCategoryId && catId !== selectedCategoryId) return false;
+      if (selectedTypeId && typeId !== selectedTypeId) return false;
+      if (selectedCityId && cityId !== selectedCityId) return false;
+      if (selectedLocationId && locId !== selectedLocationId) return false;
+
+      if (selectedAmenityIds.length > 0 && Array.isArray(product.amenities)) {
+        const productAmenityIds = product.amenities.map((a: any) => a.amenity?.id || a.amenityId || a.id);
         const hasAll = selectedAmenityIds.every(id => productAmenityIds.includes(id));
         if (!hasAll) return false;
       }
@@ -107,8 +121,9 @@ export default function ProductsClient({
     });
   }, [products, selectedCategoryId, selectedTypeId, selectedCityId, selectedLocationId, selectedAmenityIds]);
 
-  const guestSpaces = filteredProducts.filter((p: Product) => p.categoryId === 2);
-  const workspaces  = filteredProducts.filter((p: Product) => p.categoryId === 1);
+  const isGuestCategory = (p: Product) => (p.categoryId === 2 || p.category?.slug === 'guest-space' || p.category?.name?.toLowerCase().includes('guest'));
+  const guestSpaces = filteredProducts.filter(isGuestCategory);
+  const workspaces  = filteredProducts.filter((p: Product) => !isGuestCategory(p));
 
   const formatPrice = (price: number | string) => {
     const num = typeof price === "number" ? price : parseFloat(price);
@@ -132,19 +147,36 @@ export default function ProductsClient({
     }
   };
 
+  // FAQ Accordion State
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
+
   return (
-    <div className="min-h-screen bg-surface font-sans text-on-surface antialiased py-12 px-4 md:px-8 max-w-[1600px] mx-auto space-y-12">
+    <div className="min-h-screen bg-surface font-sans text-on-surface antialiased">
       
-      {/* ── HEADER TITLE ── */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-primary/40">SYSTEM_CATALOG // 2026</span>
-          <div className="h-[1px] w-12 bg-primary/20"></div>
+      {/* ── AWFIS-STYLE RED & TEAL PROMO TICKER ── */}
+      <div className="bg-[#1ab0bc] text-white text-[11px] font-bold uppercase tracking-widest py-2.5 px-4 text-center overflow-hidden border-b border-teal-600/30">
+        <div className="animate-pulse flex items-center justify-center gap-4 flex-wrap">
+          <span>• MEETING ROOM EXCLUSIVE: 20% OFF * on booking for 4-8 hours</span>
+          <span className="hidden sm:inline">• 20% OFF * on Saturdays</span>
+          <span>• DAY PASSES STARTING @ ₹299/DAY</span>
         </div>
-        <h1 className="font-display text-4xl md:text-6xl font-black uppercase tracking-tight text-secondary">
-          OUR SPACES
-        </h1>
-      </section>
+      </div>
+
+      <div className="py-12 px-4 md:px-8 max-w-[1600px] mx-auto space-y-16">
+        
+        {/* ── HEADER TITLE ── */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-primary/40">SSPACA_WORKSPACES // AHMEDABAD</span>
+            <div className="h-[1px] w-12 bg-primary/20"></div>
+          </div>
+          <h1 className="font-display text-4xl md:text-6xl font-black uppercase tracking-tight text-secondary">
+            Coworking Space in Ahmedabad
+          </h1>
+          <p className="text-sm text-gray-600 max-w-3xl leading-relaxed">
+            Looking for a coworking space in Ahmedabad? SSPACIA offers modern, comfortable, and fully equipped workspaces catering to freelancers, startups, and established enterprises.
+          </p>
+        </section>
 
       {/* ── LAYOUT GRID: SIDEBAR + CATALOG ── */}
       <div className="flex flex-col lg:flex-row gap-12 items-start">
@@ -490,6 +522,166 @@ export default function ProductsClient({
           )}
         </div>
       )}
+
+        {/* ── AWFIS-INSPIRED DYNAMIC SECTIONS ── */}
+        <div className="border-t border-gray-200 pt-16 space-y-16">
+          
+          {/* SECTION 1: WHY CHOOSE SSPACIA */}
+          <section className="space-y-6">
+            <h2 className="text-2xl md:text-3xl font-display font-bold text-[#1B1C1C] tracking-tight italic">
+              Why Choose a Cowork Space in Ahmedabad?
+            </h2>
+            <p className="text-xs text-gray-600 leading-relaxed max-w-4xl">
+              Ahmedabad, a rapidly growing business hub, is home to a thriving ecosystem of entrepreneurs and enterprises. Choosing a coworking space in Ahmedabad offers several advantages:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4">
+              <div className="p-6 bg-white border border-gray-200 shadow-sm space-y-2 hover:border-[#1ab0bc] transition-all">
+                <span className="text-[#1ab0bc] font-mono text-xs font-black">01 // VALUE</span>
+                <h4 className="font-bold text-sm text-[#1B1C1C]">Cost-Effective Solutions</h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Traditional office spaces can be expensive and inflexible. SSPACIA provides affordable alternatives with all necessary enterprise amenities.
+                </p>
+              </div>
+
+              <div className="p-6 bg-white border border-gray-200 shadow-sm space-y-2 hover:border-[#1ab0bc] transition-all">
+                <span className="text-[#1ab0bc] font-mono text-xs font-black">02 // NETWORK</span>
+                <h4 className="font-bold text-sm text-[#1B1C1C]">Networking Opportunities</h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Sharing a workspace in Ahmedabad with like-minded professionals creates opportunities to build connections, share ideas, and grow.
+                </p>
+              </div>
+
+              <div className="p-6 bg-white border border-gray-200 shadow-sm space-y-2 hover:border-[#1ab0bc] transition-all">
+                <span className="text-[#1ab0bc] font-mono text-xs font-black">03 // LOCATIONS</span>
+                <h4 className="font-bold text-sm text-[#1B1C1C]">Convenient Prime Locations</h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  SSPACIA centers are strategically located on SG Highway, Sindhu Bhavan Marg, and C.G. Road ensuring ease of access to transit and dining.
+                </p>
+              </div>
+
+              <div className="p-6 bg-white border border-gray-200 shadow-sm space-y-2 hover:border-[#1ab0bc] transition-all">
+                <span className="text-[#1ab0bc] font-mono text-xs font-black">04 // FLEXIBILITY</span>
+                <h4 className="font-bold text-sm text-[#1B1C1C]">Flexibility & Scalability</h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Choose from a range of options, whether you need a private cabin, dedicated desk, shared office, or guest meeting room.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 2: PRIME LOCATIONS IN AHMEDABAD */}
+          <section className="space-y-6 pt-8 border-t border-gray-200">
+            <h2 className="text-2xl md:text-3xl font-display font-bold text-[#1B1C1C] tracking-tight italic">
+              Prime Locations for Coworking Spaces in Ahmedabad
+            </h2>
+            <p className="text-xs text-gray-600 leading-relaxed max-w-4xl">
+              SSPACIA has carefully selected locations across Ahmedabad to provide the best accessibility and top-tier workspace facilities:
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
+              <div className="bg-white border border-gray-200 p-6 space-y-3">
+                <div className="flex items-center gap-2 text-[#1ab0bc]">
+                  <MapPin className="w-5 h-5" />
+                  <h3 className="font-bold text-base text-[#1B1C1C]">Premier House</h3>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Situated on SG Highway, Bodakdev, Premier House offers breathtaking executive cabins, dedicated desks, and seamless airport connectivity.
+                </p>
+              </div>
+
+              <div className="bg-white border border-gray-200 p-6 space-y-3">
+                <div className="flex items-center gap-2 text-[#1ab0bc]">
+                  <MapPin className="w-5 h-5" />
+                  <h3 className="font-bold text-base text-[#1B1C1C]">Mercado</h3>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Located on Sindhu Bhavan Marg, Mercado offers premium corporate office suites and vibrant networking event spaces.
+                </p>
+              </div>
+
+              <div className="bg-white border border-gray-200 p-6 space-y-3">
+                <div className="flex items-center gap-2 text-[#1ab0bc]">
+                  <MapPin className="w-5 h-5" />
+                  <h3 className="font-bold text-base text-[#1B1C1C]">Agarwal Complex</h3>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Positioned at C.G. Road, Navrangpura, offering instant access to commercial banking districts and retail centers.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 3: BOOK YOUR SHARED OFFICE TODAY CALLOUT */}
+          <section className="bg-[#1B1C1C] text-white p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="space-y-3 max-w-2xl">
+              <h2 className="text-2xl md:text-3xl font-display font-bold tracking-tight text-[#1ab0bc]">
+                Book Your Shared Office Space in Ahmedabad Today!
+              </h2>
+              <p className="text-xs text-white/70 leading-relaxed">
+                Ready to experience the benefits of a premium coworking space? SSPACIA offers state-of-the-art office setups designed to help you work efficiently and connect with industry leaders.
+              </p>
+            </div>
+            <Link
+              href="/contact"
+              className="bg-[#1ab0bc] text-white px-8 py-4 text-xs font-black uppercase tracking-[0.2em] shadow-lg hover:bg-teal-600 transition-all shrink-0"
+            >
+              BOOK A SPACE TOUR
+            </Link>
+          </section>
+
+          {/* SECTION 4: FAQ'S ACCORDION */}
+          <section className="space-y-6 pt-8 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              <HelpCircle className="w-6 h-6 text-[#1ab0bc]" />
+              <h2 className="text-2xl md:text-3xl font-display font-bold text-[#1B1C1C] tracking-tight italic">
+                Frequently Asked Questions (FAQ's)
+              </h2>
+            </div>
+
+            <div className="space-y-4 max-w-4xl">
+              {[
+                {
+                  q: "Is a shared office space in Ahmedabad suitable for freelancers?",
+                  a: "Absolutely! Shared office spaces in Ahmedabad offer an affordable, flexible, and high-productivity environment ideal for freelancers and independent contractors."
+                },
+                {
+                  q: "How can coworking spaces in Ahmedabad benefit startups?",
+                  a: "Coworking spaces provide cost-effective infrastructure, flexible month-to-month contracts, meeting rooms, and networking events for rapid business growth."
+                },
+                {
+                  q: "Can I use a coworking space in Ahmedabad for virtual office services?",
+                  a: "Yes! SSPACIA offers virtual office business address plans, mail handling, and GST registration assistance."
+                },
+                {
+                  q: "What amenities are included in SSPACIA coworking plans?",
+                  a: "High-speed Wi-Fi, 24/7 access options, complimentary tea/coffee, ergonomic seating, printing facilities, and air-conditioned conference rooms."
+                }
+              ].map((faq, idx) => (
+                <div key={idx} className="border border-gray-200 bg-white">
+                  <button
+                    onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
+                    className="w-full text-left p-5 flex items-center justify-between font-bold text-sm text-[#1B1C1C] hover:text-[#1ab0bc] transition-colors"
+                  >
+                    <span>{faq.q}</span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${openFaq === idx ? 'rotate-180 text-[#1ab0bc]' : 'text-gray-400'}`} />
+                  </button>
+                  {openFaq === idx && (
+                    <div className="px-5 pb-5 text-xs text-gray-600 leading-relaxed border-t border-gray-100 pt-3">
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+
+        </div>
+
+      </div>
+
+      {/* FOOTER */}
+      <Footer />
     </div>
   );
 }
@@ -519,7 +711,7 @@ function ProductCardCarousel({
   };
 
   return (
-    <div className="w-full md:w-[40%] aspect-[4/3] md:aspect-auto relative overflow-hidden group bg-neutral-100">
+    <div className="w-full h-56 sm:h-64 relative overflow-hidden group bg-neutral-100 border-b border-gray-100">
       <img
         src={images[currentIdx] || images[0]}
         alt={`${productName} image ${currentIdx + 1}`}

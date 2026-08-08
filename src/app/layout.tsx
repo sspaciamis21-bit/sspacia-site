@@ -9,6 +9,9 @@ import { seoConfig } from "../config/seo";
 import { AuthProvider } from "../context/AuthContext";
 import { SidebarProvider } from "../context/SidebarContext";
 import { MainWrapper } from "../components/main-wrapper";
+import { VisitorChatWidget } from "../components/ui/visitor-chat-widget";
+import { TopAnnouncementBar } from "../components/ui/top-announcement-bar";
+import { RequestVisitTrigger } from "../components/ui/request-visit-trigger";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -204,7 +207,10 @@ export default function RootLayout({
       >
         <AuthProvider>
           <SidebarProvider>
+            <TopAnnouncementBar />
             <MainWrapper>{children}</MainWrapper>
+            <VisitorChatWidget />
+            <RequestVisitTrigger />
             <Toaster position="top-right" />
           </SidebarProvider>
         </AuthProvider>

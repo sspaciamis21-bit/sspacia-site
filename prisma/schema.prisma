@@ -190,6 +190,7 @@ model User {
   contractsCreated  Contract[]      @relation("ContractCreator")
   contractVersions  ContractVersion[] @relation("VersionCreator")
   negotiationMessages NegotiationMessage[]
+  visitorChatMessages VisitorChatMessage[]
 
   @@index([email])
   @@index([roleId])
@@ -1104,4 +1105,50 @@ model InvoiceProduct {
   name      String   @unique
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UNREGISTERED CUSTOMERS & VISITOR LIVE CHAT
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UnregisteredCustomer {
+  id           Int                  @id @default(autoincrement())
+  username     String
+  email        String               @unique
+  mobileNo     String
+  sessionToken String               @unique
+  isConverted  Boolean              @default(false)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  chatMessages VisitorChatMessage[]
+
+  @@index([email])
+  @@index([mobileNo])
+  @@index([sessionToken])
+}
+
+model VisitorChatMessage {
+  id                     Int                  @id @default(autoincrement())
+  unregisteredCustomerId Int
+  senderType             String               // "VISITOR" | "ADMIN" | "MANAGER"
+  senderId               Int?
+  senderName             String
+  message                String               @db.Text
+  isRead                 Boolean              @default(false)
+  createdAt              DateTime             @default(now())
+
+  unregisteredCustomer   UnregisteredCustomer @relation(fields: [unregisteredCustomerId], references: [id], onDelete: Cascade)
+  sender                 User?                @relation(fields: [senderId], references: [id])
+
+  @@index([unregisteredCustomerId])
+  @@index([senderId])
+}
+
+model AnnouncementLabel {
+  id        Int      @id @default(autoincrement())
+  text      String   @db.Text
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

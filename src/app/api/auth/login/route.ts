@@ -67,6 +67,21 @@ export async function POST(request: Request) {
       )
     }
 
+    // ─── Auto-remove from UnregisteredCustomer Lead Table ───
+    try {
+      await (prisma as any).unregisteredCustomer.deleteMany({
+        where: {
+          OR: [
+            { email: user.email },
+            ...(user.phone ? [{ mobileNo: user.phone }] : []),
+            ...(user.contactNumber ? [{ mobileNo: user.contactNumber }] : []),
+          ],
+        },
+      });
+    } catch (cleanupErr) {
+      console.warn('[Login] Unregistered lead cleanup notice:', cleanupErr);
+    }
+
     // ─── Get Permissions ──────────────────────────────────
     const permissions = user.role.permissions.map(
       (rp) => rp.permission.name

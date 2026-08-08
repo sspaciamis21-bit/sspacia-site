@@ -18,6 +18,7 @@ import {
   FileText,
   ShieldCheck,
   Receipt,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -25,6 +26,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { ManageProfileModal } from '@/components/profile/ManageProfileModal';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { VisitorChatDrawer } from '@/components/ui/visitor-chat-drawer';
 
 export default function ManagerLayout({
   children,
@@ -35,6 +37,7 @@ export default function ManagerLayout({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const { user, isLoading, logout, isRole, hasPermission } = useAuth();
   const pathname = usePathname();
+  const [isVisitorChatOpen, setIsVisitorChatOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -228,6 +231,14 @@ export default function ManagerLayout({
           </div>
 
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsVisitorChatOpen(true)}
+              className="bg-[#1ab0bc]/10 hover:bg-[#1ab0bc] text-[#1ab0bc] hover:text-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border border-[#1ab0bc]/30"
+              title="Open Visitor Live Chat Drawer"
+            >
+              <MessageSquare size={14} />
+              <span>Visitor Live Chat</span>
+            </button>
             <NotificationBell />
           </div>
         </header>
@@ -240,6 +251,11 @@ export default function ManagerLayout({
       <ManageProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      <VisitorChatDrawer
+        isOpen={isVisitorChatOpen}
+        onClose={() => setIsVisitorChatOpen(false)}
       />
     </div>
   );
