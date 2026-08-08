@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertCircle, Clock, CheckCircle, XCircle, Loader2, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { AlertCircle, Clock, CheckCircle, XCircle, Loader2, ShieldAlert, AlertTriangle, MessageSquare } from 'lucide-react';
 import { FadeUp } from '@/components/ui/fade-up';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import { TicketChatModal } from '@/components/tickets/TicketChatModal';
 
 interface Ticket {
   id: number;
@@ -34,6 +35,7 @@ export default function ManagerTicketsPage() {
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'ESCALATED'>('ALL');
+  const [activeChatTicket, setActiveChatTicket] = useState<Ticket | null>(null);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -211,6 +213,7 @@ export default function ManagerTicketsPage() {
                     <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Origin Node</th>
                     <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">State Logic</th>
                     <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">Timestamp &amp; SLA</th>
+                    <th className="py-6 px-8 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Action &amp; Communication</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--outline-variant)]/10 bg-white">
@@ -257,6 +260,16 @@ export default function ManagerTicketsPage() {
                           </div>
                         )}
                       </td>
+                      <td className="py-8 px-8 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setActiveChatTicket(ticket)}
+                          className="px-4 py-2 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-[10px] uppercase tracking-widest transition-all inline-flex items-center gap-2 shadow-sm"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          Chat with User
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -265,6 +278,18 @@ export default function ManagerTicketsPage() {
           )}
         </div>
       </FadeUp>
+
+      {activeChatTicket && (
+        <TicketChatModal
+          isOpen={!!activeChatTicket}
+          onClose={() => setActiveChatTicket(null)}
+          ticketId={activeChatTicket.id}
+          ticketNumber={activeChatTicket.ticketNumber}
+          ticketTitle={`${activeChatTicket.category || 'Support Request'} - ${activeChatTicket.name}`}
+          statusName={activeChatTicket.status.displayName || activeChatTicket.status.name}
+          userRole="CM"
+        />
+      )}
     </div>
   );
 }

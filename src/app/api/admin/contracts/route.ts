@@ -112,9 +112,27 @@ export const POST = withPermission('clm', 'create', async (req: NextRequest) => 
  * GET /api/admin/contracts
  * List all contracts for managers.
  */
-export const GET = withPermission('clm', 'view', async (req: NextRequest) => {
+export const GET = withPermission('clm', 'view', async (req: NextRequest, { payload }) => {
   try {
+    const userId = Number(payload.id);
+    const dbUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: { select: { name: true } }, assignedLocations: { select: { locationId: true } } }
+    });
+
+    const roleName = dbUser?.role?.name?.toLowerCase() || '';
+    const isSuperAdmin = roleName === 'super admin' || roleName === 'admin';
+    const assignedLocationIds = dbUser?.assignedLocations.map(al => al.locationId) || [];
+
+    let locationWhere = {};
+    if (!isSuperAdmin && assignedLocationIds.length > 0) {
+      locationWhere = {
+        booking: { product: { locationId: { in: assignedLocationIds } } }
+      };
+    }
+
     const contracts = await prisma.contract.findMany({
+      where: locationWhere,
       include: {
         status: { select: { name: true, displayName: true, color: true } },
         booking: {

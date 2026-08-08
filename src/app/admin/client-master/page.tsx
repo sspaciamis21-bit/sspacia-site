@@ -70,6 +70,9 @@ interface ClientMasterProductItem {
   amount: number | null;
   gstPercent: number | null;
   totalAmount: number | null;
+  paymentDuration?: string | null;
+  paymentDueDay?: number | null;
+  firstPaymentDate?: string | null;
 }
 
 interface ClientMasterEntry {
@@ -598,6 +601,9 @@ export default function ClientMasterRegistryPage() {
           amount: p.amount ?? '',
           gstPercent: p.gstPercent ?? 18,
           totalAmount: p.totalAmount ?? '',
+          paymentDuration: p.paymentDuration || 'MONTHLY',
+          paymentDueDay: p.paymentDueDay ?? entry.paymentDueDay ?? '',
+          firstPaymentDate: p.firstPaymentDate ? new Date(p.firstPaymentDate).toISOString().split('T')[0] : '',
           isAmountManuallyEdited: true,
           isTotalAmountManuallyEdited: true,
         }))
@@ -611,6 +617,9 @@ export default function ClientMasterRegistryPage() {
           amount: entry.amount ?? '',
           gstPercent: entry.gstPercent ?? 18,
           totalAmount: entry.totalAmount ?? '',
+          paymentDuration: 'MONTHLY',
+          paymentDueDay: entry.paymentDueDay ?? '',
+          firstPaymentDate: '',
           isAmountManuallyEdited: true,
           isTotalAmountManuallyEdited: true,
         }
@@ -1215,7 +1224,7 @@ export default function ClientMasterRegistryPage() {
       {/* BIG POPUP MODAL: ADD CLIENT / EDIT CLIENT */}
       <AnimatePresence>
         {showAddClientModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-xs overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1892,6 +1901,54 @@ export default function ClientMasterRegistryPage() {
                               />
                             </div>
                           </div>
+
+                          {/* Item Payment Duration & Due Date Parameters */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-neutral-200/80 bg-white/60 p-2.5">
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-[#006064] mb-1">
+                                Payment Duration Type
+                              </label>
+                              <select
+                                value={row.paymentDuration || 'MONTHLY'}
+                                onChange={(e) => handleUpdateProductRow(idx, 'paymentDuration', e.target.value)}
+                                className="w-full bg-white border border-[#006064]/30 px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold text-[#006064]"
+                              >
+                                <option value="MONTHLY">Monthly (1 Month)</option>
+                                <option value="QUARTERLY">Quarterly (3 Months)</option>
+                                <option value="HALF_YEARLY">Half-Yearly (6 Months)</option>
+                                <option value="YEARLY">Yearly (12 Months)</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-[#006064] mb-1">
+                                Payment Due Day (1 – 31)
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="31"
+                                placeholder="e.g. 5 (5th of month)"
+                                value={row.paymentDueDay ?? ''}
+                                onChange={(e) =>
+                                  handleUpdateProductRow(idx, 'paymentDueDay', e.target.value === '' ? '' : Number(e.target.value))
+                                }
+                                className="w-full bg-white border border-[#006064]/30 px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold text-[#1B1C1C]"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-[#006064] mb-1">
+                                First Payment Date (Optional)
+                              </label>
+                              <input
+                                type="date"
+                                value={row.firstPaymentDate || ''}
+                                onChange={(e) => handleUpdateProductRow(idx, 'firstPaymentDate', e.target.value)}
+                                className="w-full bg-white border border-[#006064]/30 px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-medium text-[#1B1C1C]"
+                              />
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -2123,7 +2180,7 @@ export default function ClientMasterRegistryPage() {
       {/* ADD NEW PRODUCT OPTION MODAL */}
       <AnimatePresence>
         {showAddProductModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -2177,7 +2234,7 @@ export default function ClientMasterRegistryPage() {
       {/* FULL RECORD VIEWER */}
       <AnimatePresence>
         {entryToViewDetails && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -2334,13 +2391,15 @@ export default function ClientMasterRegistryPage() {
                 {entryToViewDetails.products && entryToViewDetails.products.length > 0 ? (
                   <table className="w-full border-collapse border border-[var(--outline-variant)]/60 text-xs">
                     <thead>
-                      <tr className="bg-[#F8F9FA] text-[#616161] uppercase">
+                      <tr className="bg-[#F8F9FA] text-[#616161] uppercase text-[10px]">
                         <th className="p-2 border border-neutral-200">Cabin / Product</th>
                         <th className="p-2 border border-neutral-200 text-center">Seats / Parking</th>
                         <th className="p-2 border border-neutral-200 text-right">Rate (₹)</th>
                         <th className="p-2 border border-neutral-200 text-right">Amount (₹)</th>
                         <th className="p-2 border border-neutral-200 text-center">GST %</th>
                         <th className="p-2 border border-neutral-200 text-right">Total Amt (₹)</th>
+                        <th className="p-2 border border-neutral-200 text-center">Duration</th>
+                        <th className="p-2 border border-neutral-200 text-center">Due Day</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2352,6 +2411,12 @@ export default function ClientMasterRegistryPage() {
                           <td className="p-2 border border-neutral-200 text-right font-mono">₹{Number(p.amount || 0).toLocaleString('en-IN')}</td>
                           <td className="p-2 border border-neutral-200 text-center">{p.gstPercent ?? 18}%</td>
                           <td className="p-2 border border-neutral-200 text-right font-mono font-bold text-[#006064]">₹{Number(p.totalAmount || 0).toLocaleString('en-IN')}</td>
+                          <td className="p-2 border border-neutral-200 text-center font-bold text-[#006064] text-[10px]">
+                            {p.paymentDuration ? String(p.paymentDuration).replace('_', ' ') : 'MONTHLY'}
+                          </td>
+                          <td className="p-2 border border-neutral-200 text-center font-bold text-[10px]">
+                            {p.paymentDueDay ? `${p.paymentDueDay}th` : 'Default'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -277,14 +277,14 @@ export const PATCH = withPermission('tickets', 'update', async (req: NextRequest
     // 2. Check existence
     const existing = await prisma.supportTicket.findUnique({
       where: { id },
-      select: { id: true, statusId: true },
+      select: { id: true, statusId: true, ticketNumber: true, email: true, customer: { select: { email: true } } },
     });
 
     if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    // 3. Update + activity log
+    // 3. Update + activity log + notify user
     const ticket = await prisma.$transaction(async (tx) => {
       const updated = await tx.supportTicket.update({
         where: { id },
@@ -296,6 +296,32 @@ export const PATCH = withPermission('tickets', 'update', async (req: NextRequest
           updatedAt: true,
         },
       });
+
+      const newStatusName = updated.status?.displayName || updated.status?.name || 'Updated';
+      const senderName = (payload.name as string) || 'Community Manager';
+
+      // Post System Comment
+      await tx.ticketComment.create({
+        data: {
+          supportTicketId: id,
+          senderName: 'System',
+          senderRole: 'SYSTEM',
+          message: `Ticket status updated to "${newStatusName}" by ${senderName}.`,
+        },
+      });
+
+      // Create User Notification
+      const targetEmail = existing.email || existing.customer?.email;
+      if (targetEmail) {
+        await tx.userNotification.create({
+          data: {
+            userEmail: targetEmail,
+            title: `Ticket #${updated.ticketNumber} Status Changed`,
+            message: `Status updated to "${newStatusName}".`,
+            ticketId: updated.id,
+          },
+        });
+      }
 
       // 4. Activity log
       await tx.activityLog.create({

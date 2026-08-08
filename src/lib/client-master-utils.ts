@@ -60,6 +60,9 @@ export interface ProductRow {
   amount: number | '';
   gstPercent: number | '';
   totalAmount: number | '';
+  paymentDuration: string; // 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY'
+  paymentDueDay: number | '';
+  firstPaymentDate: string;
   isAmountManuallyEdited: boolean;
   isTotalAmountManuallyEdited: boolean;
 }
@@ -72,6 +75,9 @@ export function createEmptyProductRow(): ProductRow {
     amount: '',
     gstPercent: 18,
     totalAmount: '',
+    paymentDuration: 'MONTHLY',
+    paymentDueDay: '',
+    firstPaymentDate: '',
     isAmountManuallyEdited: false,
     isTotalAmountManuallyEdited: false,
   };

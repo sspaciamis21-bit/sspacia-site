@@ -200,6 +200,16 @@ export const POST = withPermission('products', 'create', async (req: NextRequest
                 create: amenityIds.map((aId) => ({ amenityId: aId })),
               }
             : undefined,
+          images: Array.isArray(body.images) && body.images.length > 0
+            ? {
+                create: body.images.map((img: any, idx: number) => ({
+                  url: typeof img === 'string' ? img : String(img.url),
+                  alt: typeof img === 'object' && img.alt ? String(img.alt) : String(name),
+                  isPrimary: typeof img === 'object' && img.isPrimary !== undefined ? Boolean(img.isPrimary) : idx === 0,
+                  sortOrder: idx + 1,
+                })),
+              }
+            : undefined,
         },
         select: {
           id: true,

@@ -93,63 +93,116 @@ export async function POST(request: Request) {
       },
       select: {
         clientMasterId: true,
+        productGroupKey: true,
       },
     });
 
-    const existingSet = new Set(existingInvoices.map((inv: any) => inv.clientMasterId));
+    const existingSet = new Set(existingInvoices.map((inv: any) => `${inv.clientMasterId}_${inv.productGroupKey || 'DEFAULT'}`));
 
     const invoiceCreates: any[] = [];
     let skippedDuplicatesCount = 0;
 
     for (const cm of clientsToDispatch) {
-      // Skip if an invoice record already exists for this client in current billing month
-      if (existingSet.has(cm.id)) {
-        skippedDuplicatesCount++;
-        continue;
-      }
-
-      existingSet.add(cm.id); // Mark as created within this batch
-
-      let totalSeats = 0;
-      let subAmount = 0;
-      let totalAmt = 0;
-      let cabinSummary = 'N/A';
-
       if (cm.products && cm.products.length > 0) {
-        totalSeats = cm.products.reduce((sum: number, p: any) => sum + (Number(p.noOfSeats) || 0), 0);
-        subAmount = cm.products.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-        totalAmt = cm.products.reduce((sum: number, p: any) => sum + (Number(p.totalAmount) || 0), 0);
-        cabinSummary = cm.products.length > 1
-          ? `${cm.products.length} Products (${cm.products.map((p: any) => p.cabinName).filter(Boolean).join(', ')})`
-          : (cm.products[0].cabinName || cm.cabinName || 'N/A');
-      } else {
-        totalSeats = Number(cm.noOfSeats) || 0;
-        subAmount = Number(cm.amount) || 0;
-        totalAmt = Number(cm.totalAmount) || 0;
-        cabinSummary = cm.cabinName || 'N/A';
-      }
+        const groupsMap = new Map<string, any[]>();
+        for (const p of cm.products) {
+          const pDuration = p.paymentDuration || 'MONTHLY';
+          const pDueDay = p.paymentDueDay ?? cm.paymentDueDay ?? 'DEFAULT';
+          const key = `${pDueDay}_${pDuration}`;
+          if (!groupsMap.has(key)) {
+            groupsMap.set(key, []);
+          }
+          groupsMap.get(key)!.push(p);
+        }
 
-      invoiceCreates.push(
-        (prisma as any).invoiceRecord.create({
-          data: {
-            clientMasterId: cm.id,
-            srNo: cm.srNo,
-            companyName: cm.companyName,
-            cabinName: cabinSummary,
-            noOfSeats: totalSeats,
-            ratePerAgreement: cm.ratePerAgreement || (cm.products?.[0]?.ratePerAgreement ?? null),
-            amount: subAmount,
-            gstPercent: cm.gstPercent || (cm.products?.[0]?.gstPercent ?? 18),
-            totalAmount: totalAmt,
-            gstNo: cm.gstNo,
-            billingMonth: currentBillingMonth,
-            sendType: sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC_MONTH_END' : 'MANUAL',
-            sentAt: now,
-            status: 'PENDING_CM_REVIEW',
-            createdById: cm.createdById, // Preserve original CM center/node ownership
-          },
-        })
-      );
+        for (const [groupKey, pList] of Array.from(groupsMap.entries())) {
+          const dedupeKey = `${cm.id}_${groupKey}`;
+          if (existingSet.has(dedupeKey)) {
+            skippedDuplicatesCount++;
+            continue;
+          }
+
+          existingSet.add(dedupeKey);
+          const firstP = pList[0];
+
+          const totalSeats = pList.reduce((sum: number, p: any) => sum + (Number(p.noOfSeats) || 0), 0);
+          const subAmount = pList.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+          const totalAmt = pList.reduce((sum: number, p: any) => sum + (Number(p.totalAmount) || 0), 0);
+          const cabinSummary = pList.length > 1
+            ? `${pList.length} Items (${pList.map((p: any) => p.cabinName).filter(Boolean).join(', ')})`
+            : (pList[0].cabinName || cm.cabinName || 'N/A');
+
+          invoiceCreates.push(
+            (prisma as any).invoiceRecord.create({
+              data: {
+                clientMasterId: cm.id,
+                srNo: cm.srNo,
+                companyName: cm.companyName,
+                cabinName: cabinSummary,
+                noOfSeats: totalSeats,
+                ratePerAgreement: firstP.ratePerAgreement || cm.ratePerAgreement || null,
+                amount: subAmount,
+                gstPercent: firstP.gstPercent || cm.gstPercent || 18,
+                totalAmount: totalAmt,
+                paymentDuration: firstP.paymentDuration || 'MONTHLY',
+                paymentDueDay: firstP.paymentDueDay ?? cm.paymentDueDay ?? null,
+                firstPaymentDate: firstP.firstPaymentDate ? new Date(firstP.firstPaymentDate) : null,
+                productGroupKey: groupKey,
+                itemsJson: JSON.stringify(pList.map((p: any) => ({
+                  cabinName: p.cabinName,
+                  noOfSeats: p.noOfSeats,
+                  ratePerAgreement: p.ratePerAgreement,
+                  amount: p.amount,
+                  gstPercent: p.gstPercent,
+                  totalAmount: p.totalAmount,
+                  paymentDuration: p.paymentDuration,
+                  paymentDueDay: p.paymentDueDay,
+                  firstPaymentDate: p.firstPaymentDate,
+                }))),
+                gstNo: cm.gstNo,
+                billingMonth: currentBillingMonth,
+                sendType: sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC_MONTH_END' : 'MANUAL',
+                sentAt: now,
+                status: 'PENDING_CM_REVIEW',
+                createdById: cm.createdById,
+              },
+            })
+          );
+        }
+      } else {
+        const dedupeKey = `${cm.id}_DEFAULT`;
+        if (existingSet.has(dedupeKey)) {
+          skippedDuplicatesCount++;
+          continue;
+        }
+
+        existingSet.add(dedupeKey);
+
+        invoiceCreates.push(
+          (prisma as any).invoiceRecord.create({
+            data: {
+              clientMasterId: cm.id,
+              srNo: cm.srNo,
+              companyName: cm.companyName,
+              cabinName: cm.cabinName || 'N/A',
+              noOfSeats: Number(cm.noOfSeats) || 0,
+              ratePerAgreement: cm.ratePerAgreement || null,
+              amount: Number(cm.amount) || 0,
+              gstPercent: cm.gstPercent || 18,
+              totalAmount: Number(cm.totalAmount) || 0,
+              paymentDuration: 'MONTHLY',
+              paymentDueDay: cm.paymentDueDay ?? null,
+              productGroupKey: 'DEFAULT',
+              gstNo: cm.gstNo,
+              billingMonth: currentBillingMonth,
+              sendType: sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC_MONTH_END' : 'MANUAL',
+              sentAt: now,
+              status: 'PENDING_CM_REVIEW',
+              createdById: cm.createdById,
+            },
+          })
+        );
+      }
     }
 
     if (invoiceCreates.length === 0) {

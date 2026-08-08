@@ -101,7 +101,7 @@ export default function UserDocumentsPage() {
   const fetchDocuments = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/documents');
+      const response = await fetch('/api/user/documents');
       if (!response.ok) throw new Error('Failed to fetch');
       const json = await response.json();
       const docs = json.data as Document[];

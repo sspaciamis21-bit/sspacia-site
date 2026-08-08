@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ChevronLeft,
@@ -15,6 +16,8 @@ import {
   Calendar,
   ShieldCheck,
   Clock,
+  Loader2,
+  CheckCircle2,
 } from "lucide-react";
 
 // For demo purposes since actual DB images are empty []
@@ -31,18 +34,24 @@ const TIME_SLOTS = [
 
 export default function ProductDetailClient({ product }: { product: any }) {
   const router = useRouter();
-  const { isLoggedIn } = useAuth();
+  const searchParams = useSearchParams();
+  const { isLoggedIn, user } = useAuth();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const images = product.images?.length > 0 ? product.images.map((img: any) => img.url) : fallbackImages;
 
+  const initialDateFromQuery = searchParams?.get('date');
+  const initialSlotsFromQuery = searchParams?.get('slots')?.split(',').filter(Boolean) || [];
+
   // Guest Space Booking State
   const [selectedDate, setSelectedDate] = useState<string>(() => {
+    if (initialDateFromQuery) return initialDateFromQuery;
     const now = new Date();
     return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
   });
-  const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
+  const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>(initialSlotsFromQuery);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [isFetchingSlots, setIsFetchingSlots] = useState(false);
+  const [isSubmittingInquiry, setIsSubmittingInquiry] = useState(false);
 
   const isGuestSpace = product.categoryId === 1;
 
@@ -172,6 +181,44 @@ export default function ProductDetailClient({ product }: { product: any }) {
       basePrice: totalPrice.toString()
     });
     router.push(`/checkout?${params.toString()}`);
+  };
+
+  const handleInquiryRequest = async () => {
+    if (!isLoggedIn) {
+      const returnUrl = encodeURIComponent(`/products/${product.id}`);
+      router.push(`/login?redirect=${returnUrl}`);
+      return;
+    }
+
+    setIsSubmittingInquiry(true);
+    const toastId = toast.loading("Submitting your workspace inquiry...");
+
+    try {
+      const plan = product.pricingPlans?.[0];
+      const res = await fetch('/api/user/bookings/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: product.id,
+          durationTypeId: plan?.durationTypeId || 1,
+          startDate: new Date().toISOString()
+        })
+      });
+
+      const json = await res.json();
+      if (res.ok) {
+        toast.success("Inquiry & Contract Request Submitted!", {
+          id: toastId,
+          description: "Our Community Manager has received your request and will contact you shortly."
+        });
+      } else {
+        toast.error(json.error || "Submission failed", { id: toastId });
+      }
+    } catch {
+      toast.error("Failed to submit inquiry. Please try again.", { id: toastId });
+    } finally {
+      setIsSubmittingInquiry(false);
+    }
   };
 
   return (
@@ -398,10 +445,12 @@ export default function ProductDetailClient({ product }: { product: any }) {
               </p>
 
               <button
-                className="liquid-hover w-full bg-primary text-white py-5 text-[10px] font-bold uppercase tracking-[0.2em] transition-all hover:bg-primary-container shadow-xl"
-                onClick={() => window.location.href = '/contact'}
+                disabled={isSubmittingInquiry}
+                onClick={handleInquiryRequest}
+                className="liquid-hover w-full bg-primary text-white py-5 text-[10px] font-bold uppercase tracking-[0.2em] transition-all hover:bg-primary-container shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                Enquire Now
+                {isSubmittingInquiry ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {isLoggedIn ? "Submit Inquiry & Request Agreement" : "Login to Submit Inquiry"}
               </button>
             </div>
           )}

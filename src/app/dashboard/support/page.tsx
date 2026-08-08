@@ -126,7 +126,7 @@ export default function DashboardSupportPage() {
       for (let i = 0; i < files.length; i++) {
         const formData = new FormData();
         formData.append("file", files[i]);
-        const response = await fetch("/api/admin/upload-image", {
+        const response = await fetch("/api/user/upload-image", {
           method: "POST",
           body: formData,
         });
@@ -171,7 +171,7 @@ export default function DashboardSupportPage() {
         filestackUrls: filestackUrls,
       };
 
-      const response = await fetch("/api/admin/tickets", {
+      const response = await fetch("/api/user/tickets", {
         method: "POST",
         headers: {
           "Content-Type": "application/json", 

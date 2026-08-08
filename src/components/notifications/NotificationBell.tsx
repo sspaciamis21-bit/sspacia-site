@@ -349,21 +349,23 @@ export function NotificationBell() {
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('TICKET')}
-                  className={`py-2 px-1.5 text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
-                    activeTab === 'TICKET'
-                      ? 'bg-red-600 text-white shadow-xs font-black'
-                      : 'text-red-200 hover:text-white hover:bg-red-900/40'
-                  }`}
-                >
-                  <ShieldAlert size={11} />
-                  <span>48h Escalations</span>
-                  <span className="px-1 rounded-full font-mono text-[8px] bg-red-800 text-white">
-                    {summary.ticketCount}
-                  </span>
-                </button>
+                {(isRole('SUPER_ADMIN') || isRole('ADMIN') || isRole('super_admin') || isRole('admin')) && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('TICKET')}
+                    className={`py-2 px-1.5 text-[9px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
+                      activeTab === 'TICKET'
+                        ? 'bg-red-600 text-white shadow-xs font-black'
+                        : 'text-red-200 hover:text-white hover:bg-red-900/40'
+                    }`}
+                  >
+                    <ShieldAlert size={11} />
+                    <span>48h Escalations</span>
+                    <span className="px-1 rounded-full font-mono text-[8px] bg-red-800 text-white">
+                      {summary.ticketCount}
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
 

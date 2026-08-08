@@ -691,6 +691,7 @@ model SupportTicket {
   productType   ProductType?       @relation(fields: [productTypeId], references: [id])
   locationRel   Location?          @relation(fields: [locationId], references: [id])
   attachments   TicketAttachment[]
+  comments      TicketComment[]
 
   @@index([customerId])
   @@index([assigneeId])
@@ -711,6 +712,36 @@ model TicketAttachment {
   supportTicket   SupportTicket @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
 
   @@index([supportTicketId])
+}
+
+model TicketComment {
+  id              Int           @id @default(autoincrement())
+  supportTicketId Int
+  senderName      String
+  senderEmail     String?
+  senderRole      String        @default("USER") // "USER" | "CM" | "ADMIN" | "SYSTEM"
+  message         String        @db.Text
+  attachmentsJson String?       @db.Text
+  createdAt       DateTime      @default(now())
+
+  supportTicket   SupportTicket @relation(fields: [supportTicketId], references: [id], onDelete: Cascade)
+
+  @@index([supportTicketId])
+  @@index([createdAt])
+}
+
+model UserNotification {
+  id        Int      @id @default(autoincrement())
+  userEmail String
+  title     String
+  message   String   @db.Text
+  ticketId  Int?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userEmail])
+  @@index([isRead])
+  @@index([createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -985,6 +1016,9 @@ model ClientMasterProduct {
   amount           Decimal?     @db.Decimal(12, 2)
   gstPercent       Decimal?     @db.Decimal(5, 2)
   totalAmount      Decimal?     @db.Decimal(12, 2)
+  paymentDuration  String?      @default("MONTHLY") // "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY"
+  paymentDueDay    Int?         // 1 to 31
+  firstPaymentDate DateTime?
   sortOrder        Int          @default(0)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
@@ -1022,6 +1056,11 @@ model InvoiceRecord {
   amount                 Decimal?               @db.Decimal(12, 2)
   gstPercent             Decimal?               @db.Decimal(5, 2)
   totalAmount            Decimal?               @db.Decimal(12, 2)
+  paymentDuration        String?                @default("MONTHLY") // "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY"
+  paymentDueDay          Int?
+  firstPaymentDate       DateTime?
+  productGroupKey        String?
+  itemsJson              String?                @db.Text
   gstNo                  String?
   billingMonth           String?                // e.g. "July 2026"
   sendType               String                 @default("MANUAL") // "MANUAL" | "AUTOMATIC_MONTH_END"

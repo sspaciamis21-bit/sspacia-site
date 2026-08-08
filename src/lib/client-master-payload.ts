@@ -135,6 +135,9 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
       amount: p.amount ? Number(p.amount) : null,
       gstPercent: p.gstPercent ? Number(p.gstPercent) : null,
       totalAmount: p.totalAmount ? Number(p.totalAmount) : null,
+      paymentDuration: p.paymentDuration ? String(p.paymentDuration).trim() : 'MONTHLY',
+      paymentDueDay: p.paymentDueDay ? Number(p.paymentDueDay) : null,
+      firstPaymentDate: p.firstPaymentDate ? new Date(String(p.firstPaymentDate)) : null,
       sortOrder: idx,
     })),
   };

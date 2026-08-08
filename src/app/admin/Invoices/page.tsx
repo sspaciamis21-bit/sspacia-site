@@ -68,6 +68,11 @@ interface InvoiceRecord {
   amount: number | null;
   gstPercent: number | null;
   totalAmount: number | null;
+  paymentDuration?: string | null;
+  paymentDueDay?: number | null;
+  firstPaymentDate?: string | null;
+  productGroupKey?: string | null;
+  itemsJson?: string | null;
   gstNo: string | null;
   billingMonth: string | null;
   sendType: 'MANUAL' | 'AUTOMATIC_MONTH_END';
@@ -141,6 +146,8 @@ export default function AdminInvoicesWorkflowPage() {
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('ALL');
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState('ALL');
+  const [selectedCycleFilter, setSelectedCycleFilter] = useState('ALL');
 
   // Node/Location Filter for Admin
   const [locations, setLocations] = useState<LocationOption[]>([]);
@@ -378,6 +385,46 @@ export default function AdminInvoicesWorkflowPage() {
     }
   };
 
+  const companyOptions = useMemo(() => {
+    const set = new Set<string>();
+    invoices.forEach((inv) => {
+      if (inv.companyName) set.add(inv.companyName.trim());
+    });
+    return Array.from(set).sort();
+  }, [invoices]);
+
+  const availableCycleOptions = useMemo(() => {
+    const targetInvoices = selectedCompanyFilter === 'ALL'
+      ? invoices
+      : invoices.filter((e) => e.companyName.trim() === selectedCompanyFilter);
+
+    const map = new Map<string, { label: string; count: number; itemsName: string; totalAmt: number }>();
+    for (const inv of targetInvoices) {
+      const key = inv.productGroupKey || `${inv.paymentDueDay || 'DEFAULT'}_${inv.paymentDuration || 'MONTHLY'}`;
+      const durationLabel = inv.paymentDuration ? String(inv.paymentDuration).replace('_', ' ') : 'MONTHLY';
+      const dueDayLabel = inv.paymentDueDay ? `Due: ${inv.paymentDueDay}th` : 'End of Month';
+      const itemsLabel = inv.cabinName ? `(${inv.cabinName})` : '';
+      const label = `${durationLabel} [${dueDayLabel}] ${itemsLabel} - ₹${Number(inv.totalAmount || 0).toLocaleString('en-IN')}`;
+
+      if (!map.has(key)) {
+        map.set(key, {
+          label,
+          count: 1,
+          itemsName: inv.cabinName || 'Items',
+          totalAmt: Number(inv.totalAmount || 0),
+        });
+      } else {
+        const existing = map.get(key)!;
+        existing.count += 1;
+        existing.totalAmt += Number(inv.totalAmount || 0);
+      }
+    }
+    return Array.from(map.entries()).map(([key, value]) => ({
+      key,
+      ...value,
+    }));
+  }, [invoices, selectedCompanyFilter]);
+
   // Filtered entries for CM View vs Accountant View
   const filteredInvoices = useMemo(() => {
     return invoices.filter((e) => {
@@ -394,9 +441,36 @@ export default function AdminInvoicesWorkflowPage() {
       const matchesStatus =
         selectedStatusFilter === 'ALL' || e.status === selectedStatusFilter;
 
-      return matchesSearch && matchesRoleFilter && matchesStatus;
+      const matchesCompany =
+        selectedCompanyFilter === 'ALL' || e.companyName.trim() === selectedCompanyFilter;
+
+      const currentCycleKey = e.productGroupKey || `${e.paymentDueDay || 'DEFAULT'}_${e.paymentDuration || 'MONTHLY'}`;
+      const matchesCycle =
+        selectedCycleFilter === 'ALL' || currentCycleKey === selectedCycleFilter;
+
+      return matchesSearch && matchesRoleFilter && matchesStatus && matchesCompany && matchesCycle;
     });
-  }, [invoices, searchTerm, userRoleView, selectedStatusFilter]);
+  }, [invoices, searchTerm, userRoleView, selectedStatusFilter, selectedCompanyFilter, selectedCycleFilter]);
+
+  const groupedInvoicesByCompany = useMemo(() => {
+    const map = new Map<string, InvoiceRecord[]>();
+    for (const inv of filteredInvoices) {
+      const key = inv.companyName.trim() || 'Unknown Company';
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key)!.push(inv);
+    }
+    return Array.from(map.entries()).map(([companyName, items]) => ({
+      companyName,
+      items,
+      clientMasterId: items[0]?.clientMasterId,
+      gstNo: items[0]?.gstNo || items[0]?.clientMaster?.gstNo,
+      nodeLocations: items[0]?.createdBy?.assignedLocations || [],
+      createdByName: items[0]?.createdBy?.name || 'Community Manager',
+      totalCompanyAmount: items.reduce((sum, item) => sum + (Number(item.totalAmount) || 0), 0),
+    }));
+  }, [filteredInvoices]);
 
   // KPIs
   const kpis = useMemo(() => {
@@ -569,20 +643,61 @@ export default function AdminInvoicesWorkflowPage() {
       {/* TABLE WORKFLOW */}
       <FadeUp delay={0.2}>
         <div className="bg-white border border-[var(--outline-variant)]/40 p-6 space-y-6 shadow-xs">
-          {/* Search & Filter */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-neutral-200 pb-4">
-            <div className="relative w-full sm:w-80">
-              <Search size={16} className="absolute left-3 top-3.5 text-[#616161]" />
-              <input
-                type="text"
-                placeholder="Search by company, GST or cabin..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] pl-9 pr-4 py-2.5 text-xs focus:outline-none focus:border-[var(--primary)]"
-              />
+          {/* Search & Filter Bar */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border-b border-neutral-200 pb-4">
+            {/* 1. FIRST CONTROL: Company Selector & 2. Payment Duration Selector */}
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2 font-bold text-[#006064] bg-[#006064]/5 px-3 py-2 border border-[#006064]/20">
+                <Building2 size={16} />
+                <span className="text-xs uppercase tracking-wider">Select Company:</span>
+                <select
+                  value={selectedCompanyFilter}
+                  onChange={(e) => {
+                    setSelectedCompanyFilter(e.target.value);
+                    setSelectedCycleFilter('ALL');
+                  }}
+                  className="bg-white border border-[#006064]/40 px-3 py-1.5 text-xs focus:outline-none focus:border-[#006064] font-extrabold text-[#006064] shadow-xs"
+                >
+                  <option value="ALL">All Companies ({companyOptions.length})</option>
+                  {companyOptions.map((cName) => (
+                    <option key={cName} value={cName}>
+                      {cName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* SECOND CONTROL: Payment Duration / Cycle Selector */}
+              <div className="flex items-center gap-2 font-bold text-amber-900 bg-amber-50 px-3 py-2 border border-amber-300">
+                <Calendar size={16} className="text-amber-700" />
+                <span className="text-xs uppercase tracking-wider">Payment Duration / Cycle:</span>
+                <select
+                  value={selectedCycleFilter}
+                  onChange={(e) => setSelectedCycleFilter(e.target.value)}
+                  className="bg-white border border-amber-400 px-3 py-1.5 text-xs focus:outline-none focus:border-amber-600 font-extrabold text-amber-900 shadow-xs"
+                >
+                  <option value="ALL">All Payment Cycles ({availableCycleOptions.length})</option>
+                  {availableCycleOptions.map((cyc) => (
+                    <option key={cyc.key} value={cyc.key}>
+                      {cyc.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <div className="relative flex-1 min-w-[200px] sm:w-64">
+                <Search size={16} className="absolute left-3 top-3 text-[#616161]" />
+                <input
+                  type="text"
+                  placeholder="Search by GST or cabin..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-[var(--primary)]"
+                />
+              </div>
+
               {/* Admin & Accountant Node Filter */}
               {canUseNodeFilter && locations.length > 0 && (
                 <>
@@ -605,7 +720,7 @@ export default function AdminInvoicesWorkflowPage() {
               )}
 
               <div className="flex items-center gap-1.5 text-xs font-bold text-[#616161]">
-                <Filter size={14} /> Workflow Status:
+                <Filter size={14} /> Status:
               </div>
               <select
                 value={selectedStatusFilter}
@@ -613,9 +728,9 @@ export default function AdminInvoicesWorkflowPage() {
                 className="bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[var(--primary)] font-medium"
               >
                 <option value="ALL">All Statuses</option>
-                <option value="PENDING_CM_REVIEW">Pending CM Review (New Arrivals)</option>
+                <option value="PENDING_CM_REVIEW">Pending CM Review</option>
                 <option value="SENT_TO_ACCOUNTANT">Sent to Accountant</option>
-                <option value="INVOICE_ATTACHED">Invoice Attached (Pending CM Approval)</option>
+                <option value="INVOICE_ATTACHED">Invoice Attached</option>
                 <option value="APPROVED">Approved</option>
                 <option value="REJECTED_WITH_REMARKS">Revision Requested</option>
               </select>
@@ -646,14 +761,15 @@ export default function AdminInvoicesWorkflowPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto space-y-4">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-[#F8F9FA] text-[#616161] uppercase tracking-wider border-b border-[var(--outline-variant)] font-bold">
+                  <tr className="bg-[#006064] text-white uppercase tracking-wider text-[10px] font-bold">
                     <th className="p-3 w-12 text-center">SR.No</th>
                     <th className="p-3">Company Name</th>
+                    <th className="p-3">Payment Cycle & Duration</th>
                     <th className="p-3">Node & Person</th>
-                    <th className="p-3">Cabin & Seats</th>
+                    <th className="p-3">Cabin & Seats / Items</th>
                     <th className="p-3">Arrival Date & Dispatch Type</th>
                     <th className="p-3">Billing Month</th>
                     <th className="p-3 text-right">Total Amt (₹)</th>
@@ -671,6 +787,19 @@ export default function AdminInvoicesWorkflowPage() {
                       <td className="p-3">
                         <div className="font-bold text-[#1B1C1C] text-sm">{invoice.companyName}</div>
                         {invoice.gstNo && <div className="text-[10px] font-mono text-neutral-500">GST: {invoice.gstNo}</div>}
+                      </td>
+
+                      <td className="p-3">
+                        <div className="flex flex-col gap-1">
+                          <span className="px-2 py-0.5 bg-[#006064] text-white text-[10px] font-bold uppercase tracking-wider inline-block text-center w-fit">
+                            {invoice.paymentDuration ? String(invoice.paymentDuration).replace('_', ' ') : 'MONTHLY'}
+                          </span>
+                          {invoice.paymentDueDay && (
+                            <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 border border-amber-200 w-fit">
+                              Due: {invoice.paymentDueDay}th of month
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="p-3">
@@ -1119,116 +1248,127 @@ export default function AdminInvoicesWorkflowPage() {
                   <Building2 size={14} /> Cabin, Seating & Billing Amounts
                 </div>
 
-                {entryToViewDetails.clientMaster?.products && entryToViewDetails.clientMaster.products.length > 0 ? (
-                  <div className="space-y-3">
-                    {entryToViewDetails.clientMaster.products.map((p, idx) => {
-                      const isParking = p.cabinName?.toLowerCase().includes('parking');
-                      return (
-                        <div key={idx} className="bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/50 relative">
-                          <div className="flex items-center justify-between border-b border-neutral-200 pb-2 mb-3">
-                            <div className="font-extrabold uppercase text-[#006064] text-[10px] tracking-wider flex items-center gap-2">
-                              ITEM #{idx + 1}
-                              {isParking && (
-                                <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[8px] font-black uppercase tracking-wider">
-                                  PARKING MODE
-                                </span>
-                              )}
-                            </div>
-                            <div className="font-mono font-bold text-xs text-[#006064]">
-                              Total: ₹{Number(p.totalAmount || 0).toLocaleString('en-IN')}
-                            </div>
-                          </div>
+                {(() => {
+                  let items: any[] = [];
+                  if (entryToViewDetails.itemsJson) {
+                    try {
+                      const parsed = JSON.parse(entryToViewDetails.itemsJson);
+                      if (Array.isArray(parsed) && parsed.length > 0) items = parsed;
+                    } catch {}
+                  }
+                  if (items.length === 0 && entryToViewDetails.clientMaster?.products) {
+                    items = entryToViewDetails.clientMaster.products;
+                  }
 
-                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                            <div>
-                              <div className="font-bold uppercase text-[#616161] text-[9px]">Cabin / Product Name</div>
-                              <div className="font-bold text-[#1B1C1C] mt-0.5">{p.cabinName || 'N/A'}</div>
-                            </div>
-
-                            <div>
-                              <div className="font-bold uppercase text-[#616161] text-[9px]">
-                                {isParking ? 'No of Parking' : 'No of Seats'}
+                  if (items.length > 0) {
+                    return (
+                      <div className="space-y-3">
+                        {items.map((p: any, idx: number) => {
+                          const isParking = p.cabinName?.toLowerCase().includes('parking');
+                          return (
+                            <div key={idx} className="bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/50 relative">
+                              <div className="flex items-center justify-between border-b border-neutral-200 pb-2 mb-3">
+                                <div className="font-extrabold uppercase text-[#006064] text-[10px] tracking-wider flex items-center gap-2">
+                                  ITEM #{idx + 1}
+                                  {isParking && (
+                                    <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[8px] font-black uppercase tracking-wider">
+                                      PARKING MODE
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="font-mono font-bold text-xs text-[#006064]">
+                                  Total: ₹{Number(p.totalAmount || 0).toLocaleString('en-IN')}
+                                </div>
                               </div>
-                              <div className="font-bold text-[#1B1C1C] mt-0.5">{p.noOfSeats || 0}</div>
-                            </div>
 
-                            <div>
-                              <div className="font-bold uppercase text-[#616161] text-[9px]">Rate As Per Agreement (₹)</div>
-                              <div className="font-bold text-[#1B1C1C] mt-0.5">₹{Number(p.ratePerAgreement || 0).toLocaleString('en-IN')}</div>
-                            </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                                <div>
+                                  <div className="font-bold uppercase text-[#616161] text-[9px]">Cabin / Product Name</div>
+                                  <div className="font-bold text-[#1B1C1C] mt-0.5">{p.cabinName || 'N/A'}</div>
+                                </div>
 
-                            <div>
-                              <div className="font-bold uppercase text-[#616161] text-[9px]">Amount (₹)</div>
-                              <div className="font-bold text-blue-700 mt-0.5">₹{Number(p.amount || 0).toLocaleString('en-IN')}</div>
-                            </div>
+                                <div>
+                                  <div className="font-bold uppercase text-[#616161] text-[9px]">
+                                    {isParking ? 'No of Parking' : 'No of Seats'}
+                                  </div>
+                                  <div className="font-bold text-[#1B1C1C] mt-0.5">{p.noOfSeats || 0}</div>
+                                </div>
 
+                                <div>
+                                  <div className="font-bold uppercase text-[#616161] text-[9px]">Rate As Per Agreement (₹)</div>
+                                  <div className="font-bold text-[#1B1C1C] mt-0.5">₹{Number(p.ratePerAgreement || 0).toLocaleString('en-IN')}</div>
+                                </div>
+
+                                <div>
+                                  <div className="font-bold uppercase text-[#616161] text-[9px]">Amount (₹)</div>
+                                  <div className="font-bold text-blue-700 mt-0.5">₹{Number(p.amount || 0).toLocaleString('en-IN')}</div>
+                                </div>
+
+                                <div>
+                                  <div className="font-bold uppercase text-[#616161] text-[9px]">GST (%)</div>
+                                  <div className="font-bold text-neutral-700 mt-0.5">{p.gstPercent ?? 18}%</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* GRAND TOTAL SUMMARY BAR FOR THIS INVOICE CYCLE */}
+                        <div className="p-4 bg-[#00363A] text-white flex flex-wrap items-center justify-between gap-4">
+                          <div className="font-extrabold uppercase text-xs tracking-wider">
+                            Grand Total (Items Included in Invoice Entry)
+                          </div>
+                          <div className="flex items-center gap-6 text-xs font-mono">
                             <div>
-                              <div className="font-bold uppercase text-[#616161] text-[9px]">GST (%)</div>
-                              <div className="font-bold text-neutral-700 mt-0.5">{p.gstPercent ?? 18}%</div>
+                              <span className="text-white/70 text-[9px] uppercase tracking-wider block">Total Subtotal</span>
+                              <span className="font-bold text-sm">
+                                ₹{Number(items.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)).toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-white/70 text-[9px] uppercase tracking-wider block">Total GST</span>
+                              <span className="font-bold text-sm">
+                                ₹{Number(items.reduce((sum, p) => sum + (Number(p.totalAmount || 0) - Number(p.amount || 0)), 0)).toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                            <div className="bg-white/10 px-3 py-1.5 border border-white/20">
+                              <span className="text-white/70 text-[9px] uppercase tracking-wider block">Grand Total</span>
+                              <span className="font-black text-base text-emerald-300">
+                                ₹{Number(items.reduce((sum, p) => sum + (Number(p.totalAmount) || 0), 0)).toLocaleString('en-IN')}
+                              </span>
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-
-                    {/* GRAND TOTAL SUMMARY BAR */}
-                    <div className="p-4 bg-[#00363A] text-white flex flex-wrap items-center justify-between gap-4">
-                      <div className="font-extrabold uppercase text-xs tracking-wider">
-                        Grand Total (All Items)
                       </div>
-                      <div className="flex items-center gap-6 text-xs font-mono">
+                    );
+                  } else {
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
                         <div>
-                          <span className="text-white/70 text-[9px] uppercase tracking-wider block">Total Subtotal</span>
-                          <span className="font-bold text-sm">
-                            ₹{Number(
-                              entryToViewDetails.clientMaster.products.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
-                            ).toLocaleString('en-IN')}
-                          </span>
+                          <div className="font-bold uppercase text-[#616161] text-[9px]">Cabin Name</div>
+                          <div className="font-bold text-[#1B1C1C] mt-0.5 text-sm">{entryToViewDetails.cabinName || 'N/A'}</div>
                         </div>
                         <div>
-                          <span className="text-white/70 text-[9px] uppercase tracking-wider block">Total GST</span>
-                          <span className="font-bold text-sm">
-                            ₹{Number(
-                              entryToViewDetails.clientMaster.products.reduce((sum, p) => sum + (Number(p.totalAmount || 0) - Number(p.amount || 0)), 0)
-                            ).toLocaleString('en-IN')}
-                          </span>
+                          <div className="font-bold uppercase text-[#616161] text-[9px]">Seats & Agreement Rate</div>
+                          <div className="font-bold text-[#1B1C1C] mt-0.5">
+                            {entryToViewDetails.noOfSeats || 0} seats @ ₹
+                            {Number(entryToViewDetails.ratePerAgreement || 0).toLocaleString('en-IN')}
+                          </div>
                         </div>
-                        <div className="bg-white/10 px-3 py-1.5 border border-white/20">
-                          <span className="text-white/70 text-[9px] uppercase tracking-wider block">Grand Total</span>
-                          <span className="font-black text-base text-emerald-300">
-                            ₹{Number(
-                              entryToViewDetails.clientMaster.products.reduce((sum, p) => sum + (Number(p.totalAmount) || 0), 0)
-                            ).toLocaleString('en-IN')}
-                          </span>
+                        <div>
+                          <div className="font-bold uppercase text-[#616161] text-[9px]">GST %</div>
+                          <div className="font-bold text-[#1B1C1C] mt-0.5">{entryToViewDetails.gstPercent ?? 18}%</div>
+                        </div>
+                        <div>
+                          <div className="font-bold uppercase text-[#616161] text-[9px]">Total Amount (Amt + GST)</div>
+                          <div className="font-black text-base text-[var(--primary)] mt-0.5">
+                            ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
-                    <div>
-                      <div className="font-bold uppercase text-[#616161] text-[9px]">Cabin Name</div>
-                      <div className="font-bold text-[#1B1C1C] mt-0.5 text-sm">{entryToViewDetails.cabinName || 'N/A'}</div>
-                    </div>
-                    <div>
-                      <div className="font-bold uppercase text-[#616161] text-[9px]">Seats & Agreement Rate</div>
-                      <div className="font-bold text-[#1B1C1C] mt-0.5">
-                        {entryToViewDetails.noOfSeats || 0} seats @ ₹
-                        {Number(entryToViewDetails.ratePerAgreement || 0).toLocaleString('en-IN')}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-bold uppercase text-[#616161] text-[9px]">GST %</div>
-                      <div className="font-bold text-[#1B1C1C] mt-0.5">{entryToViewDetails.gstPercent ?? 18}%</div>
-                    </div>
-                    <div>
-                      <div className="font-bold uppercase text-[#616161] text-[9px]">Total Amount (Amt + GST)</div>
-                      <div className="font-black text-base text-[var(--primary)] mt-0.5">
-                        ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                    );
+                  }
+                })()}
               </div>
 
               {/* SECTION 2: Head Office & GST Details */}

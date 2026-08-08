@@ -11,11 +11,13 @@ export async function GET(request: Request) {
     const cookieStore = await cookies();
     const token = cookieStore.get('auth-token')?.value;
     let currentUserId: number | null = null;
+    let userRole: string | null = null;
 
     if (token) {
       const payload = await verifyToken(token);
       if (payload?.id) {
         currentUserId = Number(payload.id);
+        userRole = payload.role ? String(payload.role).toUpperCase() : null;
       }
     }
 
@@ -159,67 +161,72 @@ export async function GET(request: Request) {
       }
     }
 
-    // 3. ESCALATED SUPPORT TICKETS (>48 Hours SLA breached by CM)
-    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+    // 3. ESCALATED SUPPORT TICKETS (>48 Hours SLA breached by CM) — Super Admin & Admin ONLY
+    const isSuperOrAdmin = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
+    let ticketEscalations: any[] = [];
 
-    const ticketWhere: any = {
-      createdAt: { lte: fortyEightHoursAgo },
-      status: {
-        name: { notIn: ['RESOLVED', 'CLOSED', 'Resolved', 'Closed'] },
-      },
-    };
+    if (isSuperOrAdmin) {
+      const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
-    if (scopedUserIds !== null) {
-      const currentUser = await prisma.user.findUnique({
-        where: { id: currentUserId },
-        select: { assignedLocations: { select: { locationId: true } } },
-      });
-      const myLocIds = currentUser?.assignedLocations.map((ul) => ul.locationId) || [];
-      if (myLocIds.length > 0) {
-        ticketWhere.locationId = { in: myLocIds };
-      }
-    }
-
-    const overdueTickets = await prisma.supportTicket.findMany({
-      where: ticketWhere,
-      select: {
-        id: true,
-        ticketNumber: true,
-        name: true,
-        email: true,
-        phone: true,
-        organization: true,
-        category: true,
-        subCategory: true,
-        description: true,
-        createdAt: true,
-        status: { select: { id: true, name: true, displayName: true } },
-        locationRel: { select: { id: true, name: true } },
-        customer: { select: { id: true, name: true, email: true } },
-      },
-      orderBy: { createdAt: 'asc' }, // oldest / most overdue first
-    });
-
-    const ticketEscalations = overdueTickets.map((t) => {
-      const hoursOpen = Math.floor((now.getTime() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60));
-      return {
-        id: t.id,
-        ticketNumber: t.ticketNumber,
-        companyName: t.organization || t.customer?.name || t.name,
-        reporterName: t.name || t.customer?.name || 'Client',
-        email: t.email || t.customer?.email || 'N/A',
-        phone: t.phone || 'N/A',
-        category: t.category || 'General Issue',
-        subCategory: t.subCategory,
-        description: t.description,
-        createdAt: t.createdAt,
-        hoursOpen,
-        overdueHours: hoursOpen - 48,
-        locationName: t.locationRel?.name || 'General Sector',
-        statusName: t.status.displayName || t.status.name,
-        type: 'TICKET_ESCALATION',
+      const ticketWhere: any = {
+        createdAt: { lte: fortyEightHoursAgo },
+        status: {
+          name: { notIn: ['RESOLVED', 'CLOSED', 'Resolved', 'Closed'] },
+        },
       };
-    });
+
+      if (scopedUserIds !== null) {
+        const currentUser = await prisma.user.findUnique({
+          where: { id: currentUserId },
+          select: { assignedLocations: { select: { locationId: true } } },
+        });
+        const myLocIds = currentUser?.assignedLocations.map((ul) => ul.locationId) || [];
+        if (myLocIds.length > 0) {
+          ticketWhere.locationId = { in: myLocIds };
+        }
+      }
+
+      const overdueTickets = await prisma.supportTicket.findMany({
+        where: ticketWhere,
+        select: {
+          id: true,
+          ticketNumber: true,
+          name: true,
+          email: true,
+          phone: true,
+          organization: true,
+          category: true,
+          subCategory: true,
+          description: true,
+          createdAt: true,
+          status: { select: { id: true, name: true, displayName: true } },
+          locationRel: { select: { id: true, name: true } },
+          customer: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { createdAt: 'asc' }, // oldest / most overdue first
+      });
+
+      ticketEscalations = overdueTickets.map((t) => {
+        const hoursOpen = Math.floor((now.getTime() - new Date(t.createdAt).getTime()) / (1000 * 60 * 60));
+        return {
+          id: t.id,
+          ticketNumber: t.ticketNumber,
+          companyName: t.organization || t.customer?.name || t.name,
+          reporterName: t.name || t.customer?.name || 'Client',
+          email: t.email || t.customer?.email || 'N/A',
+          phone: t.phone || 'N/A',
+          category: t.category || 'General Issue',
+          subCategory: t.subCategory,
+          description: t.description,
+          createdAt: t.createdAt,
+          hoursOpen,
+          overdueHours: hoursOpen - 48,
+          locationName: t.locationRel?.name || 'General Sector',
+          statusName: t.status.displayName || t.status.name,
+          type: 'TICKET_ESCALATION',
+        };
+      });
+    }
 
     // Sort arrays
     agreementNotifications.sort((a, b) => a.daysRemaining - b.daysRemaining);
@@ -228,8 +235,8 @@ export async function GET(request: Request) {
     const summary = {
       agreementCount: agreementNotifications.length,
       lockinCount: lockinNotifications.length,
-      ticketCount: ticketEscalations.length,
-      totalCount: agreementNotifications.length + lockinNotifications.length + ticketEscalations.length,
+      ticketCount: isSuperOrAdmin ? ticketEscalations.length : 0,
+      totalCount: agreementNotifications.length + lockinNotifications.length + (isSuperOrAdmin ? ticketEscalations.length : 0),
     };
 
     return NextResponse.json({

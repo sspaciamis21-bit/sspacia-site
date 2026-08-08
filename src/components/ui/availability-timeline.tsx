@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Check, Lock } from "lucide-react";
 
 interface AvailabilityTimelineProps {
   productId?: number;
@@ -35,11 +35,11 @@ export function AvailabilityTimeline({
           const data = await res.json();
           setBookedSlots(data.bookedSlots || []);
         } else {
-          // Fallback static booked slots for demo
-          setBookedSlots(["08:00", "09:00", "12:00", "13:00", "16:00"]);
+          setBookedSlots([]);
         }
       } catch (err) {
         console.error("Availability fetch error:", err);
+        setBookedSlots([]);
       } finally {
         setLoading(false);
       }
@@ -48,70 +48,66 @@ export function AvailabilityTimeline({
     fetchBookedSlots();
   }, [productId, selectedDate]);
 
-  const isSlotDisabled = (slot: string) => {
-    if (bookedSlots.includes(slot)) return true;
-    
+  const isSlotPast = (slot: string) => {
     const now = new Date();
     const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
     const dateToCheck = selectedDate || today;
 
+    if (dateToCheck < today) return true;
     if (dateToCheck === today) {
       const currentHour = now.getHours();
       const [slotHour] = slot.split(':').map(Number);
-      if (currentHour >= slotHour) return true;
+      return currentHour >= slotHour;
     }
-    
-    if (dateToCheck < today) return true;
     return false;
   };
 
   return (
-    <div className="space-y-4 w-full overflow-hidden">
+    <div className="space-y-3 w-full overflow-hidden">
       <div className="flex items-center justify-between">
-        <h4 className="text-[10px] font-sans font-bold text-primary uppercase tracking-[0.4em]">AVAILABLE TIME SLOT</h4>
+        <h4 className="text-[10px] font-sans font-bold text-primary uppercase tracking-[0.3em]">AVAILABLE TIME SLOTS</h4>
         {loading && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
       </div>
 
       <div className="relative group overflow-hidden">
-        <div className={`overflow-x-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent pb-4 transition-opacity ${loading ? "opacity-50" : "opacity-100"}`}>
-          <div className="min-w-fit flex flex-col gap-3">
-             {/* Slot Row */}
-             <div className="flex border border-outline-variant/30 rounded-none overflow-hidden h-10">
-                {TIME_SLOTS.map((slot) => {
-                  const disabled = isSlotDisabled(slot);
-                  const isBooked = bookedSlots.includes(slot);
-                  const isSelected = selectedSlots.includes(slot);
-                  
-                  return (
-                    <div 
-                      key={slot}
-                      onClick={() => !disabled && onToggleSlot?.(slot)}
-                      className={`min-w-[64px] flex flex-col items-center justify-center border-r border-outline-variant/30 last:border-r-0 transition-all cursor-pointer ${
-                        disabled 
-                          ? "bg-surface-container-high/40 grayscale cursor-not-allowed" 
-                          : isSelected 
-                            ? "bg-primary text-white z-10 shadow-lg" 
-                            : "bg-white hover:bg-primary/5"
-                      }`}
-                    >
-                      <span className={`text-[12px] ${
-                        isSelected ? "text-white font-black" : isBooked || disabled ? "text-red-500 font-bold" : "text-primary/60 font-medium"
-                      }`}>
-                        {isBooked || disabled ? "x" : "|"}
-                      </span>
-                    </div>
-                  );
-                })}
-             </div>
-             
-             {/* Label Row */}
-             <div className="flex">
-                {TIME_SLOTS.map((slot) => (
-                  <div key={`label-${slot}`} className="min-w-[64px] text-center text-[8px] font-bold text-tertiary/40 uppercase tracking-tighter">
-                    {slot}
-                  </div>
-                ))}
-             </div>
+        <div className={`overflow-x-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent pb-2 transition-opacity ${loading ? "opacity-50" : "opacity-100"}`}>
+          <div className="min-w-max flex gap-2 py-1">
+            {TIME_SLOTS.map((slot) => {
+              const isPast = isSlotPast(slot);
+              const isBooked = bookedSlots.includes(slot);
+              const disabled = isPast || isBooked;
+              const isSelected = selectedSlots.includes(slot);
+              
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  disabled={disabled}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!disabled && onToggleSlot) {
+                      onToggleSlot(slot);
+                    }
+                  }}
+                  className={`px-3 py-2 rounded-md text-[11px] font-bold font-mono flex items-center gap-1.5 transition-all border ${
+                    isSelected
+                      ? "bg-[#1ab0bc] text-white border-[#1ab0bc] shadow-md scale-105"
+                      : disabled
+                      ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-[#1ab0bc] hover:text-[#1ab0bc] hover:bg-cyan-50/50 cursor-pointer"
+                  }`}
+                  title={isBooked ? "Slot Booked" : isPast ? "Time Passed" : `Select ${slot} slot`}
+                >
+                  {isSelected ? (
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  ) : disabled ? (
+                    <Lock className="w-3 h-3 text-gray-400" />
+                  ) : null}
+                  <span>{slot}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

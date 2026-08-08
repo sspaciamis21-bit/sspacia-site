@@ -13,29 +13,12 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
     const today = now.getDate();
     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
 
-    // Only run on the last day of the month
-    if (today !== lastDayOfMonth) {
-      return { dispatched: false, count: 0, message: 'Not the last day of the month' };
-    }
-
     // Build billing month string
     const monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     const currentBillingMonth = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
-
-    // Duplicate prevention: skip if already dispatched this month
-    const existingCount = await (prisma as any).invoiceRecord.count({
-      where: {
-        billingMonth: currentBillingMonth,
-        sendType: 'AUTOMATIC_MONTH_END',
-      },
-    });
-
-    if (existingCount > 0) {
-      return { dispatched: false, count: 0, message: `Already dispatched for ${currentBillingMonth}` };
-    }
 
     // Fetch all active clients with their products
     const clientsToDispatch = await (prisma as any).clientMaster.findMany({
@@ -49,55 +32,124 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
       return { dispatched: false, count: 0, message: 'No active clients found' };
     }
 
-    // Create 1 InvoiceRecord entry per client
+    const existingInvoices = await (prisma as any).invoiceRecord.findMany({
+      where: { billingMonth: currentBillingMonth },
+      select: { clientMasterId: true, productGroupKey: true },
+    });
+    const existingSet = new Set(existingInvoices.map((inv: any) => `${inv.clientMasterId}_${inv.productGroupKey || 'DEFAULT'}`));
+
     const invoiceCreates: any[] = [];
 
     for (const cm of clientsToDispatch) {
-      let totalSeats = 0;
-      let subAmount = 0;
-      let totalAmt = 0;
-      let cabinSummary = 'N/A';
-
       if (cm.products && cm.products.length > 0) {
-        totalSeats = cm.products.reduce((sum: number, p: any) => sum + (Number(p.noOfSeats) || 0), 0);
-        subAmount = cm.products.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-        totalAmt = cm.products.reduce((sum: number, p: any) => sum + (Number(p.totalAmount) || 0), 0);
-        cabinSummary = cm.products.length > 1
-          ? `${cm.products.length} Products (${cm.products.map((p: any) => p.cabinName).filter(Boolean).join(', ')})`
-          : (cm.products[0].cabinName || cm.cabinName || 'N/A');
-      } else {
-        totalSeats = Number(cm.noOfSeats) || 0;
-        subAmount = Number(cm.amount) || 0;
-        totalAmt = Number(cm.totalAmount) || 0;
-        cabinSummary = cm.cabinName || 'N/A';
-      }
+        // Group products by (paymentDueDay + paymentDuration)
+        const groupsMap = new Map<string, any[]>();
+        for (const p of cm.products) {
+          const pDuration = p.paymentDuration || 'MONTHLY';
+          const pDueDay = p.paymentDueDay ?? cm.paymentDueDay ?? 'DEFAULT';
+          const key = `${pDueDay}_${pDuration}`;
+          if (!groupsMap.has(key)) {
+            groupsMap.set(key, []);
+          }
+          groupsMap.get(key)!.push(p);
+        }
 
-      invoiceCreates.push(
-        (prisma as any).invoiceRecord.create({
-          data: {
-            clientMasterId: cm.id,
-            srNo: cm.srNo,
-            companyName: cm.companyName,
-            cabinName: cabinSummary,
-            noOfSeats: totalSeats,
-            ratePerAgreement: cm.ratePerAgreement || (cm.products?.[0]?.ratePerAgreement ?? null),
-            amount: subAmount,
-            gstPercent: cm.gstPercent || (cm.products?.[0]?.gstPercent ?? 18),
-            totalAmount: totalAmt,
-            gstNo: cm.gstNo,
-            billingMonth: currentBillingMonth,
-            sendType: 'AUTOMATIC_MONTH_END',
-            sentAt: now,
-            status: 'PENDING_CM_REVIEW',
-            createdById: cm.createdById,
-          },
-        })
-      );
+        for (const [groupKey, pList] of Array.from(groupsMap.entries())) {
+          const dedupeKey = `${cm.id}_${groupKey}`;
+          if (existingSet.has(dedupeKey)) continue;
+
+          // Check if due day matches today or if month-end dispatch
+          const firstP = pList[0];
+          const dueDay = firstP.paymentDueDay ?? cm.paymentDueDay;
+
+          // If due day is set and doesn't match today on lastDay check, allow dispatch on exact due day or month end
+          if (dueDay && today !== dueDay && today !== lastDayOfMonth) {
+            continue;
+          }
+
+          existingSet.add(dedupeKey);
+
+          const totalSeats = pList.reduce((sum: number, p: any) => sum + (Number(p.noOfSeats) || 0), 0);
+          const subAmount = pList.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+          const totalAmt = pList.reduce((sum: number, p: any) => sum + (Number(p.totalAmount) || 0), 0);
+          const cabinSummary = pList.length > 1
+            ? `${pList.length} Items (${pList.map((p: any) => p.cabinName).filter(Boolean).join(', ')})`
+            : (pList[0].cabinName || cm.cabinName || 'N/A');
+
+          invoiceCreates.push(
+            (prisma as any).invoiceRecord.create({
+              data: {
+                clientMasterId: cm.id,
+                srNo: cm.srNo,
+                companyName: cm.companyName,
+                cabinName: cabinSummary,
+                noOfSeats: totalSeats,
+                ratePerAgreement: firstP.ratePerAgreement || cm.ratePerAgreement || null,
+                amount: subAmount,
+                gstPercent: firstP.gstPercent || cm.gstPercent || 18,
+                totalAmount: totalAmt,
+                paymentDuration: firstP.paymentDuration || 'MONTHLY',
+                paymentDueDay: firstP.paymentDueDay ?? cm.paymentDueDay ?? null,
+                firstPaymentDate: firstP.firstPaymentDate ? new Date(firstP.firstPaymentDate) : null,
+                productGroupKey: groupKey,
+                itemsJson: JSON.stringify(pList.map((p: any) => ({
+                  cabinName: p.cabinName,
+                  noOfSeats: p.noOfSeats,
+                  ratePerAgreement: p.ratePerAgreement,
+                  amount: p.amount,
+                  gstPercent: p.gstPercent,
+                  totalAmount: p.totalAmount,
+                  paymentDuration: p.paymentDuration,
+                  paymentDueDay: p.paymentDueDay,
+                  firstPaymentDate: p.firstPaymentDate,
+                }))),
+                gstNo: cm.gstNo,
+                billingMonth: currentBillingMonth,
+                sendType: 'AUTOMATIC_MONTH_END',
+                sentAt: now,
+                status: 'PENDING_CM_REVIEW',
+                createdById: cm.createdById,
+              },
+            })
+          );
+        }
+      } else {
+        const dedupeKey = `${cm.id}_DEFAULT`;
+        if (existingSet.has(dedupeKey)) continue;
+        existingSet.add(dedupeKey);
+
+        invoiceCreates.push(
+          (prisma as any).invoiceRecord.create({
+            data: {
+              clientMasterId: cm.id,
+              srNo: cm.srNo,
+              companyName: cm.companyName,
+              cabinName: cm.cabinName || 'N/A',
+              noOfSeats: Number(cm.noOfSeats) || 0,
+              ratePerAgreement: cm.ratePerAgreement || null,
+              amount: Number(cm.amount) || 0,
+              gstPercent: cm.gstPercent || 18,
+              totalAmount: Number(cm.totalAmount) || 0,
+              paymentDuration: 'MONTHLY',
+              paymentDueDay: cm.paymentDueDay ?? null,
+              productGroupKey: 'DEFAULT',
+              gstNo: cm.gstNo,
+              billingMonth: currentBillingMonth,
+              sendType: 'AUTOMATIC_MONTH_END',
+              sentAt: now,
+              status: 'PENDING_CM_REVIEW',
+              createdById: cm.createdById,
+            },
+          })
+        );
+      }
+    }
+
+    if (invoiceCreates.length === 0) {
+      return { dispatched: false, count: 0, message: 'No new invoice entries to create' };
     }
 
     const createdRecords = await (prisma as any).$transaction(invoiceCreates);
-
-    console.log(`[Auto-Dispatch] ${currentBillingMonth}: ${createdRecords.length} invoice entries created from ${clientsToDispatch.length} active clients.`);
 
     return {
       dispatched: true,

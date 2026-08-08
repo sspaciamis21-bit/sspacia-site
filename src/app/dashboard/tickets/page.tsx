@@ -4,7 +4,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
-import { Loader2, Ticket as TicketIcon, Clock, CheckCircle, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { Loader2, Ticket as TicketIcon, Clock, CheckCircle, AlertCircle, ExternalLink, RefreshCw, MessageSquare } from 'lucide-react';
+import { TicketChatModal } from '@/components/tickets/TicketChatModal';
 
 interface TicketAttachment {
   id: number;
@@ -38,12 +39,13 @@ export default function UserTicketsPage() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeChatTicket, setActiveChatTicket] = useState<SupportTicket | null>(null);
 
   const fetchTickets = useCallback(async () => {
     if (!user?.id) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/admin/tickets`);
+      const res = await fetch(`/api/user/tickets`);
       if (!res.ok) throw new Error('Failed to fetch tickets');
       const json = await res.json();
       if (json.data) setTickets(json.data);
@@ -164,10 +166,10 @@ export default function UserTicketsPage() {
                       {ticket.locationRel?.name || ticket.location || 'Unknown Location'}
                     </h3>
                     {(ticket.category || ticket.subCategory) && (
-                      <p className="text-[10px] font-black text-[var(--primary)] mt-2 uppercase tracking-[0.15em] flex items-center gap-2">
-                         <div className="w-1.5 h-1.5 bg-[var(--primary)]"></div>
+                      <div className="text-[10px] font-black text-[var(--primary)] mt-2 uppercase tracking-[0.15em] flex items-center gap-2">
+                         <span className="inline-block w-1.5 h-1.5 bg-[var(--primary)]"></span>
                          {ticket.category} {ticket.subCategory ? `› ${ticket.subCategory}` : ''}
-                      </p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -182,31 +184,53 @@ export default function UserTicketsPage() {
                 {ticket.description}
               </div>
 
-              {ticket.attachments && ticket.attachments.length > 0 && (
-                <div className="pt-6 border-t border-[var(--outline-variant)]/20">
-                  <h4 className="text-[9px] font-black text-[#9E9E9E] uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <ExternalLink size={12} className="text-[var(--primary)]" />
-                    Attachments ({ticket.attachments.length})
-                  </h4>
-                  <div className="flex flex-wrap gap-4">
-                    {ticket.attachments.map((att, i) => (
-                      <a 
-                        key={att.id} 
-                        href={att.url} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="flex items-center gap-3 px-4 py-3 bg-[var(--surface-low)] border border-[var(--outline-variant)] rounded-none text-[9px] font-black text-[#1B1C1C] uppercase tracking-widest hover:border-[var(--primary)] hover:text-[var(--primary)] transition-all"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        File {i + 1}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
+               <div className="flex flex-wrap items-center justify-between gap-4 pt-6 border-t border-[var(--outline-variant)]/20">
+                 {ticket.attachments && ticket.attachments.length > 0 ? (
+                   <div>
+                     <h4 className="text-[9px] font-black text-[#9E9E9E] uppercase tracking-widest mb-3 flex items-center gap-2">
+                       <ExternalLink size={12} className="text-[var(--primary)]" />
+                       Attachments ({ticket.attachments.length})
+                     </h4>
+                     <div className="flex flex-wrap gap-4">
+                       {ticket.attachments.map((att, i) => (
+                         <a 
+                           key={att.id} 
+                           href={att.url} 
+                           target="_blank" 
+                           rel="noreferrer"
+                           className="flex items-center gap-3 px-4 py-2.5 bg-[var(--surface-low)] border border-[var(--outline-variant)] text-[9px] font-black text-[#1B1C1C] uppercase tracking-widest hover:border-[var(--primary)] hover:text-[var(--primary)] transition-all"
+                         >
+                           <ExternalLink className="w-3.5 h-3.5" />
+                           File {i + 1}
+                         </a>
+                       ))}
+                     </div>
+                   </div>
+                 ) : <div />}
+
+                 <button
+                   onClick={() => setActiveChatTicket(ticket)}
+                   className="px-6 py-3 bg-[#006064] text-white font-bold text-[10px] uppercase tracking-widest hover:bg-[#004d40] transition-all flex items-center gap-2.5 shadow-md ml-auto"
+                 >
+                   <MessageSquare className="w-4 h-4" />
+                   Chat with Community Manager
+                 </button>
+               </div>
             </motion.div>
           ))}
         </div>
+      )}
+
+      {activeChatTicket && (
+        <TicketChatModal
+          isOpen={!!activeChatTicket}
+          onClose={() => setActiveChatTicket(null)}
+          ticketId={activeChatTicket.id}
+          ticketNumber={activeChatTicket.ticketNumber}
+          ticketTitle={`${activeChatTicket.productType?.displayName || activeChatTicket.spaceType || 'Workspace'} - ${activeChatTicket.category || 'General'}`}
+          statusName={typeof activeChatTicket.status === 'object' ? (activeChatTicket.status.displayName || activeChatTicket.status.name) : activeChatTicket.status}
+          userRole="USER"
+        />
       )}
     </div>
   );

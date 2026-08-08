@@ -24,9 +24,16 @@ export async function checkPermission(
 
   if (!user || !user.role || !user.role.isActive) return false;
 
-  // Bypass for ADMIN role (case-insensitive)
+  // Bypass for ADMIN & COMMUNITY_MANAGER role (case-insensitive)
   const roleName = user.role.name.toLowerCase();
-  if (roleName === 'admin' || roleName === 'super_admin' || roleName === 'super-admin') {
+  if (
+    roleName === 'admin' || 
+    roleName === 'super_admin' || 
+    roleName === 'super-admin' || 
+    roleName === 'super admin' ||
+    roleName === 'community_manager' ||
+    roleName === 'community manager'
+  ) {
     return true;
   }
 
@@ -34,8 +41,9 @@ export async function checkPermission(
   if (roleName === 'user' || roleName === 'member' || roleName === 'customer') {
     const memberPermissions = [
       'tickets:read', 'tickets:create',
-      'bookings:read', 'bookings:create',
-      'documents:view', 'documents:update'
+      'bookings:read', 'bookings:create', 'bookings:view',
+      'documents:view', 'documents:update',
+      'payments:create', 'payments:view', 'payments:read'
     ];
     if (memberPermissions.includes(`${module}:${action}`)) {
       return true;

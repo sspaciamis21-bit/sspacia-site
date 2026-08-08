@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { ManageProfileModal } from '@/components/profile/ManageProfileModal';
+import { UserNotificationBell } from '@/components/notifications/UserNotificationBell';
 
 const sidebarItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -439,6 +440,19 @@ export default function UserLayout({
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 relative">
+        <div className="bg-[var(--surface-lowest)] border-b border-[var(--outline-variant)]/30 px-8 py-3 flex items-center justify-between shrink-0 z-40">
+          <nav className="flex items-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em] text-[#616161]">
+            <Link href="/" className="hover:text-[var(--primary)] transition-colors">Home</Link>
+            <Link href="/about" className="hover:text-[var(--primary)] transition-colors">About</Link>
+            <Link href="/contact" className="hover:text-[var(--primary)] transition-colors">Contact</Link>
+            <Link href="/products" className="hover:text-[var(--primary)] transition-colors">Products</Link>
+            <Link href="/blog" className="hover:text-[var(--primary)] transition-colors">Blog</Link>
+            <Link href="/gallery" className="hover:text-[var(--primary)] transition-colors">Gallery</Link>
+          </nav>
+          <div className="flex items-center gap-4">
+             <UserNotificationBell />
+          </div>
+        </div>
         <div className="flex-1 p-10 overflow-y-auto relative z-0 bg-[var(--surface)] custom-scrollbar">
           {children}
         </div>

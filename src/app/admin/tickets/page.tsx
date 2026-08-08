@@ -18,8 +18,10 @@ import {
   ChevronRight,
   ShieldAlert,
   AlertTriangle,
-  Filter
+  Filter,
+  MessageSquare
 } from 'lucide-react';
+import { TicketChatModal } from '@/components/tickets/TicketChatModal';
 
 interface TicketAttachment {
   id: number;
@@ -39,12 +41,12 @@ interface SupportTicket {
   category: string | null;
   subCategory: string | null;
   description: string;
-  status: any;
+  status: { id: number; name: string; displayName: string; color?: string };
   attachments: TicketAttachment[];
   createdAt: string;
-  hoursOpen?: number;
-  isEscalated?: boolean;
-  escalatedHours?: number;
+  hoursOpen: number;
+  isEscalated: boolean;
+  escalatedHours: number;
   user: {
     name: string;
     email: string;
@@ -64,6 +66,7 @@ export default function AdminTicketsPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterMode, setFilterMode] = useState<'ALL' | 'OPEN' | 'ESCALATED'>('ALL');
+  const [activeChatTicket, setActiveChatTicket] = useState<SupportTicket | null>(null);
 
   const fetchTickets = async () => {
     setIsLoading(true);
@@ -394,6 +397,14 @@ export default function AdminTicketsPage() {
                           </select>
                           <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-[#9E9E9E] pointer-events-none" size={14} />
                         </div>
+
+                        <button
+                          onClick={() => setActiveChatTicket(ticket)}
+                          className="w-full py-3 px-4 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-sm mt-3"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          Chat with User
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -402,6 +413,18 @@ export default function AdminTicketsPage() {
             );
           })}
         </div>
+      )}
+
+      {activeChatTicket && (
+        <TicketChatModal
+          isOpen={!!activeChatTicket}
+          onClose={() => setActiveChatTicket(null)}
+          ticketId={activeChatTicket.id}
+          ticketNumber={activeChatTicket.ticketNumber}
+          ticketTitle={`${activeChatTicket.productType?.displayName || activeChatTicket.spaceType || 'Workspace'} - ${activeChatTicket.name}`}
+          statusName={activeChatTicket.status.displayName || activeChatTicket.status.name}
+          userRole="CM"
+        />
       )}
     </div>
   );

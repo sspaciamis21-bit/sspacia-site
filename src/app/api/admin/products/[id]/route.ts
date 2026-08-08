@@ -125,12 +125,7 @@ export const PATCH = withPermission('products', 'update', async (
       ? (body.pricingPlans as PricingPlanInput[])
       : undefined;
 
-    interface UnitInput { name: string; code?: string; capacity?: number; description?: string }
-    const units: UnitInput[] | undefined = Array.isArray(body.units)
-      ? (body.units as UnitInput[])
-      : undefined;
-
-    // 3. Update + activity log
+    // 3. Update + activity log in transaction
     const product = await prisma.$transaction(async (tx) => {
       const updated = await tx.product.update({
         where: { id: productId },
@@ -157,29 +152,6 @@ export const PATCH = withPermission('products', 'update', async (
               create: amenityIds.map((aId) => ({ amenityId: aId })),
             }
           }),
-          ...(pricingPlans !== undefined && {
-            pricingPlans: {
-              deleteMany: {},
-              create: pricingPlans.map((p) => ({
-                durationType: { connect: { name: p.durationType } },
-                price:    p.price,
-                oldPrice: p.oldPrice,
-                discount: p.discount,
-                priceType: (p.priceType as any) || 'PER_SEAT',
-              })),
-            }
-          }),
-          ...(units !== undefined && units.length > 0 && {
-            units: {
-              deleteMany: {},
-              create: units.map((u) => ({
-                name: u.name,
-                code: u.code,
-                capacity: u.capacity ? Number(u.capacity) : (body.capacity ? Number(body.capacity) : 1),
-                description: u.description || '',
-              })),
-            }
-          }),
         },
         select: {
           id: true,
@@ -191,8 +163,48 @@ export const PATCH = withPermission('products', 'update', async (
         },
       });
 
-      // Synchronize unit capacities if product capacity changed and no specific units were provided
-      if (body.capacity !== undefined && (units === undefined || units.length === 0)) {
+      // Explicit Product Images Update
+      if (Array.isArray(body.images)) {
+        await tx.productImage.deleteMany({ where: { productId } });
+        if (body.images.length > 0) {
+          await tx.productImage.createMany({
+            data: body.images.map((img: any, idx: number) => ({
+              productId,
+              url: typeof img === 'string' ? img : String(img.url),
+              alt: typeof img === 'object' && img.alt ? String(img.alt) : String(body.name || existing.name),
+              isPrimary: typeof img === 'object' && img.isPrimary !== undefined ? Boolean(img.isPrimary) : idx === 0,
+              sortOrder: idx + 1,
+            })),
+          });
+        }
+      }
+
+      // Explicit Pricing Plans Update
+      if (Array.isArray(pricingPlans) && pricingPlans.length > 0) {
+        await tx.pricingPlan.deleteMany({ where: { productId } });
+        for (const p of pricingPlans) {
+          const durationTypeName = p.durationType || 'MONTHLY';
+          const dt = await tx.durationType.findFirst({
+            where: { name: durationTypeName }
+          }) || await tx.durationType.findFirst();
+
+          if (dt) {
+            await tx.pricingPlan.create({
+              data: {
+                productId,
+                durationTypeId: dt.id,
+                price: p.price,
+                oldPrice: p.oldPrice,
+                discount: p.discount,
+                priceType: (p.priceType as any) || 'PER_SEAT',
+              }
+            });
+          }
+        }
+      }
+
+      // Synchronize unit capacities if product capacity changed
+      if (body.capacity !== undefined) {
         await tx.productUnit.updateMany({
           where: { productId },
           data: { capacity: Number(body.capacity) }
@@ -218,7 +230,10 @@ export const PATCH = withPermission('products', 'update', async (
     return NextResponse.json({ data: product });
   } catch (error) {
     console.error('[PRODUCT_UPDATE]', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
   }
 });
 
