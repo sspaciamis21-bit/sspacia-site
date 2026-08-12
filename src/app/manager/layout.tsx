@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Receipt,
   MessageSquare,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -81,6 +82,7 @@ export default function ManagerLayout({
     items.push({ name: 'Products', href: '/manager/products', icon: Package });
     items.push({ name: 'Bookings', href: '/manager/bookings', icon: Calendar });
     items.push({ name: 'Tickets', href: '/manager/tickets', icon: Ticket });
+    items.push({ name: 'Expenses', href: '/manager/expenses', icon: FileSpreadsheet });
     items.push({ name: 'Contracts', href: '/manager/contracts', icon: ShieldCheck });
     items.push({ name: 'Documents', href: '/manager/documents', icon: FileText });
     items.push({ name: 'Agreements', href: '/manager/agreements', icon: FileText });

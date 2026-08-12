@@ -32,7 +32,10 @@ export async function checkPermission(
     roleName === 'super-admin' || 
     roleName === 'super admin' ||
     roleName === 'community_manager' ||
-    roleName === 'community manager'
+    roleName === 'community manager' ||
+    roleName.includes('manager') ||
+    roleName.includes('community') ||
+    roleName.includes('admin')
   ) {
     return true;
   }

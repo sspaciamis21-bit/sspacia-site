@@ -69,6 +69,24 @@ export async function POST(request: Request) {
       });
     }
 
+    // Retroactively update VisitorLog entries for chat metrics
+    try {
+      await (prisma as any).visitorLog.updateMany({
+        where: {
+          OR: [
+            { userEmail: cleanEmail },
+            { isUnregistered: true }
+          ]
+        },
+        data: {
+          hasChatted: true,
+          userEmail: cleanEmail
+        }
+      });
+    } catch (err) {
+      console.warn('[VISITOR_LEAD_LOG_UPDATE_WARN]', err);
+    }
+
     return NextResponse.json({
       success: true,
       lead: {

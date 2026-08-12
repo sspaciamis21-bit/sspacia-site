@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { IndiaGeoMapModal } from '@/components/admin/india-geo-map-modal';
 // ─── Types ──────────────────────────────────────────────────
 interface DashboardStats {
   totalProducts: number;
@@ -91,6 +92,7 @@ export default function AdminDashboardPage() {
   const [statsLoading, setStatsLoading] = useState(true);
   const [productsLoading, setProductsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isGeoMapOpen, setIsGeoMapOpen] = useState(false);
 
   const fetchRecentProducts = () => {
     setProductsLoading(true);
@@ -170,14 +172,24 @@ export default function AdminDashboardPage() {
     <div className="space-y-12 pb-20">
       {/* Header */}
       <FadeUp>
-        <div className="flex items-center gap-6">
-          <div className="h-20 w-20 bg-white text-[var(--primary)] flex items-center justify-center rounded-none border border-[var(--outline-variant)]/40 shadow-xl">
-            <LayoutDashboard size={40} />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div className="flex items-center gap-6">
+            <div className="h-20 w-20 bg-white text-[var(--primary)] flex items-center justify-center rounded-none border border-[var(--outline-variant)]/40 shadow-xl">
+              <LayoutDashboard size={40} />
+            </div>
+            <div>
+              <h1 className="text-4xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Command--Center</h1>
+              <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60 italic">System overview and node verification</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-4xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Command--Center</h1>
-            <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60 italic">System overview and node verification</p>
-          </div>
+
+          <button
+            onClick={() => setIsGeoMapOpen(true)}
+            className="bg-[#1ab0bc] hover:bg-teal-600 text-white px-6 py-3.5 text-xs font-black uppercase tracking-[0.2em] shadow-xl transition-all flex items-center gap-2.5 border border-teal-400 hover:scale-105 active:scale-95 cursor-pointer"
+          >
+            <MapPin className="w-4 h-4 text-amber-300 animate-bounce" />
+            <span>View Visitor Geo Map 🗺️</span>
+          </button>
         </div>
       </FadeUp>
 
@@ -428,6 +440,11 @@ export default function AdminDashboardPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchRecentProducts}
+      />
+
+      <IndiaGeoMapModal
+        isOpen={isGeoMapOpen}
+        onClose={() => setIsGeoMapOpen(false)}
       />
     </div>
   );

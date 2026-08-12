@@ -78,18 +78,30 @@ export function Header() {
           </nav>
 
           {/* Desktop Buttons - right */}
-          <div className="hidden md:flex items-center gap-5">
-            {/* BOOK A TOUR HEADER LINK (ONLY FOR UNREGISTERED USERS) */}
+          <div className="hidden md:flex items-center gap-3">
+            {/* BOOK A TOUR & PHONE CALL LINKS (FOR UNREGISTERED VISITORS) */}
             {!isLoggedIn && (
-              <button
-                onClick={() => setIsTourModalOpen(true)}
-                className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3.5 py-2 border border-red-200 transition-all shadow-xs"
-                title="Book a Workspace Tour with Nikhil Dave"
-              >
-                <Calendar className="w-4 h-4 text-red-600" />
-                <span>Book a Tour</span>
-                <span className="text-[10px] font-mono text-gray-500 border-l border-red-200 pl-2">📞 1800 258 6633</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {/* BOOK A TOUR BUTTON */}
+                <button
+                  onClick={() => setIsTourModalOpen(true)}
+                  className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3.5 py-2 border border-red-200 transition-all shadow-xs cursor-pointer"
+                  title="Book a Workspace Tour"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-red-600" />
+                  <span>Book a Tour</span>
+                </button>
+
+                {/* PHONE CALL LINK (DIRECT DIAL +91 7600393779) */}
+                <a
+                  href="tel:+917600393779"
+                  className="flex items-center gap-1.5 text-xs font-mono font-bold text-gray-700 hover:text-red-600 bg-gray-50 hover:bg-red-50 px-3 py-2 border border-gray-200 hover:border-red-200 transition-all shadow-xs cursor-pointer"
+                  title="Call SSPACIA +91 7600393779"
+                >
+                  <Phone className="w-3.5 h-3.5 text-red-600" />
+                  <span>+91 7600393779</span>
+                </a>
+              </div>
             )}
 
             {isLoggedIn ? (

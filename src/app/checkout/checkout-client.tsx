@@ -42,7 +42,7 @@ export default function CheckoutClient() {
   const [discountCode, setDiscountCode] = useState("");
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [customerInfo, setCustomerInfo] = useState({ name: "", email: "" });
+  const [customerInfo, setCustomerInfo] = useState({ name: "", email: "", phone: "" });
 
   // URL Params
   const productId = searchParams?.get("productId") || null;
@@ -67,7 +67,11 @@ export default function CheckoutClient() {
 
   useEffect(() => {
     if (user) {
-      setCustomerInfo({ name: user.name || "", email: user.email || "" });
+      setCustomerInfo({
+        name: user.name || "",
+        email: user.email || "",
+        phone: user.phone || user.contactNumber || ""
+      });
     }
   }, [user]);
 
@@ -165,6 +169,7 @@ export default function CheckoutClient() {
         prefill: {
           name: customerInfo.name,
           email: customerInfo.email,
+          contact: customerInfo.phone || (user as any)?.phone || (user as any)?.contactNumber || "",
         },
         theme: {
           color: "#083329",
@@ -272,7 +277,7 @@ export default function CheckoutClient() {
 
               <div className="space-y-8">
                 <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-tertiary">Billing Information</h3>
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid md:grid-cols-3 gap-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-tertiary uppercase ml-1">Full Name</label>
                     <input 
@@ -291,6 +296,16 @@ export default function CheckoutClient() {
                       onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
                       className="w-full bg-surface-low/30 border border-outline-variant/20 px-5 py-4 text-sm outline-none focus:border-primary/30 focus:bg-white" 
                       placeholder="john@example.com" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-tertiary uppercase ml-1">Mobile</label>
+                    <input 
+                      type="tel" 
+                      value={customerInfo.phone}
+                      onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
+                      className="w-full bg-surface-low/30 border border-outline-variant/20 px-5 py-4 text-sm outline-none focus:border-primary/30 focus:bg-white" 
+                      placeholder="+91 00000 00000" 
                     />
                   </div>
                 </div>

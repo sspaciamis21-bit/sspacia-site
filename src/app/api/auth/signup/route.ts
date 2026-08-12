@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       },
     })
 
-    // ─── Auto-remove from UnregisteredCustomer Lead Table ───
+    // ─── Auto-remove from UnregisteredCustomer Lead Table & Mark VisitorLog Converted ───
     try {
       await (prisma as any).unregisteredCustomer.deleteMany({
         where: {
@@ -77,6 +77,20 @@ export async function POST(request: Request) {
             ...(body.phone || body.mobileNo ? [{ mobileNo: String(body.phone || body.mobileNo) }] : []),
           ],
         },
+      });
+
+      // Update matching visitor logs to converted = true
+      await (prisma as any).visitorLog.updateMany({
+        where: {
+          OR: [
+            { userEmail: user.email },
+            { isUnregistered: true }
+          ]
+        },
+        data: {
+          isConverted: true,
+          userEmail: user.email
+        }
       });
     } catch (cleanupErr) {
       console.warn('[Signup] Unregistered lead cleanup notice:', cleanupErr);

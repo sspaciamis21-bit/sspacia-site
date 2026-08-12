@@ -21,6 +21,7 @@ import {
   FileText,
   Mail,
   MessageSquare,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -40,6 +41,7 @@ const sidebarItems = [
   { name: 'Roles', href: '/admin/roles', icon: Shield },
   { name: 'Tickets', href: '/admin/tickets', icon: Ticket },
   { name: 'Bookings', href: '/admin/bookings', icon: Calendar },
+  { name: 'Expenses', href: '/admin/expenses', icon: FileSpreadsheet },
   { name: 'Contracts', href: '/manager/contracts', icon: ShieldCheck },
   { name: 'Documents', href: '/manager/documents', icon: FileText },
   { name: 'Client Master', href: '/admin/client-master', icon: FileText },

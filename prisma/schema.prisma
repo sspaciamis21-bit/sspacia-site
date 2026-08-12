@@ -191,6 +191,7 @@ model User {
   contractVersions  ContractVersion[] @relation("VersionCreator")
   negotiationMessages NegotiationMessage[]
   visitorChatMessages VisitorChatMessage[]
+  updatedExpenseSheets LocationExpenseSheet[]
 
   @@index([email])
   @@index([roleId])
@@ -302,7 +303,7 @@ model Location {
   products       Product[]
   assignedUsers  UserLocation[]
   supportTickets SupportTicket[]
-
+  expenseSheet   LocationExpenseSheet?
 
   @@index([cityId])
   @@index([slug])
@@ -1151,4 +1152,48 @@ model AnnouncementLabel {
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model VisitorLog {
+  id             Int      @id @default(autoincrement())
+  sessionToken   String?
+  ipAddress      String?
+  city           String   @default("Ahmedabad")
+  state          String   @default("Gujarat")
+  country        String   @default("India")
+  latitude       Float    @default(23.0225)
+  longitude      Float    @default(72.5714)
+  hasChatted     Boolean  @default(false)
+  isUnregistered Boolean  @default(true)
+  isLoggedOut    Boolean  @default(false)
+  isConverted    Boolean  @default(false)
+  userEmail      String?
+  visitedAt      DateTime @default(now())
+
+  @@index([city])
+  @@index([state])
+  @@index([sessionToken])
+  @@index([ipAddress])
+  @@index([userEmail])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CENTER / LOCATION EXPENSE SPREADSHEETS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model LocationExpenseSheet {
+  id          Int      @id @default(autoincrement())
+  locationId  Int      @unique
+  title       String   @default("Center Expenses")
+  columns     Json     // Array of column configs: [{ id, label, type }]
+  rows        Json     // Array of row cell data objects
+  updatedById Int?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  updatedBy   User?    @relation(fields: [updatedById], references: [id])
+
+  @@index([locationId])
+  @@index([updatedById])
 }
