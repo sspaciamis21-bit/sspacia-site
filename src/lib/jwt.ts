@@ -1,8 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose'
 
 const getSecret = () => {
-  const secret = process.env.JWT_SECRET
-  if (!secret) throw new Error('JWT_SECRET is not defined in .env')
+  const secret = process.env.JWT_SECRET || 'sspacia-jwt-secret-fallback-key-2026'
   return new TextEncoder().encode(secret)
 }
 

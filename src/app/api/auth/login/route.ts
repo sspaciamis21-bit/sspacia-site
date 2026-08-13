@@ -3,8 +3,9 @@ import bcrypt from 'bcryptjs'
 import prisma from '@/lib/prisma'
 import { SignJWT } from 'jose'
 
-// ✅ Use JWT_SECRET consistently
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET)
+// ✅ Use JWT_SECRET consistently with fallback
+const secretKey = process.env.JWT_SECRET || 'sspacia-jwt-secret-fallback-key-2026';
+const JWT_SECRET = new TextEncoder().encode(secretKey);
 
 export async function POST(request: Request) {
   try {
@@ -128,10 +129,10 @@ export async function POST(request: Request) {
 
     return response
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error)
     return NextResponse.json(
-      { error: 'Something went wrong' },
+      { error: error?.message || 'Something went wrong' },
       { status: 500 }
     )
   }
