@@ -10,6 +10,19 @@
   transform: scaleX(0);
 }
 
+@keyframes textShimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+.animate-text-shimmer {
+  animation: textShimmer 3.5s linear infinite;
+}
+
 :root {
   --background: #fbf9f8;
   --foreground: #1b1c1c;

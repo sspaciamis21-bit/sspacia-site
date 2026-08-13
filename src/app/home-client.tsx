@@ -30,22 +30,11 @@ export default function HomeClient() {
 
   return (
     <div className="space-y-24">
-      {/* ── AWFIS-STYLE PROMO TICKER ── */}
-      <div className="relative left-1/2 -translate-x-1/2 w-screen bg-[#1ab0bc] text-white text-[11px] font-bold uppercase tracking-widest py-2.5 px-4 text-center overflow-hidden border-b border-teal-600/30">
-        <div className="animate-pulse flex items-center justify-center gap-4 flex-wrap">
-          <span>• MEETING ROOM EXCLUSIVE: 20% OFF * on booking for 4-8 hours</span>
-          <span className="hidden sm:inline">• 20% OFF * on Saturdays</span>
-          <span>• DAY PASSES STARTING @ ₹299/DAY</span>
-        </div>
-      </div>
-
       {/* ── Hero ── */}
-      <section className="relative left-1/2 -translate-x-1/2 w-screen">
-        <Hero />
-      </section>
+      <Hero />
 
       {/* ── LOCATIONS ── */}
-      <section className="container mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+      <section id="spaces" className="container mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-24">
         <FadeUp className="space-y-3">
           <SectionLabel>
             <MapPin className="h-3 w-3" /> Our Spaces

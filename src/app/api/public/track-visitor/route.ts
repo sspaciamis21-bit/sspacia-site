@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import geoip from 'geoip-lite';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
@@ -22,15 +23,20 @@ export async function POST(request: Request) {
     let lng = 72.5714;
 
     if (rawIp && rawIp !== '127.0.0.1' && rawIp !== '::1' && !rawIp.startsWith('192.168.') && !rawIp.startsWith('10.')) {
-      const geo = geoip.lookup(rawIp);
-      if (geo) {
-        city = geo.city || city;
-        state = geo.region || state;
-        country = geo.country || country;
-        if (geo.ll && geo.ll.length === 2) {
-          lat = geo.ll[0];
-          lng = geo.ll[1];
+      try {
+        const geoip = require('geoip-lite');
+        const geo = geoip.lookup(rawIp);
+        if (geo) {
+          city = geo.city || city;
+          state = geo.region || state;
+          country = geo.country || country;
+          if (geo.ll && geo.ll.length === 2) {
+            lat = geo.ll[0];
+            lng = geo.ll[1];
+          }
         }
+      } catch (e) {
+        console.warn('[GEOIP_LOOKUP_WARNING]', e);
       }
     }
 
