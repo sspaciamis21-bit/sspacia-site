@@ -146,7 +146,7 @@ export default function LoginClient() {
       </div>
 
       {/* Form Side */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center p-8 sm:p-16 relative">
+      <div className="flex w-full lg:w-1/2 items-center justify-center p-5 sm:p-12 lg:p-16 relative">
         <div className="absolute top-0 right-12 w-[1px] h-full bg-outline-variant/10 hidden md:block"></div>
         <div className="absolute top-12 left-0 w-full h-[1px] bg-outline-variant/10 hidden md:block"></div>
 
@@ -156,12 +156,12 @@ export default function LoginClient() {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="w-full max-w-md relative z-10"
         >
-          <div className="mb-12">
-            <h1 className="text-5xl font-display font-bold tracking-tighter text-on-surface mb-4 relative inline-block">
+          <div className="mb-8 sm:mb-12">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-display font-bold tracking-tighter text-on-surface mb-3 sm:mb-4 relative inline-block">
               Welcome Back
               <span className="absolute -bottom-2 left-0 w-1/3 h-1 bg-primary"></span>
             </h1>
-            <p className="text-tertiary mt-6 text-lg font-light">Sign in to your SSPACIA workspace</p>
+            <p className="text-tertiary mt-4 sm:mt-6 text-sm sm:text-lg font-light">Sign in to your SSPACIA workspace</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

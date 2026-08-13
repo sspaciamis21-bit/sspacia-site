@@ -54,7 +54,7 @@ export function BookTourModal({ isOpen, onClose }: BookTourModalProps) {
 
   return (
     <div className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-      <div className="bg-white border border-gray-200 max-w-lg w-full shadow-2xl overflow-hidden my-auto relative">
+      <div className="bg-white border border-gray-200 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl my-auto relative rounded-sm">
         
         {/* TOP HEADER */}
         <div className="bg-[#1B1C1C] text-white p-6 flex items-center justify-between border-b border-teal-500/30">

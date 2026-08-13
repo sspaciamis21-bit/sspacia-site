@@ -178,11 +178,131 @@ export function Header() {
             <button
               onClick={() => setIsOpen(!isOpen)}
               className="text-on-surface hover:text-primary p-2 transition-colors"
+              aria-label="Toggle Navigation Menu"
             >
               {isOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="md:hidden border-t border-outline-variant/10 bg-surface/95 backdrop-blur-2xl overflow-hidden"
+            >
+              <div className="px-4 pt-3 pb-6 space-y-4">
+                {/* Main Nav Items */}
+                <div className="flex flex-col space-y-1">
+                  {siteConfig.navigation.map((item) => (
+                    <div key={item.href} className="py-1">
+                      <Link
+                        href={item.href}
+                        onClick={() => setIsOpen(false)}
+                        className="block px-3 py-2 text-sm font-bold uppercase tracking-widest text-on-surface/80 hover:text-primary hover:bg-surface-low transition-colors rounded-sm"
+                      >
+                        {item.label}
+                      </Link>
+                      {item.subItems && (
+                        <div className="ml-4 pl-3 border-l-2 border-primary/20 space-y-1 mt-1">
+                          {item.subItems.map((subItem) => (
+                            <Link
+                              key={subItem.href}
+                              href={subItem.href}
+                              onClick={() => setIsOpen(false)}
+                              className="block py-1.5 text-xs font-semibold text-on-surface/60 hover:text-primary transition-colors"
+                            >
+                              {subItem.label}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Call & Tour Buttons for Mobile */}
+                <div className="pt-2 border-t border-outline-variant/10 flex flex-col gap-2.5">
+                  <a
+                    href="tel:+917600393779"
+                    className="flex items-center justify-center gap-2 w-full text-xs font-mono font-bold text-gray-700 bg-gray-50 py-2.5 border border-gray-200"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-red-600" />
+                    <span>Call Us: +91 7600393779</span>
+                  </a>
+                  {!isLoggedIn && (
+                    <button
+                      onClick={() => {
+                        setIsOpen(false);
+                        setIsTourModalOpen(true);
+                      }}
+                      className="flex items-center justify-center gap-2 w-full text-xs font-bold uppercase tracking-wider text-red-600 bg-red-50 py-2.5 border border-red-200"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-red-600" />
+                      <span>Book a Workspace Tour</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Auth Actions for Mobile */}
+                <div className="pt-3 border-t border-outline-variant/10">
+                  {isLoggedIn ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 px-3 py-2 bg-surface-low rounded-sm">
+                        <div className="h-8 w-8 rounded-sm bg-primary text-white flex items-center justify-center font-bold">
+                          {user?.name?.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-on-surface">{user?.name}</p>
+                          <p className="text-[10px] text-on-surface/60">{user?.email}</p>
+                        </div>
+                      </div>
+                      <Link
+                        href={user?.role === 'ADMIN' ? '/admin/dashboard' : (user?.role === 'MANAGER' || user?.role === 'COMMUNITY_MANAGER') ? '/manager/dashboard' : '/dashboard'}
+                        onClick={() => setIsOpen(false)}
+                        className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-bold uppercase tracking-wider text-on-surface bg-surface-low hover:bg-surface-high transition-colors"
+                      >
+                        <LayoutDashboard size={16} />
+                        Go to Dashboard
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setIsOpen(false);
+                          logout();
+                        }}
+                        className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-bold uppercase tracking-wider text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                      >
+                        <LogOut size={16} />
+                        Logout
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Link
+                        href="/login"
+                        onClick={() => setIsOpen(false)}
+                        className="flex items-center justify-center px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-on-surface border border-outline-variant/20 hover:bg-surface-low transition-colors"
+                      >
+                        Log In
+                      </Link>
+                      <Link
+                        href="/signup"
+                        onClick={() => setIsOpen(false)}
+                        className="flex items-center justify-center bg-[#1ab0bc] text-white px-4 py-2.5 text-xs font-bold uppercase tracking-widest hover:bg-teal-600 transition-colors"
+                      >
+                        Sign Up
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       <BookTourModal isOpen={isTourModalOpen} onClose={() => setIsTourModalOpen(false)} />

@@ -9,7 +9,7 @@ export function Footer() {
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 space-y-12">
         
         {/* TOP GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 border-b border-white/10 pb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12 border-b border-white/10 pb-12 md:pb-16">
           
           {/* COLUMN 1: ABOUT */}
           <div className="space-y-6">
