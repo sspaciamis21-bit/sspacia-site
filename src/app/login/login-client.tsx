@@ -131,7 +131,7 @@ export default function LoginClient() {
           src="/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"
           alt="SSPACIA Auth"
           fill
-          className="object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 group-hover:scale-105"
+          className="object-cover transition-all duration-1000 group-hover:scale-105"
           priority
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
