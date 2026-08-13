@@ -4,6 +4,9 @@ import { siteConfig } from "../config/site";
 import { StructuredData } from "../components/structured-data";
 import HomeClient from "./home-client";
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: seoConfig.pages.home.title,
   description: seoConfig.pages.home.description,
