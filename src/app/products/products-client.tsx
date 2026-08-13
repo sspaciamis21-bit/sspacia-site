@@ -307,16 +307,17 @@ export default function ProductsClient({
                       return (
                         <div
                           key={gs.id}
-                          className="group bg-white rounded-none overflow-hidden border border-outline-variant/5 shadow-[0_20px_50px_rgba(27,28,28,0.03)] hover:shadow-[0_40px_80px_rgba(0,105,111,0.08)] transition-all duration-700 flex flex-col md:flex-row h-full"
+                          className="group bg-white rounded-none overflow-hidden border border-outline-variant/10 shadow-[0_20px_50px_rgba(27,28,28,0.03)] hover:shadow-[0_40px_80px_rgba(0,105,111,0.08)] transition-all duration-500 flex flex-col lg:flex-row items-stretch min-w-0"
                         >
                            {/* Multi-Image Carousel Component */}
                            <ProductCardCarousel
                              productName={gs.name}
                              images={allImgs}
                              onOpenLightbox={(imgs, idx) => setLightbox({ isOpen: true, title: gs.name, images: imgs, activeIndex: idx })}
+                             className="w-full lg:w-80 xl:w-96 h-64 sm:h-72 lg:h-auto shrink-0"
                            />
 
-                           <div className="p-8 flex-1 min-w-0 flex flex-col justify-between gap-8">
+                           <div className="p-6 md:p-8 flex-1 min-w-0 flex flex-col justify-between gap-6">
                               <div className="space-y-6">
                                   <div className="flex justify-between items-start gap-4">
                                       <h3 className="font-display text-xl md:text-2xl font-bold tracking-tight text-on-surface leading-tight">{gs.name} @ {gs.location.name}</h3>
@@ -680,11 +681,13 @@ export default function ProductsClient({
 function ProductCardCarousel({
   productName,
   images,
-  onOpenLightbox
+  onOpenLightbox,
+  className = "w-full h-56 sm:h-64"
 }: {
   productName: string;
   images: string[];
   onOpenLightbox: (allImgs: string[], startIdx: number) => void;
+  className?: string;
 }) {
   const [currentIdx, setCurrentIdx] = useState(0);
 
@@ -701,7 +704,7 @@ function ProductCardCarousel({
   };
 
   return (
-    <div className="w-full h-56 sm:h-64 relative overflow-hidden group bg-neutral-100 border-b border-gray-100">
+    <div className={`relative overflow-hidden group bg-neutral-100 border-b lg:border-b-0 lg:border-r border-gray-100 ${className}`}>
       <img
         src={images[currentIdx] || images[0]}
         alt={`${productName} image ${currentIdx + 1}`}
