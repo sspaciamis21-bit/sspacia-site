@@ -49,6 +49,15 @@ export async function GET() {
           },
           contractRequests: {
             select: { id: true, status: true }
+          },
+          qrBooking: {
+            select: {
+              id: true,
+              remarks: true,
+              screenshotData: true,
+              status: true,
+              rejectionReason: true,
+            }
           }
       }
     });

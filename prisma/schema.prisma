@@ -192,6 +192,7 @@ model User {
   negotiationMessages NegotiationMessage[]
   visitorChatMessages VisitorChatMessage[]
   updatedExpenseSheets LocationExpenseSheet[]
+  verifiedQrBookings QrBooking[]
 
   @@index([email])
   @@index([roleId])
@@ -260,6 +261,7 @@ model Customer {
   negotiations        ContractNegotiation[]
   negotiationMessages NegotiationMessage[]
   signatures          ContractSignature[]
+  qrBookings          QrBooking[]
 
   @@index([email])
   @@index([phone])
@@ -304,6 +306,7 @@ model Location {
   assignedUsers  UserLocation[]
   supportTickets SupportTicket[]
   expenseSheet   LocationExpenseSheet?
+  qrBookings     QrBooking[]
 
   @@index([cityId])
   @@index([slug])
@@ -393,6 +396,7 @@ model Product {
   images                    ProductImage[]
   /// Physical units — only populated for Owned Space products.
   units                     ProductUnit[]
+  qrBookings                QrBooking[]
 
   @@unique([locationId, slug])
   @@index([locationId])
@@ -538,6 +542,7 @@ model Booking {
   documents              Document[]
   contractRequests       ContractRequest[]
   contracts              Contract[]
+  qrBooking              QrBooking?
 
   @@index([customerId])
   @@index([productId])
@@ -1197,3 +1202,52 @@ model LocationExpenseSheet {
   @@index([locationId])
   @@index([updatedById])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QR UPI BOOKINGS & VERIFICATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model QrBooking {
+  id              Int       @id @default(autoincrement())
+  bookingNumber   String    @unique
+  customerId      Int?
+  customerName    String
+  customerEmail   String
+  customerPhone   String?
+  productId       Int
+  productName     String
+  locationId      Int
+  locationName    String
+  startDate       DateTime
+  endDate         DateTime?
+  startTime       String?
+  endTime         String?
+  slots           String?   @db.Text
+  durationUnits   Int       @default(1)
+  seats           Int       @default(1)
+  subtotal        Decimal   @db.Decimal(12, 2)
+  taxAmount       Decimal   @db.Decimal(10, 2)
+  grandTotal      Decimal   @db.Decimal(12, 2)
+  discountCode    String?
+  remarks         String    @db.Text
+  screenshotData  String?   @db.LongText
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  rejectionReason String?   @db.Text
+  verifiedById    Int?
+  verifiedAt      DateTime?
+  bookingId       Int?      @unique
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  product         Product   @relation(fields: [productId], references: [id])
+  location        Location  @relation(fields: [locationId], references: [id])
+  booking         Booking?  @relation(fields: [bookingId], references: [id])
+  verifiedBy      User?     @relation(fields: [verifiedById], references: [id])
+
+  @@index([locationId])
+  @@index([status])
+  @@index([customerEmail])
+  @@index([createdAt])
+}
+
