@@ -50,6 +50,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
   });
   const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>(initialSlotsFromQuery);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [myBookedSlots, setMyBookedSlots] = useState<string[]>([]);
   const [isFetchingSlots, setIsFetchingSlots] = useState(false);
   const [isSubmittingInquiry, setIsSubmittingInquiry] = useState(false);
 
@@ -89,28 +90,27 @@ export default function ProductDetailClient({ product }: { product: any }) {
       // If clicking the only selected slot, remove it
       if (selectedTimeSlots.length === 1) {
         setSelectedTimeSlots([]);
+        return;
       }
-      // Only allow deselecting from the edges to maintain a solid block
-      else if (slotIndex === minIndex || slotIndex === maxIndex) {
-        setSelectedTimeSlots(prev => prev.filter(s => s !== slot));
-      }
-      // If clicking in the middle, reset to just that slot to avoid a gap
-      else {
+
+      // Can only remove from edges (min or max) to maintain continuity
+      if (slotIndex === minIndex) {
+        setSelectedTimeSlots(selectedTimeSlots.filter((s) => s !== slot));
+      } else if (slotIndex === maxIndex) {
+        setSelectedTimeSlots(selectedTimeSlots.filter((s) => s !== slot));
+      } else {
+        // If clicked in middle, restart selection from this slot
         setSelectedTimeSlots([slot]);
       }
       return;
     }
 
-    // 3. Selection logic (Expansion)
-    // Check if the clicked slot is immediately before the start or after the end
+    // 3. Selection / Expansion logic
+    // Allow expanding if adjacent to either end
     if (slotIndex === minIndex - 1 || slotIndex === maxIndex + 1) {
-      const newIndices = [...selectedIndices, slotIndex].sort((a, b) => a - b);
-      const newSlots = newIndices.map(i => TIME_SLOTS[i]);
-      setSelectedTimeSlots(newSlots);
-    }
-    // 4. Reset logic (Jumping)
-    // If clicking a non-adjacent slot, start a new range from that slot
-    else {
+      setSelectedTimeSlots([...selectedTimeSlots, slot]);
+    } else {
+      // Reset if trying to select a non-adjacent slot
       setSelectedTimeSlots([slot]);
     }
   };
@@ -123,12 +123,17 @@ export default function ProductDetailClient({ product }: { product: any }) {
       const fetchBookedSlots = async () => {
         setIsFetchingSlots(true);
         try {
-          const res = await fetch(`/api/public/bookings/booked-slots?productId=${product.id}&date=${selectedDate}`);
+          const res = await fetch(`/api/public/bookings/booked-slots?productId=${product.id}&date=${selectedDate}`, {
+            credentials: 'include'
+          });
           const data = await res.json();
           const slots = data.bookedSlots || data.data || [];
           setBookedSlots(slots);
+          setMyBookedSlots(data.myBookedSlots || []);
         } catch (error) {
           console.error("Error fetching booked slots:", error);
+          setBookedSlots([]);
+          setMyBookedSlots([]);
         } finally {
           setIsFetchingSlots(false);
         }
@@ -390,6 +395,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
                     )}
                     {TIME_SLOTS.map(slot => {
                       const disabled = isSlotDisabled(slot);
+                      const isMine = myBookedSlots.includes(slot);
                       const isBooked = bookedSlots.includes(slot);
                       
                       return (
@@ -398,18 +404,30 @@ export default function ProductDetailClient({ product }: { product: any }) {
                           type="button"
                           disabled={disabled}
                           onClick={() => toggleTimeSlot(slot)}
-                          title={isBooked ? "🔒 Already Reserved — This time slot is booked by another customer" : disabled ? "Time Passed" : `Available - Click to select ${slot}`}
+                          title={
+                            isMine 
+                              ? "🔒 Booked by You — You have already reserved this slot" 
+                              : isBooked 
+                              ? "🔒 Already Reserved — This time slot is booked by another customer" 
+                              : disabled 
+                              ? "Time Passed" 
+                              : `Available - Click to select ${slot}`
+                          }
                           className={`py-2 text-[10px] font-bold transition-all border relative flex flex-col items-center justify-center gap-0.5 ${selectedTimeSlots.includes(slot)
                             ? 'bg-[#1ab0bc] border-[#1ab0bc] text-white shadow-md'
-                            : isBooked
-                              ? 'bg-rose-50 border-rose-200 text-rose-600 cursor-not-allowed opacity-90 shadow-xs'
-                              : disabled
-                                ? 'bg-outline-variant/10 border-outline-variant/30 text-outline cursor-not-allowed grayscale opacity-60'
-                                : 'bg-white border-outline-variant/20 text-tertiary hover:border-[#1ab0bc]/50 hover:text-[#1ab0bc]'
+                            : isMine
+                              ? 'bg-blue-50 border-blue-200 text-blue-700 cursor-not-allowed opacity-90 shadow-xs'
+                              : isBooked
+                                ? 'bg-rose-50 border-rose-200 text-rose-600 cursor-not-allowed opacity-90 shadow-xs'
+                                : disabled
+                                  ? 'bg-outline-variant/10 border-outline-variant/30 text-outline cursor-not-allowed grayscale opacity-60'
+                                  : 'bg-white border-outline-variant/20 text-tertiary hover:border-[#1ab0bc]/50 hover:text-[#1ab0bc]'
                             }`}
                         >
                           <span>{slot}</span>
-                          {isBooked ? (
+                          {isMine ? (
+                            <span className="text-[7.5px] leading-[1] text-blue-700 uppercase font-black tracking-tight">Booked by You</span>
+                          ) : isBooked ? (
                             <span className="text-[7.5px] leading-[1] text-rose-600 uppercase font-black tracking-tight">Reserved</span>
                           ) : disabled ? (
                             <span className="text-[7px] leading-[1] opacity-60 uppercase font-bold">Passed</span>

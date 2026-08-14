@@ -22,6 +22,7 @@ export function AvailabilityTimeline({
   onToggleSlot
 }: AvailabilityTimelineProps) {
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [myBookedSlots, setMyBookedSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -30,16 +31,21 @@ export function AvailabilityTimeline({
       setLoading(true);
       try {
         const dateParam = selectedDate || new Date().toISOString().split('T')[0];
-        const res = await fetch(`/api/public/bookings/booked-slots?productId=${productId}&date=${dateParam}`);
+        const res = await fetch(`/api/public/bookings/booked-slots?productId=${productId}&date=${dateParam}`, {
+          credentials: 'include'
+        });
         if (res.ok) {
           const data = await res.json();
           setBookedSlots(data.bookedSlots || data.data || []);
+          setMyBookedSlots(data.myBookedSlots || []);
         } else {
           setBookedSlots([]);
+          setMyBookedSlots([]);
         }
       } catch (err) {
         console.error("Availability fetch error:", err);
         setBookedSlots([]);
+        setMyBookedSlots([]);
       } finally {
         setLoading(false);
       }
@@ -74,6 +80,7 @@ export function AvailabilityTimeline({
           <div className="min-w-max flex gap-2 py-1">
             {TIME_SLOTS.map((slot) => {
               const isPast = isSlotPast(slot);
+              const isMine = myBookedSlots.includes(slot);
               const isBooked = bookedSlots.includes(slot);
               const disabled = isPast || isBooked;
               const isSelected = selectedSlots.includes(slot);
@@ -93,23 +100,39 @@ export function AvailabilityTimeline({
                   className={`px-3 py-2 rounded-md text-[11px] font-bold font-mono flex items-center gap-1.5 transition-all border ${
                     isSelected
                       ? "bg-[#1ab0bc] text-white border-[#1ab0bc] shadow-md scale-105"
+                      : isMine
+                      ? "bg-blue-50 text-blue-700 border-blue-200 cursor-not-allowed opacity-90 shadow-xs"
                       : isBooked
                       ? "bg-rose-50 text-rose-600 border-rose-200 cursor-not-allowed opacity-90 shadow-xs"
                       : disabled
                       ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
                       : "bg-white text-gray-700 border-gray-300 hover:border-[#1ab0bc] hover:text-[#1ab0bc] hover:bg-cyan-50/50 cursor-pointer"
                   }`}
-                  title={isBooked ? "🔒 Already Reserved - This slot is booked by another customer" : isPast ? "Time Passed" : `Available - Click to select ${slot} slot`}
+                  title={
+                    isMine
+                      ? "🔒 Booked by You — You have already reserved this slot"
+                      : isBooked
+                      ? "🔒 Already Reserved — This slot is booked by another customer"
+                      : isPast
+                      ? "Time Passed"
+                      : `Available - Click to select ${slot} slot`
+                  }
                 >
                   {isSelected ? (
                     <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  ) : isMine ? (
+                    <Lock className="w-3 h-3 text-blue-600" />
                   ) : isBooked ? (
                     <Lock className="w-3 h-3 text-rose-500" />
                   ) : disabled ? (
                     <Lock className="w-3 h-3 text-gray-400" />
                   ) : null}
                   <span>{slot}</span>
-                  {isBooked && <span className="text-[8px] uppercase tracking-tighter text-rose-600 font-bold">Reserved</span>}
+                  {isMine ? (
+                    <span className="text-[8px] uppercase tracking-tighter text-blue-700 font-bold">Booked by You</span>
+                  ) : isBooked ? (
+                    <span className="text-[8px] uppercase tracking-tighter text-rose-600 font-bold">Reserved</span>
+                  ) : null}
                 </button>
               );
             })}
