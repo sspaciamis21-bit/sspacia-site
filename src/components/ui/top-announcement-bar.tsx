@@ -46,7 +46,7 @@ export function TopAnnouncementBar() {
   const combinedMarqueeText = labelList.join("  •  ");
 
   return (
-    <div className="bg-red-600 text-white border-b border-red-700 overflow-hidden py-2 px-4 shadow-md relative z-[100] selection:bg-white selection:text-red-600">
+    <div className="bg-[#1ab0bc] text-white border-b border-teal-600 overflow-hidden py-2 px-4 shadow-md relative z-[100] selection:bg-white selection:text-[#1ab0bc]">
       <div className="relative flex overflow-x-hidden group cursor-pointer">
         {/* DUPLICATED SCROLLING TRACK FOR INFINITE MARQUEE */}
         <div className="animate-marquee whitespace-nowrap flex items-center gap-12 text-xs md:text-sm font-black uppercase tracking-[0.15em] shrink-0 font-sans">
