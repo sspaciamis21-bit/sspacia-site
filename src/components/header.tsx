@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { siteConfig } from "../config/site";
 import { Menu, X, ChevronDown, LayoutDashboard, LogOut, Phone, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -15,6 +16,8 @@ export function Header() {
   const [isTourModalOpen, setIsTourModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, isLoggedIn, logout } = useAuth();
+  const pathname = usePathname();
+  const isLoginPage = pathname === '/login';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -148,16 +151,24 @@ export function Header() {
                 </AnimatePresence>
               </div>
             ) : (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <Link
                   href="/login"
-                  className="text-xs font-bold uppercase tracking-widest text-on-surface/70 hover:text-primary transition-colors"
+                  className={`px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all shadow-xs ${
+                    isLoginPage
+                      ? "bg-[#1ab0bc] text-white hover:bg-teal-600"
+                      : "text-on-surface/70 hover:text-primary"
+                  }`}
                 >
                   Log In
                 </Link>
                 <Link
                   href="/signup"
-                  className="bg-[#1ab0bc] text-white px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-teal-600 transition-all shadow-xs"
+                  className={`px-4 py-2 text-xs font-bold uppercase tracking-widest transition-all shadow-xs ${
+                    !isLoginPage
+                      ? "bg-[#1ab0bc] text-white hover:bg-teal-600"
+                      : "text-on-surface/70 hover:text-primary"
+                  }`}
                 >
                   Sign Up
                 </Link>
@@ -285,14 +296,22 @@ export function Header() {
                       <Link
                         href="/login"
                         onClick={() => setIsOpen(false)}
-                        className="flex items-center justify-center px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-on-surface border border-outline-variant/20 hover:bg-surface-low transition-colors"
+                        className={`flex items-center justify-center px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors ${
+                          isLoginPage
+                            ? "bg-[#1ab0bc] text-white hover:bg-teal-600"
+                            : "text-on-surface border border-outline-variant/20 hover:bg-surface-low"
+                        }`}
                       >
                         Log In
                       </Link>
                       <Link
                         href="/signup"
                         onClick={() => setIsOpen(false)}
-                        className="flex items-center justify-center bg-[#1ab0bc] text-white px-4 py-2.5 text-xs font-bold uppercase tracking-widest hover:bg-teal-600 transition-colors"
+                        className={`flex items-center justify-center px-4 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors ${
+                          !isLoginPage
+                            ? "bg-[#1ab0bc] text-white hover:bg-teal-600"
+                            : "text-on-surface border border-outline-variant/20 hover:bg-surface-low"
+                        }`}
                       >
                         Sign Up
                       </Link>
