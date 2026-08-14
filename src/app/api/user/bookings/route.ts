@@ -21,7 +21,7 @@ export async function GET() {
         return NextResponse.json({ data: [] });
     }
 
-    const bookings = await prisma.booking.findMany({
+    const bookings = await (prisma as any).booking.findMany({
       where: { customerId: customer.id },
       orderBy: { createdAt: 'desc' },
       select: {
