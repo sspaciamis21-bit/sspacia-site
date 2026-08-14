@@ -22,6 +22,8 @@ import {
   Mail,
   MessageSquare,
   FileSpreadsheet,
+  Menu,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -55,6 +57,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const { isSidebarOpen, setIsSidebarOpen } = useSidebar();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isTestEmailModalOpen, setIsTestEmailModalOpen] = useState(false);
   const [isVisitorChatOpen, setIsVisitorChatOpen] = useState(false);
@@ -92,21 +95,46 @@ export default function AdminLayout({
 
   return (
     <div className="h-screen overflow-hidden bg-[#F8F9FA] flex">
-      {/* Sidebar */}
+      {/* Mobile Drawer Backdrop */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="fixed inset-0 bg-black/60 z-50 md:hidden backdrop-blur-xs"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar (Slide-out drawer on Mobile, Expandable on Desktop) */}
       <aside
-        className={`${isSidebarOpen ? 'w-72' : 'w-20'
-          } bg-white border-r border-[var(--outline-variant)]/40 transition-all duration-300 ease-in-out flex flex-col z-50 relative`}
+        className={`fixed md:relative top-0 bottom-0 left-0 ${
+          isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0'
+        } ${
+          isSidebarOpen ? 'md:w-72' : 'md:w-20'
+        } bg-white border-r border-[var(--outline-variant)]/40 transition-all duration-300 ease-in-out flex flex-col z-50 md:z-40`}
       >
+        {/* Desktop Toggle Button */}
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="absolute -right-3 top-8 p-1.5 bg-white border border-[var(--outline-variant)]/60 rounded-none text-[#1B1C1C] shadow-sm hover:bg-[var(--primary)] hover:text-white transition-all z-[60]"
+          className="hidden md:flex absolute -right-3 top-8 p-1.5 bg-white border border-[var(--outline-variant)]/60 rounded-none text-[#1B1C1C] shadow-sm hover:bg-[var(--primary)] hover:text-white transition-all z-[60]"
         >
           {isSidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
         </button>
 
-        <div className="p-8 flex items-center justify-between overflow-hidden">
+        {/* Mobile Close Button */}
+        <button
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="md:hidden absolute right-4 top-4 p-2 text-gray-500 hover:text-black z-[60]"
+        >
+          <X size={20} />
+        </button>
+
+        <div className="p-6 md:p-8 flex items-center justify-between overflow-hidden">
           <AnimatePresence mode="wait">
-            {isSidebarOpen ? (
+            {(isSidebarOpen || isMobileMenuOpen) ? (
               <motion.div
                 key="logo-full"
                 initial={{ opacity: 0 }}
@@ -130,20 +158,21 @@ export default function AdminLayout({
           </AnimatePresence>
         </div>
 
-        <nav className="flex-1 px-4 py-8 space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-3 md:px-4 py-4 md:py-8 space-y-1.5 overflow-y-auto no-scrollbar">
           {sidebarItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-4 px-4 py-3.5 rounded-none transition-all group relative ${isActive
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center gap-3 md:gap-4 px-3.5 md:px-4 py-3 md:py-3.5 rounded-none transition-all group relative ${isActive
                   ? 'bg-[var(--primary)] text-white'
                   : 'text-[#616161] hover:bg-neutral-50 hover:text-[#1B1C1C]'
                   }`}
               >
-                <item.icon size={20} className={`${isActive ? 'text-white' : 'group-hover:scale-110 transition-transform'}`} />
-                {isSidebarOpen && (
+                <item.icon size={20} className={`${isActive ? 'text-white' : 'group-hover:scale-110 transition-transform'} shrink-0`} />
+                {(isSidebarOpen || isMobileMenuOpen) && (
                   <span className="font-bold text-[10px] uppercase tracking-[0.2em] whitespace-nowrap">{item.name}</span>
                 )}
                 {isActive && (
@@ -158,14 +187,17 @@ export default function AdminLayout({
         </nav>
 
         {user && (
-          <div className="border-t border-[var(--outline-variant)]/30 p-6 shrink-0 flex flex-col gap-4">
-            {isSidebarOpen ? (
+          <div className="border-t border-[var(--outline-variant)]/30 p-4 md:p-6 shrink-0 flex flex-col gap-3">
+            {(isSidebarOpen || isMobileMenuOpen) ? (
               <div 
-                onClick={() => setIsProfileModalOpen(true)}
-                className="flex items-center gap-4 px-2 w-full cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsProfileModalOpen(true);
+                }}
+                className="flex items-center gap-3 px-2 w-full cursor-pointer hover:opacity-80 transition-opacity"
                 title="Manage Profile"
               >
-                <div className="h-10 w-10 shrink-0 rounded-none bg-white text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)]/40 font-black text-sm">
+                <div className="h-9 w-9 shrink-0 rounded-none bg-white text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)]/40 font-black text-sm">
                   {user.name?.charAt(0).toUpperCase()}
                 </div>
                 <div className="w-full min-w-0 overflow-hidden">
@@ -179,48 +211,62 @@ export default function AdminLayout({
                 className="flex justify-center w-full cursor-pointer hover:opacity-80 transition-opacity"
                 title="Manage Profile"
               >
-                <div className="h-10 w-10 shrink-0 rounded-none bg-white text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)]/40 font-black text-sm">
+                <div className="h-9 w-9 shrink-0 rounded-none bg-white text-[var(--primary)] flex items-center justify-center border border-[var(--outline-variant)]/40 font-black text-sm">
                   {user.name?.charAt(0).toUpperCase()}
                 </div>
               </div>
             )}
 
             <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-4 px-3 py-3 text-[#616161] hover:bg-neutral-100 hover:text-red-600 rounded-none transition-all group border border-transparent hover:border-red-100"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                handleLogout();
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-[#616161] hover:bg-neutral-100 hover:text-red-600 rounded-none transition-all group border border-transparent hover:border-red-100"
               title="Logout"
             >
-              <LogOut size={18} className="shrink-0 group-hover:translate-x-1 transition-transform" />
-              {isSidebarOpen && <span className="font-bold text-[9px] uppercase tracking-[0.3em] whitespace-nowrap">DISPATCH NODE</span>}
+              <LogOut size={16} className="shrink-0 group-hover:translate-x-1 transition-transform" />
+              {(isSidebarOpen || isMobileMenuOpen) && <span className="font-bold text-[9px] uppercase tracking-[0.3em] whitespace-nowrap">DISPATCH NODE</span>}
             </button>
           </div>
         )}
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 relative">
+      <main className="flex-1 flex flex-col min-w-0 relative w-full h-full overflow-hidden">
         {/* Top Navigation / Notification Header */}
-        <header className="h-16 bg-white border-b border-[var(--outline-variant)]/40 px-8 flex items-center justify-between z-40 shrink-0 shadow-xs">
+        <header className="h-16 bg-white border-b border-[var(--outline-variant)]/40 px-4 md:px-8 flex items-center justify-between z-40 shrink-0 shadow-xs gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#006064]">
+            {/* Mobile Hamburger Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden p-2 text-gray-700 hover:text-black hover:bg-gray-100 rounded-sm"
+              title="Open Navigation Menu"
+            >
+              <Menu size={20} />
+            </button>
+
+            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#006064] truncate">
               SSPACIA Admin Portal
             </span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-4">
             <button
               onClick={() => setIsVisitorChatOpen(true)}
-              className="bg-[#1ab0bc]/10 hover:bg-[#1ab0bc] text-[#1ab0bc] hover:text-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border border-[#1ab0bc]/30"
+              className="bg-[#1ab0bc]/10 hover:bg-[#1ab0bc] text-[#1ab0bc] hover:text-white px-2.5 sm:px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border border-[#1ab0bc]/30"
               title="Open Visitor Live Chat Drawer"
             >
               <MessageSquare size={14} />
-              <span>Visitor Live Chat</span>
+              <span className="hidden sm:inline">Visitor Live Chat</span>
+              <span className="sm:hidden">Chat</span>
             </button>
             <NotificationBell />
           </div>
         </header>
 
-        <div className="flex-1 p-10 overflow-y-auto relative z-0">
+        <div className="flex-1 p-4 sm:p-6 md:p-10 overflow-y-auto relative z-0">
           {children}
         </div>
       </main>

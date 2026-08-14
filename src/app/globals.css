@@ -313,3 +313,17 @@ h1, h2, h3, h4, h5, h6, p, span, div, button, input, textarea {
   width: 1rem;
   color: #fff;
 }
+
+/* Mobile & Tablet UX Polish */
+html, body {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overflow-x: clip;
+}
+
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+

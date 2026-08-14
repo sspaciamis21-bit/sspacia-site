@@ -101,8 +101,131 @@ export default function UserBookingsPage() {
                <p className="text-sm font-medium text-[#9E9E9E] mt-2 max-w-xs leading-relaxed">It seems you haven&apos;t reserved any spaces yet. Explore our locations to get started.</p>
              </div>
           ) : (
-             <div className="overflow-x-auto min-w-full">
-               <table className="w-full text-left border-collapse min-w-[950px]">
+             <>
+               {/* Mobile Cards Feed (< md) */}
+               <div className="block md:hidden divide-y divide-[var(--outline-variant)]/30">
+                 {bookings.map(booking => {
+                   const isPending = booking.status.name === 'PENDING' || booking.qrBooking?.status === 'PENDING';
+                   const isConfirmed = booking.status.name === 'CONFIRMED' || booking.qrBooking?.status === 'APPROVED';
+                   const isRejected = booking.status.name === 'CANCELLED' || booking.qrBooking?.status === 'REJECTED';
+
+                   return (
+                     <div key={booking.id} className="p-5 space-y-4 hover:bg-[var(--surface-low)]/20 transition-colors">
+                       <div className="flex items-start justify-between gap-2">
+                         <div>
+                           <p className="text-sm font-bold text-[#1B1C1C]">{booking.bookingNumber}</p>
+                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                             {new Date(booking.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                           </p>
+                         </div>
+                         <div className="text-right">
+                           <p className="text-base font-display font-bold text-[#1B1C1C]">
+                             ₹{parseFloat(booking.grandTotal.toString()).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                           </p>
+                           {booking.qrBooking && (
+                             <span className="inline-block mt-0.5 text-[8px] font-black uppercase tracking-wider bg-teal-50 text-[#1ab0bc] px-2 py-0.5 border border-teal-200">
+                               ICICI QR
+                             </span>
+                           )}
+                         </div>
+                       </div>
+
+                       <div className="bg-[var(--surface-low)] p-3 border border-[var(--outline-variant)]/40 space-y-1.5 text-xs">
+                         <div className="flex items-center justify-between">
+                           <span className="font-bold text-[#1B1C1C]">{booking.product.name}</span>
+                           <span className="flex items-center gap-1 text-[10px] font-bold text-gray-600 uppercase">
+                             <MapPin size={10} className="text-[#1ab0bc]" /> {booking.product.location.name}
+                           </span>
+                         </div>
+                         <div className="flex items-center justify-between text-[11px] text-gray-600">
+                           <span>Date: {new Date(booking.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                           <span>Slot: {booking.startTime || 'Standard'} {booking.endTime ? `— ${booking.endTime}` : ''}</span>
+                         </div>
+                       </div>
+
+                       <div className="space-y-2">
+                         {isPending && (
+                           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
+                             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                             <span>QR Verification Under Review</span>
+                           </div>
+                         )}
+                         {isConfirmed && (
+                           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+                             <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                             <span>Confirmed &amp; Reserved</span>
+                           </div>
+                         )}
+                         {isRejected && (
+                           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-800 text-[10px] font-bold uppercase tracking-wider">
+                             <span className="w-2 h-2 rounded-full bg-rose-500" />
+                             <span>Payment Rejected</span>
+                           </div>
+                         )}
+
+                         {booking.qrBooking?.remarks && (
+                           <p className="text-[11px] text-gray-600">
+                             <span className="font-bold">Remarks:</span> {booking.qrBooking.remarks}
+                           </p>
+                         )}
+
+                         {booking.qrBooking?.rejectionReason && (
+                           <p className="text-[11px] text-rose-600 font-medium">
+                             <span className="font-bold">Reason:</span> {booking.qrBooking.rejectionReason}
+                           </p>
+                         )}
+
+                         {booking.qrBooking?.screenshotData && (
+                           <div>
+                             <button
+                               type="button"
+                               onClick={() => setSelectedScreenshot(booking.qrBooking!.screenshotData)}
+                               className="text-[10px] font-bold text-[#1ab0bc] hover:underline uppercase tracking-wider"
+                             >
+                               View Uploaded Screenshot ↗
+                             </button>
+                           </div>
+                         )}
+                       </div>
+
+                       <div className="pt-2 flex justify-end">
+                         {isConfirmed ? (
+                           <>
+                             {booking.contracts && booking.contracts.length > 0 ? (
+                               <button 
+                                 onClick={() => window.location.href = `/dashboard/contracts/${booking.contracts?.[0]?.id}`}
+                                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1B1B1B] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-all"
+                               >
+                                 View Agreement <ArrowRight size={12}/>
+                               </button>
+                             ) : booking.contractRequests && booking.contractRequests.length > 0 ? (
+                               <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 border border-amber-200 text-[10px] font-bold uppercase">
+                                 <ShieldCheck size={14} className="text-amber-500" />
+                                 <span>Agreement Request Pending</span>
+                               </div>
+                             ) : (
+                               <button 
+                                 onClick={() => handleRequestAgreement(booking.id)}
+                                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-white border border-[var(--outline-variant)] text-[#1B1C1C] text-[10px] font-bold uppercase tracking-widest hover:border-[#1ab0bc] hover:text-[#1ab0bc] transition-all"
+                               >
+                                 Request Agreement <FileCheck size={12}/>
+                               </button>
+                             )}
+                           </>
+                         ) : isPending ? (
+                           <span className="w-full text-center py-2 text-[9px] font-bold text-amber-700 uppercase tracking-widest bg-amber-50 border border-amber-200">
+                             Awaiting Community Manager Review
+                           </span>
+                         ) : null}
+                       </div>
+                     </div>
+                   );
+                 })}
+               </div>
+
+               {/* Desktop Table (>= md) */}
+               <div className="hidden md:block overflow-x-auto min-w-full">
+                 <table className="w-full text-left border-collapse min-w-[950px]">
                   <thead>
                     <tr className="bg-[var(--surface-low)]/50 border-b border-[var(--outline-variant)]">
                       <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Booking ID</th>
@@ -239,7 +362,8 @@ export default function UserBookingsPage() {
                    })}
                   </tbody>
                 </table>
-             </div>
+              </div>
+            </>
           )}
         </div>
       </FadeUp>
