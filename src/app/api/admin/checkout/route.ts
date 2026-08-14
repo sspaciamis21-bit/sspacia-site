@@ -128,6 +128,50 @@ export const POST = withPermission('payments', 'create', async (req: NextRequest
     const parsedStartDate = new Date(effectiveStartDate);
     const parsedEndDate   = body.endDate ? new Date(body.endDate) : new Date(parsedStartDate.getTime() + units * 3600000);
 
+    // 5.1 Strict Server-Side Overlap & Reservation Verification
+    if (Array.isArray(body.slots) && body.slots.length > 0) {
+      const startOfDay = new Date(parsedStartDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(parsedStartDate);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+
+      const TIME_SLOTS_ORDER = [
+        '08:00', '09:00', '10:00', '11:00', '12:00',
+        '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
+      ];
+
+      const existingBookings = await prisma.booking.findMany({
+        where: {
+          productId: product.id,
+          startDate: { gte: startOfDay, lte: endOfDay },
+          status: { name: { notIn: ['CANCELLED', 'FAILED'] } },
+        },
+        select: { startTime: true, endTime: true },
+      });
+
+      const alreadyBooked = new Set<string>();
+      for (const eb of existingBookings) {
+        if (eb.startTime && eb.endTime) {
+          const sIdx = TIME_SLOTS_ORDER.indexOf(eb.startTime);
+          const eIdx = TIME_SLOTS_ORDER.indexOf(eb.endTime);
+          if (sIdx !== -1 && eIdx !== -1) {
+            for (let i = sIdx; i <= eIdx; i++) {
+              alreadyBooked.add(TIME_SLOTS_ORDER[i]);
+            }
+          } else if (sIdx !== -1) {
+            alreadyBooked.add(eb.startTime);
+          }
+        }
+      }
+
+      const conflictingSlots = body.slots.filter((slot: string) => alreadyBooked.has(slot));
+      if (conflictingSlots.length > 0) {
+        return NextResponse.json({
+          error: `The slot(s) ${conflictingSlots.join(', ')} are already reserved by another customer for this space. Please choose available time slots.`,
+        }, { status: 409 });
+      }
+    }
+
     const booking = await prisma.booking.create({
       data: {
         bookingNumber: generateBookingNumber(),

@@ -54,7 +54,11 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ data: Array.from(bookedSlots) });
+    return NextResponse.json({
+      success: true,
+      data: Array.from(bookedSlots),
+      bookedSlots: Array.from(bookedSlots),
+    });
   } catch (error) {
     console.error('[PUBLIC_BOOKED_SLOTS]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

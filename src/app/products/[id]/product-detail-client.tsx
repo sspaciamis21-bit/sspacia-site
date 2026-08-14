@@ -125,9 +125,8 @@ export default function ProductDetailClient({ product }: { product: any }) {
         try {
           const res = await fetch(`/api/public/bookings/booked-slots?productId=${product.id}&date=${selectedDate}`);
           const data = await res.json();
-          if (data.bookedSlots) {
-            setBookedSlots(data.bookedSlots);
-          }
+          const slots = data.bookedSlots || data.data || [];
+          setBookedSlots(slots);
         } catch (error) {
           console.error("Error fetching booked slots:", error);
         } finally {
@@ -396,19 +395,25 @@ export default function ProductDetailClient({ product }: { product: any }) {
                       return (
                         <button
                           key={slot}
+                          type="button"
                           disabled={disabled}
                           onClick={() => toggleTimeSlot(slot)}
+                          title={isBooked ? "🔒 Already Reserved — This time slot is booked by another customer" : disabled ? "Time Passed" : `Available - Click to select ${slot}`}
                           className={`py-2 text-[10px] font-bold transition-all border relative flex flex-col items-center justify-center gap-0.5 ${selectedTimeSlots.includes(slot)
-                            ? 'bg-primary border-primary text-white shadow-md'
-                            : disabled
-                              ? 'bg-outline-variant/10 border-outline-variant/30 text-outline cursor-not-allowed grayscale'
-                              : 'bg-white border-outline-variant/20 text-tertiary hover:border-primary/50'
+                            ? 'bg-[#1ab0bc] border-[#1ab0bc] text-white shadow-md'
+                            : isBooked
+                              ? 'bg-rose-50 border-rose-200 text-rose-600 cursor-not-allowed opacity-90 shadow-xs'
+                              : disabled
+                                ? 'bg-outline-variant/10 border-outline-variant/30 text-outline cursor-not-allowed grayscale opacity-60'
+                                : 'bg-white border-outline-variant/20 text-tertiary hover:border-[#1ab0bc]/50 hover:text-[#1ab0bc]'
                             }`}
                         >
                           <span>{slot}</span>
-                          {isBooked && (
-                            <span className="text-[7px] leading-[1] opacity-60 uppercase font-black">Booked</span>
-                          )}
+                          {isBooked ? (
+                            <span className="text-[7.5px] leading-[1] text-rose-600 uppercase font-black tracking-tight">Reserved</span>
+                          ) : disabled ? (
+                            <span className="text-[7px] leading-[1] opacity-60 uppercase font-bold">Passed</span>
+                          ) : null}
                         </button>
                       );
                     })}
