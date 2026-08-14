@@ -28,7 +28,7 @@ export default function ManagerContractsPage() {
   const [requests, setRequests] = useState<ContractRequest[]>([]);
   const [contracts, setContracts] = useState<ContractSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'requests' | 'active'>('active');
+  const [activeTab, setActiveTab] = useState<'requests' | 'active'>('requests');
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchData = async () => {
@@ -39,6 +39,10 @@ export default function ManagerContractsPage() {
       ]);
       setRequests(reqData);
       setContracts(conData);
+      // If there are pending requests, stay on requests tab, otherwise switch to active if no requests
+      if (reqData.length === 0 && conData.length > 0) {
+        setActiveTab('active');
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch';
       toast.error(msg);
@@ -109,20 +113,22 @@ export default function ManagerContractsPage() {
 
       <div className="flex items-center gap-8 mb-10 border-b border-[var(--outline-variant)]/20 px-4">
         {[
-          { id: 'active', label: 'Active', count: contracts.length },
-          { id: 'requests', label: 'Pending Requests', count: requests.filter(r => (r.status as string) === 'PENDING').length },
+          { id: 'requests', label: 'Pending Agreement Requests', count: requests.filter(r => (r.status as string) === 'PENDING').length, badgeColor: 'bg-amber-500 text-white' },
+          { id: 'active', label: 'Active Contracts & Agreements', count: contracts.length, badgeColor: 'bg-gray-100 text-gray-700' },
         ].map(tab => (
           <button 
             key={tab.id}
             onClick={() => setActiveTab(tab.id as 'requests' | 'active')}
-            className={`pb-6 text-[10px] font-bold uppercase tracking-[0.2em] transition-all relative ${
-              activeTab === tab.id ? 'text-[var(--primary)]' : 'text-[#9E9E9E] hover:text-[#1B1C1C]'
+            className={`pb-4 text-xs font-black uppercase tracking-wider transition-all relative flex items-center gap-2 ${
+              activeTab === tab.id ? 'text-[#1ab0bc]' : 'text-gray-400 hover:text-gray-800'
             }`}
           >
-            {tab.label}
-            <span className="ml-2 opacity-40">({tab.count})</span>
+            <span>{tab.label}</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${tab.badgeColor}`}>
+              {tab.count}
+            </span>
             {activeTab === tab.id && (
-              <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--primary)] rounded-full" />
+              <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-1 bg-[#1ab0bc] rounded-full" />
             )}
           </button>
         ))}

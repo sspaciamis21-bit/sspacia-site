@@ -23,7 +23,6 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { AvailabilityTimeline } from "@/components/ui/availability-timeline";
-import { Footer } from "@/components/ui/footer";
 
 import type { Product, City, Amenity } from "./page";
 
@@ -671,8 +670,6 @@ export default function ProductsClient({
 
       </div>
 
-      {/* FOOTER */}
-      <Footer />
     </div>
   );
 }

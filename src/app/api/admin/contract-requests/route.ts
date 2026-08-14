@@ -9,7 +9,7 @@ import { withPermission } from '@/lib/auth/withPermission';
 export const GET = withPermission('clm', 'view', async (req: NextRequest, { payload }) => {
   try {
     const { searchParams } = req.nextUrl;
-    const status = searchParams.get('status') || 'PENDING';
+    const status = searchParams.get('status');
 
     const userId = Number(payload.id);
     const dbUser = await prisma.user.findUnique({
@@ -18,30 +18,37 @@ export const GET = withPermission('clm', 'view', async (req: NextRequest, { payl
     });
 
     const roleName = dbUser?.role?.name?.toLowerCase() || '';
-    const isSuperAdmin = roleName === 'super admin' || roleName === 'admin';
+    const isSuperAdmin = roleName === 'super admin' || roleName === 'admin' || roleName === 'super_admin';
     const assignedLocationIds = dbUser?.assignedLocations.map(al => al.locationId) || [];
 
     let locationWhere = {};
     if (!isSuperAdmin && assignedLocationIds.length > 0) {
       locationWhere = {
-        booking: {
-          product: {
-            locationId: { in: assignedLocationIds }
+        OR: [
+          {
+            booking: {
+              product: {
+                locationId: { in: assignedLocationIds }
+              }
+            }
+          },
+          {
+            bookingId: null
           }
-        }
+        ]
       };
     }
 
     const requests = await prisma.contractRequest.findMany({
       where: {
-        status,
+        ...(status && status !== 'ALL' ? { status } : {}),
         ...locationWhere,
       },
       include: {
         customer: { select: { id: true, name: true, email: true, organization: true } },
         booking: {
           include: {
-            product: { select: { name: true, location: { select: { name: true } } } }
+            product: { select: { name: true, location: { select: { id: true, name: true } } } }
           }
         },
         contract: { select: { id: true, contractNumber: true } }

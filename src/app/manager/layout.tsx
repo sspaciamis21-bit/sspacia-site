@@ -73,17 +73,52 @@ export default function ManagerLayout({
     }
   };
 
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [pendingQrCount, setPendingQrCount] = useState(0);
+
+  useEffect(() => {
+    if (user) {
+      fetchCounts();
+    }
+  }, [user, pathname]);
+
+  const fetchCounts = async () => {
+    try {
+      const [reqRes, qrRes] = await Promise.all([
+        fetch('/api/admin/contract-requests?status=PENDING'),
+        fetch('/api/admin/qr-bookings?status=PENDING'),
+      ]);
+      const reqJson = await reqRes.json();
+      const qrJson = await qrRes.json();
+
+      if (reqJson.data) setPendingRequestsCount(reqJson.data.length);
+      if (qrJson.data) setPendingQrCount(qrJson.data.length);
+    } catch {
+      // Ignore
+    }
+  };
+
   const sidebarItems = useMemo(() => {
-    const items = [
+    const items: Array<{ name: string; href: string; icon: any; badge?: number }> = [
       { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard }
     ];
 
     // Core Manager Routes
     items.push({ name: 'Products', href: '/manager/products', icon: Package });
-    items.push({ name: 'Bookings', href: '/manager/bookings', icon: Calendar });
+    items.push({ 
+      name: 'Bookings', 
+      href: '/manager/bookings', 
+      icon: Calendar,
+      badge: pendingQrCount > 0 ? pendingQrCount : undefined
+    });
     items.push({ name: 'Tickets', href: '/manager/tickets', icon: Ticket });
     items.push({ name: 'Expenses', href: '/manager/expenses', icon: FileSpreadsheet });
-    items.push({ name: 'Contracts', href: '/manager/contracts', icon: ShieldCheck });
+    items.push({ 
+      name: 'Contracts', 
+      href: '/manager/contracts', 
+      icon: ShieldCheck,
+      badge: pendingRequestsCount > 0 ? pendingRequestsCount : undefined
+    });
     items.push({ name: 'Documents', href: '/manager/documents', icon: FileText });
     items.push({ name: 'Agreements', href: '/manager/agreements', icon: FileText });
     items.push({ name: 'Users', href: '/manager/users', icon: Users });
@@ -102,7 +137,7 @@ export default function ManagerLayout({
     }
 
     return items;
-  }, [hasPermission, isRole]);
+  }, [hasPermission, isRole, user, pendingQrCount, pendingRequestsCount]);
 
   if (isLoading || !user || isRole('USER')) {
     return (
@@ -166,13 +201,18 @@ export default function ManagerLayout({
                     : 'text-[#616161] hover:bg-[var(--primary)]/5 hover:text-[var(--primary)]'
                 }`}
               >
-                <item.icon size={22} className={`${isActive ? '' : 'opacity-70 group-hover:opacity-100 group-hover:scale-110'} transition-all`} />
+                <item.icon size={22} className={`${isActive ? '' : 'opacity-70 group-hover:opacity-100 group-hover:scale-110'} transition-all shrink-0`} />
                 {isSidebarOpen && (
-                  <span className="font-bold text-[12px] whitespace-nowrap uppercase tracking-widest">{item.name}</span>
+                  <span className="font-bold text-[12px] whitespace-nowrap uppercase tracking-widest flex-1">{item.name}</span>
+                )}
+                {item.badge !== undefined && (
+                  <span className={`${isSidebarOpen ? '' : 'absolute top-2 right-2'} bg-amber-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-xs shrink-0 animate-pulse`}>
+                    {item.badge}
+                  </span>
                 )}
                 {!isSidebarOpen && (
                   <div className={`absolute left-full ml-4 px-3 py-1.5 bg-[#1B1C1C] text-white text-[9px] font-bold uppercase tracking-widest rounded-none opacity-0 translate-x-[-5px] group-hover:opacity-100 group-hover:translate-x-0 transition-all shadow-xl pointer-events-none whitespace-nowrap z-[100]`}>
-                    {item.name}
+                    {item.name} {item.badge ? `(${item.badge})` : ''}
                   </div>
                 )}
                 {isActive && (
