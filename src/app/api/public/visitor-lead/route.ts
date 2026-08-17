@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import crypto from 'crypto';
+import { sendTourBookingToSheet } from '@/lib/expenseFms';
 
 // POST /api/public/visitor-lead
-// Registers or retrieves an UnregisteredCustomer lead for visitor chat
+// Registers or retrieves an UnregisteredCustomer lead for visitor chat & sends tour bookings to Google Sheet & sales email
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { username, email, mobileNo } = body;
+    const { username, email, mobileNo, locationName, preferredDate } = body;
 
     if (!username || !email || !mobileNo) {
       return NextResponse.json(
@@ -85,6 +86,21 @@ export async function POST(request: Request) {
       });
     } catch (err) {
       console.warn('[VISITOR_LEAD_LOG_UPDATE_WARN]', err);
+    }
+
+    // If this is a Workspace Tour Booking request, send to Google Sheet & sales email
+    if (locationName || preferredDate) {
+      try {
+        await sendTourBookingToSheet({
+          username: cleanName,
+          email: cleanEmail,
+          mobileNo: cleanPhone,
+          locationName: String(locationName || 'Premier House (SG Highway)').trim(),
+          preferredDate: String(preferredDate || 'Not Specified').trim()
+        });
+      } catch (tourErr) {
+        console.warn('[TOUR_BOOKING_SHEET_WARN]', tourErr);
+      }
     }
 
     return NextResponse.json({

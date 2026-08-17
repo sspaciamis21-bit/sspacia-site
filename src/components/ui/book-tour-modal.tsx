@@ -96,7 +96,7 @@ export function BookTourModal({ isOpen, onClose }: BookTourModalProps) {
 
             <div className="bg-white p-4 border border-emerald-200 text-xs font-mono space-y-1 text-emerald-900">
               <p><strong>Manager Contact:</strong> Nikhil Dave</p>
-              <p><strong>Phone:</strong> <a href="tel:+919876543210" className="underline font-bold">+91 98765 43210</a></p>
+              <p><strong>Phone:</strong> <a href="tel:+917600393779" className="underline font-bold">+91 76003 93779</a></p>
               <p><strong>Location:</strong> {locationName}</p>
             </div>
 

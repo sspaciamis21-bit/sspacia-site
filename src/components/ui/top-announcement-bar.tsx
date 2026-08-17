@@ -25,9 +25,7 @@ export function TopAnnouncementBar() {
       const res = await fetch('/api/public/announcements');
       if (res.ok) {
         const json = await res.json();
-        if (json.data && json.data.length > 0) {
-          setAnnouncements(json.data);
-        }
+        setAnnouncements(json.data || []);
       }
     } catch (err) {
       console.error('[ANNOUNCEMENT_BAR_FETCH_ERROR]', err);
@@ -36,13 +34,16 @@ export function TopAnnouncementBar() {
     }
   };
 
-  // If user is logged in, ONLY show the top red marquee banner when they are on the home page ('/')
+  // If loading, or no active announcements exist, or logged in on subpages, hide the bar completely
+  if (loading || announcements.length === 0) {
+    return null;
+  }
+
   if (isLoggedIn && pathname !== '/') {
     return null;
   }
 
-  const defaultText = "MEETING ROOM EXCLUSIVE: 50% OFF* on first booking | 25% OFF * on full day booking. •";
-  const labelList = announcements.length > 0 ? announcements.map(a => a.text) : [defaultText];
+  const labelList = announcements.map(a => a.text);
   const combinedMarqueeText = labelList.join("  •  ");
 
   return (

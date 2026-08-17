@@ -29,17 +29,22 @@ interface ExpenseSheetData {
 
 export default function SuperAdminExpensesPage() {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [locations, setLocations] = useState<LocationInfo[]>([]);
   const [sheets, setSheets] = useState<ExpenseSheetData[]>([]);
   const [activeLocationId, setActiveLocationId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchExpensesData();
+    fetchExpensesData(true);
   }, []);
 
-  const fetchExpensesData = async () => {
+  const fetchExpensesData = async (isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       const res = await fetch("/api/admin/expenses");
       if (!res.ok) {
         throw new Error("Failed to load center expenses");
@@ -53,9 +58,15 @@ export default function SuperAdminExpensesPage() {
       }
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "Failed to load expense sheets");
+      if (isInitial) {
+        toast.error(err.message || "Failed to load expense sheets");
+      }
     } finally {
-      setLoading(false);
+      if (isInitial) {
+        setLoading(false);
+      } else {
+        setRefreshing(false);
+      }
     }
   };
 
@@ -92,11 +103,12 @@ export default function SuperAdminExpensesPage() {
           </div>
 
           <button
-            onClick={fetchExpensesData}
+            onClick={() => fetchExpensesData(false)}
+            disabled={refreshing}
             className="bg-white hover:bg-gray-100 text-gray-800 px-4 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-2 shadow-xs cursor-pointer self-start md:self-auto"
           >
-            <RefreshCcw className="w-4 h-4 text-[#1ab0bc]" />
-            <span>Refresh Sheets</span>
+            <RefreshCcw className={`w-4 h-4 text-[#1ab0bc] ${refreshing ? "animate-spin" : ""}`} />
+            <span>{refreshing ? "Refreshing..." : "Refresh Sheets"}</span>
           </button>
         </div>
       </FadeUp>
@@ -137,7 +149,6 @@ export default function SuperAdminExpensesPage() {
           initialColumns={activeSheet?.columns || []}
           initialRows={activeSheet?.rows || []}
           isSuperAdmin={true}
-          onSaved={fetchExpensesData}
         />
       ) : (
         <div className="bg-white p-12 text-center border border-gray-200 text-gray-400 italic">

@@ -5,11 +5,11 @@ import { Youtube, Instagram, Linkedin, Facebook, MapPin, Phone, Mail, Clock } fr
 
 export function Footer() {
   return (
-    <footer className="bg-[#1B1C1C] text-white border-t border-white/10 pt-16 pb-12">
-      <div className="max-w-[1600px] mx-auto px-4 md:px-8 space-y-12">
+    <footer className="bg-[#1B1C1C] text-white border-t border-white/10 pt-10 pb-5 md:pt-12 md:pb-6">
+      <div className="max-w-[1600px] mx-auto px-4 md:px-8 space-y-6 md:space-y-8">
         
         {/* TOP GRID */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12 border-b border-white/10 pb-12 md:pb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12 border-b border-white/10 pb-8 md:pb-10">
           
           {/* COLUMN 1: ABOUT */}
           <div className="space-y-6">
@@ -121,8 +121,7 @@ export function Footer() {
               <div className="flex items-center gap-3">
                 <Phone className="w-4 h-4 text-[#1ab0bc] shrink-0" />
                 <div className="flex flex-col gap-0.5">
-                  <a href="tel:+919876543210" className="hover:text-[#1ab0bc] transition-colors">+91 98765 43210</a>
-                  <a href="tel:18002586633" className="hover:text-[#1ab0bc] transition-colors">Toll-Free: 1800 258 6633</a>
+                  <a href="tel:+917600393779" className="hover:text-[#1ab0bc] transition-colors">+91 76003 93779</a>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -131,7 +130,7 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-3">
                 <Clock className="w-4 h-4 text-[#1ab0bc] shrink-0" />
-                <span>Mon - Sat: 08:00 AM - 08:00 PM</span>
+                <span>24/7</span>
               </div>
             </div>
           </div>
@@ -139,7 +138,7 @@ export function Footer() {
         </div>
 
         {/* BOTTOM COPYRIGHT BAR */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-[11px] text-white/40 pt-4">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-[11px] text-white/40 pt-1 md:pt-2">
           <p>© {new Date().getFullYear()} SSPACIA Coworking Solutions Ltd. All rights reserved.</p>
           <div className="flex items-center gap-6">
             <Link href="/privacy" className="hover:text-white/80 transition-colors">Privacy Policy</Link>

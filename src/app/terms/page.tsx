@@ -79,7 +79,7 @@ export default function TermsPage() {
           <div className="bg-neutral-50 p-4 border border-gray-200 text-xs font-mono space-y-1">
             <p><strong>SSPACIA Coworking Solutions Ltd.</strong></p>
             <p>Support: <a href="mailto:sales@sspacia.com" className="text-[#1ab0bc] hover:underline">sales@sspacia.com</a></p>
-            <p>Phone: +91 98765 43210 / 1800 258 6633</p>
+            <p>Phone: <a href="tel:+917600393779" className="text-[#1ab0bc] hover:underline">+91 76003 93779</a></p>
           </div>
         </section>
 
