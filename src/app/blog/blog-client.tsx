@@ -11,7 +11,7 @@ export default function BlogClient() {
   const { blog } = siteConfig;
 
   return (
-    <div className="space-y-24 py-12 container mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="space-y-24 py-12 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* ── Header ── */}
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#E0F7FA] via-[#F8F9FA] to-[#E0F2F1] px-6 py-16 sm:px-12 sm:py-24">
         {/* Decorative blur orbs */}

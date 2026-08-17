@@ -175,7 +175,7 @@ export default function GalleryClient() {
   };
 
   return (
-    <div className="space-y-16 py-12">
+    <div className="space-y-16 py-12 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* ── Header ── */}
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#E0F7FA] via-[#F8F9FA] to-[#E0F2F1] px-6 py-16 sm:px-12 sm:py-24 text-center">
         <div className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-[#006064]/10 blur-3xl" />
