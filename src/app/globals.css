@@ -24,14 +24,14 @@
 }
 
 :root {
-  --background: #fbf9f8;
-  --foreground: #1b1c1c;
+  --background: #f8f9fa;
+  --foreground: #212121;
 
   /* Sspacia Structural Colors */
-  --surface: #fbf9f8;
+  --surface: #f8f9fa;
   --surface-lowest: #ffffff;
-  --surface-low: #f5f3f3;
-  --surface-high: #e9e8e7;
+  --surface-low: #f1f3f5;
+  --surface-high: #e9ecef;
 
   /* Sspacia Action Colors */
   --primary: #00696f;

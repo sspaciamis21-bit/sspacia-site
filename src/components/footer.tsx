@@ -80,35 +80,26 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* COLUMN 3: LOCATIONS */}
+          {/* COLUMN 3: OUR SPACES */}
           <div className="space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-[#1ab0bc]">AHMEDABAD CENTERS</h4>
+            <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-[#1ab0bc]">OUR SPACES</h4>
             <ul className="space-y-3 text-xs text-white/70">
               <li>
-                <Link href="/coworking-spaces" className="flex items-start gap-2 group hover:text-[#1ab0bc] transition-colors">
-                  <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
-                  <div>
-                    <span className="font-bold text-white block group-hover:text-[#1ab0bc]">Premier House</span>
-                    <span className="text-[11px] text-white/50 group-hover:text-white/80">SG Highway, Bodakdev, Ahmedabad</span>
-                  </div>
+                <Link href="/products#agarwal-complex" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
+                  <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-white group-hover:text-[#1ab0bc]">CG Road – Agarwal Complex</span>
                 </Link>
               </li>
               <li>
-                <Link href="/coworking-spaces" className="flex items-start gap-2 group hover:text-[#1ab0bc] transition-colors">
-                  <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
-                  <div>
-                    <span className="font-bold text-white block group-hover:text-[#1ab0bc]">Mercado</span>
-                    <span className="text-[11px] text-white/50 group-hover:text-white/80">Sindhu Bhavan Marg, Ahmedabad</span>
-                  </div>
+                <Link href="/products#mercardo" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
+                  <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-white group-hover:text-[#1ab0bc]">CG Road – Mercardo</span>
                 </Link>
               </li>
               <li>
-                <Link href="/coworking-spaces" className="flex items-start gap-2 group hover:text-[#1ab0bc] transition-colors">
-                  <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
-                  <div>
-                    <span className="font-bold text-white block group-hover:text-[#1ab0bc]">Agarwal Complex</span>
-                    <span className="text-[11px] text-white/50 group-hover:text-white/80">C.G. Road, Navrangpura, Ahmedabad</span>
-                  </div>
+                <Link href="/products#premier-house" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
+                  <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-white group-hover:text-[#1ab0bc]">SG Highway – Premier House</span>
                 </Link>
               </li>
             </ul>

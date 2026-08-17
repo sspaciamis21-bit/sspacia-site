@@ -34,7 +34,7 @@ export default function HomeClient() {
       <Hero />
 
       {/* ── LOCATIONS ── */}
-      <section id="spaces" className="container mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-24">
+      <section id="spaces" className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 scroll-mt-24">
         <FadeUp className="space-y-3">
           <SectionLabel>
             <MapPin className="h-3 w-3" /> Our Spaces
@@ -93,7 +93,7 @@ export default function HomeClient() {
         <div className="pointer-events-none absolute -top-24 -right-24 h-96 w-96 rounded-full bg-[#006064]/5 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-[#4DB6AC]/5 blur-3xl" />
         
-        <div className="container relative z-10 mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
+        <div className="max-w-6xl relative z-10 mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
           <FadeUp className="space-y-4 text-center">
             <SectionLabel className="mx-auto">
               <Cpu className="h-3 w-3" /> Why SSPACIA
@@ -130,7 +130,7 @@ export default function HomeClient() {
       </section>
 
       {/* ── BLOG ── */}
-      <section className="container mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         <FadeUp className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-4">
             <SectionLabel>
@@ -201,7 +201,7 @@ export default function HomeClient() {
       </section>
 
       {/* ── FAQ ── */}
-      <section className="container mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <FaqSection />
       </section>
     </div>

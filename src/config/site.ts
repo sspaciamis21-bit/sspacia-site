@@ -24,6 +24,12 @@ export const siteConfig = {
     { label: "About", href: "/about", subItems: undefined },
     { label: "Contact", href: "/contact", subItems: undefined },
     { 
+      label: "Locations", 
+      href: "/products",
+      isLocationsMenu: true,
+      subItems: undefined 
+    },
+    { 
       label: "Products", 
       href: "/products",
       subItems: [
