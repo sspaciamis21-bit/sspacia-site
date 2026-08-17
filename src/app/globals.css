@@ -23,6 +23,21 @@
   animation: textShimmer 3.5s linear infinite;
 }
 
+@keyframes brandPulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0px 0 rgba(0, 96, 100, 0.15), 0 1px 3px rgba(0, 96, 100, 0.08);
+    border-color: rgba(0, 96, 100, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 12px 3px rgba(26, 176, 188, 0.45), 0 3px 6px rgba(0, 96, 100, 0.15);
+    border-color: rgba(26, 176, 188, 0.7);
+  }
+}
+
+.animate-brand-glow {
+  animation: brandPulseGlow 2.2s ease-in-out infinite;
+}
+
 :root {
   --background: #f8f9fa;
   --foreground: #212121;

@@ -23,6 +23,7 @@ export function Header() {
   const { user, isLoggedIn, logout } = useAuth();
   const pathname = usePathname();
   const isLoginPage = pathname === '/login';
+  const isSignupPage = pathname === '/signup';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -170,20 +171,20 @@ export function Header() {
               <div className="flex items-center gap-1.5 xl:gap-2">
                 <Link
                   href="/login"
-                  className={`px-2.5 py-1.5 xl:px-3.5 xl:py-2 text-[11px] xl:text-xs font-bold uppercase tracking-wider transition-all shadow-xs ${
+                  className={`px-2.5 py-1.5 xl:px-3.5 xl:py-2 text-[11px] xl:text-xs font-bold uppercase tracking-wider transition-all rounded-sm border ${
                     isLoginPage
-                      ? "bg-[#1ab0bc] text-white hover:bg-teal-600"
-                      : "text-on-surface/70 hover:text-primary"
+                      ? "bg-[#006064] text-white border-[#006064] shadow-md"
+                      : "bg-white text-[#006064] hover:bg-[#006064] hover:text-white border-[#006064]/25 animate-brand-glow"
                   }`}
                 >
                   Log In
                 </Link>
                 <Link
                   href="/signup"
-                  className={`px-2.5 py-1.5 xl:px-3.5 xl:py-2 text-[11px] xl:text-xs font-bold uppercase tracking-wider transition-all shadow-xs ${
-                    !isLoginPage
-                      ? "bg-[#1ab0bc] text-white hover:bg-teal-600"
-                      : "text-on-surface/70 hover:text-primary"
+                  className={`px-2.5 py-1.5 xl:px-3.5 xl:py-2 text-[11px] xl:text-xs font-bold uppercase tracking-wider transition-all rounded-sm border ${
+                    isSignupPage
+                      ? "bg-[#006064] text-white border-[#006064] shadow-md"
+                      : "bg-white text-[#006064] hover:bg-[#006064] hover:text-white border-[#006064]/25 animate-brand-glow"
                   }`}
                 >
                   Sign Up
@@ -388,14 +389,22 @@ export function Header() {
                       <Link
                         href="/login"
                         onClick={() => setIsOpen(false)}
-                        className="text-center py-2.5 text-xs font-bold uppercase tracking-wider border border-outline-variant/20 hover:bg-surface-low transition-colors"
+                        className={`text-center py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm border transition-all ${
+                          isLoginPage
+                            ? "bg-[#006064] text-white border-[#006064] shadow-md"
+                            : "bg-white text-[#006064] border-[#006064]/25 animate-brand-glow"
+                        }`}
                       >
                         Log In
                       </Link>
                       <Link
                         href="/signup"
                         onClick={() => setIsOpen(false)}
-                        className="text-center py-2.5 text-xs font-bold uppercase tracking-wider bg-primary text-white hover:bg-teal-700 transition-colors"
+                        className={`text-center py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm border transition-all ${
+                          isSignupPage
+                            ? "bg-[#006064] text-white border-[#006064] shadow-md"
+                            : "bg-white text-[#006064] border-[#006064]/25 animate-brand-glow"
+                        }`}
                       >
                         Sign Up
                       </Link>
