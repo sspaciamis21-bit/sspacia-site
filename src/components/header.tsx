@@ -44,9 +44,9 @@ export function Header() {
               <Image
                 src="/SspaciaLogo.png"
                 alt={siteConfig.site.name}
-                width={100}
-                height={35}
-                className="h-11 w-auto object-contain sm:h-14 xl:h-16"
+                width={120}
+                height={42}
+                className="h-13 w-auto object-contain sm:h-16 xl:h-[72px]"
                 priority
               />
             </Link>
@@ -104,20 +104,20 @@ export function Header() {
                 {/* BOOK A TOUR BUTTON */}
                 <button
                   onClick={() => setIsTourModalOpen(true)}
-                  className="flex items-center gap-1 text-[11px] xl:text-xs font-bold uppercase tracking-wider text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 xl:px-3.5 xl:py-2 border border-red-200 transition-all shadow-xs cursor-pointer"
+                  className="flex items-center gap-1.5 text-[11px] xl:text-xs font-bold uppercase tracking-wider text-[#006064] hover:text-[#004D40] bg-[#E0F7FA] hover:bg-[#B2EBF2] px-2.5 py-1.5 xl:px-3.5 xl:py-2 border border-[#006064]/20 transition-all shadow-xs cursor-pointer rounded-sm"
                   title="Book a Workspace Tour"
                 >
-                  <Calendar className="w-3.5 h-3.5 text-red-600" />
+                  <Calendar className="w-3.5 h-3.5 text-[#006064]" />
                   <span>Book a Tour</span>
                 </button>
 
                 {/* PHONE CALL LINK (DIRECT DIAL +91 7600393779) */}
                 <a
                   href="tel:+917600393779"
-                  className="flex items-center gap-1 text-[11px] xl:text-xs font-mono font-bold text-gray-700 hover:text-red-600 bg-gray-50 hover:bg-red-50 px-2.5 py-1.5 xl:px-3 xl:py-2 border border-gray-200 hover:border-red-200 transition-all shadow-xs cursor-pointer"
+                  className="flex items-center gap-1.5 text-[11px] xl:text-xs font-mono font-bold text-gray-700 hover:text-[#006064] bg-white hover:bg-[#E0F7FA]/50 px-2.5 py-1.5 xl:px-3 xl:py-2 border border-[#CFD8DC] hover:border-[#006064]/30 transition-all shadow-xs cursor-pointer rounded-sm"
                   title="Call SSPACIA +91 7600393779"
                 >
-                  <Phone className="w-3.5 h-3.5 text-red-600" />
+                  <Phone className="w-3.5 h-3.5 text-[#006064]" />
                   <span>+91 7600393779</span>
                 </a>
               </div>
@@ -335,9 +335,9 @@ export function Header() {
                 <div className="pt-2 border-t border-outline-variant/10 flex flex-col gap-2.5">
                   <a
                     href="tel:+917600393779"
-                    className="flex items-center justify-center gap-2 w-full text-xs font-mono font-bold text-gray-700 bg-gray-50 py-2.5 border border-gray-200"
+                    className="flex items-center justify-center gap-2 w-full text-xs font-mono font-bold text-gray-700 bg-white py-2.5 border border-[#CFD8DC]"
                   >
-                    <Phone className="w-3.5 h-3.5 text-red-600" />
+                    <Phone className="w-3.5 h-3.5 text-[#006064]" />
                     <span>Call Us: +91 7600393779</span>
                   </a>
                   {!isLoggedIn && (
@@ -346,9 +346,9 @@ export function Header() {
                         setIsOpen(false);
                         setIsTourModalOpen(true);
                       }}
-                      className="flex items-center justify-center gap-2 w-full text-xs font-bold uppercase tracking-wider text-red-600 bg-red-50 py-2.5 border border-red-200"
+                      className="flex items-center justify-center gap-2 w-full text-xs font-bold uppercase tracking-wider text-[#006064] bg-[#E0F7FA] py-2.5 border border-[#006064]/20"
                     >
-                      <Calendar className="w-3.5 h-3.5 text-red-600" />
+                      <Calendar className="w-3.5 h-3.5 text-[#006064]" />
                       <span>Book a Workspace Tour</span>
                     </button>
                   )}

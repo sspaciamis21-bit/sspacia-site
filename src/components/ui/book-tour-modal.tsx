@@ -119,7 +119,6 @@ export function BookTourModal({ isOpen, onClose }: BookTourModalProps) {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Rahul Sharma"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-300 focus:border-[#1ab0bc] outline-none text-xs font-bold"
@@ -134,7 +133,6 @@ export function BookTourModal({ isOpen, onClose }: BookTourModalProps) {
                 <input
                   type="tel"
                   required
-                  placeholder="+91 98765 43210"
                   value={mobileNo}
                   onChange={(e) => setMobileNo(e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-300 focus:border-[#1ab0bc] outline-none text-xs font-mono font-bold"
@@ -149,7 +147,6 @@ export function BookTourModal({ isOpen, onClose }: BookTourModalProps) {
                 <input
                   type="email"
                   required
-                  placeholder="name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-300 focus:border-[#1ab0bc] outline-none text-xs"

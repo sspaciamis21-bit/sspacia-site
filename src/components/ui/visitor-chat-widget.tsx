@@ -221,7 +221,6 @@ export function VisitorChatWidget() {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Rahul Sharma"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 focus:border-[#1ab0bc] outline-none text-xs"
@@ -236,7 +235,6 @@ export function VisitorChatWidget() {
                   <input
                     type="email"
                     required
-                    placeholder="name@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 focus:border-[#1ab0bc] outline-none text-xs"
@@ -251,7 +249,6 @@ export function VisitorChatWidget() {
                   <input
                     type="tel"
                     required
-                    placeholder="+91 98765 43210"
                     value={mobileNo}
                     onChange={(e) => setMobileNo(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 focus:border-[#1ab0bc] outline-none text-xs font-mono"
