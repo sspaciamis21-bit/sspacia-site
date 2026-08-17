@@ -22,7 +22,7 @@ export function TopAnnouncementBar() {
 
   const fetchAnnouncements = async () => {
     try {
-      const res = await fetch('/api/public/announcements');
+      const res = await fetch('/api/public/announcements', { cache: 'no-store' });
       if (res.ok) {
         const json = await res.json();
         setAnnouncements(json.data || []);
