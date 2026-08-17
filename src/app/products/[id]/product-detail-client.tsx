@@ -19,6 +19,7 @@ import {
   Loader2,
   CheckCircle2,
 } from "lucide-react";
+import { AuthModal } from "@/components/ui/auth-modal";
 
 // For demo purposes since actual DB images are empty []
 const fallbackImages = [
@@ -37,6 +38,8 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const searchParams = useSearchParams();
   const { isLoggedIn, user } = useAuth();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const images = product.images?.length > 0 ? product.images.map((img: any) => img.url) : fallbackImages;
 
   const initialDateFromQuery = searchParams?.get('date');
@@ -172,12 +175,6 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const handleBooking = () => {
     if (!selectedDate || selectedTimeSlots.length === 0) return;
 
-    if (!isLoggedIn) {
-      const returnUrl = encodeURIComponent(`/products/${product.id}`);
-      router.push(`/login?redirect=${returnUrl}`);
-      return;
-    }
-
     const params = new URLSearchParams({
       productId: product.id.toString(),
       date: selectedDate,
@@ -189,8 +186,8 @@ export default function ProductDetailClient({ product }: { product: any }) {
 
   const handleInquiryRequest = async () => {
     if (!isLoggedIn) {
-      const returnUrl = encodeURIComponent(`/products/${product.id}`);
-      router.push(`/login?redirect=${returnUrl}`);
+      setPendingAction("inquiry");
+      setIsAuthModalOpen(true);
       return;
     }
 
@@ -456,9 +453,9 @@ export default function ProductDetailClient({ product }: { product: any }) {
               <button
                 disabled={!selectedDate || selectedTimeSlots.length === 0}
                 onClick={handleBooking}
-                className="liquid-hover w-full bg-primary text-white py-5 text-[10px] font-bold uppercase tracking-[0.2em] transition-all hover:bg-primary-container disabled:opacity-50 disabled:cursor-not-allowed shadow-xl"
+                className="liquid-hover w-full bg-primary text-white py-5 text-[10px] font-bold uppercase tracking-[0.2em] transition-all hover:bg-primary-container disabled:opacity-50 disabled:cursor-not-allowed shadow-xl cursor-pointer"
               >
-                {isLoggedIn ? "Proceed to Booking" : "Login to Continue"}
+                Proceed to Booking
               </button>
             </div>
           ) : (
@@ -470,16 +467,33 @@ export default function ProductDetailClient({ product }: { product: any }) {
               <button
                 disabled={isSubmittingInquiry}
                 onClick={handleInquiryRequest}
-                className="liquid-hover w-full bg-primary text-white py-5 text-[10px] font-bold uppercase tracking-[0.2em] transition-all hover:bg-primary-container shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                className="liquid-hover w-full bg-primary text-white py-5 text-[10px] font-bold uppercase tracking-[0.2em] transition-all hover:bg-primary-container shadow-xl disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isSubmittingInquiry ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {isLoggedIn ? "Submit Inquiry & Request Agreement" : "Login to Submit Inquiry"}
+                <span>Submit Inquiry & Request Agreement</span>
               </button>
             </div>
           )}
         </div>
 
       </div>
+
+      {/* QUICK AUTH POPUP MODAL */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setPendingAction(null);
+        }}
+        title="Sign In to Continue"
+        message="Log in or register to submit your workspace request."
+        onSuccess={() => {
+          if (pendingAction === "inquiry") {
+            handleInquiryRequest();
+          }
+          setPendingAction(null);
+        }}
+      />
     </div>
   );
 }

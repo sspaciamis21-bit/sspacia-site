@@ -53,6 +53,7 @@ export default function ProductsClient({
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(initialCategoryId);
   const [selectedTypeId, setSelectedTypeId] = useState<number | undefined>(undefined);
   const [selectedCityId, setSelectedCityId] = useState<number | undefined>(undefined);
+  const [selectedArea, setSelectedArea] = useState<string | undefined>(undefined);
   const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>(undefined);
   const [selectedAmenityIds, setSelectedAmenityIds] = useState<number[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -88,16 +89,35 @@ export default function ProductsClient({
     });
   };
 
-  const availableLocations = useMemo(() => {
+  const availableAreas = useMemo(() => {
     const targetProducts = selectedCityId
       ? products.filter(p => (p.location?.cityId ?? (p.location as any)?.city?.id) === selectedCityId)
       : products;
+    const areaSet = new Set<string>();
+    targetProducts.forEach(p => {
+      if (p.location?.area) {
+        areaSet.add(p.location.area.trim());
+      }
+    });
+    return Array.from(areaSet).map(area => ({ id: area, name: area }));
+  }, [products, selectedCityId]);
+
+  const availableLocations = useMemo(() => {
+    let targetProducts = products;
+    if (selectedCityId) {
+      targetProducts = targetProducts.filter(p => (p.location?.cityId ?? (p.location as any)?.city?.id) === selectedCityId);
+    }
+    if (selectedArea) {
+      targetProducts = targetProducts.filter(p => p.location?.area?.trim() === selectedArea.trim());
+    }
     const locMap = new Map<number, { id: number; name: string }>();
     targetProducts.forEach(p => {
-      if (p.location) locMap.set(p.location.id, { id: p.location.id, name: p.location.name });
+      if (p.location) {
+        locMap.set(p.location.id, { id: p.location.id, name: p.location.name });
+      }
     });
     return Array.from(locMap.values());
-  }, [products, selectedCityId]);
+  }, [products, selectedCityId, selectedArea]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
@@ -105,11 +125,13 @@ export default function ProductsClient({
       const typeId = product.typeId ?? product.type?.id;
       const cityId = product.location?.cityId ?? (product.location as any)?.city?.id;
       const locId = product.locationId ?? product.location?.id;
+      const area = product.location?.area?.trim();
 
+      if (selectedCityId && cityId !== selectedCityId) return false;
+      if (selectedArea && area !== selectedArea.trim()) return false;
+      if (selectedLocationId && locId !== selectedLocationId) return false;
       if (selectedCategoryId && catId !== selectedCategoryId) return false;
       if (selectedTypeId && typeId !== selectedTypeId) return false;
-      if (selectedCityId && cityId !== selectedCityId) return false;
-      if (selectedLocationId && locId !== selectedLocationId) return false;
 
       if (selectedAmenityIds.length > 0 && Array.isArray(product.amenities)) {
         const productAmenityIds = product.amenities.map((a: any) => a.amenity?.id || a.amenityId || a.id);
@@ -118,7 +140,7 @@ export default function ProductsClient({
       }
       return true;
     });
-  }, [products, selectedCategoryId, selectedTypeId, selectedCityId, selectedLocationId, selectedAmenityIds]);
+  }, [products, selectedCityId, selectedArea, selectedLocationId, selectedCategoryId, selectedTypeId, selectedAmenityIds]);
 
   const isGuestCategory = (p: Product) => (p.categoryId === 2 || p.category?.slug === 'guest-space' || p.category?.name?.toLowerCase().includes('guest'));
   const guestSpaces = filteredProducts.filter(isGuestCategory);
@@ -151,43 +173,43 @@ export default function ProductsClient({
 
   return (
     <div className="min-h-screen bg-surface font-sans text-on-surface antialiased">
-      <div className="py-12 px-4 md:px-8 max-w-[1600px] mx-auto space-y-16">
-        
-        {/* ── HEADER TITLE ── */}
-        <section className="space-y-4">
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-primary/40">SSPACA_WORKSPACES // AHMEDABAD</span>
-            <div className="h-[1px] w-12 bg-primary/20"></div>
-          </div>
-          <h1 className="font-display text-4xl md:text-6xl font-black uppercase tracking-tight text-secondary">
-            Coworking Space in Ahmedabad
+      <div className="space-y-8 py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* ── Compact Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pb-4 border-b border-[#CFD8DC]/60">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#006064]">SSPACIA // AHMEDABAD</span>
+          <h1 className="text-2xl sm:text-3xl font-display font-black text-[#004D40] tracking-tight uppercase">
+            {initialCategoryId === 2 ? "Guest Spaces" : initialCategoryId === 1 ? "Coworking Spaces" : "All Workspaces"}
           </h1>
-          <p className="text-sm text-gray-600 max-w-3xl leading-relaxed">
-            Looking for a coworking space in Ahmedabad? SSPACIA offers modern, comfortable, and fully equipped workspaces catering to freelancers, startups, and established enterprises.
-          </p>
-        </section>
+        </div>
+        <p className="text-xs text-gray-500 max-w-md">
+          {initialCategoryId === 2 
+            ? "Book premium meeting rooms, event spaces, and day passes on-demand."
+            : "Flexible dedicated desks, shared offices, and private cabins across Ahmedabad."}
+        </p>
+      </div>
 
-      {/* ── LAYOUT GRID: SIDEBAR + CATALOG ── */}
-      <div className="flex flex-col lg:flex-row gap-12 items-start">
-
-        {/* ── SIDEBAR FILTERS ── */}
-        <aside className="w-full lg:w-80 shrink-0 space-y-8 sticky top-28 bg-white p-8 border border-outline-variant/10 shadow-[0_20px_50px_rgba(27,28,28,0.02)]">
+      {/* ── Main Layout: Sidebar Filter + Catalog ── */}
+      <div className="flex flex-col lg:flex-row items-start gap-12">
+        {/* ── STICKY SIDEBAR FILTER ── */}
+        <aside className="w-full lg:w-72 shrink-0 space-y-6 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain bg-surface-lowest p-6 border border-outline-variant/10 shadow-[0_20px_50px_rgba(27,28,28,0.02)] sidebar-scrollbar">
           <div className="flex items-center justify-between border-b border-outline-variant/20 pb-4">
              <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-[#1ab0bc]" />
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-secondary">FILTER SPACES</span>
              </div>
-             {(selectedCityId || selectedLocationId || selectedAmenityIds.length > 0 || selectedCategoryId || selectedTypeId) && (
+             {(selectedCityId || selectedArea || selectedLocationId || selectedAmenityIds.length > 0 || (initialCategoryId ? selectedCategoryId !== initialCategoryId : selectedCategoryId !== undefined) || selectedTypeId) && (
                <button 
                 onClick={() => {
                     setSelectedCityId(undefined);
+                    setSelectedArea(undefined);
                     setSelectedLocationId(undefined);
-                    setSelectedAmenityIds([]);
-                    setSelectedCategoryId(undefined);
+                    setSelectedCategoryId(initialCategoryId);
                     setSelectedTypeId(undefined);
+                    setSelectedAmenityIds([]);
                     setSelectedDate(new Date().toISOString().split('T')[0]);
                 }}
-                className="text-[9px] font-bold text-rose-500 uppercase tracking-widest hover:underline"
+                className="text-[9px] font-bold text-rose-500 uppercase tracking-widest hover:underline cursor-pointer"
                >
                  Reset
                </button>
@@ -195,7 +217,49 @@ export default function ProductsClient({
           </div>
 
           <div className="space-y-6">
-             {/* Category Filter */}
+             {/* 1. City Filter */}
+             <div className="space-y-2">
+                <FilterDropdown
+                  label="CITY"
+                  options={cities}
+                  selectedId={selectedCityId}
+                  onSelect={(val: any) => {
+                    setSelectedCityId(val ? Number(val) : undefined);
+                    setSelectedArea(undefined);
+                    setSelectedLocationId(undefined);
+                  }}
+                  placeholder="Select City"
+                />
+             </div>
+
+             {/* 2. Area Filter */}
+             <div className="space-y-2">
+                <FilterDropdown
+                  label="AREA"
+                  options={availableAreas}
+                  selectedId={selectedArea}
+                  onSelect={(val: any) => {
+                    setSelectedArea(val ? String(val) : undefined);
+                    setSelectedLocationId(undefined);
+                  }}
+                  placeholder="Select Area"
+                  disabled={availableAreas.length === 0}
+                />
+             </div>
+
+             {/* 3. Centre Filter */}
+             <div className="space-y-2">
+                <FilterDropdown
+                  label="CENTRE"
+                  options={availableLocations}
+                  selectedId={selectedLocationId}
+                  onSelect={(val: any) => setSelectedLocationId(val ? Number(val) : undefined)}
+                  placeholder="Select Centre"
+                  disabled={availableLocations.length === 0}
+                />
+             </div>
+
+             {/* 4. Space Category Filter */}
              <div className="space-y-2">
                 <FilterDropdown
                   label="SPACE CATEGORY"
@@ -206,7 +270,7 @@ export default function ProductsClient({
                 />
              </div>
 
-             {/* Type Filter */}
+             {/* 5. Space Type Filter */}
              <div className="space-y-2">
                 <FilterDropdown
                   label="SPACE TYPE"
@@ -217,53 +281,26 @@ export default function ProductsClient({
                 />
              </div>
 
-             {/* City Filter */}
+             {/* 6. Date Picker */}
              <div className="space-y-2">
-                <FilterDropdown
-                  label="CITY"
-                  options={cities}
-                  selectedId={selectedCityId}
-                  onSelect={(val: any) => {
-                    setSelectedCityId(val ? Number(val) : undefined);
-                    setSelectedLocationId(undefined);
-                  }}
-                  placeholder="Select City"
-                />
-             </div>
-
-             {/* Office Location Filter */}
-             {selectedCityId && availableLocations.length > 0 && (
-               <div className="space-y-2 animate-in fade-in">
-                  <FilterDropdown
-                    label="OFFICE LOCATION"
-                    options={availableLocations}
-                    selectedId={selectedLocationId}
-                    onSelect={(val: any) => setSelectedLocationId(val ? Number(val) : undefined)}
-                    placeholder="Select Office Location"
-                  />
-               </div>
-             )}
-
-             {/* Date Picker */}
-             <div className="space-y-2">
-                <label className="text-[9px] font-sans font-bold text-tertiary/50 uppercase tracking-[0.2em]">DATE</label>
+                <label className="text-[10px] font-sans font-bold text-primary uppercase tracking-[0.4em] ml-1">DATE</label>
                 <input 
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full h-10 bg-transparent text-[13px] border-b border-outline-variant/30 focus:border-[#1ab0bc] outline-none transition-all font-mono"
+                  className="w-full h-14 bg-surface-lowest px-4 text-sm border-b-2 border-outline-variant/20 focus:border-primary outline-none transition-all font-mono"
                 />
              </div>
 
-             {/* Amenities Stack */}
+             {/* 7. Amenities Stack */}
              <div className="space-y-3">
-                <label className="text-[9px] font-sans font-bold text-tertiary/50 uppercase tracking-[0.2em]">AMENITIES</label>
+                <label className="text-[10px] font-sans font-bold text-primary uppercase tracking-[0.4em] ml-1">AMENITIES</label>
                 <div className="flex flex-wrap gap-2 pb-2 border-b border-outline-variant/30">
                   {amenities.slice(0, 4).map(amenity => (
                       <button
                         key={amenity.id}
                         onClick={() => toggleAmenity(amenity.id)}
-                        className={`p-2 rounded-lg transition-all ${
+                        className={`p-2 rounded-lg transition-all cursor-pointer ${
                             selectedAmenityIds.includes(amenity.id)
                             ? "text-[#1ab0bc] scale-110 bg-[#1ab0bc]/10"
                             : "text-tertiary/20 hover:text-tertiary/60"

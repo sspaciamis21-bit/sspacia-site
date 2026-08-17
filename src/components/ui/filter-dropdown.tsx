@@ -55,19 +55,19 @@ export function FilterDropdown({
         <button
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
-          className={`w-full flex items-center justify-between bg-surface-lowest px-6 py-4 text-sm transition-all border-b-2 h-14 ${
+          className={`w-full flex items-center justify-between bg-surface-lowest px-4 py-3 text-xs sm:text-sm transition-all border-b-2 h-12 ${
             disabled ? "opacity-40 grayscale cursor-not-allowed border-outline-variant/10" :
             isOpen ? "border-primary shadow-2xl bg-surface-high" : "border-outline-variant/20 hover:border-primary/50"
           }`}
         >
-          <div className="flex items-center gap-3">
-            {icon && <span className="text-primary/60">{icon}</span>}
-            <span className={selectedOption ? "text-on-surface font-medium" : "text-tertiary"}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            {icon && <span className="text-primary/60 shrink-0">{icon}</span>}
+            <span className={`truncate ${selectedOption ? "text-on-surface font-medium" : "text-tertiary"}`}>
               {selectedOption ? selectedOption.name : placeholder}
             </span>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {selectedId && (
               <X 
                 className="h-3 w-3 text-tertiary hover:text-primary transition-colors cursor-pointer" 
@@ -88,7 +88,7 @@ export function FilterDropdown({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.98 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="absolute z-[60] left-0 right-0 mt-2 bg-surface-lowest shadow-[0_30px_60px_rgba(0,0,0,0.2)] max-h-72 overflow-y-auto no-scrollbar border border-outline-variant/10"
+              className="absolute z-[60] left-0 right-0 mt-2 bg-surface-lowest shadow-[0_30px_60px_rgba(0,0,0,0.2)] max-h-56 overflow-y-auto sidebar-scrollbar border border-outline-variant/10"
             >
               {options.length === 0 ? (
                 <div className="px-6 py-4 text-xs text-tertiary italic">No options available</div>

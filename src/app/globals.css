@@ -38,6 +38,28 @@
   animation: brandPulseGlow 2.2s ease-in-out infinite;
 }
 
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 96, 100, 0.25) transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 96, 100, 0.25);
+  border-radius: 4px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 96, 100, 0.5);
+}
+
 :root {
   --background: #f8f9fa;
   --foreground: #212121;

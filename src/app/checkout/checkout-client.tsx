@@ -21,6 +21,7 @@ import { motion } from "motion/react";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { AuthModal } from "@/components/ui/auth-modal";
 
 interface Product {
   id: number;
@@ -38,6 +39,7 @@ export default function CheckoutClient() {
   const [loading, setLoading] = useState(true);
   const [discountCode, setDiscountCode] = useState("");
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [customerInfo, setCustomerInfo] = useState({ name: "", email: "", phone: "" });
 
@@ -129,8 +131,8 @@ export default function CheckoutClient() {
 
   const handlePayment = async () => {
     if (!user) {
-      toast.error("Please log in to continue");
-      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      toast.info("Please sign in or create an account to complete your booking.");
+      setIsAuthModalOpen(true);
       return;
     }
 
@@ -501,6 +503,17 @@ export default function CheckoutClient() {
           </div>
         </motion.div>
       </div>
+
+      {/* QUICK AUTH POPUP MODAL */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        title="Sign In to Complete Booking"
+        message="Log in or register to secure your workspace booking with instant confirmation."
+        onSuccess={() => {
+          toast.success("Authentication successful! You can now submit your booking.");
+        }}
+      />
     </div>
   );
 }
