@@ -53,7 +53,91 @@ export function buildHoAddress(parts: {
   return segments.length > 0 ? segments.join(', ') : null;
 }
 
+/**
+ * Calculates Pro-Rata / Prorated Billing for mid-month seat additions
+ * Formula: (Rate / Days in Month) * Remaining Days * Seats
+ */
+export function calculateProratedAmount(
+  seats: number,
+  monthlyRatePerSeat: number,
+  startDateStr: string
+): {
+  daysInMonth: number;
+  activeDays: number;
+  proratedSubtotal: number;
+  proratedGst: number;
+  proratedTotal: number;
+} {
+  const date = new Date(startDateStr);
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0-indexed
+  const startDay = date.getDate();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const activeDays = Math.max(1, daysInMonth - startDay + 1);
+
+  const proratedPerSeat = (monthlyRatePerSeat / daysInMonth) * activeDays;
+  const proratedSubtotal = roundCurrency(proratedPerSeat * seats);
+  const proratedGst = roundCurrency((proratedSubtotal * 18) / 100);
+  const proratedTotal = Math.round(proratedSubtotal + proratedGst);
+
+  return {
+    daysInMonth,
+    activeDays,
+    proratedSubtotal,
+    proratedGst,
+    proratedTotal,
+  };
+}
+
+/**
+ * Calculates Mid-Month Rate Escalation split
+ * Period 1: 1st to (Escalation Day - 1) at Old Rate
+ * Period 2: Escalation Day to End of Month at New Rate
+ */
+export function calculateEscalatedSplit(
+  seats: number,
+  oldRatePerSeat: number,
+  newRatePerSeat: number,
+  escalationDateStr: string
+): {
+  daysInMonth: number;
+  preDays: number;
+  postDays: number;
+  preAmount: number;
+  postAmount: number;
+  totalSubtotal: number;
+  gstAmount: number;
+  grandTotal: number;
+} {
+  const date = new Date(escalationDateStr);
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const escDay = date.getDate();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const preDays = Math.max(0, escDay - 1);
+  const postDays = Math.max(1, daysInMonth - escDay + 1);
+
+  const preAmount = roundCurrency(((oldRatePerSeat / daysInMonth) * preDays) * seats);
+  const postAmount = roundCurrency(((newRatePerSeat / daysInMonth) * postDays) * seats);
+  const totalSubtotal = roundCurrency(preAmount + postAmount);
+  const gstAmount = roundCurrency((totalSubtotal * 18) / 100);
+  const grandTotal = Math.round(totalSubtotal + gstAmount);
+
+  return {
+    daysInMonth,
+    preDays,
+    postDays,
+    preAmount,
+    postAmount,
+    totalSubtotal,
+    gstAmount,
+    grandTotal,
+  };
+}
+
 export interface ProductRow {
+  id?: number;
   cabinName: string;
   noOfSeats: number | '';
   ratePerAgreement: number | '';
@@ -65,6 +149,23 @@ export interface ProductRow {
   firstPaymentDate: string;
   isAmountManuallyEdited: boolean;
   isTotalAmountManuallyEdited: boolean;
+
+  // Secondary/Expansion Agreement Options
+  hasSeparateAgreement?: boolean;
+  agreementPdfUrl?: string;
+  agreementPdfName?: string;
+  agreementStartDate?: string;
+  agreementEndDate?: string;
+  lockinEndDate?: string;
+
+  // Prorated & Escalation Options
+  billingType?: string; // 'REGULAR' | 'PRORATED' | 'ESCALATED'
+  proratedStartDate?: string;
+  proratedEndDate?: string;
+  escalationPercent?: number | '';
+  escalationApplicable?: string;
+  preEscalationRate?: number | '';
+  postEscalationRate?: number | '';
 }
 
 export function createEmptyProductRow(): ProductRow {
@@ -76,9 +177,22 @@ export function createEmptyProductRow(): ProductRow {
     gstPercent: 18,
     totalAmount: '',
     paymentDuration: 'MONTHLY',
-    paymentDueDay: '',
+    paymentDueDay: 5, // Standard 5th of the month default
     firstPaymentDate: '',
     isAmountManuallyEdited: false,
     isTotalAmountManuallyEdited: false,
+    hasSeparateAgreement: false,
+    agreementPdfUrl: '',
+    agreementPdfName: '',
+    agreementStartDate: '',
+    agreementEndDate: '',
+    lockinEndDate: '',
+    billingType: 'REGULAR',
+    proratedStartDate: '',
+    proratedEndDate: '',
+    escalationPercent: '',
+    escalationApplicable: '',
+    preEscalationRate: '',
+    postEscalationRate: '',
   };
 }

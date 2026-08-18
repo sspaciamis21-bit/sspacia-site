@@ -46,7 +46,9 @@ import {
   validateEmail,
   buildHoAddress,
   ProductRow,
-  createEmptyProductRow
+  createEmptyProductRow,
+  calculateProratedAmount,
+  calculateEscalatedSplit
 } from '@/lib/client-master-utils';
 
 interface ContactPerson {
@@ -73,6 +75,18 @@ interface ClientMasterProductItem {
   paymentDuration?: string | null;
   paymentDueDay?: number | null;
   firstPaymentDate?: string | null;
+  agreementPdfUrl?: string | null;
+  agreementPdfName?: string | null;
+  agreementStartDate?: string | null;
+  agreementEndDate?: string | null;
+  lockinEndDate?: string | null;
+  billingType?: string | null;
+  proratedStartDate?: string | null;
+  proratedEndDate?: string | null;
+  escalationPercent?: number | null;
+  escalationApplicable?: string | null;
+  preEscalationRate?: number | null;
+  postEscalationRate?: number | null;
 }
 
 interface ClientMasterEntry {
@@ -233,6 +247,23 @@ export default function ClientMasterRegistryPage() {
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [addingProduct, setAddingProduct] = useState(false);
+
+  // Pro-Rata & Escalation Helper Modal State
+  const [activeProratedRowIndex, setActiveProratedRowIndex] = useState<number | null>(null);
+  const [prorateStartDate, setProrateStartDate] = useState('');
+  const [prorateMonthlyRate, setProrateMonthlyRate] = useState<number | ''>('');
+  const [prorateSeats, setProrateSeats] = useState<number | ''>('');
+
+  const [activeEscalatedRowIndex, setActiveEscalatedRowIndex] = useState<number | null>(null);
+  const [escOldRate, setEscOldRate] = useState<number | ''>('');
+  const [escNewRate, setEscNewRate] = useState<number | ''>('');
+  const [escDate, setEscDate] = useState('');
+  const [escSeats, setEscSeats] = useState<number | ''>('');
+
+  // Target Due Date Filter for Dispatch
+  const [selectedTargetDueDay, setSelectedTargetDueDay] = useState<string>('ALL');
+  const [showDispatchDueDayModal, setShowDispatchDueDayModal] = useState(false);
+  const [uploadingProductAgrIdx, setUploadingProductAgrIdx] = useState<number | null>(null);
 
   // TDS
   const [willDeductTds, setWillDeductTds] = useState(false);
@@ -494,6 +525,102 @@ export default function ClientMasterRegistryPage() {
     }
   };
 
+  // Upload handler for Secondary/Expansion Product Agreement PDF
+  const handleProductFileUpload = async (file: File, idx: number) => {
+    setUploadingProductAgrIdx(idx);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/admin/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+      const json = await res.json();
+      if (json.success) {
+        handleUpdateProductRow(idx, 'agreementPdfUrl', json.data.fileUrl);
+        handleUpdateProductRow(idx, 'agreementPdfName', json.data.fileName);
+        handleUpdateProductRow(idx, 'hasSeparateAgreement', true);
+        toast.success(`Agreement attached for Item #${idx + 1}`);
+      } else {
+        toast.error(json.error || 'Upload failed');
+      }
+    } catch {
+      toast.error('File upload failed');
+    } finally {
+      setUploadingProductAgrIdx(null);
+    }
+  };
+
+  // Apply Pro-Rata calculation to product row
+  const handleApplyProrateToRow = (idx: number) => {
+    if (!prorateStartDate || !prorateMonthlyRate || !prorateSeats) {
+      toast.error('Please enter Start Date, Monthly Rate, and Seats');
+      return;
+    }
+    const result = calculateProratedAmount(Number(prorateSeats), Number(prorateMonthlyRate), prorateStartDate);
+    const dateObj = new Date(prorateStartDate);
+    const day = dateObj.getDate();
+    const monthName = dateObj.toLocaleString('en-IN', { month: 'short' });
+
+    setProductRows((prev) => {
+      const updated = [...prev];
+      const existingName = (updated[idx].cabinName || '').replace(/\s*\(Prorated.*?\)/i, '').trim();
+      updated[idx] = {
+        ...updated[idx],
+        cabinName: `${existingName || 'Expansion'} (Prorated ${day}-${result.daysInMonth} ${monthName})`,
+        noOfSeats: Number(prorateSeats),
+        ratePerAgreement: Number(prorateMonthlyRate),
+        amount: result.proratedSubtotal,
+        gstPercent: 18,
+        totalAmount: result.proratedTotal,
+        billingType: 'PRORATED',
+        proratedStartDate: prorateStartDate,
+        isAmountManuallyEdited: true,
+        isTotalAmountManuallyEdited: true,
+      };
+      return updated;
+    });
+
+    toast.success(`Applied Prorated: ₹${result.proratedSubtotal.toLocaleString()} for ${result.activeDays} days`);
+    setActiveProratedRowIndex(null);
+  };
+
+  // Apply Mid-Month Escalation Split to product row
+  const handleApplyEscalationToRow = (idx: number) => {
+    if (!escOldRate || !escNewRate || !escDate || !escSeats) {
+      toast.error('Please enter Old Rate, New Rate, Escalation Date, and Seats');
+      return;
+    }
+    const result = calculateEscalatedSplit(Number(escSeats), Number(escOldRate), Number(escNewRate), escDate);
+    const dateObj = new Date(escDate);
+    const escDay = dateObj.getDate();
+    const monthName = dateObj.toLocaleString('en-IN', { month: 'short' });
+
+    setProductRows((prev) => {
+      const updated = [...prev];
+      const existingName = (updated[idx].cabinName || '').replace(/\s*\(Escalated.*?\)/i, '').trim();
+      updated[idx] = {
+        ...updated[idx],
+        cabinName: `${existingName || 'Space'} (Escalated from ${escDay} ${monthName})`,
+        noOfSeats: Number(escSeats),
+        ratePerAgreement: Number(escNewRate),
+        amount: result.totalSubtotal,
+        gstPercent: 18,
+        totalAmount: result.grandTotal,
+        billingType: 'ESCALATED',
+        escalationApplicable: escDate,
+        preEscalationRate: Number(escOldRate),
+        postEscalationRate: Number(escNewRate),
+        isAmountManuallyEdited: true,
+        isTotalAmountManuallyEdited: true,
+      };
+      return updated;
+    });
+
+    toast.success(`Applied Escalated Split: Pre ₹${result.preAmount.toLocaleString()} (${result.preDays}d) + Post ₹${result.postAmount.toLocaleString()} (${result.postDays}d) = Total ₹${result.totalSubtotal.toLocaleString()}`);
+    setActiveEscalatedRowIndex(null);
+  };
+
   // Reset Form
   const resetForm = () => {
     setEditingId(null);
@@ -595,6 +722,7 @@ export default function ClientMasterRegistryPage() {
     if (entry.products && entry.products.length > 0) {
       setProductRows(
         entry.products.map((p) => ({
+          id: p.id,
           cabinName: p.cabinName || '',
           noOfSeats: p.noOfSeats ?? '',
           ratePerAgreement: p.ratePerAgreement ?? '',
@@ -602,10 +730,23 @@ export default function ClientMasterRegistryPage() {
           gstPercent: p.gstPercent ?? 18,
           totalAmount: p.totalAmount ?? '',
           paymentDuration: p.paymentDuration || 'MONTHLY',
-          paymentDueDay: p.paymentDueDay ?? entry.paymentDueDay ?? '',
+          paymentDueDay: p.paymentDueDay ?? entry.paymentDueDay ?? 5,
           firstPaymentDate: p.firstPaymentDate ? new Date(p.firstPaymentDate).toISOString().split('T')[0] : '',
           isAmountManuallyEdited: true,
           isTotalAmountManuallyEdited: true,
+          hasSeparateAgreement: Boolean(p.agreementPdfUrl),
+          agreementPdfUrl: p.agreementPdfUrl || '',
+          agreementPdfName: p.agreementPdfName || '',
+          agreementStartDate: p.agreementStartDate ? new Date(p.agreementStartDate).toISOString().split('T')[0] : '',
+          agreementEndDate: p.agreementEndDate ? new Date(p.agreementEndDate).toISOString().split('T')[0] : '',
+          lockinEndDate: p.lockinEndDate ? new Date(p.lockinEndDate).toISOString().split('T')[0] : '',
+          billingType: p.billingType || 'REGULAR',
+          proratedStartDate: p.proratedStartDate ? new Date(p.proratedStartDate).toISOString().split('T')[0] : '',
+          proratedEndDate: p.proratedEndDate ? new Date(p.proratedEndDate).toISOString().split('T')[0] : '',
+          escalationPercent: p.escalationPercent ?? '',
+          escalationApplicable: p.escalationApplicable ? new Date(p.escalationApplicable).toISOString().split('T')[0] : '',
+          preEscalationRate: p.preEscalationRate ?? '',
+          postEscalationRate: p.postEscalationRate ?? '',
         }))
       );
     } else {
@@ -618,10 +759,23 @@ export default function ClientMasterRegistryPage() {
           gstPercent: entry.gstPercent ?? 18,
           totalAmount: entry.totalAmount ?? '',
           paymentDuration: 'MONTHLY',
-          paymentDueDay: entry.paymentDueDay ?? '',
+          paymentDueDay: entry.paymentDueDay ?? 5,
           firstPaymentDate: '',
           isAmountManuallyEdited: true,
           isTotalAmountManuallyEdited: true,
+          hasSeparateAgreement: false,
+          agreementPdfUrl: '',
+          agreementPdfName: '',
+          agreementStartDate: '',
+          agreementEndDate: '',
+          lockinEndDate: '',
+          billingType: 'REGULAR',
+          proratedStartDate: '',
+          proratedEndDate: '',
+          escalationPercent: '',
+          escalationApplicable: '',
+          preEscalationRate: '',
+          postEscalationRate: '',
         }
       ]);
     }
@@ -708,8 +862,23 @@ export default function ClientMasterRegistryPage() {
         noOfSeats: p.noOfSeats !== '' ? Number(p.noOfSeats) : null,
         ratePerAgreement: p.ratePerAgreement !== '' ? Number(p.ratePerAgreement) : null,
         amount: p.amount !== '' ? Number(p.amount) : null,
-        gstPercent: p.gstPercent !== '' ? Number(p.gstPercent) : null,
+        gstPercent: p.gstPercent !== '' ? Number(p.gstPercent) : 18,
         totalAmount: p.totalAmount !== '' ? Number(p.totalAmount) : null,
+        paymentDuration: p.paymentDuration || 'MONTHLY',
+        paymentDueDay: p.paymentDueDay !== '' ? Number(p.paymentDueDay) : null,
+        firstPaymentDate: p.firstPaymentDate || null,
+        agreementPdfUrl: p.hasSeparateAgreement && p.agreementPdfUrl ? p.agreementPdfUrl : null,
+        agreementPdfName: p.hasSeparateAgreement && p.agreementPdfName ? p.agreementPdfName : null,
+        agreementStartDate: p.hasSeparateAgreement && p.agreementStartDate ? p.agreementStartDate : null,
+        agreementEndDate: p.hasSeparateAgreement && p.agreementEndDate ? p.agreementEndDate : null,
+        lockinEndDate: p.hasSeparateAgreement && p.lockinEndDate ? p.lockinEndDate : null,
+        billingType: p.billingType || 'REGULAR',
+        proratedStartDate: p.proratedStartDate || null,
+        proratedEndDate: p.proratedEndDate || null,
+        escalationPercent: p.escalationPercent !== '' ? Number(p.escalationPercent) : null,
+        escalationApplicable: p.escalationApplicable || null,
+        preEscalationRate: p.preEscalationRate !== '' ? Number(p.preEscalationRate) : null,
+        postEscalationRate: p.postEscalationRate !== '' ? Number(p.postEscalationRate) : null,
       })),
 
       willDeductTds,
@@ -1224,15 +1393,15 @@ export default function ClientMasterRegistryPage() {
       {/* BIG POPUP MODAL: ADD CLIENT / EDIT CLIENT */}
       <AnimatePresence>
         {showAddClientModal && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 15 }}
-              className="bg-white border border-[var(--outline-variant)] w-full max-w-5xl my-6 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+              className="bg-white border border-[var(--outline-variant)] w-full max-w-5xl my-auto shadow-2xl overflow-hidden flex flex-col max-h-[88vh]"
             >
               {/* Modal Header */}
-              <div className="p-6 bg-[#006064] text-white flex items-center justify-between shrink-0">
+              <div className="p-5 sm:p-6 bg-[#006064] text-white flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 bg-white/10 flex items-center justify-center font-bold text-lg">
                     #{srNoDisplay}
@@ -1949,6 +2118,282 @@ export default function ClientMasterRegistryPage() {
                               />
                             </div>
                           </div>
+
+                          {/* Extra Helper Tools: Prorate, Escalation Split, Separate Agreement */}
+                          <div className="pt-2 border-t border-neutral-200/60 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveProratedRowIndex(activeProratedRowIndex === idx ? null : idx);
+                                  setProrateSeats(row.noOfSeats || '');
+                                  setProrateMonthlyRate(row.ratePerAgreement || '');
+                                  setProrateStartDate(new Date().toISOString().split('T')[0]);
+                                }}
+                                className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors ${
+                                  activeProratedRowIndex === idx
+                                    ? 'bg-amber-600 text-white'
+                                    : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+                                }`}
+                              >
+                                ⚡ Prorate Mid-Month Seats
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveEscalatedRowIndex(activeEscalatedRowIndex === idx ? null : idx);
+                                  setEscSeats(row.noOfSeats || '');
+                                  setEscOldRate(row.ratePerAgreement || '');
+                                  setEscNewRate('');
+                                  setEscDate(new Date().toISOString().split('T')[0]);
+                                }}
+                                className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors ${
+                                  activeEscalatedRowIndex === idx
+                                    ? 'bg-purple-600 text-white'
+                                    : 'bg-purple-50 text-purple-900 border border-purple-300 hover:bg-purple-100'
+                                }`}
+                              >
+                                📈 Mid-Month Escalation Split
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleUpdateProductRow(idx, 'hasSeparateAgreement', !row.hasSeparateAgreement)
+                                }
+                                className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors ${
+                                  row.hasSeparateAgreement
+                                    ? 'bg-teal-700 text-white'
+                                    : 'bg-teal-50 text-teal-900 border border-teal-300 hover:bg-teal-100'
+                                }`}
+                              >
+                                📄 {row.hasSeparateAgreement ? 'Separate Agreement (Active)' : 'Attach Separate Agreement'}
+                              </button>
+                            </div>
+
+                            {row.billingType && row.billingType !== 'REGULAR' && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-900 uppercase">
+                                Mode: {row.billingType}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Inline Prorate Calculator Drawer */}
+                          {activeProratedRowIndex === idx && (
+                            <div className="p-3 bg-amber-50 border border-amber-300 rounded space-y-3">
+                              <div className="flex items-center justify-between text-xs font-bold text-amber-900 uppercase">
+                                <span>⚡ Calculate Prorated Billing (Mid-Month Additions)</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveProratedRowIndex(null)}
+                                  className="text-amber-700 hover:text-amber-950 font-bold"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                              <p className="text-[11px] text-amber-800">
+                                Enter the effective date when the client added seats. The calculator uses exact days remaining in the month.
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-amber-900 uppercase mb-0.5">
+                                    Addition Start Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={prorateStartDate}
+                                    onChange={(e) => setProrateStartDate(e.target.value)}
+                                    className="w-full bg-white border border-amber-300 px-2 py-1.5 text-xs font-bold text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-amber-900 uppercase mb-0.5">
+                                    Seats Added
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    placeholder="Seats..."
+                                    value={prorateSeats}
+                                    onChange={(e) => setProrateSeats(e.target.value === '' ? '' : Number(e.target.value))}
+                                    className="w-full bg-white border border-amber-300 px-2 py-1.5 text-xs font-bold text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-amber-900 uppercase mb-0.5">
+                                    Full Monthly Rate (₹)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    placeholder="Rate..."
+                                    value={prorateMonthlyRate}
+                                    onChange={(e) => setProrateMonthlyRate(e.target.value === '' ? '' : Number(e.target.value))}
+                                    className="w-full bg-white border border-amber-300 px-2 py-1.5 text-xs font-bold text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApplyProrateToRow(idx)}
+                                    className="w-full bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs py-2 uppercase tracking-wider rounded"
+                                  >
+                                    Apply Prorated Amount
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Inline Escalation Split Drawer */}
+                          {activeEscalatedRowIndex === idx && (
+                            <div className="p-3 bg-purple-50 border border-purple-300 rounded space-y-3">
+                              <div className="flex items-center justify-between text-xs font-bold text-purple-900 uppercase">
+                                <span>📈 Mid-Month Escalation Rate Split (2 Rates in 1 Month)</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveEscalatedRowIndex(null)}
+                                  className="text-purple-700 hover:text-purple-950 font-bold"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                              <p className="text-[11px] text-purple-800">
+                                Computes split invoice: Pre-escalation days @ Old Rate + Post-escalation days @ New Rate.
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-purple-900 uppercase mb-0.5">
+                                    Escalation Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={escDate}
+                                    onChange={(e) => setEscDate(e.target.value)}
+                                    className="w-full bg-white border border-purple-300 px-2 py-1.5 text-xs font-bold text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-purple-900 uppercase mb-0.5">
+                                    Seats
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    placeholder="Seats..."
+                                    value={escSeats}
+                                    onChange={(e) => setEscSeats(e.target.value === '' ? '' : Number(e.target.value))}
+                                    className="w-full bg-white border border-purple-300 px-2 py-1.5 text-xs font-bold text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-purple-900 uppercase mb-0.5">
+                                    Old Rate (₹)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    placeholder="Old rate..."
+                                    value={escOldRate}
+                                    onChange={(e) => setEscOldRate(e.target.value === '' ? '' : Number(e.target.value))}
+                                    className="w-full bg-white border border-purple-300 px-2 py-1.5 text-xs font-bold text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-purple-900 uppercase mb-0.5">
+                                    New Rate (₹)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    placeholder="New rate..."
+                                    value={escNewRate}
+                                    onChange={(e) => setEscNewRate(e.target.value === '' ? '' : Number(e.target.value))}
+                                    className="w-full bg-white border border-purple-300 px-2 py-1.5 text-xs font-bold text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApplyEscalationToRow(idx)}
+                                    className="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs py-2 uppercase tracking-wider rounded"
+                                  >
+                                    Apply Split Rate
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Separate Secondary Agreement Details Drawer */}
+                          {row.hasSeparateAgreement && (
+                            <div className="p-3 bg-teal-50 border border-teal-300 rounded space-y-3">
+                              <div className="flex items-center justify-between text-xs font-bold text-teal-900 uppercase">
+                                <span>📄 Secondary / Expansion Agreement Details for Item #{idx + 1}</span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-teal-900 uppercase mb-0.5">
+                                    Agreement Start Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={row.agreementStartDate || ''}
+                                    onChange={(e) => handleUpdateProductRow(idx, 'agreementStartDate', e.target.value)}
+                                    className="w-full bg-white border border-teal-300 px-2 py-1.5 text-xs font-medium text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-teal-900 uppercase mb-0.5">
+                                    Agreement End Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={row.agreementEndDate || ''}
+                                    onChange={(e) => handleUpdateProductRow(idx, 'agreementEndDate', e.target.value)}
+                                    className="w-full bg-white border border-teal-300 px-2 py-1.5 text-xs font-medium text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-teal-900 uppercase mb-0.5">
+                                    Lock-in End Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={row.lockinEndDate || ''}
+                                    onChange={(e) => handleUpdateProductRow(idx, 'lockinEndDate', e.target.value)}
+                                    className="w-full bg-white border border-teal-300 px-2 py-1.5 text-xs font-medium text-black"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-teal-900 uppercase mb-0.5">
+                                    Attach Agreement PDF
+                                  </label>
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="file"
+                                      accept="application/pdf,.pdf"
+                                      onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                          handleProductFileUpload(e.target.files[0], idx);
+                                        }
+                                      }}
+                                      className="w-full bg-white border border-teal-300 px-2 py-1 text-xs text-black"
+                                    />
+                                    {uploadingProductAgrIdx === idx && (
+                                      <Loader2 size={16} className="animate-spin text-teal-800" />
+                                    )}
+                                  </div>
+                                  {row.agreementPdfName && (
+                                    <div className="text-[10px] text-teal-800 font-bold mt-0.5 line-clamp-1">
+                                      Attached: {row.agreementPdfName}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -2180,7 +2625,7 @@ export default function ClientMasterRegistryPage() {
       {/* ADD NEW PRODUCT OPTION MODAL */}
       <AnimatePresence>
         {showAddProductModal && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -2234,12 +2679,12 @@ export default function ClientMasterRegistryPage() {
       {/* FULL RECORD VIEWER */}
       <AnimatePresence>
         {entryToViewDetails && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 sm:p-8 w-full max-w-4xl space-y-6 shadow-2xl my-8 max-h-[90vh] overflow-y-auto text-xs"
+              className="bg-white border border-[var(--outline-variant)] p-6 sm:p-8 w-full max-w-4xl space-y-6 shadow-2xl my-auto max-h-[88vh] overflow-y-auto text-xs flex flex-col"
             >
               <div className="flex items-center justify-between border-b border-neutral-200 pb-4">
                 <div>

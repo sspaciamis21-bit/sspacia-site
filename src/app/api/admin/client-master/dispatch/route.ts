@@ -22,7 +22,12 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { sendType = 'MANUAL', clientMasterIds = [], locationId = null } = body;
+    const { 
+      sendType = 'MANUAL', 
+      clientMasterIds = [], 
+      locationId = null,
+      targetDueDay = null, // e.g. 5, 10, 15, 20, or 'ALL'
+    } = body;
 
     // ── Node-based Data Isolation & Super Admin Node Filter for Dispatching ──
     const scopedUserIds = await getNodeScopedUserIds(userId);
@@ -36,14 +41,13 @@ export async function POST(request: Request) {
       where.id = { in: clientMasterIds.map(Number) };
     }
 
-    // Super Admin Node Filter: if locationId is passed (e.g. Super Admin filtered by a center)
+    // Super Admin Node Filter: if locationId is passed
     if (locationId && locationId !== 'ALL') {
       const locationUserIds = await getUserIdsByLocation(parseInt(String(locationId), 10));
       if (locationUserIds) {
         where.createdById = { in: locationUserIds };
       }
     } else if (scopedUserIds !== null) {
-      // Apply node scoping for non-admin Community Managers
       where.createdById = { in: scopedUserIds };
     }
 
@@ -56,7 +60,7 @@ export async function POST(request: Request) {
 
     if (clientsToDispatch.length === 0) {
       return NextResponse.json(
-        { error: 'No active clients found in the selected center to dispatch.' },
+        { error: 'No active clients found in the selected filter to dispatch.' },
         { status: 400 }
       );
     }
@@ -67,26 +71,10 @@ export async function POST(request: Request) {
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
     const currentBillingMonth = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+    const currentMonthIndex = now.getMonth(); // 0 to 11
+    const currentYear = now.getFullYear();
 
-    // ── Duplicate prevention for AUTOMATIC_MONTH_END ─────────────
-    if (sendType === 'AUTOMATIC_MONTH_END') {
-      const existingCount = await (prisma as any).invoiceRecord.count({
-        where: {
-          billingMonth: currentBillingMonth,
-          sendType: 'AUTOMATIC_MONTH_END',
-          ...(scopedUserIds !== null ? { createdById: { in: scopedUserIds } } : {}),
-        },
-      });
-
-      if (existingCount > 0) {
-        return NextResponse.json(
-          { error: `Month-end dispatch already completed for ${currentBillingMonth} in this center (${existingCount} records exist).` },
-          { status: 400 }
-        );
-      }
-    }
-
-    // ── Strict Single Invoice Record Per Client Master Entry ─────────────────
+    // ── Strict Single Invoice Record Per (ClientMaster + DueDay + Frequency) ──
     const existingInvoices = await (prisma as any).invoiceRecord.findMany({
       where: {
         billingMonth: currentBillingMonth,
@@ -101,14 +89,44 @@ export async function POST(request: Request) {
 
     const invoiceCreates: any[] = [];
     let skippedDuplicatesCount = 0;
+    let skippedOffCycleCount = 0;
 
     for (const cm of clientsToDispatch) {
       if (cm.products && cm.products.length > 0) {
+        // Filter and group products by (dueDay + duration)
         const groupsMap = new Map<string, any[]>();
+
         for (const p of cm.products) {
-          const pDuration = p.paymentDuration || 'MONTHLY';
-          const pDueDay = p.paymentDueDay ?? cm.paymentDueDay ?? 'DEFAULT';
-          const key = `${pDueDay}_${pDuration}`;
+          const pDuration = (p.paymentDuration || 'MONTHLY').toUpperCase();
+          const pDueDay = p.paymentDueDay ?? cm.paymentDueDay ?? 5;
+
+          // 1. Exact Due Day Filter Check (if targetDueDay specified)
+          if (targetDueDay && targetDueDay !== 'ALL') {
+            if (Number(pDueDay) !== Number(targetDueDay)) {
+              continue; // Skip products not falling on this exact target due date
+            }
+          }
+
+          // 2. Billing Cycle Validator (Yearly, Quarterly, Half-Yearly, Monthly)
+          const startMonth = p.firstPaymentDate ? new Date(p.firstPaymentDate).getMonth() : (cm.agreementStartDate ? new Date(cm.agreementStartDate).getMonth() : 0);
+          const monthOffset = (currentMonthIndex - startMonth + 12) % 12;
+
+          let isDueInCurrentMonth = true;
+          if (pDuration === 'QUARTERLY') {
+            isDueInCurrentMonth = monthOffset % 3 === 0;
+          } else if (pDuration === 'HALF_YEARLY') {
+            isDueInCurrentMonth = monthOffset % 6 === 0;
+          } else if (pDuration === 'YEARLY') {
+            isDueInCurrentMonth = monthOffset % 12 === 0;
+          }
+
+          if (!isDueInCurrentMonth) {
+            skippedOffCycleCount++;
+            continue; // Skip products not due in this calendar month cycle
+          }
+
+          // Option B: Group strictly by Due Day so accountant gets 1 consolidated invoice for all items due on that day
+          const key = `DUE_${pDueDay}`;
           if (!groupsMap.has(key)) {
             groupsMap.set(key, []);
           }
@@ -124,13 +142,20 @@ export async function POST(request: Request) {
 
           existingSet.add(dedupeKey);
           const firstP = pList[0];
+          const dueDayNum = Number(firstP.paymentDueDay ?? cm.paymentDueDay ?? 5);
+          const daysInCurrentMonth = new Date(currentYear, currentMonthIndex + 1, 0).getDate();
+          const calculatedDueDate = new Date(currentYear, currentMonthIndex, Math.min(dueDayNum, daysInCurrentMonth));
 
           const totalSeats = pList.reduce((sum: number, p: any) => sum + (Number(p.noOfSeats) || 0), 0);
           const subAmount = pList.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
           const totalAmt = pList.reduce((sum: number, p: any) => sum + (Number(p.totalAmount) || 0), 0);
           const cabinSummary = pList.length > 1
-            ? `${pList.length} Items (${pList.map((p: any) => p.cabinName).filter(Boolean).join(', ')})`
+            ? `${pList.length} Spaces (${pList.map((p: any) => p.cabinName).filter(Boolean).join(', ')})`
             : (pList[0].cabinName || cm.cabinName || 'N/A');
+
+          // Determine duration label (single frequency vs combined frequencies)
+          const uniqueDurations = Array.from(new Set(pList.map((p: any) => (p.paymentDuration || 'MONTHLY').toUpperCase())));
+          const consolidatedDuration = uniqueDurations.length === 1 ? uniqueDurations[0] : 'COMBINED';
 
           invoiceCreates.push(
             (prisma as any).invoiceRecord.create({
@@ -144,9 +169,11 @@ export async function POST(request: Request) {
                 amount: subAmount,
                 gstPercent: firstP.gstPercent || cm.gstPercent || 18,
                 totalAmount: totalAmt,
-                paymentDuration: firstP.paymentDuration || 'MONTHLY',
-                paymentDueDay: firstP.paymentDueDay ?? cm.paymentDueDay ?? null,
+                paymentDuration: consolidatedDuration,
+                paymentDueDay: dueDayNum,
                 firstPaymentDate: firstP.firstPaymentDate ? new Date(firstP.firstPaymentDate) : null,
+                dueDate: calculatedDueDate,
+                lateFeePerDay: 100.0,
                 productGroupKey: groupKey,
                 itemsJson: JSON.stringify(pList.map((p: any) => ({
                   cabinName: p.cabinName,
@@ -158,6 +185,9 @@ export async function POST(request: Request) {
                   paymentDuration: p.paymentDuration,
                   paymentDueDay: p.paymentDueDay,
                   firstPaymentDate: p.firstPaymentDate,
+                  billingType: p.billingType || 'REGULAR',
+                  agreementPdfUrl: p.agreementPdfUrl,
+                  agreementPdfName: p.agreementPdfName,
                 }))),
                 gstNo: cm.gstNo,
                 billingMonth: currentBillingMonth,
@@ -170,6 +200,12 @@ export async function POST(request: Request) {
           );
         }
       } else {
+        // Fallback for legacy single-cabin entries
+        const dueDayNum = Number(cm.paymentDueDay ?? 5);
+        if (targetDueDay && targetDueDay !== 'ALL' && Number(targetDueDay) !== dueDayNum) {
+          continue;
+        }
+
         const dedupeKey = `${cm.id}_DEFAULT`;
         if (existingSet.has(dedupeKey)) {
           skippedDuplicatesCount++;
@@ -177,6 +213,8 @@ export async function POST(request: Request) {
         }
 
         existingSet.add(dedupeKey);
+        const daysInCurrentMonth = new Date(currentYear, currentMonthIndex + 1, 0).getDate();
+        const calculatedDueDate = new Date(currentYear, currentMonthIndex, Math.min(dueDayNum, daysInCurrentMonth));
 
         invoiceCreates.push(
           (prisma as any).invoiceRecord.create({
@@ -191,7 +229,9 @@ export async function POST(request: Request) {
               gstPercent: cm.gstPercent || 18,
               totalAmount: Number(cm.totalAmount) || 0,
               paymentDuration: 'MONTHLY',
-              paymentDueDay: cm.paymentDueDay ?? null,
+              paymentDueDay: dueDayNum,
+              dueDate: calculatedDueDate,
+              lateFeePerDay: 100.0,
               productGroupKey: 'DEFAULT',
               gstNo: cm.gstNo,
               billingMonth: currentBillingMonth,
@@ -208,7 +248,7 @@ export async function POST(request: Request) {
     if (invoiceCreates.length === 0) {
       return NextResponse.json(
         {
-          error: `Selected client entry(ies) are already present in the Invoices section for ${currentBillingMonth}. Cannot re-dispatch.`,
+          error: `No new invoice records were eligible for dispatch (already present in Invoices section or off-cycle).`,
         },
         { status: 400 }
       );
@@ -218,9 +258,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Successfully dispatched ${createdInvoiceRecords.length} entries to Invoices section${skippedDuplicatesCount > 0 ? ` (${skippedDuplicatesCount} already present skipped)` : ''}!`,
+      message: `Successfully dispatched ${createdInvoiceRecords.length} invoice entries to the Invoices section!`,
       count: createdInvoiceRecords.length,
       skippedDuplicatesCount,
+      skippedOffCycleCount,
       batchDate: now.toISOString(),
       sendType,
       data: createdInvoiceRecords,

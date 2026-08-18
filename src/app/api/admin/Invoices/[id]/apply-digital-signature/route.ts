@@ -1,0 +1,128 @@
+import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/jwt';
+import prisma from '@/lib/prisma';
+import { stampPdfWithDigitalSignature } from '@/lib/digital-signature';
+import fs from 'fs';
+import path from 'path';
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth-token')?.value;
+    let userId = 1;
+    let userName = 'Community Manager';
+
+    if (token) {
+      const payload = await verifyToken(token);
+      if (payload?.id) {
+        userId = Number(payload.id);
+        userName = (payload.name as string) || (payload.email as string) || userName;
+      }
+    }
+
+    const { id: rawId } = await params;
+    const invoiceRecordId = parseInt(rawId, 10);
+    if (isNaN(invoiceRecordId)) {
+      return NextResponse.json({ error: 'Invalid invoice record ID' }, { status: 400 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const { signerName, signerTitle, customSignatureUrl } = body;
+
+    // 1. Fetch InvoiceRecord and attached invoice PDF
+    const invoiceRecord = await (prisma as any).invoiceRecord.findUnique({
+      where: { id: invoiceRecordId },
+      include: {
+        attachedInvoice: true,
+      },
+    });
+
+    if (!invoiceRecord) {
+      return NextResponse.json({ error: 'Invoice record not found' }, { status: 404 });
+    }
+
+    const pdfUrl = invoiceRecord.attachedInvoice?.fileUrl;
+    if (!pdfUrl) {
+      return NextResponse.json(
+        { error: 'No accountant invoice PDF attached to sign. Please upload an invoice PDF first.' },
+        { status: 400 }
+      );
+    }
+
+    // 2. Fetch active digital signature stamp setting
+    const signatureSetting = await (prisma as any).digitalSignatureSetting.findFirst({
+      where: { isActive: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const activeSignatureUrl = customSignatureUrl || signatureSetting?.signatureUrl || '';
+    const activeSigner = signerName || signatureSetting?.signerName || userName;
+    const activeTitle = signerTitle || signatureSetting?.signerTitle || 'Authorized Signatory';
+    const company = signatureSetting?.companyName || 'SSPACIA Workspaces';
+
+    // 3. Read base PDF bytes
+    let pdfBuffer: Buffer;
+    if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) {
+      const res = await fetch(pdfUrl);
+      if (!res.ok) throw new Error('Failed to fetch attached PDF from remote storage');
+      pdfBuffer = Buffer.from(await res.arrayBuffer());
+    } else {
+      const localPath = path.join(process.cwd(), 'public', pdfUrl.startsWith('/') ? pdfUrl.slice(1) : pdfUrl);
+      if (!fs.existsSync(localPath)) {
+        return NextResponse.json({ error: `File not found at ${localPath}` }, { status: 404 });
+      }
+      pdfBuffer = fs.readFileSync(localPath);
+    }
+
+    // 4. Apply Digital Signature Stamp
+    const signedPdfBuffer = await stampPdfWithDigitalSignature(pdfBuffer, {
+      signerName: activeSigner,
+      signerTitle: activeTitle,
+      companyName: company,
+      signatureImageUrl: activeSignatureUrl,
+      date: new Date(),
+    });
+
+    // 5. Save stamped PDF to public/uploads/signed-invoices/
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'signed-invoices');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const signedFileName = `signed_invoice_${invoiceRecord.id}_${Date.now()}.pdf`;
+    const signedFilePath = path.join(uploadDir, signedFileName);
+    fs.writeFileSync(signedFilePath, signedPdfBuffer);
+    const signedPdfUrl = `/uploads/signed-invoices/${signedFileName}`;
+
+    // 6. Update InvoiceRecord
+    const updated = await (prisma as any).invoiceRecord.update({
+      where: { id: invoiceRecordId },
+      data: {
+        digitallySignedPdfUrl: signedPdfUrl,
+        digitallySignedPdfName: signedFileName,
+        signedAt: new Date(),
+        signedByName: activeSigner,
+        status: 'APPROVED', // Once signed, invoice is approved and client-ready
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Digital signature applied successfully!',
+      data: {
+        invoiceRecord: updated,
+        signedPdfUrl,
+      },
+    });
+  } catch (error) {
+    console.error('Apply digital signature error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to apply digital signature' },
+      { status: 500 }
+    );
+  }
+}

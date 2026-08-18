@@ -60,6 +60,14 @@ export async function PUT(
       gstNo,
       billingMonth,
       status,
+      dueDate,
+      lateFeePerDay,
+      lateDays,
+      lateFeeAmount,
+      digitallySignedPdfUrl,
+      digitallySignedPdfName,
+      signedAt,
+      signedByName,
     } = body;
 
     const updated = await (prisma as any).invoiceRecord.update({
@@ -75,6 +83,14 @@ export async function PUT(
         ...(gstNo !== undefined ? { gstNo } : {}),
         ...(billingMonth !== undefined ? { billingMonth } : {}),
         ...(status !== undefined ? { status } : {}),
+        ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+        ...(lateFeePerDay !== undefined ? { lateFeePerDay: Number(lateFeePerDay) } : {}),
+        ...(lateDays !== undefined ? { lateDays: Number(lateDays) } : {}),
+        ...(lateFeeAmount !== undefined ? { lateFeeAmount: Number(lateFeeAmount) } : {}),
+        ...(digitallySignedPdfUrl !== undefined ? { digitallySignedPdfUrl } : {}),
+        ...(digitallySignedPdfName !== undefined ? { digitallySignedPdfName } : {}),
+        ...(signedAt !== undefined ? { signedAt: signedAt ? new Date(signedAt) : null } : {}),
+        ...(signedByName !== undefined ? { signedByName } : {}),
       },
     });
 

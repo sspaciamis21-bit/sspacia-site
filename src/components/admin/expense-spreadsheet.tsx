@@ -22,7 +22,10 @@ import {
   MoreVertical,
   ArrowDown,
   ArrowRight,
-  ChevronDown
+  ChevronDown,
+  Paperclip,
+  FileText,
+  ExternalLink
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,6 +67,11 @@ export function ExpenseSpreadsheet({
   const [hasChanges, setHasChanges] = useState<boolean>(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [lastSavedTime, setLastSavedTime] = useState<string>("");
+
+  // Cell Attachment State (Attach PDF to cell)
+  const [targetAttachCell, setTargetAttachCell] = useState<{ rowId: string; colId: string } | null>(null);
+  const [uploadingCell, setUploadingCell] = useState<{ rowId: string; colId: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Hidden Columns & Hidden Rows state (Google Sheets style)
   const [hiddenColIds, setHiddenColIds] = useState<string[]>([]);
@@ -259,6 +267,82 @@ export function ExpenseSpreadsheet({
   const handleCellBlur = () => {
     commitCurrentCell();
     setEditingCell(null);
+  };
+
+  // ── CELL ATTACHMENT HANDLERS (Attach PDF / Document to Cell) ──
+  const handleTriggerAttachPdf = (rowId: string, colId: string) => {
+    notifyFmsTyping();
+    setTargetAttachCell({ rowId, colId });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !targetAttachCell) return;
+
+    const { rowId, colId } = targetAttachCell;
+    setUploadingCell({ rowId, colId });
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/admin/upload-pdf", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to upload document");
+      }
+
+      const data = await res.json();
+      const fileUrl = data.data?.fileUrl || data.fileUrl;
+
+      if (!fileUrl) {
+        throw new Error("No file URL returned from upload");
+      }
+
+      // Update row with fileUrl
+      const updatedRows = rows.map((r) => {
+        if (r.id === rowId) {
+          return { ...r, [colId]: fileUrl };
+        }
+        return r;
+      });
+
+      setRows(updatedRows);
+      if (editingCell?.rowId === rowId && editingCell?.colId === colId) {
+        setCellValue(fileUrl);
+      }
+      scheduleAutoSave(undefined, updatedRows);
+      toast.success(`PDF attached to cell: ${file.name}`);
+    } catch (err: any) {
+      console.error("PDF upload error:", err);
+      toast.error(err.message || "Failed to attach PDF");
+    } finally {
+      setUploadingCell(null);
+      setTargetAttachCell(null);
+    }
+  };
+
+  const handleRemoveAttachment = (rowId: string, colId: string) => {
+    notifyFmsTyping();
+    const updatedRows = rows.map((r) => {
+      if (r.id === rowId) {
+        return { ...r, [colId]: "" };
+      }
+      return r;
+    });
+    setRows(updatedRows);
+    if (editingCell?.rowId === rowId && editingCell?.colId === colId) {
+      setCellValue("");
+    }
+    scheduleAutoSave(undefined, updatedRows);
+    toast.info("Attachment removed from cell");
   };
 
   // ── GOOGLE SHEETS KEYBOARD NAVIGATION (Enter, Tab, Shift+Enter, Shift+Tab, Arrows) ──
@@ -612,6 +696,27 @@ export function ExpenseSpreadsheet({
             <span>+ Row</span>
           </button>
 
+          {/* ATTACH PDF TO ACTIVE CELL BUTTON */}
+          <button
+            type="button"
+            onClick={() => {
+              if (editingCell) {
+                handleTriggerAttachPdf(editingCell.rowId, editingCell.colId);
+              } else {
+                toast.info("Please click any cell first to attach a PDF to it");
+              }
+            }}
+            className={`px-2.5 py-1 text-xs font-bold uppercase tracking-wider border flex items-center gap-1 transition-all cursor-pointer ${
+              editingCell
+                ? "bg-teal-50 text-[#1ab0bc] border-teal-300 hover:bg-teal-100 shadow-2xs"
+                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-100"
+            }`}
+            title={editingCell ? "Attach PDF to the selected cell" : "Click on any cell first, then click Attach PDF"}
+          >
+            <Paperclip className="w-3.5 h-3.5 text-[#1ab0bc]" />
+            <span>Attach PDF</span>
+          </button>
+
           {/* EXPORT CSV */}
           <button
             onClick={handleExportCSV}
@@ -760,28 +865,90 @@ export function ExpenseSpreadsheet({
                 {/* CELLS */}
                 {visibleColumns.map((col) => {
                   const isEditing = editingCell?.rowId === row.id && editingCell?.colId === col.id;
+                  const isUploading = uploadingCell?.rowId === row.id && uploadingCell?.colId === col.id;
                   const val = row[col.id];
+                  const isPdf = typeof val === "string" && (
+                    val.includes("/api/admin/stored-documents/") ||
+                    val.includes("/uploads/") ||
+                    val.toLowerCase().endsWith(".pdf")
+                  );
 
                   return (
                     <td
                       key={col.id}
                       onClick={() => handleCellClick(row.id, col.id, val)}
-                      className={`px-2 py-1.5 border-r border-gray-200 cursor-cell relative min-h-[30px] ${
+                      className={`px-2 py-1.5 border-r border-gray-200 cursor-cell relative min-h-[32px] ${
                         isEditing
                           ? "bg-white ring-2 ring-[#1ab0bc] ring-inset z-10"
                           : "hover:bg-sky-50/50"
                       }`}
                     >
-                      {isEditing ? (
-                        <input
-                          ref={inputRef}
-                          type="text"
-                          value={cellValue}
-                          onChange={(e) => setCellValue(e.target.value)}
-                          onBlur={handleCellBlur}
-                          onKeyDown={handleCellKeyDown}
-                          className="w-full h-full bg-transparent px-1 py-0.5 text-xs text-gray-900 outline-none font-mono font-medium"
-                        />
+                      {isUploading ? (
+                        <div className="flex items-center gap-1.5 text-xs text-teal-700 font-bold px-1 animate-pulse">
+                          <Loader2 size={12} className="animate-spin" />
+                          <span>Attaching PDF...</span>
+                        </div>
+                      ) : isEditing ? (
+                        <div className="relative w-full h-full">
+                          {/* FULL-WIDTH CLEAN CELL INPUT */}
+                          <input
+                            ref={inputRef}
+                            type="text"
+                            value={cellValue}
+                            onChange={(e) => setCellValue(e.target.value)}
+                            onBlur={handleCellBlur}
+                            onKeyDown={handleCellKeyDown}
+                            placeholder={isPdf ? "PDF attached..." : ""}
+                            className="w-full h-full bg-transparent px-1 py-0.5 text-xs text-gray-900 outline-none font-mono font-medium"
+                          />
+
+                          {/* FLOATING ACTION PILL ABOVE THE ACTIVE CELL */}
+                          <div className="absolute -top-7 right-0 z-30 flex items-center gap-1.5 bg-white border border-[#1ab0bc] shadow-md px-2 py-0.5 rounded text-[10px] font-bold text-[#1ab0bc] whitespace-nowrap">
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleTriggerAttachPdf(row.id, col.id);
+                              }}
+                              className="flex items-center gap-1 hover:text-teal-900 cursor-pointer"
+                              title="Click to attach PDF file to this cell"
+                            >
+                              <Paperclip size={10} />
+                              <span>Attach PDF</span>
+                            </button>
+
+                            {isPdf && (
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleRemoveAttachment(row.id, col.id);
+                                }}
+                                className="text-gray-400 hover:text-red-600 pl-1 border-l border-gray-200 cursor-pointer"
+                                title="Remove PDF attachment"
+                              >
+                                <X size={11} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : isPdf ? (
+                        <div className="flex items-center justify-between gap-1 w-full px-1">
+                          <a
+                            href={val}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[10px] font-bold truncate max-w-[220px] transition-colors"
+                            title="Click to view attached PDF document"
+                          >
+                            <FileText size={10} className="text-emerald-600 shrink-0" />
+                            <span className="truncate">📄 View PDF</span>
+                            <ExternalLink size={9} className="shrink-0 text-emerald-500" />
+                          </a>
+                        </div>
                       ) : (
                         <div className="flex items-center justify-between min-h-[18px] px-1">
                           <span className="text-gray-900 truncate max-w-[260px] block">
@@ -844,6 +1011,14 @@ export function ExpenseSpreadsheet({
         </table>
       </div>
 
+      {/* HIDDEN FILE INPUT FOR CELL PDF ATTACHMENTS */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf,image/png,image/jpeg,image/webp"
+        onChange={handleFileUpload}
+        className="hidden"
+      />
     </div>
   );
 }

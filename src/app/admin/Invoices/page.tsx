@@ -29,7 +29,13 @@ import {
   Shield,
   Download,
   Tag,
-  Edit2
+  Edit2,
+  PenTool,
+  CheckCheck,
+  Award,
+  DollarSign,
+  AlertOctagon,
+  Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -73,6 +79,16 @@ interface InvoiceRecord {
   firstPaymentDate?: string | null;
   productGroupKey?: string | null;
   itemsJson?: string | null;
+  dueDate?: string | null;
+  lateFeePerDay?: number | null;
+  lateDays?: number | null;
+  lateFeeAmount?: number | null;
+  calculatedLateDays?: number;
+  calculatedLateFee?: number;
+  digitallySignedPdfUrl?: string | null;
+  digitallySignedPdfName?: string | null;
+  signedAt?: string | null;
+  signedByName?: string | null;
   gstNo: string | null;
   billingMonth: string | null;
   sendType: 'MANUAL' | 'AUTOMATIC_MONTH_END';
@@ -106,6 +122,10 @@ interface InvoiceRecord {
       amount: number | null;
       gstPercent: number | null;
       totalAmount: number | null;
+      paymentDuration?: string | null;
+      paymentDueDay?: number | null;
+      agreementPdfUrl?: string | null;
+      agreementPdfName?: string | null;
     }[];
   };
   attachedInvoice?: AttachedInvoice | null;
@@ -148,10 +168,34 @@ export default function AdminInvoicesWorkflowPage() {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('ALL');
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState('ALL');
   const [selectedCycleFilter, setSelectedCycleFilter] = useState('ALL');
+  const [selectedDueDayFilter, setSelectedDueDayFilter] = useState('ALL');
+  const [selectedBillingMonthFilter, setSelectedBillingMonthFilter] = useState('ALL');
 
   // Node/Location Filter for Admin
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('ALL');
+
+  // Digital Signature Management State
+  const [showSignatureSettingsModal, setShowSignatureSettingsModal] = useState(false);
+  const [showApplySignatureModal, setShowApplySignatureModal] = useState(false);
+  const [targetInvoiceToSign, setTargetInvoiceToSign] = useState<InvoiceRecord | null>(null);
+  const [signatureSetting, setSignatureSetting] = useState<{
+    signatureUrl: string;
+    signerName: string;
+    signerTitle: string;
+    companyName: string;
+    isActive: boolean;
+  }>({
+    signatureUrl: '',
+    signerName: 'Community Manager',
+    signerTitle: 'Authorized Signatory',
+    companyName: 'SSPACIA Workspaces',
+    isActive: true,
+  });
+  const [uploadingSignature, setUploadingSignature] = useState(false);
+  const [newSignatureFile, setNewSignatureFile] = useState<File | null>(null);
+  const [signatureSignerName, setSignatureSignerName] = useState('');
+  const [signatureSignerTitle, setSignatureSignerTitle] = useState('');
 
   // Accountant Upload Invoice Modal
   const [entryToAttachInvoice, setEntryToAttachInvoice] = useState<InvoiceRecord | null>(null);
@@ -179,6 +223,167 @@ export default function AdminInvoicesWorkflowPage() {
   const [editGstNo, setEditGstNo] = useState('');
   const [editBillingMonth, setEditBillingMonth] = useState('');
   const [editStatus, setEditStatus] = useState<InvoiceRecord['status']>('PENDING_CM_REVIEW');
+
+  const fetchSignatureSettings = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/digital-signature');
+      const json = await res.json();
+      if (json.success && json.data) {
+        setSignatureSetting(json.data);
+        setSignatureSignerName(json.data.signerName || 'Community Manager');
+        setSignatureSignerTitle(json.data.signerTitle || 'Authorized Signatory');
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    fetchSignatureSettings();
+  }, [fetchSignatureSettings]);
+
+  const handleSaveSignatureSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUploadingSignature(true);
+    try {
+      let signatureUrl = signatureSetting.signatureUrl;
+
+      if (newSignatureFile) {
+        const formData = new FormData();
+        formData.append('file', newSignatureFile);
+        formData.append('signerName', signatureSignerName);
+        formData.append('signerTitle', signatureSignerTitle);
+        formData.append('companyName', signatureSetting.companyName || 'SSPACIA Workspaces');
+
+        const res = await fetch('/api/admin/digital-signature', {
+          method: 'POST',
+          body: formData,
+        });
+        const json = await res.json();
+        if (json.success) {
+          toast.success('Digital signature stamp updated successfully! ✍️');
+          setSignatureSetting(json.data);
+          setShowSignatureSettingsModal(false);
+          setNewSignatureFile(null);
+          return;
+        } else {
+          toast.error(json.error || 'Failed to update signature');
+          return;
+        }
+      }
+
+      const res = await fetch('/api/admin/digital-signature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signatureUrl,
+          signerName: signatureSignerName,
+          signerTitle: signatureSignerTitle,
+          companyName: signatureSetting.companyName || 'SSPACIA Workspaces',
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success('Digital signature settings saved! ✍️');
+        setSignatureSetting(json.data);
+        setShowSignatureSettingsModal(false);
+      } else {
+        toast.error(json.error || 'Failed to save settings');
+      }
+    } catch {
+      toast.error('Error saving signature settings');
+    } finally {
+      setUploadingSignature(false);
+    }
+  };
+
+  const handleApplyDigitalSignature = async (invoiceId: number) => {
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/admin/Invoices/${invoiceId}/apply-digital-signature`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signerName: signatureSignerName || signatureSetting.signerName,
+          signerTitle: signatureSignerTitle || signatureSetting.signerTitle,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success('Digital signature stamp successfully applied to invoice PDF! ✅');
+        setShowApplySignatureModal(false);
+        setTargetInvoiceToSign(null);
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to apply digital signature');
+      }
+    } catch {
+      toast.error('Error applying digital signature');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Late Fee Surcharge Action
+  const handleApplyLateFee = async (inv: InvoiceRecord) => {
+    const lateFee = inv.calculatedLateFee || 0;
+    const lateDays = inv.calculatedLateDays || 0;
+    if (lateFee <= 0) {
+      toast.info('Invoice is not overdue yet.');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const newTotal = (Number(inv.totalAmount) || 0) + lateFee;
+      const res = await fetch(`/api/admin/Invoices/${inv.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lateFeeAmount: lateFee,
+          lateDays,
+          totalAmount: newTotal,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Late Fee Surcharge of ₹${lateFee.toLocaleString('en-IN')} (+₹100/day for ${lateDays} days) applied!`);
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to apply late fee');
+      }
+    } catch {
+      toast.error('Error applying late fee');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleWaiveLateFee = async (inv: InvoiceRecord) => {
+    setActionLoading(true);
+    try {
+      const currentLateFee = Number(inv.lateFeeAmount) || 0;
+      const newTotal = Math.max(0, (Number(inv.totalAmount) || 0) - currentLateFee);
+      const res = await fetch(`/api/admin/Invoices/${inv.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lateFeeAmount: 0,
+          lateDays: 0,
+          totalAmount: newTotal,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success('Late payment fee waived successfully.');
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to waive late fee');
+      }
+    } catch {
+      toast.error('Error waiving late fee');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleOpenEditModal = (inv: InvoiceRecord) => {
     setEntryToEditInvoice(inv);
@@ -448,9 +653,15 @@ export default function AdminInvoicesWorkflowPage() {
       const matchesCycle =
         selectedCycleFilter === 'ALL' || currentCycleKey === selectedCycleFilter;
 
-      return matchesSearch && matchesRoleFilter && matchesStatus && matchesCompany && matchesCycle;
+      const matchesDueDay =
+        selectedDueDayFilter === 'ALL' || String(e.paymentDueDay) === selectedDueDayFilter;
+
+      const matchesBillingMonth =
+        selectedBillingMonthFilter === 'ALL' || e.billingMonth === selectedBillingMonthFilter;
+
+      return matchesSearch && matchesRoleFilter && matchesStatus && matchesCompany && matchesCycle && matchesDueDay && matchesBillingMonth;
     });
-  }, [invoices, searchTerm, userRoleView, selectedStatusFilter, selectedCompanyFilter, selectedCycleFilter]);
+  }, [invoices, searchTerm, userRoleView, selectedStatusFilter, selectedCompanyFilter, selectedCycleFilter, selectedDueDayFilter, selectedBillingMonthFilter]);
 
   const groupedInvoicesByCompany = useMemo(() => {
     const map = new Map<string, InvoiceRecord[]>();
@@ -643,105 +854,170 @@ export default function AdminInvoicesWorkflowPage() {
       {/* TABLE WORKFLOW */}
       <FadeUp delay={0.2}>
         <div className="bg-white border border-[var(--outline-variant)]/40 p-6 space-y-6 shadow-xs">
-          {/* Search & Filter Bar */}
-          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border-b border-neutral-200 pb-4">
-            {/* 1. FIRST CONTROL: Company Selector & 2. Payment Duration Selector */}
-            <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <div className="flex items-center gap-2 font-bold text-[#006064] bg-[#006064]/5 px-3 py-2 border border-[#006064]/20">
-                <Building2 size={16} />
-                <span className="text-xs uppercase tracking-wider">Select Company:</span>
-                <select
-                  value={selectedCompanyFilter}
-                  onChange={(e) => {
-                    setSelectedCompanyFilter(e.target.value);
-                    setSelectedCycleFilter('ALL');
-                  }}
-                  className="bg-white border border-[#006064]/40 px-3 py-1.5 text-xs focus:outline-none focus:border-[#006064] font-extrabold text-[#006064] shadow-xs"
-                >
-                  <option value="ALL">All Companies ({companyOptions.length})</option>
-                  {companyOptions.map((cName) => (
-                    <option key={cName} value={cName}>
-                      {cName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* SECOND CONTROL: Payment Duration / Cycle Selector */}
-              <div className="flex items-center gap-2 font-bold text-amber-900 bg-amber-50 px-3 py-2 border border-amber-300">
-                <Calendar size={16} className="text-amber-700" />
-                <span className="text-xs uppercase tracking-wider">Payment Duration / Cycle:</span>
-                <select
-                  value={selectedCycleFilter}
-                  onChange={(e) => setSelectedCycleFilter(e.target.value)}
-                  className="bg-white border border-amber-400 px-3 py-1.5 text-xs focus:outline-none focus:border-amber-600 font-extrabold text-amber-900 shadow-xs"
-                >
-                  <option value="ALL">All Payment Cycles ({availableCycleOptions.length})</option>
-                  {availableCycleOptions.map((cyc) => (
-                    <option key={cyc.key} value={cyc.key}>
-                      {cyc.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <div className="relative flex-1 min-w-[200px] sm:w-64">
-                <Search size={16} className="absolute left-3 top-3 text-[#616161]" />
-                <input
-                  type="text"
-                  placeholder="Search by GST or cabin..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] pl-9 pr-4 py-2 text-xs focus:outline-none focus:border-[var(--primary)]"
-                />
-              </div>
-
-              {/* Admin & Accountant Node Filter */}
-              {canUseNodeFilter && locations.length > 0 && (
-                <>
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#616161]">
-                    <MapPin size={14} /> Node:
-                  </div>
+          {/* Search & Filter Bar - 2-Tier Structured Layout */}
+          <div className="bg-[#F8F9FA] border border-[var(--outline-variant)]/60 p-4 space-y-3.5 shadow-xs">
+            {/* Tier 1: Primary Dimensions & Action Button */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* 1. Select Company */}
+                <div className="flex items-center gap-1.5 bg-white border border-[#006064]/30 px-3 py-1.5 shadow-2xs">
+                  <Building2 size={14} className="text-[#006064]" />
+                  <span className="text-[11px] font-bold text-[#006064] uppercase tracking-wider">Company:</span>
                   <select
-                    value={selectedLocationFilter}
-                    onChange={(e) => setSelectedLocationFilter(e.target.value)}
-                    className="bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[var(--primary)] font-medium"
+                    value={selectedCompanyFilter}
+                    onChange={(e) => {
+                      setSelectedCompanyFilter(e.target.value);
+                      setSelectedCycleFilter('ALL');
+                    }}
+                    className="bg-transparent text-xs font-extrabold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[180px] truncate"
                   >
-                    <option value="ALL">All Nodes</option>
-                    {locations.map((loc) => (
-                      <option key={loc.id} value={String(loc.id)}>
-                        {loc.name}
+                    <option value="ALL">All Companies ({companyOptions.length})</option>
+                    {companyOptions.map((cName) => (
+                      <option key={cName} value={cName}>
+                        {cName}
                       </option>
                     ))}
                   </select>
-                </>
-              )}
+                </div>
 
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[#616161]">
-                <Filter size={14} /> Status:
+                {/* 2. Due Date Filter */}
+                <div className="flex items-center gap-1.5 bg-white border border-teal-300 px-3 py-1.5 shadow-2xs">
+                  <Clock size={14} className="text-teal-700" />
+                  <span className="text-[11px] font-bold text-teal-800 uppercase tracking-wider">Due Day:</span>
+                  <select
+                    value={selectedDueDayFilter}
+                    onChange={(e) => setSelectedDueDayFilter(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                  >
+                    <option value="ALL">All Due Days</option>
+                    <option value="5">5th of Month</option>
+                    <option value="7">7th of Month</option>
+                    <option value="10">10th of Month</option>
+                    <option value="15">15th of Month</option>
+                    <option value="20">20th of Month</option>
+                    <option value="25">25th of Month</option>
+                    <option value="30">30th of Month</option>
+                  </select>
+                </div>
+
+                {/* 3. Payment Duration */}
+                <div className="flex items-center gap-1.5 bg-white border border-amber-300 px-3 py-1.5 shadow-2xs">
+                  <Calendar size={14} className="text-amber-700" />
+                  <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Duration:</span>
+                  <select
+                    value={selectedCycleFilter}
+                    onChange={(e) => setSelectedCycleFilter(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[200px] truncate"
+                  >
+                    <option value="ALL">All Cycles ({availableCycleOptions.length})</option>
+                    {availableCycleOptions.map((cyc) => (
+                      <option key={cyc.key} value={cyc.key}>
+                        {cyc.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <select
-                value={selectedStatusFilter}
-                onChange={(e) => setSelectedStatusFilter(e.target.value)}
-                className="bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[var(--primary)] font-medium"
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="PENDING_CM_REVIEW">Pending CM Review</option>
-                <option value="SENT_TO_ACCOUNTANT">Sent to Accountant</option>
-                <option value="INVOICE_ATTACHED">Invoice Attached</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED_WITH_REMARKS">Revision Requested</option>
-              </select>
 
-              <button
-                onClick={fetchData}
-                className="p-2 border border-[var(--outline-variant)] hover:bg-neutral-50 text-[#616161]"
-                title="Refresh"
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              </button>
+              {/* Primary Action: Digital Signature Stamp Hub */}
+              {(canAccessCM || isAdmin) && (
+                <button
+                  type="button"
+                  onClick={() => setShowSignatureSettingsModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-colors"
+                >
+                  <PenTool size={13} />
+                  <span>Digital Signature Stamp</span>
+                </button>
+              )}
+            </div>
+
+            {/* Tier 2: Search, Node Scoping, Status Filter & Refresh */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-neutral-200/80">
+              <div className="relative flex-1 min-w-[240px] max-w-md">
+                <Search size={14} className="absolute left-3 top-2.5 text-[#616161]" />
+                <input
+                  type="text"
+                  placeholder="Search by company, GST, or cabin..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-white border border-[var(--outline-variant)] pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-[#006064] font-medium"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-black"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Node Filter */}
+                {canUseNodeFilter && locations.length > 0 && (
+                  <div className="flex items-center gap-1 bg-white border border-[var(--outline-variant)] px-2.5 py-1.5">
+                    <MapPin size={13} className="text-[#616161]" />
+                    <span className="text-[10px] font-bold uppercase text-[#616161]">Node:</span>
+                    <select
+                      value={selectedLocationFilter}
+                      onChange={(e) => setSelectedLocationFilter(e.target.value)}
+                      className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                    >
+                      <option value="ALL">All Nodes</option>
+                      {locations.map((loc) => (
+                        <option key={loc.id} value={String(loc.id)}>
+                          {loc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Status Filter */}
+                <div className="flex items-center gap-1 bg-white border border-[var(--outline-variant)] px-2.5 py-1.5">
+                  <Filter size={13} className="text-[#616161]" />
+                  <span className="text-[10px] font-bold uppercase text-[#616161]">Status:</span>
+                  <select
+                    value={selectedStatusFilter}
+                    onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="PENDING_CM_REVIEW">Pending CM Review</option>
+                    <option value="SENT_TO_ACCOUNTANT">Sent to Accountant</option>
+                    <option value="INVOICE_ATTACHED">Invoice Attached</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REJECTED_WITH_REMARKS">Revision Requested</option>
+                  </select>
+                </div>
+
+                {/* Reset all filters button if active */}
+                {(selectedCompanyFilter !== 'ALL' || selectedDueDayFilter !== 'ALL' || selectedCycleFilter !== 'ALL' || selectedStatusFilter !== 'ALL' || searchTerm) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCompanyFilter('ALL');
+                      setSelectedDueDayFilter('ALL');
+                      setSelectedCycleFilter('ALL');
+                      setSelectedStatusFilter('ALL');
+                      setSearchTerm('');
+                    }}
+                    className="px-2.5 py-1.5 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-[10px] font-bold uppercase tracking-wider"
+                    title="Reset all active filters"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+
+                <button
+                  onClick={fetchData}
+                  className="p-1.5 bg-white border border-[var(--outline-variant)] hover:bg-neutral-100 text-[#616161] shadow-2xs"
+                  title="Refresh data"
+                >
+                  <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -795,10 +1071,39 @@ export default function AdminInvoicesWorkflowPage() {
                             {invoice.paymentDuration ? String(invoice.paymentDuration).replace('_', ' ') : 'MONTHLY'}
                           </span>
                           {invoice.paymentDueDay && (
-                            <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 border border-amber-200 w-fit">
+                            <span className="text-[10px] font-bold text-teal-900 bg-teal-50 px-1.5 py-0.5 border border-teal-200 w-fit">
                               Due: {invoice.paymentDueDay}th of month
                             </span>
                           )}
+                          {invoice.calculatedLateDays && invoice.calculatedLateDays > 0 ? (
+                            <div className="space-y-1 mt-1">
+                              <span className="text-[9px] font-extrabold text-red-700 bg-red-50 px-1.5 py-0.5 border border-red-200 flex items-center gap-1 w-fit">
+                                <AlertOctagon size={10} /> Overdue {invoice.calculatedLateDays} days
+                              </span>
+                              <div className="text-[9px] font-bold text-red-900">
+                                Late Fee: ₹{invoice.calculatedLateFee?.toLocaleString('en-IN')}
+                              </div>
+                              {Number(invoice.lateFeeAmount || 0) > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleWaiveLateFee(invoice)}
+                                  disabled={actionLoading}
+                                  className="text-[8px] text-neutral-600 hover:text-red-700 underline font-bold uppercase"
+                                >
+                                  Waive Late Surcharge
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleApplyLateFee(invoice)}
+                                  disabled={actionLoading}
+                                  className="text-[8px] bg-red-600 hover:bg-red-700 text-white px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
+                                >
+                                  + Apply Late Fee
+                                </button>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       </td>
 
@@ -855,22 +1160,37 @@ export default function AdminInvoicesWorkflowPage() {
                         {invoice.billingMonth || 'N/A'}
                       </td>
 
-                      <td className="p-3 text-right font-black text-sm text-[var(--primary)]">
-                        ₹{Number(invoice.totalAmount || 0).toLocaleString('en-IN')}
+                      <td className="p-3 text-right">
+                        <div className="font-black text-sm text-[var(--primary)]">
+                          ₹{Number(invoice.totalAmount || 0).toLocaleString('en-IN')}
+                        </div>
+                        {Number(invoice.lateFeeAmount || 0) > 0 && (
+                          <div className="text-[9px] text-red-600 font-bold">
+                            Includes ₹{Number(invoice.lateFeeAmount).toLocaleString('en-IN')} Late Fee
+                          </div>
+                        )}
                       </td>
 
                       <td className="p-3">
-                        {renderStatusBadge(invoice.status)}
+                        <div className="space-y-1.5">
+                          {renderStatusBadge(invoice.status)}
 
-                        {/* Show Revision Remarks if rejected by CM */}
-                        {invoice.status === 'REJECTED_WITH_REMARKS' && invoice.remarks && (
-                          <div className="mt-2 p-2 bg-red-50 border border-red-200 text-red-800 text-[10px] space-y-1">
-                            <div className="font-bold flex items-center gap-1">
-                              <AlertTriangle size={11} /> CM Revision Remarks:
+                          {invoice.digitallySignedPdfUrl && (
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-bold uppercase rounded">
+                              <Award size={10} className="text-emerald-700" /> Digitally Signed
                             </div>
-                            <div className="italic">"{invoice.remarks}"</div>
-                          </div>
-                        )}
+                          )}
+
+                          {/* Show Revision Remarks if rejected by CM */}
+                          {invoice.status === 'REJECTED_WITH_REMARKS' && invoice.remarks && (
+                            <div className="mt-2 p-2 bg-red-50 border border-red-200 text-red-800 text-[10px] space-y-1">
+                              <div className="font-bold flex items-center gap-1">
+                                <AlertTriangle size={11} /> CM Revision Remarks:
+                              </div>
+                              <div className="italic">"{invoice.remarks}"</div>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       <td className="p-3 text-center">
@@ -889,12 +1209,35 @@ export default function AdminInvoicesWorkflowPage() {
                               )}
 
                               {invoice.status === 'INVOICE_ATTACHED' && invoice.attachedInvoice && (
-                                <button
-                                  onClick={() => setEntryToReviewInvoice(invoice)}
-                                  className="px-3 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 w-full justify-center shadow-xs"
+                                <>
+                                  <button
+                                    onClick={() => setEntryToReviewInvoice(invoice)}
+                                    className="px-3 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 w-full justify-center shadow-xs"
+                                  >
+                                    <Eye size={11} /> Review Tally PDF
+                                  </button>
+
+                                  <button
+                                    onClick={() => {
+                                      setTargetInvoiceToSign(invoice);
+                                      setShowApplySignatureModal(true);
+                                    }}
+                                    className="px-3 py-1.5 bg-[#006064] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-teal-900 flex items-center gap-1 w-full justify-center shadow-xs"
+                                  >
+                                    <PenTool size={11} /> Apply Digital Signature
+                                  </button>
+                                </>
+                              )}
+
+                              {invoice.digitallySignedPdfUrl && (
+                                <a
+                                  href={invoice.digitallySignedPdfUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 w-full justify-center shadow-xs"
                                 >
-                                  <Eye size={11} /> Review Tally PDF
-                                </button>
+                                  <Download size={11} /> Signed PDF
+                                </a>
                               )}
                             </>
                           )}
@@ -964,12 +1307,12 @@ export default function AdminInvoicesWorkflowPage() {
       {/* MODAL 1: Accountant Attach Tally Invoice PDF */}
       <AnimatePresence>
         {entryToAttachInvoice && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-4 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-lg space-y-4 shadow-xl text-xs"
+              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-lg space-y-4 shadow-2xl text-xs my-auto"
             >
               <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
                 <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
@@ -1005,8 +1348,9 @@ export default function AdminInvoicesWorkflowPage() {
                 </div>
               )}
 
+              {/* Upload Input */}
               <div className="space-y-2">
-                <label className="block font-bold uppercase tracking-wider text-[#616161]">
+                <label className="block font-bold uppercase text-[#616161]">
                   Select Tally Invoice PDF File *
                 </label>
                 <input
@@ -1020,13 +1364,15 @@ export default function AdminInvoicesWorkflowPage() {
                   className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs"
                 />
                 {selectedInvoiceFile && (
-                  <div className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
-                    <Check size={14} /> Selected: {selectedInvoiceFile.name} ({(selectedInvoiceFile.size / 1024).toFixed(1)} KB)
+                  <div className="text-emerald-700 font-bold flex items-center gap-1">
+                    <Check size={14} /> Selected: {selectedInvoiceFile.name} (
+                    {(selectedInvoiceFile.size / 1024).toFixed(1)} KB)
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
                 <button
                   type="button"
                   onClick={() => {
@@ -1062,12 +1408,12 @@ export default function AdminInvoicesWorkflowPage() {
       {/* MODAL 2: CM Review Attached Tally Invoice PDF */}
       <AnimatePresence>
         {entryToReviewInvoice && entryToReviewInvoice.attachedInvoice && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-4 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-xl space-y-4 shadow-xl text-xs"
+              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto"
             >
               <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
                 <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
@@ -1202,12 +1548,12 @@ export default function AdminInvoicesWorkflowPage() {
       {/* MODAL 4: Full Invoice Record Viewer */}
       <AnimatePresence>
         {entryToViewDetails && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 sm:p-8 w-full max-w-4xl space-y-6 shadow-2xl my-8 max-h-[92vh] overflow-y-auto text-xs"
+              className="bg-white border border-[var(--outline-variant)] p-6 sm:p-8 w-full max-w-4xl space-y-6 shadow-2xl my-auto max-h-[88vh] overflow-y-auto text-xs flex flex-col"
             >
               {/* Header */}
               <div className="flex items-start justify-between border-b border-neutral-200 pb-4">
@@ -1558,14 +1904,14 @@ export default function AdminInvoicesWorkflowPage() {
       {/* MODAL 4: EDIT INVOICE RECORD MODAL */}
       <AnimatePresence>
         {entryToEditInvoice && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 15 }}
-              className="bg-white border border-[var(--outline-variant)] w-full max-w-2xl shadow-2xl overflow-hidden font-sans text-xs"
+              className="bg-white border border-[var(--outline-variant)] w-full max-w-2xl shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[88vh] flex flex-col"
             >
-              <div className="p-5 bg-[#006064] text-white flex items-center justify-between">
+              <div className="p-5 bg-[#006064] text-white flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="h-9 w-9 bg-white/10 flex items-center justify-center font-bold text-sm">
                     #{entryToEditInvoice.srNo}
@@ -1589,7 +1935,7 @@ export default function AdminInvoicesWorkflowPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveEditInvoice} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <form onSubmit={handleSaveEditInvoice} className="p-6 space-y-4 overflow-y-auto flex-1">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
@@ -1743,6 +2089,254 @@ export default function AdminInvoicesWorkflowPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* MODAL 5: DIGITAL SIGNATURE STAMP SETTINGS */}
+      <AnimatePresence>
+        {showSignatureSettingsModal && (
+          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 15 }}
+              className="bg-white border border-[var(--outline-variant)] w-full max-w-lg shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[88vh] flex flex-col"
+            >
+              <div className="p-5 bg-[#006064] text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <PenTool className="h-5 w-5" />
+                  <div>
+                    <h2 className="text-base font-bold tracking-tight uppercase">
+                      Official Digital Signature Stamp Hub
+                    </h2>
+                    <p className="text-xs text-white/80 font-light">
+                      Upload or change your electronic signature stamp for 1-click invoice signing.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSignatureSettingsModal(false)}
+                  className="text-white/80 hover:text-white p-1.5 hover:bg-white/10 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveSignatureSettings} className="p-6 space-y-4 overflow-y-auto flex-1">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                    Signatory Full Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Authorized Signatory / CM Name"
+                    value={signatureSignerName}
+                    onChange={(e) => setSignatureSignerName(e.target.value)}
+                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                    Signatory Designation / Title
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Community Manager"
+                    value={signatureSignerTitle}
+                    onChange={(e) => setSignatureSignerTitle(e.target.value)}
+                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                    Upload Signature Image / Stamp (Transparent PNG Recommended)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setNewSignatureFile(e.target.files[0]);
+                      }
+                    }}
+                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs"
+                  />
+                  <p className="text-[10px] text-neutral-500 mt-1">
+                    A clear transparent PNG image works best on invoice PDFs.
+                  </p>
+                </div>
+
+                {/* Stamp Visual Live Preview */}
+                <div className="space-y-1.5 pt-2">
+                  <div className="text-[10px] font-bold uppercase text-neutral-600">
+                    Live Stamp Preview on PDF:
+                  </div>
+                  <div className="p-4 bg-[#F8F9FA] border border-[#006064] rounded flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      {newSignatureFile ? (
+                        <div className="text-xs font-bold text-teal-800 bg-teal-100 px-2 py-1">
+                          New Image Selected ({newSignatureFile.name})
+                        </div>
+                      ) : signatureSetting.signatureUrl ? (
+                        <img
+                          src={signatureSetting.signatureUrl}
+                          alt="Signature Preview"
+                          className="h-12 w-24 object-contain border border-neutral-200 bg-white p-1"
+                        />
+                      ) : (
+                        <div className="h-12 w-24 border border-dashed border-neutral-300 flex items-center justify-center text-[9px] text-neutral-400">
+                          No Graphic
+                        </div>
+                      )}
+
+                      <div>
+                        <div className="text-[10px] font-black uppercase text-[#006064]">
+                          DIGITALLY SIGNED & VERIFIED
+                        </div>
+                        <div className="font-bold text-xs text-black">
+                          {signatureSignerName || 'Signatory Name'}
+                        </div>
+                        <div className="text-[10px] text-neutral-600">
+                          {signatureSignerTitle || 'Community Manager'}, SSPACIA Workspaces
+                        </div>
+                        <div className="text-[9px] text-emerald-700 font-bold mt-0.5">
+                          ✔ Verified Electronic Signature Seal
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowSignatureSettingsModal(false)}
+                    className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={uploadingSignature}
+                    className="px-5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2"
+                  >
+                    {uploadingSignature ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    Save Stamp Settings
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL 6: APPLY DIGITAL SIGNATURE TO INVOICE */}
+      <AnimatePresence>
+        {showApplySignatureModal && targetInvoiceToSign && (
+          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 15 }}
+              className="bg-white border border-[var(--outline-variant)] w-full max-w-lg shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[88vh] flex flex-col"
+            >
+              <div className="p-5 bg-[#006064] text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <Award className="h-5 w-5" />
+                  <div>
+                    <h2 className="text-base font-bold tracking-tight uppercase">
+                      Stamp & Digitally Sign Invoice
+                    </h2>
+                    <p className="text-xs text-white/80 font-light">
+                      Invoice #{targetInvoiceToSign.srNo} — {targetInvoiceToSign.companyName}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowApplySignatureModal(false);
+                    setTargetInvoiceToSign(null);
+                  }}
+                  className="text-white/80 hover:text-white p-1.5 hover:bg-white/10 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="p-4 bg-teal-50 border border-teal-200 rounded space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-teal-900 text-xs">Target Invoice:</span>
+                    <span className="font-bold text-teal-800">
+                      ₹{Number(targetInvoiceToSign.totalAmount || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="text-xs text-teal-950 font-medium">
+                    Company: <strong className="text-black">{targetInvoiceToSign.companyName}</strong>
+                  </div>
+                  <div className="text-[11px] text-teal-900">
+                    Product: {targetInvoiceToSign.cabinName} ({targetInvoiceToSign.noOfSeats || 0} seats)
+                  </div>
+                  {targetInvoiceToSign.attachedInvoice && (
+                    <div className="text-[11px] text-teal-800 flex items-center gap-1 font-bold pt-1 border-t border-teal-200">
+                      <Paperclip size={12} /> Source PDF: {targetInvoiceToSign.attachedInvoice.fileName}
+                    </div>
+                  )}
+                </div>
+
+                {/* Stamp Summary */}
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold uppercase text-neutral-600">
+                    Signatory Authority Stamp:
+                  </div>
+                  <div className="p-3 bg-[#F8F9FA] border border-neutral-300 rounded space-y-1">
+                    <div className="font-bold text-xs text-black">
+                      {signatureSignerName || signatureSetting.signerName || 'Community Manager'}
+                    </div>
+                    <div className="text-[11px] text-neutral-600">
+                      {signatureSignerTitle || signatureSetting.signerTitle || 'Authorized Signatory'}, SSPACIA Workspaces
+                    </div>
+                    <div className="text-[10px] text-emerald-700 font-bold">
+                      Timestamp: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} IST
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowApplySignatureModal(false);
+                      setTargetInvoiceToSign(null);
+                    }}
+                    className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleApplyDigitalSignature(targetInvoiceToSign.id)}
+                    disabled={actionLoading}
+                    className="px-5 py-2.5 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm"
+                  >
+                    {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <PenTool size={14} />}
+                    Stamp & Approve Invoice
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+

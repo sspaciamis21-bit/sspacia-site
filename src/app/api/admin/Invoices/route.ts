@@ -12,94 +12,6 @@ export async function GET(request: Request) {
     // ── Auto-dispatch on last day of month (runs only once, duplicate-safe) ──
     await autoDispatchIfLastDay();
 
-    // ── Auto-cleanup & Re-sync of Invoice Records for Current Billing Month ──
-    try {
-      const now = new Date();
-      const monthNames = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-      ];
-      const currentBillingMonth = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
-
-      const allRecords = await (prisma as any).invoiceRecord.findMany({
-        where: { billingMonth: currentBillingMonth },
-        orderBy: { id: 'desc' },
-      });
-
-      // Group records by clientMasterId
-      const groupedByClient: Record<number, any[]> = {};
-      for (const rec of allRecords) {
-        if (!groupedByClient[rec.clientMasterId]) {
-          groupedByClient[rec.clientMasterId] = [];
-        }
-        groupedByClient[rec.clientMasterId].push(rec);
-      }
-
-      const duplicateIdsToDelete: number[] = [];
-
-      for (const [rawCmId, recs] of Object.entries(groupedByClient)) {
-        const cmId = Number(rawCmId);
-        const mainRecord = recs[0];
-
-        if (recs.length > 1) {
-          const extras = recs.slice(1);
-          extras.forEach(r => duplicateIdsToDelete.push(r.id));
-        }
-
-        // Fetch full ClientMaster data to ensure mainRecord has exact correct product amounts
-        const cm = await (prisma as any).clientMaster.findUnique({
-          where: { id: cmId },
-          include: { products: { orderBy: { sortOrder: 'asc' } } },
-        });
-
-        if (cm) {
-          let totalSeats = 0;
-          let subAmount = 0;
-          let totalAmt = 0;
-          let cabinSummary = 'N/A';
-
-          if (cm.products && cm.products.length > 0) {
-            totalSeats = cm.products.reduce((sum: number, p: any) => sum + (Number(p.noOfSeats) || 0), 0);
-            subAmount = cm.products.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-            totalAmt = cm.products.reduce((sum: number, p: any) => sum + (Number(p.totalAmount) || 0), 0);
-            cabinSummary = cm.products.length > 1
-              ? `${cm.products.length} Products (${cm.products.map((p: any) => p.cabinName).filter(Boolean).join(', ')})`
-              : (cm.products[0].cabinName || cm.cabinName || 'N/A');
-          } else {
-            totalSeats = Number(cm.noOfSeats) || 0;
-            subAmount = Number(cm.amount) || 0;
-            totalAmt = Number(cm.totalAmount) || 0;
-            cabinSummary = cm.cabinName || 'N/A';
-          }
-
-          // Update mainRecord to reflect exact total amount & seats
-          await (prisma as any).invoiceRecord.update({
-            where: { id: mainRecord.id },
-            data: {
-              cabinName: cabinSummary,
-              noOfSeats: totalSeats,
-              amount: subAmount,
-              gstPercent: cm.gstPercent || (cm.products?.[0]?.gstPercent ?? 18),
-              totalAmount: totalAmt,
-            },
-          });
-        }
-      }
-
-      if (duplicateIdsToDelete.length > 0) {
-        await (prisma as any).attachedInvoice.deleteMany({
-          where: { invoiceRecordId: { in: duplicateIdsToDelete } },
-        });
-
-        await (prisma as any).invoiceRecord.deleteMany({
-          where: { id: { in: duplicateIdsToDelete } },
-        });
-        console.log(`[Invoices API] Consolidated multiple product rows into 1 invoice per client (deleted ${duplicateIdsToDelete.length} extra split rows for ${currentBillingMonth}).`);
-      }
-    } catch (cleanErr) {
-      console.warn('Deduplication cleanup warning:', cleanErr);
-    }
-
     // Authenticate the current user
     const cookieStore = await cookies();
     const token = cookieStore.get('auth-token')?.value;
@@ -116,6 +28,8 @@ export async function GET(request: Request) {
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status');
     const sendType = searchParams.get('sendType');
+    const billingMonth = searchParams.get('billingMonth');
+    const dueDay = searchParams.get('dueDay');
     const locationId = searchParams.get('locationId'); // Filter by node
 
     const where: any = {};
@@ -134,6 +48,14 @@ export async function GET(request: Request) {
 
     if (sendType && sendType !== 'ALL') {
       where.sendType = sendType;
+    }
+
+    if (billingMonth && billingMonth !== 'ALL') {
+      where.billingMonth = billingMonth;
+    }
+
+    if (dueDay && dueDay !== 'ALL') {
+      where.paymentDueDay = parseInt(dueDay, 10);
     }
 
     // ── Node-based data isolation ────────────────────────────────
@@ -177,10 +99,36 @@ export async function GET(request: Request) {
         },
         attachedInvoice: true,
       },
-      orderBy: { sentAt: 'desc' },
+      orderBy: [
+        { paymentDueDay: 'asc' },
+        { sentAt: 'desc' },
+      ],
     });
 
-    return NextResponse.json({ success: true, data: invoices });
+    // Auto-calculate overdue days & late fee for display
+    const today = new Date();
+    const enrichedInvoices = invoices.map((inv: any) => {
+      let lateDays = inv.lateDays || 0;
+      let lateFeeAmount = Number(inv.lateFeeAmount || 0);
+
+      if (inv.dueDate && inv.status !== 'APPROVED') {
+        const due = new Date(inv.dueDate);
+        if (today > due) {
+          const diffMs = today.getTime() - due.getTime();
+          lateDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+          const ratePerDay = Number(inv.lateFeePerDay || 100);
+          lateFeeAmount = Math.max(0, lateDays * ratePerDay);
+        }
+      }
+
+      return {
+        ...inv,
+        calculatedLateDays: lateDays,
+        calculatedLateFee: lateFeeAmount,
+      };
+    });
+
+    return NextResponse.json({ success: true, data: enrichedInvoices });
   } catch (error) {
     console.error('Fetch invoices error:', error);
     return NextResponse.json({ error: 'Failed to fetch invoice records' }, { status: 500 });

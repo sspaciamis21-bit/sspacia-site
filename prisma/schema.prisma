@@ -1015,22 +1015,34 @@ model ClientMaster {
 }
 
 model ClientMasterProduct {
-  id               Int          @id @default(autoincrement())
-  clientMasterId   Int
-  cabinName        String?
-  noOfSeats        Int?
-  ratePerAgreement Decimal?     @db.Decimal(12, 2)
-  amount           Decimal?     @db.Decimal(12, 2)
-  gstPercent       Decimal?     @db.Decimal(5, 2)
-  totalAmount      Decimal?     @db.Decimal(12, 2)
-  paymentDuration  String?      @default("MONTHLY") // "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY"
-  paymentDueDay    Int?         // 1 to 31
-  firstPaymentDate DateTime?
-  sortOrder        Int          @default(0)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  id                  Int          @id @default(autoincrement())
+  clientMasterId      Int
+  cabinName           String?
+  noOfSeats           Int?
+  ratePerAgreement    Decimal?     @db.Decimal(12, 2)
+  amount              Decimal?     @db.Decimal(12, 2)
+  gstPercent          Decimal?     @db.Decimal(5, 2)
+  totalAmount         Decimal?     @db.Decimal(12, 2)
+  paymentDuration     String?      @default("MONTHLY") // "MONTHLY" | "QUARTERLY" | "HALF_YEARLY" | "YEARLY"
+  paymentDueDay       Int?         // 1 to 31
+  firstPaymentDate    DateTime?
+  agreementPdfUrl     String?      @db.Text
+  agreementPdfName    String?
+  agreementStartDate  DateTime?
+  agreementEndDate    DateTime?
+  lockinEndDate       DateTime?
+  billingType         String?      @default("REGULAR") // "REGULAR" | "PRORATED" | "ESCALATED"
+  proratedStartDate   DateTime?
+  proratedEndDate     DateTime?
+  escalationPercent   Decimal?     @db.Decimal(5, 2)
+  escalationApplicable DateTime?
+  preEscalationRate   Decimal?     @db.Decimal(12, 2)
+  postEscalationRate  Decimal?     @db.Decimal(12, 2)
+  sortOrder           Int          @default(0)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
-  clientMaster     ClientMaster @relation(fields: [clientMasterId], references: [id], onDelete: Cascade)
+  clientMaster        ClientMaster @relation(fields: [clientMasterId], references: [id], onDelete: Cascade)
 
   @@index([clientMasterId])
 }
@@ -1074,6 +1086,14 @@ model InvoiceRecord {
   sentAt                 DateTime               @default(now())
   status                 String                 @default("PENDING_CM_REVIEW") // "PENDING_CM_REVIEW" | "SENT_TO_ACCOUNTANT" | "INVOICE_ATTACHED" | "APPROVED" | "REJECTED_WITH_REMARKS"
   remarks                String?                @db.Text
+  dueDate                DateTime?
+  lateFeePerDay          Decimal?               @default(100.00) @db.Decimal(12, 2)
+  lateDays               Int?                   @default(0)
+  lateFeeAmount          Decimal?               @default(0) @db.Decimal(12, 2)
+  digitallySignedPdfUrl  String?                @db.Text
+  digitallySignedPdfName String?
+  signedAt               DateTime?
+  signedByName           String?
   createdById            Int
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
@@ -1104,6 +1124,21 @@ model AttachedInvoice {
 
   @@index([invoiceRecordId])
   @@index([uploadedById])
+}
+
+model DigitalSignatureSetting {
+  id            Int      @id @default(autoincrement())
+  userId        Int?     // Optional per-user signature
+  signatureUrl  String   @db.Text
+  signatureName String?
+  signerName    String   @default("Authorized Signatory")
+  signerTitle   String   @default("Community Manager")
+  companyName   String   @default("SSPACIA Workspaces")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model InvoiceProduct {

@@ -235,7 +235,7 @@ export default function AdminLayout({
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 relative w-full h-full overflow-hidden">
         {/* Top Navigation / Notification Header */}
-        <header className="h-16 bg-white border-b border-[var(--outline-variant)]/40 px-4 md:px-8 flex items-center justify-between z-40 shrink-0 shadow-xs gap-3">
+        <header className="h-16 bg-white border-b border-[var(--outline-variant)]/40 px-4 md:px-8 flex items-center justify-between z-10 shrink-0 shadow-xs gap-3">
           <div className="flex items-center gap-3">
             {/* Mobile Hamburger Toggle */}
             <button
@@ -262,11 +262,22 @@ export default function AdminLayout({
               <span className="hidden sm:inline">Visitor Live Chat</span>
               <span className="sm:hidden">Chat</span>
             </button>
+
+            <button
+              onClick={() => setIsTestEmailModalOpen(true)}
+              className="bg-neutral-100 hover:bg-neutral-200 text-neutral-700 px-2.5 sm:px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 border border-neutral-200"
+              title="Open Email System Diagnostics"
+            >
+              <Mail size={14} />
+              <span className="hidden sm:inline">Test Email</span>
+              <span className="sm:hidden">Email</span>
+            </button>
             <NotificationBell />
           </div>
         </header>
 
-        <div className="flex-1 p-4 sm:p-6 md:p-10 overflow-y-auto relative z-0">
+        {/* Dynamic Route Content */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative z-20">
           {children}
         </div>
       </main>
