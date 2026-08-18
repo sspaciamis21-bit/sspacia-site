@@ -55,3 +55,59 @@ export const DELETE = withPermission('products', 'update', async (
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
+
+// PATCH /api/admin/products/[id]/images/[imageId] — Set primary image or update sortOrder
+export const PATCH = withPermission('products', 'update', async (
+  req: NextRequest,
+  { params }: { params: Promise<Record<string, string>> }
+) => {
+  try {
+    const payload = await requireAuth();
+    if (!payload?.id) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+    }
+
+    const { id, imageId } = await params;
+    const productId = parseInt(id, 10);
+    const imgId     = parseInt(imageId, 10);
+
+    if (isNaN(productId) || isNaN(imgId)) {
+      return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+    }
+
+    const body = await req.json();
+    const { isPrimary, alt, sortOrder } = body;
+
+    const image = await prisma.productImage.findFirst({
+      where: { id: imgId, productId },
+    });
+
+    if (!image) {
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (isPrimary) {
+        // Clear existing primary flag for other images
+        await tx.productImage.updateMany({
+          where: { productId },
+          data: { isPrimary: false },
+        });
+      }
+
+      await tx.productImage.update({
+        where: { id: imgId },
+        data: {
+          isPrimary: isPrimary !== undefined ? Boolean(isPrimary) : undefined,
+          alt: alt !== undefined ? String(alt) : undefined,
+          sortOrder: sortOrder !== undefined ? Number(sortOrder) : undefined,
+        },
+      });
+    });
+
+    return NextResponse.json({ data: { message: 'Image updated successfully' } });
+  } catch (error) {
+    console.error('[PRODUCT_IMAGE_PATCH]', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+});
