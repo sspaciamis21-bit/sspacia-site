@@ -14,7 +14,12 @@ import {
   QrCode,
   Copy,
   Upload,
-  Loader2
+  Loader2,
+  Wifi,
+  Coffee,
+  Sparkles,
+  Wind,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "motion/react";
@@ -26,9 +31,18 @@ import { AuthModal } from "@/components/ui/auth-modal";
 interface Product {
   id: number;
   name: string;
-  location: { name: string };
+  location: { name: string; address?: string };
   pricingPlans: Array<{ type: string; price: string; [key: string]: unknown }>;
   images: Array<{ url: string;[key: string]: unknown }>;
+  capacity?: string | number;
+  accessTime?: string;
+  amenities?: Array<{
+    amenity: {
+      id: number;
+      name: string;
+      icon?: string;
+    };
+  }>;
 }
 
 export default function CheckoutClient() {
@@ -255,6 +269,46 @@ export default function CheckoutClient() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Space Amenities */}
+                  <div className="pt-3 border-t border-outline-variant/10">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#006064] flex items-center gap-1.5 mb-2.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                      <span>Included Space Amenities</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {product.amenities && product.amenities.length > 0 ? (
+                        product.amenities.map((item, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-xs font-semibold rounded-xs"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                            <span>{item.amenity.name}</span>
+                          </span>
+                        ))
+                      ) : (
+                        <>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-xs font-semibold rounded-xs">
+                            <Wifi className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                            <span>High-Speed Wi-Fi</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-xs font-semibold rounded-xs">
+                            <Wind className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                            <span>Full Air Conditioning</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-xs font-semibold rounded-xs">
+                            <Coffee className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                            <span>Beverages &amp; Water</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-xs font-semibold rounded-xs">
+                            <ShieldCheck className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                            <span>24/7 Security &amp; Reception Support</span>
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -477,6 +531,33 @@ export default function CheckoutClient() {
                     >
                       Apply
                     </button>
+                  </div>
+                </div>
+
+                {/* Summary Amenities Perks */}
+                <div className="bg-[#E0F7FA]/40 p-3.5 border border-[#006064]/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#006064] flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-[#1ab0bc]" />
+                      <span>Workspace Perks Included</span>
+                    </span>
+                    <span className="text-[9px] font-bold uppercase text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-xs">
+                      Free
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 text-[11px] text-gray-700 font-medium pt-1">
+                    <span className="flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-600 shrink-0" /> High-Speed Wi-Fi
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-600 shrink-0" /> Full AC
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-600 shrink-0" /> Power Backup
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-600 shrink-0" /> Reception Desk
+                    </span>
                   </div>
                 </div>
 

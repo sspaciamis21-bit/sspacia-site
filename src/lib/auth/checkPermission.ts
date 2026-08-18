@@ -24,18 +24,34 @@ export async function checkPermission(
 
   if (!user || !user.role || !user.role.isActive) return false;
 
-  // Bypass for ADMIN & COMMUNITY_MANAGER role (case-insensitive)
   const roleName = user.role.name.toLowerCase();
-  if (
-    roleName === 'admin' || 
-    roleName === 'super_admin' || 
-    roleName === 'super-admin' || 
+  const isAdmin =
+    roleName === 'admin' ||
+    roleName === 'super_admin' ||
+    roleName === 'super-admin' ||
     roleName === 'super admin' ||
+    roleName.includes('admin');
+
+  // Super Admin / Admin has full bypass across all modules
+  if (isAdmin) {
+    return true;
+  }
+
+  // Community Managers / Managers: strictly READ-ONLY for products (cannot create, edit, delete)
+  if (module === 'products') {
+    if (action === 'view' || action === 'read') {
+      return true;
+    }
+    // Block create, edit, update, delete, patch for non-admin
+    return false;
+  }
+
+  // Allow Community Managers / Managers operational permissions for other modules
+  if (
     roleName === 'community_manager' ||
     roleName === 'community manager' ||
     roleName.includes('manager') ||
-    roleName.includes('community') ||
-    roleName.includes('admin')
+    roleName.includes('community')
   ) {
     return true;
   }
