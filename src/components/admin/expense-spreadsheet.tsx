@@ -410,8 +410,12 @@ export function ExpenseSpreadsheet({
   const [hiddenColIds, setHiddenColIds] = useState<string[]>([]);
   const [hiddenRowIds, setHiddenRowIds] = useState<string[]>([]);
 
-  // Column Menu dropdown state
+  // Column Menu dropdown state & Google Sheets filter/sort state
   const [activeColMenu, setActiveColMenu] = useState<string | null>(null);
+  const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({});
+  const [filterSearchQuery, setFilterSearchQuery] = useState<string>("");
+  const [tempFilterValues, setTempFilterValues] = useState<string[]>([]);
+  const [sortConfig, setSortConfig] = useState<{ colId: string; direction: "asc" | "desc" } | null>(null);
 
   // Drag and Drop column movement
   const [draggedColId, setDraggedColId] = useState<string | null>(null);
@@ -523,17 +527,23 @@ export function ExpenseSpreadsheet({
   const [freezeHeader, setFreezeHeader] = useState<boolean>(true);
   const [freezeFirstCol, setFreezeFirstCol] = useState<boolean>(true);
 
-  // Focus and select input text whenever editingCell changes
+  // Auto-focus and select active cell input for instant editing without scrolling the page
   useEffect(() => {
     if (editingCell && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+      inputRef.current.focus({ preventScroll: true });
+      if (!cellValue.startsWith("=")) {
+        inputRef.current.select();
+      }
     }
-  }, [editingCell]);
+  }, [editingCell?.rowId, editingCell?.colId]);
 
   // Close menus on outside click / escape
   useEffect(() => {
-    const handleClickOutside = () => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.closest(".col-dropdown-menu") || target.closest(".context-menu-box"))) {
+        return; // Don't close if interacting inside the menu
+      }
       setActiveColMenu(null);
       setCellContextMenu(null);
       setRowContextMenu(null);
@@ -555,16 +565,6 @@ export function ExpenseSpreadsheet({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
-
-  // Auto-focus and select active cell input for instant editing on Arrow/Tab/Enter navigation
-  useEffect(() => {
-    if (editingCell && inputRef.current) {
-      inputRef.current.focus();
-      if (!cellValue.startsWith("=")) {
-        inputRef.current.select();
-      }
-    }
-  }, [editingCell?.rowId, editingCell?.colId]);
 
   const notifyFmsTyping = () => {
     if (hasPingedFms.current) return;
@@ -698,8 +698,108 @@ export function ExpenseSpreadsheet({
     return columns.filter((col) => !hiddenColIds.includes(col.id));
   }, [columns, hiddenColIds]);
 
+  // Helper to extract unique values and counts for a column
+  const getColumnUniqueValues = (colId: string) => {
+    const counts: Record<string, number> = {};
+    rows.forEach((r) => {
+      if (hiddenRowIds.includes(r.id)) return;
+      const rawVal = r[colId];
+      const key = (rawVal === "" || rawVal === undefined || rawVal === null) ? "(Blanks)" : String(rawVal);
+      counts[key] = (counts[key] || 0) + 1;
+    });
+
+    const uniqueList = Object.keys(counts).sort((a, b) => {
+      if (a === "(Blanks)") return 1;
+      if (b === "(Blanks)") return -1;
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+    });
+
+    return { uniqueList, counts };
+  };
+
+  // Open column filter menu (Google Sheets style)
+  const handleOpenColumnFilter = (colId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const { uniqueList } = getColumnUniqueValues(colId);
+    if (columnFilters[colId]) {
+      setTempFilterValues(columnFilters[colId]);
+    } else {
+      setTempFilterValues(uniqueList);
+    }
+    setFilterSearchQuery("");
+    setActiveColMenu(colId);
+  };
+
+  // Toggle value in temp filter
+  const handleToggleFilterValue = (val: string) => {
+    setTempFilterValues((prev) => {
+      if (prev.includes(val)) {
+        return prev.filter((v) => v !== val);
+      } else {
+        return [...prev, val];
+      }
+    });
+  };
+
+  // Select all values in filter
+  const handleSelectAllFilterValues = (values: string[]) => {
+    setTempFilterValues(values);
+  };
+
+  // Clear all values (untick all) in filter
+  const handleClearAllFilterValues = () => {
+    setTempFilterValues([]);
+  };
+
+  // Apply column filter (OK button)
+  const handleApplyColumnFilter = (colId: string) => {
+    const { uniqueList } = getColumnUniqueValues(colId);
+    if (tempFilterValues.length === uniqueList.length) {
+      // All selected = no active filter
+      setColumnFilters((prev) => {
+        const next = { ...prev };
+        delete next[colId];
+        return next;
+      });
+    } else {
+      setColumnFilters((prev) => ({
+        ...prev,
+        [colId]: tempFilterValues,
+      }));
+    }
+    setActiveColMenu(null);
+  };
+
+  // Reset filter for a specific column
+  const handleResetColumnFilter = (colId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setColumnFilters((prev) => {
+      const next = { ...prev };
+      delete next[colId];
+      return next;
+    });
+    setActiveColMenu(null);
+  };
+
+  // Clear all active filters and sort
+  const handleClearAllFilters = () => {
+    setColumnFilters({});
+    setSortConfig(null);
+    setSearchQuery("");
+    toast.info("Cleared all column filters & sorts");
+  };
+
+  // Sort column
+  const handleSortColumn = (colId: string, direction: "asc" | "desc", e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSortConfig({ colId, direction });
+    setActiveColMenu(null);
+  };
+
   const visibleRows = useMemo(() => {
     let filtered = rows.filter((r) => !hiddenRowIds.includes(r.id));
+
+    // 1. Global sheet search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       filtered = filtered.filter((r) => {
@@ -709,8 +809,66 @@ export function ExpenseSpreadsheet({
         });
       });
     }
+
+    // 2. Column-wise value filters (Google Sheets style)
+    Object.entries(columnFilters).forEach(([colId, allowedVals]) => {
+      if (allowedVals && Array.isArray(allowedVals)) {
+        const allowedSet = new Set(allowedVals);
+        filtered = filtered.filter((r) => {
+          const rawVal = r[colId];
+          const stringVal = (rawVal === "" || rawVal === undefined || rawVal === null) ? "(Blanks)" : String(rawVal);
+          return allowedSet.has(stringVal);
+        });
+      }
+    });
+
+    // 3. Column sorting
+    if (sortConfig) {
+      const { colId, direction } = sortConfig;
+      const col = columns.find((c) => c.id === colId);
+      const isNum = col?.type === "number" || col?.id === "col_4";
+      const isDate = isDateCol(colId);
+
+      filtered = [...filtered].sort((a, b) => {
+        const valA = a[colId];
+        const valB = b[colId];
+        const isEmptyA = valA === "" || valA === undefined || valA === null;
+        const isEmptyB = valB === "" || valB === undefined || valB === null;
+
+        if (isEmptyA && isEmptyB) return 0;
+        if (isEmptyA) return 1;
+        if (isEmptyB) return -1;
+
+        if (isNum) {
+          const numA = parseFloat(String(valA).replace(/[^0-9.-]+/g, "")) || 0;
+          const numB = parseFloat(String(valB).replace(/[^0-9.-]+/g, "")) || 0;
+          return direction === "asc" ? numA - numB : numB - numA;
+        }
+
+        if (isDate) {
+          const parseDate = (dStr: string) => {
+            const parts = String(dStr).trim().split(/[\s-]+/);
+            if (parts.length === 3) {
+              const day = parseInt(parts[0], 10);
+              const mStr = parts[1].toLowerCase();
+              const month = MONTHS_MAP[mStr] ? parseInt(MONTHS_MAP[mStr], 10) - 1 : 0;
+              const year = parseInt(parts[2], 10);
+              return new Date(year, month, day).getTime();
+            }
+            return 0;
+          };
+          const timeA = parseDate(String(valA));
+          const timeB = parseDate(String(valB));
+          return direction === "asc" ? timeA - timeB : timeB - timeA;
+        }
+
+        const comp = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
+        return direction === "asc" ? comp : -comp;
+      });
+    }
+
     return filtered;
-  }, [rows, hiddenRowIds, searchQuery]);
+  }, [rows, hiddenRowIds, searchQuery, columnFilters, sortConfig, columns]);
 
   // Statistics for selected range (Sum, Average, Count) like Excel status bar
   const selectionStats = useMemo(() => {
@@ -2315,6 +2473,25 @@ export function ExpenseSpreadsheet({
           </button>
         )}
 
+        {/* ACTIVE FILTER / SORT BADGE */}
+        {(Object.keys(columnFilters).length > 0 || sortConfig !== null) && (
+          <div className="flex items-center gap-1.5 bg-teal-100/90 border border-teal-400 text-teal-950 px-2 py-0.5 text-[11px] font-bold shrink-0 rounded-xs shadow-2xs">
+            <Filter size={11} className="text-[#006064]" />
+            <span>
+              {Object.keys(columnFilters).length > 0 && `${Object.keys(columnFilters).length} filter(s)`}
+              {Object.keys(columnFilters).length > 0 && sortConfig && " • "}
+              {sortConfig && `Sorted ${sortConfig.direction === 'asc' ? 'A→Z' : 'Z→A'}`}
+            </span>
+            <button
+              onClick={handleClearAllFilters}
+              className="ml-1 text-teal-800 hover:text-red-600 underline font-black cursor-pointer text-[10px]"
+              title="Clear all filters & sorts"
+            >
+              Reset All
+            </button>
+          </div>
+        )}
+
       </div>
 
       {/* ── GOOGLE SHEETS / EXCEL FORMULA ASSISTANT BAR (= MODE) ── */}
@@ -2595,15 +2772,35 @@ export function ExpenseSpreadsheet({
                           </span>
                         </div>
 
-                        {/* COLUMN MENU DROPDOWN */}
-                        <div className="relative shrink-0">
+                        {/* COLUMN MENU & FILTER DROPDOWN */}
+                        <div className="relative shrink-0 flex items-center gap-1">
+                          {/* Active Filter Indicator Badge */}
+                          {columnFilters[col.id] && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleOpenColumnFilter(col.id, e)}
+                              className="px-1 py-0.5 bg-teal-600 text-white rounded text-[9px] font-black flex items-center gap-0.5 cursor-pointer shadow-2xs"
+                              title={`Active Filter: ${columnFilters[col.id].length} values selected. Click to modify.`}
+                            >
+                              <Filter size={9} />
+                            </button>
+                          )}
+
+                          {/* Active Sort Indicator Badge */}
+                          {sortConfig?.colId === col.id && (
+                            <span className="px-1 py-0.2 bg-[#006064] text-white rounded text-[9px] font-black">
+                              {sortConfig.direction === "asc" ? "↑" : "↓"}
+                            </span>
+                          )}
+
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveColMenu(isMenuOpen ? null : col.id);
-                            }}
-                            className="p-1 hover:bg-gray-200 text-gray-500 rounded cursor-pointer opacity-40 group-hover:opacity-100 transition-opacity"
-                            title="Column Options"
+                            onClick={(e) => handleOpenColumnFilter(col.id, e)}
+                            className={`p-1 rounded cursor-pointer transition-opacity ${
+                              isMenuOpen || columnFilters[col.id] || sortConfig?.colId === col.id
+                                ? "opacity-100 bg-gray-200 text-teal-900"
+                                : "opacity-40 group-hover:opacity-100 hover:bg-gray-200 text-gray-500"
+                            }`}
+                            title="Filter & Column Options"
                           >
                             <ChevronDown className="w-3 h-3" />
                           </button>
@@ -2611,8 +2808,150 @@ export function ExpenseSpreadsheet({
                           {isMenuOpen && (
                             <div
                               onClick={(e) => e.stopPropagation()}
-                              className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 shadow-xl z-50 py-1 font-sans text-xs font-normal"
+                              className="col-dropdown-menu absolute right-0 top-full mt-1 w-64 bg-white border border-gray-300 shadow-2xl z-50 py-1.5 font-sans text-xs font-normal rounded-sm"
                             >
+                              {/* ── SORT SECTION ── */}
+                              <div className="px-3 py-1 text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">
+                                Sort
+                              </div>
+                              <button
+                                onClick={(e) => handleSortColumn(col.id, 'asc', e)}
+                                className="w-full px-3 py-1.5 text-left hover:bg-teal-50 flex items-center justify-between text-gray-700 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-[#1ab0bc]">A→Z</span>
+                                  <span>Sort Ascending</span>
+                                </div>
+                                {sortConfig?.colId === col.id && sortConfig.direction === 'asc' && (
+                                  <Check size={13} className="text-teal-600" />
+                                )}
+                              </button>
+                              <button
+                                onClick={(e) => handleSortColumn(col.id, 'desc', e)}
+                                className="w-full px-3 py-1.5 text-left hover:bg-teal-50 flex items-center justify-between text-gray-700 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-[#1ab0bc]">Z→A</span>
+                                  <span>Sort Descending</span>
+                                </div>
+                                {sortConfig?.colId === col.id && sortConfig.direction === 'desc' && (
+                                  <Check size={13} className="text-teal-600" />
+                                )}
+                              </button>
+
+                              <div className="border-t border-gray-100 my-1"></div>
+
+                              {/* ── FILTER BY VALUES SECTION (GOOGLE SHEETS STYLE) ── */}
+                              <div className="px-3 py-1 text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between">
+                                <span>Filter by Values</span>
+                                {columnFilters[col.id] && (
+                                  <button
+                                    onClick={(e) => handleResetColumnFilter(col.id, e)}
+                                    className="text-teal-700 hover:text-red-600 font-bold underline cursor-pointer text-[10px]"
+                                  >
+                                    Reset
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Search box for filter values */}
+                              <div className="px-3 py-1">
+                                <div className="relative">
+                                  <Search className="w-3 h-3 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                                  <input
+                                    type="text"
+                                    placeholder="Search values..."
+                                    value={filterSearchQuery}
+                                    onChange={(e) => setFilterSearchQuery(e.target.value)}
+                                    className="w-full pl-6 pr-2 py-1 bg-gray-50 border border-gray-200 text-xs text-gray-800 outline-none focus:bg-white focus:border-[#1ab0bc] rounded-xs font-mono"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Select All / Clear quick buttons */}
+                              {(() => {
+                                const { uniqueList, counts } = getColumnUniqueValues(col.id);
+                                const filteredList = filterSearchQuery.trim()
+                                  ? uniqueList.filter((v) => v.toLowerCase().includes(filterSearchQuery.toLowerCase()))
+                                  : uniqueList;
+
+                                return (
+                                  <>
+                                    <div className="px-3 py-1 flex items-center gap-3 text-[11px] font-bold text-[#006064]">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSelectAllFilterValues(filteredList)}
+                                        className="hover:underline cursor-pointer"
+                                      >
+                                        Select All
+                                      </button>
+                                      <span className="text-gray-300">|</span>
+                                      <button
+                                        type="button"
+                                        onClick={handleClearAllFilterValues}
+                                        className="hover:underline cursor-pointer"
+                                      >
+                                        Clear (Untick All)
+                                      </button>
+                                    </div>
+
+                                    {/* Scrollable Checkbox List */}
+                                    <div className="max-h-40 overflow-y-auto px-2 py-1 space-y-0.5 border-y border-gray-100 my-1 bg-slate-50/50">
+                                      {filteredList.length === 0 ? (
+                                        <div className="px-2 py-2 text-center text-gray-400 text-xs italic">
+                                          No matching values
+                                        </div>
+                                      ) : (
+                                        filteredList.map((val) => {
+                                          const isChecked = tempFilterValues.includes(val);
+                                          const count = counts[val] || 0;
+
+                                          return (
+                                            <label
+                                              key={val}
+                                              className="flex items-center gap-2 px-1.5 py-1 hover:bg-teal-50/80 rounded cursor-pointer select-none text-xs text-gray-800"
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={() => handleToggleFilterValue(val)}
+                                                className="rounded text-[#1ab0bc] focus:ring-0 cursor-pointer h-3.5 w-3.5"
+                                              />
+                                              <span className="truncate flex-1 font-medium">{val}</span>
+                                              <span className="text-[10px] text-gray-400 font-mono">({count})</span>
+                                            </label>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+
+                                    {/* Filter Action Buttons (OK / Cancel) */}
+                                    <div className="px-3 py-1.5 flex items-center justify-end gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveColMenu(null)}
+                                        className="px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded cursor-pointer font-medium"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApplyColumnFilter(col.id)}
+                                        className="px-3 py-1 bg-[#1ab0bc] hover:bg-teal-600 text-white rounded text-xs font-bold cursor-pointer shadow-2xs"
+                                      >
+                                        OK
+                                      </button>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+
+                              <div className="border-t border-gray-100 my-1"></div>
+
+                              {/* ── COLUMN ACTIONS SECTION ── */}
+                              <div className="px-3 py-0.5 text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">
+                                Column Options
+                              </div>
                               <button
                                 onClick={(e) => handleStartRenameCol(col.id, col.label, e)}
                                 className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 text-gray-700 cursor-pointer"
@@ -2641,8 +2980,6 @@ export function ExpenseSpreadsheet({
                                 </button>
                               )}
 
-                              <div className="border-t border-gray-100 my-1"></div>
-
                               <button
                                 onClick={(e) => handleInsertColumn(col.id, 'left', e)}
                                 className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 text-gray-700 cursor-pointer"
@@ -2658,8 +2995,6 @@ export function ExpenseSpreadsheet({
                                 <PlusCircle className="w-3.5 h-3.5 text-[#1ab0bc]" />
                                 <span>Insert Column Right</span>
                               </button>
-
-                              <div className="border-t border-gray-100 my-1"></div>
 
                               <button
                                 onClick={(e) => handleHideColumn(col.id, e)}

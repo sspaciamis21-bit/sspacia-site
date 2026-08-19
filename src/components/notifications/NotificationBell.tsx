@@ -268,7 +268,7 @@ export function NotificationBell() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="absolute right-0 mt-3 w-[390px] sm:w-[480px] bg-white border border-neutral-300 shadow-2xl z-50 overflow-hidden text-xs"
+            className="absolute right-0 mt-3 w-[390px] sm:w-[480px] max-h-[85vh] flex flex-col bg-white border border-neutral-300 shadow-2xl z-[100] overflow-hidden text-xs rounded-sm"
           >
             {/* Header */}
             <div className="p-4 bg-[#006064] text-white border-b border-teal-800">
@@ -370,7 +370,7 @@ export function NotificationBell() {
             </div>
 
             {/* Notification List Container */}
-            <div className="max-h-[440px] overflow-y-auto divide-y divide-neutral-100">
+            <div className="flex-1 max-h-[480px] overflow-y-auto divide-y divide-neutral-100">
               {loading && activeList.length === 0 ? (
                 <div className="p-8 text-center text-neutral-400 space-y-2">
                   <RefreshCw size={24} className="animate-spin mx-auto text-[#006064]" />

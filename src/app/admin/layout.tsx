@@ -31,7 +31,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useSidebar } from '@/context/SidebarContext';
 import { ManageProfileModal } from '@/components/profile/ManageProfileModal';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
-import { TestEmailModal } from '@/components/admin/TestEmailModal';
 import { VisitorChatDrawer } from '@/components/ui/visitor-chat-drawer';
 
 const sidebarItems = [
@@ -59,7 +58,6 @@ export default function AdminLayout({
   const { isSidebarOpen, setIsSidebarOpen } = useSidebar();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isTestEmailModalOpen, setIsTestEmailModalOpen] = useState(false);
   const [isVisitorChatOpen, setIsVisitorChatOpen] = useState(false);
   const { user, isLoading, logout, isRole } = useAuth();
   const pathname = usePathname();
@@ -235,7 +233,7 @@ export default function AdminLayout({
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 relative w-full h-full overflow-hidden">
         {/* Top Navigation / Notification Header */}
-        <header className="h-16 bg-white border-b border-[var(--outline-variant)]/40 px-4 md:px-8 flex items-center justify-between z-10 shrink-0 shadow-xs gap-3">
+        <header className="h-16 bg-white border-b border-[var(--outline-variant)]/40 px-4 md:px-8 flex items-center justify-between z-30 shrink-0 shadow-xs gap-3">
           <div className="flex items-center gap-3">
             {/* Mobile Hamburger Toggle */}
             <button
@@ -255,7 +253,7 @@ export default function AdminLayout({
           <div className="flex items-center gap-2.5 sm:gap-4">
             <button
               onClick={() => setIsVisitorChatOpen(true)}
-              className="bg-[#1ab0bc]/10 hover:bg-[#1ab0bc] text-[#1ab0bc] hover:text-white px-2.5 sm:px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border border-[#1ab0bc]/30"
+              className="bg-[#1ab0bc]/10 hover:bg-[#1ab0bc] text-[#1ab0bc] hover:text-white px-2.5 sm:px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border border-[#1ab0bc]/30 cursor-pointer"
               title="Open Visitor Live Chat Drawer"
             >
               <MessageSquare size={14} />
@@ -263,21 +261,12 @@ export default function AdminLayout({
               <span className="sm:hidden">Chat</span>
             </button>
 
-            <button
-              onClick={() => setIsTestEmailModalOpen(true)}
-              className="bg-neutral-100 hover:bg-neutral-200 text-neutral-700 px-2.5 sm:px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 border border-neutral-200"
-              title="Open Email System Diagnostics"
-            >
-              <Mail size={14} />
-              <span className="hidden sm:inline">Test Email</span>
-              <span className="sm:hidden">Email</span>
-            </button>
             <NotificationBell />
           </div>
         </header>
 
         {/* Dynamic Route Content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative z-20">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative z-0">
           {children}
         </div>
       </main>

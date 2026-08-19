@@ -299,7 +299,7 @@ export default function ManagerLayout({
 
       <main className="flex-1 flex flex-col min-w-0 relative w-full h-full overflow-hidden">
         {/* Top Navigation / Notification Header */}
-        <header className="h-16 bg-[var(--surface-lowest)] border-b border-[var(--outline-variant)]/30 px-4 md:px-8 flex items-center justify-between z-10 shrink-0 shadow-xs gap-3">
+        <header className="h-16 bg-[var(--surface-lowest)] border-b border-[var(--outline-variant)]/30 px-4 md:px-8 flex items-center justify-between z-30 shrink-0 shadow-xs gap-3">
           <div className="flex items-center gap-3">
             {/* Mobile Hamburger Toggle */}
             <button
@@ -319,7 +319,7 @@ export default function ManagerLayout({
           <div className="flex items-center gap-2.5 sm:gap-4">
             <button
               onClick={() => setIsVisitorChatOpen(true)}
-              className="bg-[#1ab0bc]/10 hover:bg-[#1ab0bc] text-[#1ab0bc] hover:text-white px-2.5 sm:px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border border-[#1ab0bc]/30"
+              className="bg-[#1ab0bc]/10 hover:bg-[#1ab0bc] text-[#1ab0bc] hover:text-white px-2.5 sm:px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border border-[#1ab0bc]/30 cursor-pointer"
               title="Open Visitor Live Chat Drawer"
             >
               <MessageSquare size={14} />
@@ -330,7 +330,7 @@ export default function ManagerLayout({
           </div>
         </header>
 
-        <div className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto relative z-20">
+        <div className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto relative z-0">
           {children}
         </div>
       </main>
