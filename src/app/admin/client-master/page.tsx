@@ -552,9 +552,9 @@ export default function ClientMasterRegistryPage() {
   };
 
   // Apply Pro-Rata calculation to product row
-  const handleApplyProrateToRow = (idx: number) => {
+  const handleApplyProrateToRow = (idx: number, mode: 'ADD_NEW_ROW' | 'COMBINE_ROW' | 'REPLACE_ROW' = 'COMBINE_ROW') => {
     if (!prorateStartDate || !prorateMonthlyRate || !prorateSeats) {
-      toast.error('Please enter Start Date, Monthly Rate, and Seats');
+      toast.error('Please enter Start Date, Rate per Seat, and Seats');
       return;
     }
     const result = calculateProratedAmount(Number(prorateSeats), Number(prorateMonthlyRate), prorateStartDate);
@@ -564,24 +564,73 @@ export default function ClientMasterRegistryPage() {
 
     setProductRows((prev) => {
       const updated = [...prev];
-      const existingName = (updated[idx].cabinName || '').replace(/\s*\(Prorated.*?\)/i, '').trim();
-      updated[idx] = {
-        ...updated[idx],
-        cabinName: `${existingName || 'Expansion'} (Prorated ${day}-${result.daysInMonth} ${monthName})`,
-        noOfSeats: Number(prorateSeats),
-        ratePerAgreement: Number(prorateMonthlyRate),
-        amount: result.proratedSubtotal,
-        gstPercent: 18,
-        totalAmount: result.proratedTotal,
-        billingType: 'PRORATED',
-        proratedStartDate: prorateStartDate,
-        isAmountManuallyEdited: true,
-        isTotalAmountManuallyEdited: true,
-      };
+      const targetRow = updated[idx];
+      const existingName = (targetRow.cabinName || '').replace(/\s*\((?:Prorated|\+\d+\s+Seats).*?\)/gi, '').trim() || 'Workspace';
+      const existingSeats = Number(targetRow.noOfSeats) || 0;
+      const existingRate = Number(targetRow.ratePerAgreement) || Number(prorateMonthlyRate);
+      const existingBaseAmount = (existingSeats > 0 && existingRate > 0) ? computeProductAmount(existingSeats, existingRate) : (Number(targetRow.amount) || 0);
+
+      if (mode === 'ADD_NEW_ROW') {
+        // 1. Insert a dedicated new row for the extra prorated seats
+        const newProratedRow: ProductRow = {
+          ...createEmptyProductRow(),
+          cabinName: `${existingName} - Extra ${prorateSeats} Seats (Prorated ${day}-${result.daysInMonth} ${monthName})`,
+          noOfSeats: Number(prorateSeats),
+          ratePerAgreement: Number(prorateMonthlyRate),
+          amount: result.proratedSubtotal,
+          gstPercent: 18,
+          totalAmount: result.proratedTotal,
+          billingType: 'PRORATED',
+          proratedStartDate: prorateStartDate,
+          paymentDuration: targetRow.paymentDuration || 'MONTHLY',
+          paymentDueDay: targetRow.paymentDueDay,
+          firstPaymentDate: targetRow.firstPaymentDate,
+          isAmountManuallyEdited: true,
+          isTotalAmountManuallyEdited: true,
+        };
+        updated.splice(idx + 1, 0, newProratedRow);
+        toast.success(`Added Extra Prorated Item: ₹${result.proratedSubtotal.toLocaleString()} (${result.activeDays} days for ${prorateSeats} seats)`);
+      } else if (mode === 'COMBINE_ROW') {
+        // 2. Combine base seats + extra prorated seats in the current item row
+        const combinedSeats = existingSeats + Number(prorateSeats);
+        const combinedAmount = roundCurrency(existingBaseAmount + result.proratedSubtotal);
+        const combinedTotal = computeProductTotal(combinedAmount, 18);
+
+        updated[idx] = {
+          ...targetRow,
+          cabinName: `${existingName} (+${prorateSeats} Seats Prorated from ${day} ${monthName})`,
+          noOfSeats: combinedSeats,
+          ratePerAgreement: existingRate,
+          amount: combinedAmount,
+          gstPercent: 18,
+          totalAmount: combinedTotal,
+          billingType: 'PRORATED',
+          proratedStartDate: prorateStartDate,
+          isAmountManuallyEdited: true,
+          isTotalAmountManuallyEdited: true,
+        };
+        toast.success(`Updated Item: Base (₹${existingBaseAmount.toLocaleString()}) + Prorated Extra (₹${result.proratedSubtotal.toLocaleString()}) = ₹${combinedAmount.toLocaleString()}`);
+      } else {
+        // 3. Replace current item with only the prorated amount (e.g. for brand new mid-month joiner)
+        updated[idx] = {
+          ...targetRow,
+          cabinName: `${existingName} (Prorated ${day}-${result.daysInMonth} ${monthName})`,
+          noOfSeats: Number(prorateSeats),
+          ratePerAgreement: Number(prorateMonthlyRate),
+          amount: result.proratedSubtotal,
+          gstPercent: 18,
+          totalAmount: result.proratedTotal,
+          billingType: 'PRORATED',
+          proratedStartDate: prorateStartDate,
+          isAmountManuallyEdited: true,
+          isTotalAmountManuallyEdited: true,
+        };
+        toast.success(`Applied Prorated: ₹${result.proratedSubtotal.toLocaleString()} for ${result.activeDays} days`);
+      }
+
       return updated;
     });
 
-    toast.success(`Applied Prorated: ₹${result.proratedSubtotal.toLocaleString()} for ${result.activeDays} days`);
     setActiveProratedRowIndex(null);
   };
 
@@ -2125,10 +2174,17 @@ export default function ClientMasterRegistryPage() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setActiveProratedRowIndex(activeProratedRowIndex === idx ? null : idx);
-                                  setProrateSeats(row.noOfSeats || '');
-                                  setProrateMonthlyRate(row.ratePerAgreement || '');
-                                  setProrateStartDate(new Date().toISOString().split('T')[0]);
+                                  if (activeProratedRowIndex === idx) {
+                                    setActiveProratedRowIndex(null);
+                                  } else {
+                                    setActiveProratedRowIndex(idx);
+                                    const currentRate = row.ratePerAgreement !== '' && Number(row.ratePerAgreement) > 0
+                                      ? Number(row.ratePerAgreement)
+                                      : '';
+                                    setProrateMonthlyRate(currentRate);
+                                    setProrateSeats(row.noOfSeats !== '' && Number(row.noOfSeats) > 0 ? Number(row.noOfSeats) : 1);
+                                    setProrateStartDate(new Date().toISOString().split('T')[0]);
+                                  }
                                 }}
                                 className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors ${
                                   activeProratedRowIndex === idx
@@ -2180,71 +2236,128 @@ export default function ClientMasterRegistryPage() {
                           </div>
 
                           {/* Inline Prorate Calculator Drawer */}
-                          {activeProratedRowIndex === idx && (
-                            <div className="p-3 bg-amber-50 border border-amber-300 rounded space-y-3">
-                              <div className="flex items-center justify-between text-xs font-bold text-amber-900 uppercase">
-                                <span>⚡ Calculate Prorated Billing (Mid-Month Additions)</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setActiveProratedRowIndex(null)}
-                                  className="text-amber-700 hover:text-amber-950 font-bold"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                              <p className="text-[11px] text-amber-800">
-                                Enter the effective date when the client added seats. The calculator uses exact days remaining in the month.
-                              </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
-                                <div>
-                                  <label className="block text-[10px] font-bold text-amber-900 uppercase mb-0.5">
-                                    Addition Start Date
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={prorateStartDate}
-                                    onChange={(e) => setProrateStartDate(e.target.value)}
-                                    className="w-full bg-white border border-amber-300 px-2 py-1.5 text-xs font-bold text-black"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold text-amber-900 uppercase mb-0.5">
-                                    Seats Added
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    placeholder="Seats..."
-                                    value={prorateSeats}
-                                    onChange={(e) => setProrateSeats(e.target.value === '' ? '' : Number(e.target.value))}
-                                    className="w-full bg-white border border-amber-300 px-2 py-1.5 text-xs font-bold text-black"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold text-amber-900 uppercase mb-0.5">
-                                    Full Monthly Rate (₹)
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    placeholder="Rate..."
-                                    value={prorateMonthlyRate}
-                                    onChange={(e) => setProrateMonthlyRate(e.target.value === '' ? '' : Number(e.target.value))}
-                                    className="w-full bg-white border border-amber-300 px-2 py-1.5 text-xs font-bold text-black"
-                                  />
-                                </div>
-                                <div>
+                          {activeProratedRowIndex === idx && (() => {
+                            const sCount = Number(prorateSeats) || 0;
+                            const sRate = Number(prorateMonthlyRate) || 0;
+                            const sDate = prorateStartDate || new Date().toISOString().split('T')[0];
+                            const calc = calculateProratedAmount(sCount, sRate, sDate);
+                            const baseSeats = Number(row.noOfSeats) || 0;
+                            const baseRate = Number(row.ratePerAgreement) || sRate;
+                            const baseAmt = (baseSeats > 0 && baseRate > 0) ? computeProductAmount(baseSeats, baseRate) : (Number(row.amount) || 0);
+                            const combinedAmt = roundCurrency(baseAmt + calc.proratedSubtotal);
+                            const combinedTotal = computeProductTotal(combinedAmt, 18);
+
+                            return (
+                              <div className="p-3 bg-amber-50 border border-amber-300 rounded space-y-3 shadow-xs">
+                                <div className="flex items-center justify-between text-xs font-bold text-amber-950 uppercase">
+                                  <span className="flex items-center gap-1.5">
+                                    <span>⚡ Calculate Prorated Billing (Mid-Month Additions)</span>
+                                  </span>
                                   <button
                                     type="button"
-                                    onClick={() => handleApplyProrateToRow(idx)}
-                                    className="w-full bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs py-2 uppercase tracking-wider rounded"
+                                    onClick={() => setActiveProratedRowIndex(null)}
+                                    className="text-amber-800 hover:text-black font-bold p-0.5 cursor-pointer"
                                   >
-                                    Apply Prorated Amount
+                                    ✕
+                                  </button>
+                                </div>
+                                <p className="text-[11px] text-amber-900">
+                                  Calculates exact pro-rata billing based on days remaining in the month.
+                                </p>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-amber-950 uppercase mb-1">
+                                      Addition Start Date
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={prorateStartDate}
+                                      onChange={(e) => setProrateStartDate(e.target.value)}
+                                      className="w-full bg-white border border-amber-400 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-amber-950 uppercase mb-1">
+                                      Seats Added (Extra)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      placeholder="e.g. 2"
+                                      value={prorateSeats}
+                                      onChange={(e) => setProrateSeats(e.target.value === '' ? '' : Number(e.target.value))}
+                                      className="w-full bg-white border border-amber-400 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-amber-950 uppercase mb-1">
+                                      Rate Per Seat (₹/month)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      placeholder="e.g. 300"
+                                      value={prorateMonthlyRate}
+                                      onChange={(e) => setProrateMonthlyRate(e.target.value === '' ? '' : Number(e.target.value))}
+                                      className="w-full bg-white border border-amber-400 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* LIVE CALCULATION BREAKDOWN BOX */}
+                                {sCount > 0 && sRate > 0 && (
+                                  <div className="p-2.5 bg-amber-100/70 border border-amber-300/80 rounded text-xs text-amber-950 space-y-1.5">
+                                    <div className="flex flex-wrap items-center justify-between font-bold text-[11px]">
+                                      <span>
+                                        Prorated for {calc.activeDays} of {calc.daysInMonth} days ({sCount} seats @ ₹{sRate}/seat):
+                                      </span>
+                                      <span className="font-mono text-emerald-800 text-sm font-black">
+                                        ₹{calc.proratedSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        <span className="text-[10px] text-gray-600 font-normal"> (+18% GST: ₹{calc.proratedTotal.toLocaleString('en-IN')})</span>
+                                      </span>
+                                    </div>
+                                    {baseSeats > 0 && baseAmt > 0 && (
+                                      <div className="text-[10px] text-amber-900 border-t border-amber-200 pt-1 flex items-center justify-between">
+                                        <span>Existing {baseSeats} seats (₹{baseAmt.toLocaleString()}) + {sCount} Extra seats prorated (₹{calc.proratedSubtotal.toLocaleString()}):</span>
+                                        <span className="font-bold text-emerald-900 font-mono">Combined Subtotal = ₹{combinedAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* ACTION BUTTONS */}
+                                <div className="flex flex-wrap items-center gap-2 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApplyProrateToRow(idx, 'ADD_NEW_ROW')}
+                                    className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-3.5 py-2 uppercase tracking-wider rounded flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                    title="Keeps current item intact and adds a new row for the extra prorated seats"
+                                  >
+                                    <span>➕ Add as Extra Prorated Row</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApplyProrateToRow(idx, 'COMBINE_ROW')}
+                                    className="bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs px-3.5 py-2 uppercase tracking-wider rounded flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                    title="Combines base seats + extra prorated seats into this item"
+                                  >
+                                    <span>⚡ Combine into This Item</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApplyProrateToRow(idx, 'REPLACE_ROW')}
+                                    className="bg-white hover:bg-amber-50 text-amber-900 border border-amber-400 font-bold text-xs px-3 py-2 uppercase tracking-wider rounded cursor-pointer"
+                                    title="Replace entire item with only the prorated amount (e.g. for mid-month joining client)"
+                                  >
+                                    <span>Replace Item</span>
                                   </button>
                                 </div>
                               </div>
-                            </div>
-                          )}
+                            );
+                          })()}
 
                           {/* Inline Escalation Split Drawer */}
                           {activeEscalatedRowIndex === idx && (

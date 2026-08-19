@@ -32,7 +32,9 @@ import {
   PlusCircle,
   Calendar,
   Filter,
-  CheckSquare
+  CheckSquare,
+  Calculator,
+  Sigma
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -123,6 +125,257 @@ function parseToPickerDate(val: string): string {
   return `${y}-${m}-${day}`;
 }
 
+// ── SPREADSHEET FORMULA & COORDINATE ENGINE (GOOGLE SHEETS / EXCEL COMPATIBLE) ──
+export function getColLetter(colIdx: number): string {
+  let letter = "";
+  let temp = colIdx;
+  while (temp >= 0) {
+    letter = String.fromCharCode((temp % 26) + 65) + letter;
+    temp = Math.floor(temp / 26) - 1;
+  }
+  return letter;
+}
+
+export function parseCoordinate(coordStr: string): { colIdx: number; rowIdx: number } | null {
+  const match = coordStr.trim().toUpperCase().match(/^([A-Z]+)(\d+)$/);
+  if (!match) return null;
+  const colLetter = match[1];
+  const rowNum = parseInt(match[2]);
+  if (isNaN(rowNum) || rowNum <= 0) return null;
+  
+  let colIdx = 0;
+  for (let i = 0; i < colLetter.length; i++) {
+    colIdx = colIdx * 26 + (colLetter.charCodeAt(i) - 64);
+  }
+  colIdx -= 1; // 0-indexed
+
+  return { colIdx, rowIdx: rowNum - 1 };
+}
+
+export function getCellCoordinate(colIdx: number, rowIdx: number): string {
+  return `${getColLetter(colIdx)}${rowIdx + 1}`;
+}
+
+export function getCellValueByCoord(
+  colIdx: number,
+  rowIdx: number,
+  columns: ColumnConfig[],
+  rows: RowData[],
+  visited = new Set<string>()
+): number {
+  if (rowIdx < 0 || rowIdx >= rows.length) return 0;
+  if (colIdx < 0 || colIdx >= columns.length) return 0;
+  const col = columns[colIdx];
+  const row = rows[rowIdx];
+  if (!col || !row) return 0;
+
+  const cellKey = `${colIdx},${rowIdx}`;
+  if (visited.has(cellKey)) return 0;
+
+  const val = row[col.id];
+  if (val === undefined || val === null || val === '') return 0;
+
+  if (typeof val === 'string' && val.startsWith('=')) {
+    const nextVisited = new Set(visited);
+    nextVisited.add(cellKey);
+    const evalRes = evaluateFormula(val, columns, rows, nextVisited);
+    if (typeof evalRes === 'number') return evalRes;
+    const parsed = parseFloat(String(evalRes).replace(/[^0-9.-]+/g, ''));
+    return isNaN(parsed) ? 0 : parsed;
+  }
+
+  const num = parseFloat(String(val).replace(/[^0-9.-]+/g, ''));
+  return isNaN(num) ? 0 : num;
+}
+
+export function getRangeValues(
+  startCoord: string,
+  endCoord: string,
+  columns: ColumnConfig[],
+  rows: RowData[],
+  visited = new Set<string>()
+): number[] {
+  const start = parseCoordinate(startCoord);
+  const end = parseCoordinate(endCoord);
+  if (!start || !end) return [];
+
+  const minCol = Math.min(start.colIdx, end.colIdx);
+  const maxCol = Math.max(start.colIdx, end.colIdx);
+  const minRow = Math.min(start.rowIdx, end.rowIdx);
+  const maxRow = Math.max(start.rowIdx, end.rowIdx);
+
+  const values: number[] = [];
+  for (let r = minRow; r <= maxRow; r++) {
+    for (let c = minCol; c <= maxCol; c++) {
+      values.push(getCellValueByCoord(c, r, columns, rows, visited));
+    }
+  }
+  return values;
+}
+
+export function evaluateFormula(
+  formula: string,
+  columns: ColumnConfig[],
+  rows: RowData[],
+  visited = new Set<string>()
+): any {
+  if (!formula || typeof formula !== 'string' || !formula.startsWith('=')) return formula;
+
+  let expr = formula.substring(1).trim();
+  if (!expr) return 0;
+
+  try {
+    // 1. Handle SUM(...)
+    expr = expr.replace(/SUM\s*\(([^)]+)\)/gi, (_, args) => {
+      const parts = args.split(',');
+      let sum = 0;
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed.includes(':')) {
+          const [s, e] = trimmed.split(':');
+          const vals = getRangeValues(s, e, columns, rows, visited);
+          sum += vals.reduce((a, b) => a + b, 0);
+        } else {
+          const parsed = parseCoordinate(trimmed);
+          if (parsed) {
+            sum += getCellValueByCoord(parsed.colIdx, parsed.rowIdx, columns, rows, visited);
+          } else {
+            const n = parseFloat(trimmed);
+            if (!isNaN(n)) sum += n;
+          }
+        }
+      }
+      return String(sum);
+    });
+
+    // 2. Handle AVERAGE(...)
+    expr = expr.replace(/AVERAGE\s*\(([^)]+)\)/gi, (_, args) => {
+      const parts = args.split(',');
+      const allVals: number[] = [];
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed.includes(':')) {
+          const [s, e] = trimmed.split(':');
+          allVals.push(...getRangeValues(s, e, columns, rows, visited));
+        } else {
+          const parsed = parseCoordinate(trimmed);
+          if (parsed) {
+            allVals.push(getCellValueByCoord(parsed.colIdx, parsed.rowIdx, columns, rows, visited));
+          } else {
+            const n = parseFloat(trimmed);
+            if (!isNaN(n)) allVals.push(n);
+          }
+        }
+      }
+      if (allVals.length === 0) return '0';
+      const avg = allVals.reduce((a, b) => a + b, 0) / allVals.length;
+      return String(Math.round(avg * 100) / 100);
+    });
+
+    // 3. Handle COUNT(...)
+    expr = expr.replace(/COUNT\s*\(([^)]+)\)/gi, (_, args) => {
+      const parts = args.split(',');
+      let count = 0;
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed.includes(':')) {
+          const [s, e] = trimmed.split(':');
+          count += getRangeValues(s, e, columns, rows, visited).filter(v => v !== 0).length;
+        } else {
+          count++;
+        }
+      }
+      return String(count);
+    });
+
+    // 4. Handle MAX & MIN
+    expr = expr.replace(/MAX\s*\(([^)]+)\)/gi, (_, args) => {
+      const vals: number[] = [];
+      args.split(',').forEach((p: string) => {
+        const t = p.trim();
+        if (t.includes(':')) {
+          const [s, e] = t.split(':');
+          vals.push(...getRangeValues(s, e, columns, rows, visited));
+        } else {
+          const coord = parseCoordinate(t);
+          if (coord) vals.push(getCellValueByCoord(coord.colIdx, coord.rowIdx, columns, rows, visited));
+        }
+      });
+      return vals.length > 0 ? String(Math.max(...vals)) : '0';
+    });
+
+    expr = expr.replace(/MIN\s*\(([^)]+)\)/gi, (_, args) => {
+      const vals: number[] = [];
+      args.split(',').forEach((p: string) => {
+        const t = p.trim();
+        if (t.includes(':')) {
+          const [s, e] = t.split(':');
+          vals.push(...getRangeValues(s, e, columns, rows, visited));
+        } else {
+          const coord = parseCoordinate(t);
+          if (coord) vals.push(getCellValueByCoord(coord.colIdx, coord.rowIdx, columns, rows, visited));
+        }
+      });
+      return vals.length > 0 ? String(Math.min(...vals)) : '0';
+    });
+
+    // 5. Replace standalone cell references (e.g. D1, D2, A5)
+    expr = expr.replace(/\b([A-Za-z]+)(\d+)\b/g, (match) => {
+      const parsed = parseCoordinate(match);
+      if (!parsed) return '0';
+      const val = getCellValueByCoord(parsed.colIdx, parsed.rowIdx, columns, rows, visited);
+      return String(val);
+    });
+
+    // 6. Evaluate safe math expression
+    const sanitized = expr.replace(/[^0-9+\-*/().% ]/g, '');
+    if (!sanitized) return 0;
+
+    const result = new Function(`return (${sanitized});`)();
+    if (typeof result === 'number') {
+      if (!isFinite(result) || isNaN(result)) return '#ERROR!';
+      return Math.round(result * 100) / 100;
+    }
+    return result;
+  } catch (err) {
+    return '#ERROR!';
+  }
+}
+
+export function getReferencedCoordinates(formula: string): string[] {
+  if (!formula || typeof formula !== 'string' || !formula.startsWith('=')) return [];
+  const coords = new Set<string>();
+
+  // 1. Expand range references like D1:D7 or A1:C5
+  const rangeRegex = /\b([A-Za-z]+)(\d+)\s*:\s*([A-Za-z]+)(\d+)\b/g;
+  let rangeMatch;
+  while ((rangeMatch = rangeRegex.exec(formula)) !== null) {
+    const start = parseCoordinate(`${rangeMatch[1]}${rangeMatch[2]}`);
+    const end = parseCoordinate(`${rangeMatch[3]}${rangeMatch[4]}`);
+    if (start && end) {
+      const minCol = Math.min(start.colIdx, end.colIdx);
+      const maxCol = Math.max(start.colIdx, end.colIdx);
+      const minRow = Math.min(start.rowIdx, end.rowIdx);
+      const maxRow = Math.max(start.rowIdx, end.rowIdx);
+
+      for (let r = minRow; r <= maxRow; r++) {
+        for (let c = minCol; c <= maxCol; c++) {
+          coords.add(getCellCoordinate(c, r));
+        }
+      }
+    }
+  }
+
+  // 2. Individual cell references like D1, D2
+  const singleRegex = /\b[A-Za-z]+\d+\b/g;
+  let singleMatch;
+  while ((singleMatch = singleRegex.exec(formula)) !== null) {
+    coords.add(singleMatch[0].toUpperCase());
+  }
+
+  return Array.from(coords);
+}
+
 export function ExpenseSpreadsheet({
   locationId,
   locationName,
@@ -140,6 +393,11 @@ export function ExpenseSpreadsheet({
   const [hasChanges, setHasChanges] = useState<boolean>(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [lastSavedTime, setLastSavedTime] = useState<string>("");
+
+  // Interactive Formula Range Dragging State (Google Sheets / Excel drag selection)
+  const [isDraggingFormulaRange, setIsDraggingFormulaRange] = useState<boolean>(false);
+  const formulaDragStartRef = useRef<{ colIdx: number; rowIdx: number; coord: string } | null>(null);
+  const formulaDragPrefixRef = useRef<string>("");
 
   // Cell Attachment State (Attach PDF to cell)
   const [targetAttachCell, setTargetAttachCell] = useState<{ rowId: string; colId: string } | null>(null);
@@ -196,6 +454,24 @@ export function ExpenseSpreadsheet({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const dateNativePickerRef = useRef<HTMLInputElement | null>(null);
   const prevLocationIdRef = useRef<number | null>(null);
+
+  // Global mouseup listener for formula range drag-selection
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (formulaDragStartRef.current) {
+        setIsDraggingFormulaRange(false);
+        formulaDragStartRef.current = null;
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }
+    };
+
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener("mouseup", handleGlobalMouseUp);
+    };
+  }, []);
 
   // Keep latestDataRef synchronized
   useEffect(() => {
@@ -278,19 +554,31 @@ export function ExpenseSpreadsheet({
     ];
     setColumns(defaultCols);
 
-    let paddedRows = [...initialRows];
-    if (paddedRows.length < 100) {
-      const needed = 100 - paddedRows.length;
-      const startIndex = paddedRows.length + 1;
-      for (let i = 0; i < needed; i++) {
-        const rowNum = startIndex + i;
-        paddedRows.push({
-          id: `row_${rowNum}`,
-        });
+    // Ensure all rows have strictly unique IDs
+    const existingIds = new Set<string>();
+    const sanitizedRows: RowData[] = [];
+
+    (initialRows || []).forEach((r, idx) => {
+      let rId = r?.id ? String(r.id) : `row_${idx + 1}`;
+      if (existingIds.has(rId)) {
+        rId = `row_${idx + 1}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
       }
+      existingIds.add(rId);
+      sanitizedRows.push({ ...r, id: rId });
+    });
+
+    while (sanitizedRows.length < 100) {
+      const rowIdx = sanitizedRows.length + 1;
+      let newId = `row_${rowIdx}`;
+      if (existingIds.has(newId)) {
+        newId = `row_${rowIdx}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+      }
+      existingIds.add(newId);
+      sanitizedRows.push({ id: newId });
     }
-    setRows(paddedRows);
-    latestDataRef.current = { columns: defaultCols, rows: paddedRows };
+
+    setRows(sanitizedRows);
+    latestDataRef.current = { columns: defaultCols, rows: sanitizedRows };
     setHasChanges(false);
     setAutoSaveStatus("saved");
   }, [locationId, initialColumns, initialRows]);
@@ -377,6 +665,22 @@ export function ExpenseSpreadsheet({
     return filtered;
   }, [rows, hiddenRowIds, searchQuery]);
 
+  // Active formula referencing coordinates
+  const referencedCoords = useMemo(() => {
+    if (editingCell && cellValue.startsWith("=")) {
+      return getReferencedCoordinates(cellValue);
+    }
+    return [];
+  }, [editingCell, cellValue]);
+
+  // Live Formula Result for Formula Assistant
+  const liveFormulaResult = useMemo(() => {
+    if (editingCell && cellValue.startsWith("=")) {
+      return evaluateFormula(cellValue, visibleColumns, rows);
+    }
+    return null;
+  }, [editingCell, cellValue, visibleColumns, rows]);
+
   // Total amount computed across all visible rows
   const totalAmount = useMemo(() => {
     const amountCol = columns.find(
@@ -386,16 +690,121 @@ export function ExpenseSpreadsheet({
     );
     if (!amountCol) return 0;
     return rows.reduce((acc, row) => {
-      const raw = row[amountCol.id];
+      let raw = row[amountCol.id];
       if (!raw) return acc;
+      if (typeof raw === "string" && raw.startsWith("=")) {
+        raw = evaluateFormula(raw, visibleColumns, rows);
+      }
       const num = parseFloat(String(raw).replace(/[^0-9.-]+/g, ""));
       return !isNaN(num) ? acc + num : acc;
     }, 0);
-  }, [rows, columns]);
+  }, [rows, columns, visibleColumns]);
 
-  // Start editing a cell on click or double-click
+  // ── FORMULA RANGE DRAG SELECTION (EXCEL / GOOGLE SHEETS STYLE) ──
+  const handleCellMouseDown = (rowId: string, colId: string, e: React.MouseEvent) => {
+    // Only activate drag-selection if currently editing in formula mode (starts with '=') and left button clicked
+    if (editingCell && cellValue.startsWith("=") && e.button === 0) {
+      // If clicking the current editing cell itself, allow internal cursor editing
+      if (editingCell.rowId === rowId && editingCell.colId === colId) {
+        return;
+      }
+
+      const colIndex = visibleColumns.findIndex((c) => c.id === colId);
+      const rowIndex = visibleRows.findIndex((r) => r.id === rowId);
+
+      if (colIndex !== -1 && rowIndex !== -1) {
+        e.preventDefault(); // Prevent native text highlight
+        const coord = getCellCoordinate(colIndex, rowIndex);
+        setIsDraggingFormulaRange(true);
+        formulaDragStartRef.current = { colIdx: colIndex, rowIdx: rowIndex, coord };
+
+        let prefix = cellValue.trim();
+        if (prefix === "=" || prefix === "=SUM" || prefix === "=SUM()") {
+          formulaDragPrefixRef.current = "=SUM(";
+          setCellValue(`=SUM(${coord})`);
+        } else if (prefix.endsWith("(") || prefix.endsWith(",")) {
+          formulaDragPrefixRef.current = prefix;
+          setCellValue(`${prefix}${coord})`);
+        } else if (/[+\-*/]$/.test(prefix)) {
+          formulaDragPrefixRef.current = `${prefix}SUM(`;
+          setCellValue(`${prefix}SUM(${coord})`);
+        } else if (prefix.endsWith(")")) {
+          formulaDragPrefixRef.current = `${prefix}+SUM(`;
+          setCellValue(`${prefix}+SUM(${coord})`);
+        } else {
+          formulaDragPrefixRef.current = "=SUM(";
+          setCellValue(`=SUM(${coord})`);
+        }
+      }
+    }
+  };
+
+  const handleCellMouseEnter = (rowId: string, colId: string) => {
+    if (isDraggingFormulaRange && formulaDragStartRef.current && editingCell && cellValue.startsWith("=")) {
+      const colIndex = visibleColumns.findIndex((c) => c.id === colId);
+      const rowIndex = visibleRows.findIndex((r) => r.id === rowId);
+
+      if (colIndex !== -1 && rowIndex !== -1) {
+        const currentCoord = getCellCoordinate(colIndex, rowIndex);
+        const startCoord = formulaDragStartRef.current.coord;
+
+        let rangeStr = startCoord;
+        if (startCoord !== currentCoord) {
+          rangeStr = `${startCoord}:${currentCoord}`;
+        }
+
+        const prefix = formulaDragPrefixRef.current;
+        if (prefix.endsWith("(")) {
+          setCellValue(`${prefix}${rangeStr})`);
+        } else {
+          setCellValue(`${prefix}${rangeStr}`);
+        }
+      }
+    }
+  };
+
+  // Start editing a cell on click or click to add cell coordinate in formula mode
   const handleCellClick = (rowId: string, colId: string, currentValue: any) => {
     notifyFmsTyping();
+
+    // ── INTERACTIVE FORMULA CELL SELECTION (= MODE) ──
+    if (editingCell && cellValue.startsWith("=")) {
+      // If clicking the current editing cell itself, allow internal cursor editing
+      if (editingCell.rowId === rowId && editingCell.colId === colId) {
+        return;
+      }
+
+      const targetColIdx = visibleColumns.findIndex((c) => c.id === colId);
+      const targetRowIdx = visibleRows.findIndex((r) => r.id === rowId);
+
+      if (targetColIdx !== -1 && targetRowIdx !== -1) {
+        const coord = getCellCoordinate(targetColIdx, targetRowIdx);
+        let newFormula = cellValue;
+        const trimmed = cellValue.trim();
+
+        if (trimmed === "=") {
+          newFormula = `=${coord}`;
+        } else if (/[+\-*/,(]$/.test(trimmed)) {
+          newFormula = `${trimmed}${coord}`;
+        } else if (/:\s*$/.test(trimmed)) {
+          newFormula = `${trimmed}${coord}`;
+        } else if (/\b[A-Za-z]+\d+\b$/.test(trimmed) && trimmed.toUpperCase().includes("SUM(") && !trimmed.includes(":") && !trimmed.endsWith(")")) {
+          newFormula = trimmed.replace(/(\b[A-Za-z]+\d+\b)$/, `$1:${coord}`);
+        } else if (/\b[A-Za-z]+\d+\b$/.test(trimmed)) {
+          newFormula = `${trimmed}+${coord}`;
+        } else {
+          newFormula = `${trimmed}${coord}`;
+        }
+
+        setCellValue(newFormula);
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 10);
+        return;
+      }
+    }
+
+    // Normal cell selection
     setEditingCell({ rowId, colId });
     const strVal = currentValue !== undefined && currentValue !== null ? String(currentValue) : "";
     setCellValue(strVal);
@@ -1061,12 +1470,15 @@ export function ExpenseSpreadsheet({
         let centerSum = 0;
         validRows.forEach((r) => {
           const rowCells = exportCols.map(c => {
-            const val = r[c.id] || "";
+            let val = r[c.id] || "";
+            if (typeof val === "string" && val.startsWith("=")) {
+              val = evaluateFormula(val, exportCols, validRows);
+            }
             if (c.label.toLowerCase().includes("amount") || c.id.toLowerCase().includes("amount")) {
               const num = parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
               if (!isNaN(num)) centerSum += num;
             }
-            return `"${String(val).replace(/"/g, '""')}"`;
+            return `"${String(val !== undefined && val !== null ? val : "").replace(/"/g, '""')}"`;
           });
           csvLines.push(rowCells.join(","));
         });
@@ -1311,6 +1723,125 @@ export function ExpenseSpreadsheet({
 
       </div>
 
+      {/* ── GOOGLE SHEETS / EXCEL FORMULA ASSISTANT BAR (= MODE) ── */}
+      {editingCell && cellValue.startsWith("=") && (
+        <div className="px-3 py-2 bg-gradient-to-r from-indigo-50 via-sky-50 to-emerald-50 border-b border-indigo-200 flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="flex items-center gap-2 flex-1 min-w-[280px]">
+            <div className="flex items-center gap-1 px-2 py-0.5 bg-indigo-600 text-white rounded font-mono font-black text-[11px] shrink-0 shadow-xs">
+              <Calculator className="w-3.5 h-3.5" />
+              <span>fx</span>
+            </div>
+            
+            <div className="flex-1 relative flex items-center">
+              <input
+                type="text"
+                value={cellValue}
+                onChange={(e) => setCellValue(e.target.value)}
+                onKeyDown={handleCellKeyDown}
+                placeholder="=SUM(D1:D9) or =D1+D2"
+                className="w-full bg-white border-2 border-indigo-400 focus:border-indigo-600 px-2.5 py-1 text-xs font-mono font-bold text-indigo-950 rounded shadow-xs focus:outline-none"
+              />
+            </div>
+
+            {/* LIVE COMPUTED RESULT PREVIEW */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-emerald-300 rounded font-mono font-black text-emerald-800 text-xs shrink-0 shadow-2xs">
+              <span className="text-[10px] text-gray-500 uppercase font-sans font-bold">Result:</span>
+              <span>
+                {liveFormulaResult !== null && liveFormulaResult !== undefined
+                  ? typeof liveFormulaResult === "number"
+                    ? liveFormulaResult.toLocaleString("en-IN", { maximumFractionDigits: 2 })
+                    : String(liveFormulaResult)
+                  : "..."}
+              </span>
+            </div>
+          </div>
+
+          {/* QUICK OPERATORS & ACTIONS */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const trimmed = cellValue.trim();
+                if (trimmed === "=") {
+                  setCellValue("=SUM(");
+                } else if (/[+\-*/,(]$/.test(trimmed)) {
+                  setCellValue(`${trimmed}SUM(`);
+                } else {
+                  setCellValue(`=SUM(${trimmed.replace(/^=/, "")}`);
+                }
+              }}
+              className="px-2 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 border border-indigo-300 rounded font-mono font-bold text-[11px] cursor-pointer"
+              title="Insert SUM function"
+            >
+              SUM( )
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCellValue((prev) => `${prev.trim()}+`)}
+              className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 rounded font-mono font-bold text-[11px] cursor-pointer"
+              title="Add plus operator"
+            >
+              +
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCellValue((prev) => `${prev.trim()}-`)}
+              className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 rounded font-mono font-bold text-[11px] cursor-pointer"
+              title="Add minus operator"
+            >
+              -
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCellValue((prev) => `${prev.trim()}*`)}
+              className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 rounded font-mono font-bold text-[11px] cursor-pointer"
+              title="Add multiply operator"
+            >
+              ×
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCellValue((prev) => `${prev.trim()}/`)}
+              className="px-2 py-1 bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 rounded font-mono font-bold text-[11px] cursor-pointer"
+              title="Add divide operator"
+            >
+              ÷
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                commitCurrentCell();
+                setEditingCell(null);
+              }}
+              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[11px] cursor-pointer flex items-center gap-1 shadow-xs"
+              title="Commit formula (Enter)"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Apply</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEditingCell(null)}
+              className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded font-bold text-[11px] cursor-pointer"
+              title="Cancel (Esc)"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="w-full text-[10px] text-indigo-900/80 font-medium flex items-center gap-1.5 -mt-1">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+            <span>Click on any cell in the sheet (e.g. D1, D2) to total or add it directly to your formula.</span>
+          </div>
+        </div>
+      )}
+
       {/* ── GOOGLE SHEETS / EXCEL DATA CANVAS ── */}
       <div className="overflow-x-auto overflow-y-auto max-h-[700px] relative border-b border-gray-200 scrollbar-thin">
         <table className="w-full text-left border-collapse text-xs font-mono">
@@ -1382,6 +1913,12 @@ export function ExpenseSpreadsheet({
                               ◀•▶
                             </button>
                           )}
+                          
+                          {/* COLUMN LETTER BADGE (A, B, C, D...) */}
+                          <span className="px-1 py-0.2 bg-gray-200/80 text-gray-700 rounded text-[9px] font-mono font-black shrink-0 border border-gray-300/70">
+                            {getColLetter(colIdx)}
+                          </span>
+
                           <GripVertical className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                           <span
                             onDoubleClick={(e) => handleStartRenameCol(col.id, col.label, e)}
@@ -1491,7 +2028,7 @@ export function ExpenseSpreadsheet({
               const hiddenRowsBefore = getHiddenRowsBefore(row.id);
 
               return (
-                <tr key={row.id} className="hover:bg-slate-50 transition-colors group border-b border-gray-200">
+                <tr key={`${row.id}_${idx}`} className="hover:bg-slate-50 transition-colors group border-b border-gray-200">
                   
                   {/* ROW INDEX COLUMN */}
                   <td
@@ -1517,7 +2054,7 @@ export function ExpenseSpreadsheet({
                   </td>
 
                   {/* CELLS */}
-                  {visibleColumns.map((col) => {
+                  {visibleColumns.map((col, colIdx) => {
                     const isEditing = editingCell?.rowId === row.id && editingCell?.colId === col.id;
                     const isUploading = uploadingCell?.rowId === row.id && uploadingCell?.colId === col.id;
                     const val = row[col.id];
@@ -1527,16 +2064,26 @@ export function ExpenseSpreadsheet({
                       val.includes("/uploads/") ||
                       val.toLowerCase().endsWith(".pdf")
                     );
+                    const isFormula = typeof val === "string" && val.startsWith("=");
+                    const evaluatedFormulaVal = isFormula ? evaluateFormula(val, visibleColumns, rows) : null;
+                    const cellCoord = getCellCoordinate(colIdx, idx);
+                    const isReferencedInActiveFormula = editingCell && cellValue.startsWith("=") && referencedCoords.includes(cellCoord);
 
                     return (
                       <td
                         key={col.id}
+                        onMouseDown={(e) => handleCellMouseDown(row.id, col.id, e)}
+                        onMouseEnter={() => handleCellMouseEnter(row.id, col.id)}
                         onClick={() => handleCellClick(row.id, col.id, val)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, col.id, val)}
                         style={{ width: col.width || "160px", minWidth: "140px" }}
-                        className={`px-2.5 py-1.5 border-r border-gray-200 cursor-cell relative min-h-[30px] ${
+                        className={`px-2.5 py-1.5 border-r border-gray-200 cursor-cell relative min-h-[30px] transition-all ${
                           isEditing
                             ? "bg-white ring-2 ring-[#1ab0bc] ring-inset z-20"
+                            : isReferencedInActiveFormula
+                            ? "bg-indigo-50 ring-2 ring-indigo-500 ring-dashed z-10 animate-pulse"
+                            : isFormula
+                            ? "bg-indigo-50/30 hover:bg-indigo-50/60"
                             : "hover:bg-sky-50/50"
                         }`}
                       >
@@ -1620,6 +2167,21 @@ export function ExpenseSpreadsheet({
                               <span className="truncate">📄 View PDF</span>
                               <ExternalLink size={9} className="shrink-0 text-emerald-500" />
                             </a>
+                          </div>
+                        ) : isFormula ? (
+                          <div className="flex items-center justify-between min-h-[18px] px-1 group/cell">
+                            <span className="text-indigo-950 font-bold truncate max-w-[260px] flex items-center gap-1 font-mono">
+                              <span className="px-1 py-0.2 bg-indigo-100 text-indigo-800 text-[9px] font-mono font-black rounded border border-indigo-200">
+                                fx
+                              </span>
+                              <span>
+                                {evaluatedFormulaVal !== null && evaluatedFormulaVal !== undefined
+                                  ? typeof evaluatedFormulaVal === "number"
+                                    ? evaluatedFormulaVal.toLocaleString("en-IN", { maximumFractionDigits: 2 })
+                                    : String(evaluatedFormulaVal)
+                                  : "#ERROR!"}
+                              </span>
+                            </span>
                           </div>
                         ) : (
                           <div className="flex items-center justify-between min-h-[18px] px-1 group/cell">
