@@ -34,6 +34,8 @@ import {
   Filter,
   CheckSquare,
   Calculator,
+  ClipboardPaste,
+  Clipboard,
   Sigma
 } from "lucide-react";
 import { toast } from "sonner";
@@ -439,6 +441,40 @@ export function ExpenseSpreadsheet({
     label: string;
   } | null>(null);
 
+  // ── MULTI-CELL RANGE SELECTION (GOOGLE SHEETS / EXCEL STYLE) ──
+  const [selectedCell, setSelectedCell] = useState<{
+    rowId: string;
+    colId: string;
+    rowIdx: number;
+    colIdx: number;
+  } | null>(null);
+
+  const [selectedRange, setSelectedRange] = useState<{
+    startRow: number;
+    startCol: number;
+    endRow: number;
+    endCol: number;
+  } | null>(null);
+  const [isDraggingSelection, setIsDraggingSelection] = useState<boolean>(false);
+
+  const selectionBounds = useMemo(() => {
+    if (!selectedRange) return null;
+    return {
+      minRow: Math.min(selectedRange.startRow, selectedRange.endRow),
+      maxRow: Math.max(selectedRange.startRow, selectedRange.endRow),
+      minCol: Math.min(selectedRange.startCol, selectedRange.endCol),
+      maxCol: Math.max(selectedRange.startCol, selectedRange.endCol),
+    };
+  }, [selectedRange]);
+
+  const isMultiCellSelected = useMemo(() => {
+    if (!selectionBounds) return false;
+    return (
+      selectionBounds.minRow !== selectionBounds.maxRow ||
+      selectionBounds.minCol !== selectionBounds.maxCol
+    );
+  }, [selectionBounds]);
+
   // ── CSV EXPORT MODAL STATE ──
   const [isCsvModalOpen, setIsCsvModalOpen] = useState<boolean>(false);
   const [csvScope, setCsvScope] = useState<"current" | "all">("current");
@@ -455,7 +491,7 @@ export function ExpenseSpreadsheet({
   const dateNativePickerRef = useRef<HTMLInputElement | null>(null);
   const prevLocationIdRef = useRef<number | null>(null);
 
-  // Global mouseup listener for formula range drag-selection
+  // Global mouseup listener for multi-cell and formula range drag-selection
   useEffect(() => {
     const handleGlobalMouseUp = () => {
       if (formulaDragStartRef.current) {
@@ -465,6 +501,7 @@ export function ExpenseSpreadsheet({
           inputRef.current.focus();
         }
       }
+      setIsDraggingSelection(false);
     };
 
     window.addEventListener("mouseup", handleGlobalMouseUp);
@@ -518,6 +555,16 @@ export function ExpenseSpreadsheet({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
+
+  // Auto-focus and select active cell input for instant editing on Arrow/Tab/Enter navigation
+  useEffect(() => {
+    if (editingCell && inputRef.current) {
+      inputRef.current.focus();
+      if (!cellValue.startsWith("=")) {
+        inputRef.current.select();
+      }
+    }
+  }, [editingCell?.rowId, editingCell?.colId]);
 
   const notifyFmsTyping = () => {
     if (hasPingedFms.current) return;
@@ -622,7 +669,7 @@ export function ExpenseSpreadsheet({
     }
   };
 
-  // Schedule auto-save on any edit (debounced 800ms for smooth uninterrupted typing)
+  // Schedule auto-save on any edit (debounced 1200ms for silent, smooth background saving)
   const scheduleAutoSave = (newCols?: ColumnConfig[], newRows?: RowData[]) => {
     setHasChanges(true);
     setAutoSaveStatus("unsaved");
@@ -637,7 +684,7 @@ export function ExpenseSpreadsheet({
     }
     autoSaveTimerRef.current = setTimeout(() => {
       saveToServer(true);
-    }, 800);
+    }, 1200);
   };
 
   // Manual save trigger
@@ -664,6 +711,50 @@ export function ExpenseSpreadsheet({
     }
     return filtered;
   }, [rows, hiddenRowIds, searchQuery]);
+
+  // Statistics for selected range (Sum, Average, Count) like Excel status bar
+  const selectionStats = useMemo(() => {
+    if (!selectionBounds || !isMultiCellSelected) return null;
+    const { minRow, maxRow, minCol, maxCol } = selectionBounds;
+    let sum = 0;
+    let numCount = 0;
+    let totalCells = 0;
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (let r = minRow; r <= maxRow; r++) {
+      const row = visibleRows[r];
+      if (!row) continue;
+      for (let c = minCol; c <= maxCol; c++) {
+        totalCells++;
+        const col = visibleColumns[c];
+        if (!col) continue;
+        const val = row[col.id];
+        if (val !== undefined && val !== null && val !== "") {
+          const num = parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
+          if (!isNaN(num)) {
+            sum += num;
+            numCount++;
+            if (num < min) min = num;
+            if (num > max) max = num;
+          }
+        }
+      }
+    }
+
+    const startCoord = getCellCoordinate(minCol, minRow);
+    const endCoord = getCellCoordinate(maxCol, maxRow);
+
+    return {
+      rangeCoord: `${startCoord}:${endCoord}`,
+      totalCells,
+      numCount,
+      sum: numCount > 0 ? sum : null,
+      avg: numCount > 0 ? sum / numCount : null,
+      min: numCount > 0 ? min : null,
+      max: numCount > 0 ? max : null,
+    };
+  }, [selectionBounds, isMultiCellSelected, visibleRows, visibleColumns]);
 
   // Active formula referencing coordinates
   const referencedCoords = useMemo(() => {
@@ -700,66 +791,111 @@ export function ExpenseSpreadsheet({
     }, 0);
   }, [rows, columns, visibleColumns]);
 
-  // ── FORMULA RANGE DRAG SELECTION (EXCEL / GOOGLE SHEETS STYLE) ──
+  // ── MULTI-CELL DRAG SELECTION & FORMULA DRAG SELECTION (GOOGLE SHEETS / EXCEL STYLE) ──
   const handleCellMouseDown = (rowId: string, colId: string, e: React.MouseEvent) => {
-    // Only activate drag-selection if currently editing in formula mode (starts with '=') and left button clicked
-    if (editingCell && cellValue.startsWith("=") && e.button === 0) {
-      // If clicking the current editing cell itself, allow internal cursor editing
+    // Only proceed on Left mouse button
+    if (e.button !== 0) return;
+
+    const colIndex = visibleColumns.findIndex((c) => c.id === colId);
+    const rowIndex = visibleRows.findIndex((r) => r.id === rowId);
+    if (colIndex === -1 || rowIndex === -1) return;
+
+    // ── FORMULA MODE DRAG (= MODE) ──
+    if (editingCell && cellValue.startsWith("=")) {
       if (editingCell.rowId === rowId && editingCell.colId === colId) {
         return;
       }
+      e.preventDefault();
+      const coord = getCellCoordinate(colIndex, rowIndex);
+      setIsDraggingFormulaRange(true);
+      formulaDragStartRef.current = { colIdx: colIndex, rowIdx: rowIndex, coord };
 
-      const colIndex = visibleColumns.findIndex((c) => c.id === colId);
-      const rowIndex = visibleRows.findIndex((r) => r.id === rowId);
-
-      if (colIndex !== -1 && rowIndex !== -1) {
-        e.preventDefault(); // Prevent native text highlight
-        const coord = getCellCoordinate(colIndex, rowIndex);
-        setIsDraggingFormulaRange(true);
-        formulaDragStartRef.current = { colIdx: colIndex, rowIdx: rowIndex, coord };
-
-        let prefix = cellValue.trim();
-        if (prefix === "=" || prefix === "=SUM" || prefix === "=SUM()") {
-          formulaDragPrefixRef.current = "=SUM(";
-          setCellValue(`=SUM(${coord})`);
-        } else if (prefix.endsWith("(") || prefix.endsWith(",")) {
-          formulaDragPrefixRef.current = prefix;
-          setCellValue(`${prefix}${coord})`);
-        } else if (/[+\-*/]$/.test(prefix)) {
-          formulaDragPrefixRef.current = `${prefix}SUM(`;
-          setCellValue(`${prefix}SUM(${coord})`);
-        } else if (prefix.endsWith(")")) {
-          formulaDragPrefixRef.current = `${prefix}+SUM(`;
-          setCellValue(`${prefix}+SUM(${coord})`);
-        } else {
-          formulaDragPrefixRef.current = "=SUM(";
-          setCellValue(`=SUM(${coord})`);
-        }
+      let prefix = cellValue.trim();
+      if (prefix === "=" || prefix === "=SUM" || prefix === "=SUM()") {
+        formulaDragPrefixRef.current = "=SUM(";
+        setCellValue(`=SUM(${coord})`);
+      } else if (prefix.endsWith("(") || prefix.endsWith(",")) {
+        formulaDragPrefixRef.current = prefix;
+        setCellValue(`${prefix}${coord})`);
+      } else if (/[+\-*/]$/.test(prefix)) {
+        formulaDragPrefixRef.current = `${prefix}SUM(`;
+        setCellValue(`${prefix}${coord})`);
+      } else if (prefix.endsWith(")")) {
+        formulaDragPrefixRef.current = `${prefix}+SUM(`;
+        setCellValue(`${prefix}+SUM(${coord})`);
+      } else {
+        formulaDragPrefixRef.current = "=SUM(";
+        setCellValue(`=SUM(${coord})`);
       }
+      return;
     }
+
+    // ── NORMAL MULTI-CELL DRAG SELECTION ──
+    if (e.shiftKey && selectedCell) {
+      e.preventDefault();
+      setSelectedRange({
+        startRow: selectedCell.rowIdx,
+        startCol: selectedCell.colIdx,
+        endRow: rowIndex,
+        endCol: colIndex,
+      });
+      return;
+    }
+
+    // If editing another cell, commit and close its input editor
+    if (editingCell && (editingCell.rowId !== rowId || editingCell.colId !== colId)) {
+      commitCurrentCell();
+      setEditingCell(null);
+    }
+
+    // Start drag selection across cells
+    setIsDraggingSelection(true);
+    setSelectedCell({
+      rowId,
+      colId,
+      rowIdx: rowIndex,
+      colIdx: colIndex,
+    });
+    setSelectedRange({
+      startRow: rowIndex,
+      startCol: colIndex,
+      endRow: rowIndex,
+      endCol: colIndex,
+    });
   };
 
   const handleCellMouseEnter = (rowId: string, colId: string) => {
+    const colIndex = visibleColumns.findIndex((c) => c.id === colId);
+    const rowIndex = visibleRows.findIndex((r) => r.id === rowId);
+    if (colIndex === -1 || rowIndex === -1) return;
+
+    // Formula drag
     if (isDraggingFormulaRange && formulaDragStartRef.current && editingCell && cellValue.startsWith("=")) {
-      const colIndex = visibleColumns.findIndex((c) => c.id === colId);
-      const rowIndex = visibleRows.findIndex((r) => r.id === rowId);
+      const currentCoord = getCellCoordinate(colIndex, rowIndex);
+      const startCoord = formulaDragStartRef.current.coord;
 
-      if (colIndex !== -1 && rowIndex !== -1) {
-        const currentCoord = getCellCoordinate(colIndex, rowIndex);
-        const startCoord = formulaDragStartRef.current.coord;
-
-        let rangeStr = startCoord;
-        if (startCoord !== currentCoord) {
-          rangeStr = `${startCoord}:${currentCoord}`;
-        }
-
-        const prefix = formulaDragPrefixRef.current;
-        if (prefix.endsWith("(")) {
-          setCellValue(`${prefix}${rangeStr})`);
-        } else {
-          setCellValue(`${prefix}${rangeStr}`);
-        }
+      let rangeStr = startCoord;
+      if (startCoord !== currentCoord) {
+        rangeStr = `${startCoord}:${currentCoord}`;
       }
+
+      const prefix = formulaDragPrefixRef.current;
+      if (prefix.endsWith("(")) {
+        setCellValue(`${prefix}${rangeStr})`);
+      } else {
+        setCellValue(`${prefix}${rangeStr}`);
+      }
+      return;
+    }
+
+    // Normal multi-cell drag selection
+    if (isDraggingSelection && selectedCell) {
+      setSelectedRange({
+        startRow: selectedCell.rowIdx,
+        startCol: selectedCell.colIdx,
+        endRow: rowIndex,
+        endCol: colIndex,
+      });
     }
   };
 
@@ -769,7 +905,6 @@ export function ExpenseSpreadsheet({
 
     // ── INTERACTIVE FORMULA CELL SELECTION (= MODE) ──
     if (editingCell && cellValue.startsWith("=")) {
-      // If clicking the current editing cell itself, allow internal cursor editing
       if (editingCell.rowId === rowId && editingCell.colId === colId) {
         return;
       }
@@ -804,7 +939,49 @@ export function ExpenseSpreadsheet({
       }
     }
 
-    // Normal cell selection
+    // Normal single-cell click: select cell without opening input (like Excel / Google Sheets)
+    const colIndex = visibleColumns.findIndex((c) => c.id === colId);
+    const rowIndex = visibleRows.findIndex((r) => r.id === rowId);
+    if (colIndex !== -1 && rowIndex !== -1) {
+      setSelectedCell({
+        rowId,
+        colId,
+        rowIdx: rowIndex,
+        colIdx: colIndex,
+      });
+      setSelectedRange({
+        startRow: rowIndex,
+        startCol: colIndex,
+        endRow: rowIndex,
+        endCol: colIndex,
+      });
+    }
+
+    if (editingCell && (editingCell.rowId !== rowId || editingCell.colId !== colId)) {
+      commitCurrentCell();
+      setEditingCell(null);
+    }
+  };
+
+  // Double click to enter text edit mode
+  const handleCellDoubleClick = (rowId: string, colId: string, currentValue: any) => {
+    notifyFmsTyping();
+    const colIndex = visibleColumns.findIndex((c) => c.id === colId);
+    const rowIndex = visibleRows.findIndex((r) => r.id === rowId);
+    if (colIndex !== -1 && rowIndex !== -1) {
+      setSelectedCell({
+        rowId,
+        colId,
+        rowIdx: rowIndex,
+        colIdx: colIndex,
+      });
+      setSelectedRange({
+        startRow: rowIndex,
+        startCol: colIndex,
+        endRow: rowIndex,
+        endCol: colIndex,
+      });
+    }
     setEditingCell({ rowId, colId });
     const strVal = currentValue !== undefined && currentValue !== null ? String(currentValue) : "";
     setCellValue(strVal);
@@ -934,40 +1111,143 @@ export function ExpenseSpreadsheet({
     });
   };
 
-  const handleCopyCell = (val: any) => {
-    if (val !== undefined && val !== null) {
+  const handleCopyCell = (val?: any) => {
+    if (selectionBounds && isMultiCellSelected) {
+      const { minRow, maxRow, minCol, maxCol } = selectionBounds;
+      const lines: string[] = [];
+      for (let r = minRow; r <= maxRow; r++) {
+        const targetRow = visibleRows[r];
+        if (!targetRow) continue;
+        const rowVals: string[] = [];
+        for (let c = minCol; c <= maxCol; c++) {
+          const targetCol = visibleColumns[c];
+          if (!targetCol) continue;
+          const v = targetRow[targetCol.id];
+          rowVals.push(v !== undefined && v !== null ? String(v) : "");
+        }
+        lines.push(rowVals.join("\t"));
+      }
+      navigator.clipboard.writeText(lines.join("\n"));
+      const rowsCount = maxRow - minRow + 1;
+      const colsCount = maxCol - minCol + 1;
+      toast.success(`Copied ${rowsCount} row(s) × ${colsCount} col(s) (${rowsCount * colsCount} cells) to clipboard`);
+    } else if (val !== undefined && val !== null) {
       navigator.clipboard.writeText(String(val));
       toast.success("Copied cell value to clipboard");
+    } else {
+      const rId = selectedCell?.rowId || editingCell?.rowId;
+      const cId = selectedCell?.colId || editingCell?.colId;
+      if (rId && cId) {
+        const row = rows.find((r) => r.id === rId);
+        if (row && row[cId] !== undefined) {
+          navigator.clipboard.writeText(String(row[cId] || ""));
+          toast.success("Copied cell value to clipboard");
+        }
+      }
     }
     setCellContextMenu(null);
   };
 
-  const handleCutCell = (rowId: string, colId: string, val: any) => {
-    if (val !== undefined && val !== null) {
-      navigator.clipboard.writeText(String(val));
-    }
-    const updatedRows = rows.map(r => r.id === rowId ? { ...r, [colId]: "" } : r);
-    setRows(updatedRows);
-    if (editingCell?.rowId === rowId && editingCell?.colId === colId) {
+  const handleCutCell = (rowId?: string, colId?: string, val?: any) => {
+    handleCopyCell(val);
+    handleClearCell(rowId, colId);
+    setCellContextMenu(null);
+  };
+
+  const handleClearCell = (rowId?: string, colId?: string) => {
+    if (selectionBounds && isMultiCellSelected) {
+      const { minRow, maxRow, minCol, maxCol } = selectionBounds;
+      const targetRowIds = new Set<string>();
+      for (let r = minRow; r <= maxRow; r++) {
+        if (visibleRows[r]) targetRowIds.add(visibleRows[r].id);
+      }
+      const targetColIds = new Set<string>();
+      for (let c = minCol; c <= maxCol; c++) {
+        if (visibleColumns[c]) targetColIds.add(visibleColumns[c].id);
+      }
+
+      let clearedCount = 0;
+      const updatedRows = rows.map((row) => {
+        if (targetRowIds.has(row.id)) {
+          const newRow = { ...row };
+          targetColIds.forEach((cId) => {
+            if (newRow[cId] !== "") {
+              newRow[cId] = "";
+              clearedCount++;
+            }
+          });
+          return newRow;
+        }
+        return row;
+      });
+
+      setRows(updatedRows);
+      scheduleAutoSave(undefined, updatedRows);
       setCellValue("");
+      toast.info(`Cleared ${clearedCount} cell(s)`);
+    } else {
+      const rId = rowId || selectedCell?.rowId || editingCell?.rowId;
+      const cId = colId || selectedCell?.colId || editingCell?.colId;
+      if (rId && cId) {
+        const updatedRows = rows.map((r) => (r.id === rId ? { ...r, [cId]: "" } : r));
+        setRows(updatedRows);
+        if (editingCell?.rowId === rId && editingCell?.colId === cId) {
+          setCellValue("");
+        }
+        scheduleAutoSave(undefined, updatedRows);
+        toast.info("Cleared cell");
+      }
     }
-    scheduleAutoSave(undefined, updatedRows);
-    toast.info("Cut cell value");
     setCellContextMenu(null);
   };
 
-  const handleClearCell = (rowId: string, colId: string) => {
-    const updatedRows = rows.map(r => r.id === rowId ? { ...r, [colId]: "" } : r);
-    setRows(updatedRows);
-    if (editingCell?.rowId === rowId && editingCell?.colId === colId) {
-      setCellValue("");
+  // ── CELL NAVIGATION HELPER ──
+  const navigateCell = (targetRowIdx: number, targetColIdx: number, baseRows?: RowData[], keepEditing = false) => {
+    let currentWorkingRows = baseRows || rows;
+
+    if (targetRowIdx < 0) return;
+    if (targetColIdx < 0 || targetColIdx >= visibleColumns.length) return;
+
+    // Auto-create rows if moving past existing rows (smooth endless scrolling/typing)
+    if (targetRowIdx >= currentWorkingRows.length) {
+      const newRows = [...currentWorkingRows];
+      while (newRows.length <= targetRowIdx) {
+        const newRowId = `row_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        newRows.push({ id: newRowId });
+      }
+      currentWorkingRows = newRows;
+      setRows(newRows);
+      scheduleAutoSave(undefined, newRows);
     }
-    scheduleAutoSave(undefined, updatedRows);
-    toast.info("Cleared cell");
-    setCellContextMenu(null);
+
+    const targetRow = currentWorkingRows[targetRowIdx];
+    const targetCol = visibleColumns[targetColIdx];
+    if (!targetRow || !targetCol) return;
+
+    setSelectedCell({
+      rowId: targetRow.id,
+      colId: targetCol.id,
+      rowIdx: targetRowIdx,
+      colIdx: targetColIdx,
+    });
+
+    setSelectedRange({
+      startRow: targetRowIdx,
+      startCol: targetColIdx,
+      endRow: targetRowIdx,
+      endCol: targetColIdx,
+    });
+
+    if (keepEditing) {
+      const nextVal = targetRow[targetCol.id];
+      setEditingCell({ rowId: targetRow.id, colId: targetCol.id });
+      setCellValue(nextVal !== undefined && nextVal !== null ? String(nextVal) : "");
+    } else {
+      setEditingCell(null);
+    }
   };
 
-  // ── KEYBOARD NAVIGATION ──
+  // ── KEYBOARD NAVIGATION (EXCEL / GOOGLE SHEETS LIKE) ──
   const handleCellKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!editingCell) return;
 
@@ -976,87 +1256,401 @@ export function ExpenseSpreadsheet({
 
     if (currentRowIndex === -1 || currentColIndex === -1) return;
 
-    // 1. ENTER / DOWN (Move to cell below)
+    const input = e.currentTarget;
+    const isAtStart = input.selectionStart === 0 && input.selectionEnd === 0;
+    const isAtEnd = input.selectionStart === input.value.length;
+    const isAllSelected = input.selectionStart === 0 && input.selectionEnd === input.value.length;
+
+    // 1. ENTER (Move down)
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const updatedRows = commitCurrentCell();
-
-      if (currentRowIndex + 1 < visibleRows.length) {
-        const nextRow = visibleRows[currentRowIndex + 1];
-        const nextVal = nextRow[editingCell.colId];
-        setEditingCell({ rowId: nextRow.id, colId: editingCell.colId });
-        setCellValue(nextVal !== undefined && nextVal !== null ? String(nextVal) : "");
-      } else {
-        const newRowId = `row_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-        const newRow: RowData = { id: newRowId };
-        const newRows = [...updatedRows, newRow];
-        setRows(newRows);
-        scheduleAutoSave(undefined, newRows);
-        setEditingCell({ rowId: newRowId, colId: editingCell.colId });
-        setCellValue("");
-      }
+      navigateCell(currentRowIndex + 1, currentColIndex, updatedRows);
       return;
     }
 
-    // 2. SHIFT + ENTER / UP
+    // 2. SHIFT + ENTER (Move up)
     if (e.key === "Enter" && e.shiftKey) {
       e.preventDefault();
-      commitCurrentCell();
-
+      const updatedRows = commitCurrentCell();
       if (currentRowIndex > 0) {
-        const prevRow = visibleRows[currentRowIndex - 1];
-        const prevVal = prevRow[editingCell.colId];
-        setEditingCell({ rowId: prevRow.id, colId: editingCell.colId });
-        setCellValue(prevVal !== undefined && prevVal !== null ? String(prevVal) : "");
+        navigateCell(currentRowIndex - 1, currentColIndex, updatedRows);
       }
       return;
     }
 
-    // 3. TAB / RIGHT
+    // 3. TAB (Move right / wrap to next row)
     if (e.key === "Tab" && !e.shiftKey) {
       e.preventDefault();
-      commitCurrentCell();
-
+      const updatedRows = commitCurrentCell();
       if (currentColIndex + 1 < visibleColumns.length) {
-        const nextCol = visibleColumns[currentColIndex + 1];
-        const nextVal = visibleRows[currentRowIndex][nextCol.id];
-        setEditingCell({ rowId: editingCell.rowId, colId: nextCol.id });
-        setCellValue(nextVal !== undefined && nextVal !== null ? String(nextVal) : "");
-      } else if (currentRowIndex + 1 < visibleRows.length) {
-        const nextRow = visibleRows[currentRowIndex + 1];
-        const firstCol = visibleColumns[0];
-        const nextVal = nextRow[firstCol.id];
-        setEditingCell({ rowId: nextRow.id, colId: firstCol.id });
-        setCellValue(nextVal !== undefined && nextVal !== null ? String(nextVal) : "");
+        navigateCell(currentRowIndex, currentColIndex + 1, updatedRows);
+      } else {
+        navigateCell(currentRowIndex + 1, 0, updatedRows);
       }
       return;
     }
 
-    // 4. SHIFT + TAB / LEFT
+    // 4. SHIFT + TAB (Move left / wrap to prev row)
     if (e.key === "Tab" && e.shiftKey) {
       e.preventDefault();
-      commitCurrentCell();
-
+      const updatedRows = commitCurrentCell();
       if (currentColIndex > 0) {
-        const prevCol = visibleColumns[currentColIndex - 1];
-        const prevVal = visibleRows[currentRowIndex][prevCol.id];
-        setEditingCell({ rowId: editingCell.rowId, colId: prevCol.id });
-        setCellValue(prevVal !== undefined && prevVal !== null ? String(prevVal) : "");
+        navigateCell(currentRowIndex, currentColIndex - 1, updatedRows);
       } else if (currentRowIndex > 0) {
-        const prevRow = visibleRows[currentRowIndex - 1];
-        const lastCol = visibleColumns[visibleColumns.length - 1];
-        const prevVal = prevRow[lastCol.id];
-        setEditingCell({ rowId: prevRow.id, colId: lastCol.id });
-        setCellValue(prevVal !== undefined && prevVal !== null ? String(prevVal) : "");
+        navigateCell(currentRowIndex - 1, visibleColumns.length - 1, updatedRows);
       }
       return;
     }
 
-    // 5. ESCAPE
+    // 5. ARROW UP (Move to cell above)
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const updatedRows = commitCurrentCell();
+      if (currentRowIndex > 0) {
+        navigateCell(currentRowIndex - 1, currentColIndex, updatedRows);
+      }
+      return;
+    }
+
+    // 6. ARROW DOWN (Move to cell below)
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const updatedRows = commitCurrentCell();
+      navigateCell(currentRowIndex + 1, currentColIndex, updatedRows);
+      return;
+    }
+
+    // 7. ARROW LEFT (Move to left cell when cursor at beginning)
+    if (e.key === "ArrowLeft" && (isAtStart || isAllSelected || input.value === "")) {
+      if (currentColIndex > 0) {
+        e.preventDefault();
+        const updatedRows = commitCurrentCell();
+        navigateCell(currentRowIndex, currentColIndex - 1, updatedRows);
+      }
+      return;
+    }
+
+    // 8. ARROW RIGHT (Move to right cell when cursor at end)
+    if (e.key === "ArrowRight" && (isAtEnd || isAllSelected || input.value === "")) {
+      if (currentColIndex + 1 < visibleColumns.length) {
+        e.preventDefault();
+        const updatedRows = commitCurrentCell();
+        navigateCell(currentRowIndex, currentColIndex + 1, updatedRows);
+      }
+      return;
+    }
+
+    // 9. ESCAPE (Exit editing)
     if (e.key === "Escape") {
       setEditingCell(null);
     }
   };
+
+  // ── MULTI-CELL COPY / PASTE LOGIC (GOOGLE SHEETS & EXCEL COMPATIBLE) ──
+  const pasteGridData = (text: string, explicitRowId?: string, explicitColId?: string) => {
+    if (!text) return;
+
+    // Normalize newlines (handles both Windows \r\n and Unix \n)
+    const rawRows = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    // Trim trailing empty line from Excel/Google Sheets copy
+    if (rawRows.length > 1 && rawRows[rawRows.length - 1].trim() === "") {
+      rawRows.pop();
+    }
+
+    const grid = rawRows.map((line) => {
+      return line.split("\t").map((cell) => {
+        let cleaned = cell.trim();
+        // Remove enclosing quotes if Excel quoted it
+        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+          cleaned = cleaned.slice(1, -1).replace(/""/g, '"');
+        }
+        return cleaned;
+      });
+    });
+
+    if (grid.length === 0) return;
+
+    const targetRowId =
+      explicitRowId ||
+      selectedCell?.rowId ||
+      editingCell?.rowId ||
+      (selectionBounds ? visibleRows[selectionBounds.minRow]?.id : visibleRows[0]?.id);
+
+    const targetColId =
+      explicitColId ||
+      selectedCell?.colId ||
+      editingCell?.colId ||
+      (selectionBounds ? visibleColumns[selectionBounds.minCol]?.id : visibleColumns[0]?.id);
+
+    if (!targetRowId || !targetColId) return;
+
+    const startRowIdx = visibleRows.findIndex((r) => r.id === targetRowId);
+    const startColIdx = visibleColumns.findIndex((c) => c.id === targetColId);
+
+    if (startRowIdx === -1 || startColIdx === -1) return;
+
+    let updatedRows = [...rows];
+    const neededRowsCount = startRowIdx + grid.length;
+    while (updatedRows.length < neededRowsCount) {
+      const newRowId = `row_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      updatedRows.push({ id: newRowId });
+    }
+
+    let cellsCount = 0;
+    const maxColsPasted = Math.max(...grid.map((r) => r.length));
+
+    for (let r = 0; r < grid.length; r++) {
+      const rowData = grid[r];
+      const vRow = visibleRows[startRowIdx + r] || updatedRows[startRowIdx + r];
+      if (!vRow) continue;
+
+      const rIndex = updatedRows.findIndex((row) => row.id === vRow.id);
+      if (rIndex === -1) continue;
+
+      const newRowObj = { ...updatedRows[rIndex] };
+      for (let c = 0; c < rowData.length; c++) {
+        const targetColIndex = startColIdx + c;
+        if (targetColIndex < visibleColumns.length) {
+          const targetCol = visibleColumns[targetColIndex];
+          newRowObj[targetCol.id] = rowData[c];
+          cellsCount++;
+        }
+      }
+      updatedRows[rIndex] = newRowObj;
+    }
+
+    setRows(updatedRows);
+    latestDataRef.current = { columns, rows: updatedRows };
+    scheduleAutoSave(undefined, updatedRows);
+
+    // Sync cellValue with the first pasted value
+    const firstPastedVal = grid[0][0] !== undefined ? grid[0][0] : "";
+    setCellValue(firstPastedVal);
+
+    // Exit in-cell input editing mode so blur cannot overwrite pasted values
+    if (inputRef.current) {
+      inputRef.current.blur();
+    }
+    setEditingCell(null);
+
+    // Set selection box and selectedCell around the newly pasted block
+    const endRow = startRowIdx + grid.length - 1;
+    const endCol = Math.min(visibleColumns.length - 1, startColIdx + maxColsPasted - 1);
+    setSelectedRange({
+      startRow: startRowIdx,
+      startCol: startColIdx,
+      endRow,
+      endCol,
+    });
+    setSelectedCell({
+      rowId: targetRowId,
+      colId: targetColId,
+      rowIdx: startRowIdx,
+      colIdx: startColIdx,
+    });
+
+    toast.success(`Pasted ${grid.length} row(s) × ${maxColsPasted} col(s) (${cellsCount} cells)`);
+  };
+
+  const handleCellPaste = (
+    e: React.ClipboardEvent<HTMLInputElement | HTMLTableCellElement>,
+    startRowId?: string,
+    startColId?: string
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const targetRowId =
+      startRowId ||
+      selectedCell?.rowId ||
+      editingCell?.rowId ||
+      (selectionBounds ? visibleRows[selectionBounds.minRow]?.id : visibleRows[0]?.id);
+    const targetColId =
+      startColId ||
+      selectedCell?.colId ||
+      editingCell?.colId ||
+      (selectionBounds ? visibleColumns[selectionBounds.minCol]?.id : visibleColumns[0]?.id);
+
+    if (!targetRowId || !targetColId) return;
+
+    const clipboardText = e.clipboardData.getData("text/plain");
+    if (!clipboardText) return;
+
+    pasteGridData(clipboardText, targetRowId, targetColId);
+  };
+
+  const handlePasteFromClipboardMenu = async (rowId: string, colId: string) => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        pasteGridData(text, rowId, colId);
+      } else {
+        toast.info("Clipboard is empty");
+      }
+    } catch (err) {
+      toast.error("Clipboard access blocked by browser. Please click the cell and press Ctrl+V to paste.");
+    }
+    setCellContextMenu(null);
+  };
+
+  // ── GLOBAL KEYBOARD LISTENERS FOR SPREADSHEET (CTRL+C, CTRL+X, CTRL+A, DELETE, SHIFT+ARROWS, ARROW KEYS, TYPING) ──
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInsideSpreadsheet =
+        activeEl === inputRef.current ||
+        (activeEl && activeEl.closest("table") !== null) ||
+        activeEl === document.body;
+
+      if (!isInsideSpreadsheet && activeEl?.tagName === "INPUT" && activeEl !== inputRef.current) {
+        return;
+      }
+      if (activeEl?.tagName === "TEXTAREA") {
+        return;
+      }
+
+      // 1. CTRL + C (Copy Range / Active Cell)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+        if (activeEl === inputRef.current) {
+          const input = inputRef.current as HTMLInputElement;
+          if (input.selectionStart !== input.selectionEnd) {
+            return; // Allow native copy of text selection inside input
+          }
+        }
+        e.preventDefault();
+        handleCopyCell();
+        return;
+      }
+
+      // 2. CTRL + X (Cut Range / Active Cell)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "x") {
+        if (activeEl === inputRef.current) {
+          const input = inputRef.current as HTMLInputElement;
+          if (input.selectionStart !== input.selectionEnd) {
+            return;
+          }
+        }
+        e.preventDefault();
+        handleCutCell();
+        return;
+      }
+
+      // 3. CTRL + A (Select All)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a" && activeEl !== inputRef.current) {
+        e.preventDefault();
+        setSelectedRange({
+          startRow: 0,
+          startCol: 0,
+          endRow: visibleRows.length - 1,
+          endCol: visibleColumns.length - 1,
+        });
+        toast.info("Selected entire spreadsheet");
+        return;
+      }
+
+      // 4. If currently editing text inside an input
+      if (editingCell) {
+        // Enter / Tab / Escape / Arrows handled by handleCellKeyDown
+        return;
+      }
+
+      // 5. If a cell or range is selected (not in text edit mode)
+      if (selectedCell) {
+        const curRowIdx = selectedCell.rowIdx;
+        const curColIdx = selectedCell.colIdx;
+
+        // Shift + Arrows (Expand / Shrink range)
+        if (e.shiftKey && (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+          e.preventDefault();
+          if (selectedRange) {
+            let { startRow, startCol, endRow, endCol } = selectedRange;
+            if (e.key === "ArrowDown") endRow = Math.min(visibleRows.length - 1, endRow + 1);
+            if (e.key === "ArrowUp") endRow = Math.max(0, endRow - 1);
+            if (e.key === "ArrowRight") endCol = Math.min(visibleColumns.length - 1, endCol + 1);
+            if (e.key === "ArrowLeft") endCol = Math.max(0, endCol - 1);
+            setSelectedRange({ startRow, startCol, endRow, endCol });
+          }
+          return;
+        }
+
+        // Navigation without Shift
+        if (e.key === "ArrowDown" || (e.key === "Enter" && !e.shiftKey)) {
+          e.preventDefault();
+          navigateCell(curRowIdx + 1, curColIdx);
+          return;
+        }
+        if (e.key === "ArrowUp" || (e.key === "Enter" && e.shiftKey)) {
+          e.preventDefault();
+          if (curRowIdx > 0) navigateCell(curRowIdx - 1, curColIdx);
+          return;
+        }
+        if (e.key === "ArrowRight" || (e.key === "Tab" && !e.shiftKey)) {
+          e.preventDefault();
+          if (curColIdx + 1 < visibleColumns.length) {
+            navigateCell(curRowIdx, curColIdx + 1);
+          } else {
+            navigateCell(curRowIdx + 1, 0);
+          }
+          return;
+        }
+        if (e.key === "ArrowLeft" || (e.key === "Tab" && e.shiftKey)) {
+          e.preventDefault();
+          if (curColIdx > 0) {
+            navigateCell(curRowIdx, curColIdx - 1);
+          } else if (curRowIdx > 0) {
+            navigateCell(curRowIdx - 1, visibleColumns.length - 1);
+          }
+          return;
+        }
+
+        // Delete / Backspace (Clear selected cell(s))
+        if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          handleClearCell();
+          return;
+        }
+
+        // F2 key (Enter edit mode with current value)
+        if (e.key === "F2") {
+          e.preventDefault();
+          const targetRow = visibleRows[curRowIdx];
+          const val = targetRow ? targetRow[selectedCell.colId] : "";
+          setEditingCell({ rowId: selectedCell.rowId, colId: selectedCell.colId });
+          setCellValue(val !== undefined && val !== null ? String(val) : "");
+          return;
+        }
+
+        // Printable key (Direct typing: enters edit mode with that character!)
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          setEditingCell({ rowId: selectedCell.rowId, colId: selectedCell.colId });
+          setCellValue(e.key);
+          return;
+        }
+      }
+    };
+
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl?.tagName === "INPUT" && activeEl !== inputRef.current) return;
+      if (activeEl?.tagName === "TEXTAREA") return;
+
+      const clipboardText = e.clipboardData?.getData("text/plain");
+      if (!clipboardText) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      pasteGridData(clipboardText);
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+      window.removeEventListener("paste", handleGlobalPaste);
+    };
+  }, [selectionBounds, isMultiCellSelected, selectedCell, editingCell, cellValue, rows, visibleRows, visibleColumns]);
 
   // ── COLUMN DRAG AND DROP HANDLERS ──
   const handleDragStartCol = (e: React.DragEvent, colId: string) => {
@@ -1842,6 +2436,72 @@ export function ExpenseSpreadsheet({
         </div>
       )}
 
+      {/* ── GOOGLE SHEETS / EXCEL MULTI-CELL SELECTION STATUS RIBBON ── */}
+      {selectionStats && isMultiCellSelected && (
+        <div className="px-3 py-1.5 bg-gradient-to-r from-teal-50 via-cyan-50 to-emerald-50 border-b border-teal-200 flex flex-wrap items-center justify-between gap-3 text-xs shadow-inner animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#006064] text-white rounded font-mono font-black text-[11px] shadow-xs">
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span>{selectionStats.rangeCoord}</span>
+            </div>
+            <span className="text-teal-900 font-bold text-xs">
+              {selectionStats.totalCells} cells selected
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3 font-mono text-xs">
+            {selectionStats.sum !== null && (
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-white border border-teal-300 rounded font-bold text-teal-950 shadow-2xs">
+                <span className="text-gray-500 font-sans text-[10px] uppercase">Sum:</span>
+                <span className="text-emerald-700">₹{selectionStats.sum.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
+            {selectionStats.avg !== null && (
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-white border border-teal-300 rounded font-bold text-teal-950 shadow-2xs">
+                <span className="text-gray-500 font-sans text-[10px] uppercase">Avg:</span>
+                <span className="text-cyan-700">₹{selectionStats.avg.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
+            {selectionStats.numCount > 0 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-white border border-teal-300 rounded font-bold text-teal-950 shadow-2xs">
+                <span className="text-gray-500 font-sans text-[10px] uppercase">Count:</span>
+                <span className="text-indigo-700">{selectionStats.numCount}</span>
+              </div>
+            )}
+            {selectionStats.min !== null && (
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-white border border-teal-300 rounded font-bold text-teal-950 shadow-2xs">
+                <span className="text-gray-500 font-sans text-[10px] uppercase">Min:</span>
+                <span>₹{selectionStats.min.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
+            {selectionStats.max !== null && (
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 bg-white border border-teal-300 rounded font-bold text-teal-950 shadow-2xs">
+                <span className="text-gray-500 font-sans text-[10px] uppercase">Max:</span>
+                <span>₹{selectionStats.max.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleCopyCell()}
+                className="px-2.5 py-0.5 bg-teal-600 hover:bg-teal-700 text-white rounded font-bold text-[11px] cursor-pointer shadow-xs"
+                title="Copy selection (Ctrl+C)"
+              >
+                Copy
+              </button>
+              <button
+                type="button"
+                onClick={() => handleClearCell()}
+                className="px-2.5 py-0.5 bg-gray-200 hover:bg-red-50 text-gray-700 hover:text-red-700 rounded font-bold text-[11px] cursor-pointer"
+                title="Clear selection (Delete)"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── GOOGLE SHEETS / EXCEL DATA CANVAS ── */}
       <div className="overflow-x-auto overflow-y-auto max-h-[700px] relative border-b border-gray-200 scrollbar-thin">
         <table className="w-full text-left border-collapse text-xs font-mono">
@@ -1863,6 +2523,7 @@ export function ExpenseSpreadsheet({
                 const isDragOverThis = dragOverColId === col.id;
                 const hiddenBefore = getHiddenColsBefore(col.id);
                 const isDate = isDateCol(col.id);
+                const isColSelected = selectionBounds && colIdx >= selectionBounds.minCol && colIdx <= selectionBounds.maxCol;
 
                 return (
                   <th
@@ -1874,9 +2535,11 @@ export function ExpenseSpreadsheet({
                     onDragEnd={handleDragEndCol}
                     onContextMenu={(e) => handleColContextMenu(e, col.id, colIdx, col.label)}
                     style={{ width: col.width || "160px", minWidth: "140px" }}
-                    className={`px-2.5 py-1.5 border-r border-gray-300 bg-[#f1f5f9] text-gray-800 text-[11px] group relative select-none transition-all cursor-grab active:cursor-grabbing ${
-                      isDraggingThis ? "opacity-30 bg-teal-50" : ""
-                    } ${isDragOverThis ? "border-l-4 border-l-[#1ab0bc] bg-teal-50/50" : ""}`}
+                    className={`px-2.5 py-1.5 border-r border-gray-300 text-gray-800 text-[11px] group relative select-none transition-all cursor-grab active:cursor-grabbing ${
+                      isColSelected ? "bg-teal-100 text-teal-950 font-black border-b-2 border-b-[#006064]" : "bg-[#f1f5f9]"
+                    } ${isDraggingThis ? "opacity-30 bg-teal-50" : ""} ${
+                      isDragOverThis ? "border-l-4 border-l-[#1ab0bc] bg-teal-50/50" : ""
+                    }`}
                   >
                     {isRenaming ? (
                       <div className="flex items-center gap-1">
@@ -1915,7 +2578,9 @@ export function ExpenseSpreadsheet({
                           )}
                           
                           {/* COLUMN LETTER BADGE (A, B, C, D...) */}
-                          <span className="px-1 py-0.2 bg-gray-200/80 text-gray-700 rounded text-[9px] font-mono font-black shrink-0 border border-gray-300/70">
+                          <span className={`px-1 py-0.2 rounded text-[9px] font-mono font-black shrink-0 border ${
+                            isColSelected ? "bg-[#006064] text-white border-[#006064]" : "bg-gray-200/80 text-gray-700 border-gray-300/70"
+                          }`}>
                             {getColLetter(colIdx)}
                           </span>
 
@@ -2026,6 +2691,7 @@ export function ExpenseSpreadsheet({
           <tbody className="divide-y divide-gray-200 bg-white">
             {visibleRows.map((row, idx) => {
               const hiddenRowsBefore = getHiddenRowsBefore(row.id);
+              const isRowSelected = selectionBounds && idx >= selectionBounds.minRow && idx <= selectionBounds.maxRow;
 
               return (
                 <tr key={`${row.id}_${idx}`} className="hover:bg-slate-50 transition-colors group border-b border-gray-200">
@@ -2033,9 +2699,11 @@ export function ExpenseSpreadsheet({
                   {/* ROW INDEX COLUMN */}
                   <td
                     onContextMenu={(e) => handleRowContextMenu(e, row.id, idx)}
-                    className={`border-r border-gray-300 px-2 py-1.5 text-center text-gray-500 font-bold text-[10px] select-none cursor-pointer hover:bg-teal-100 w-12 min-w-[48px] max-w-[48px] ${
-                      freezeFirstCol ? "sticky left-0 z-10 bg-[#f8fafc]" : "bg-[#f8fafc]"
-                    }`}
+                    className={`border-r border-gray-300 px-2 py-1.5 text-center font-bold text-[10px] select-none cursor-pointer w-12 min-w-[48px] max-w-[48px] transition-colors ${
+                      isRowSelected
+                        ? "bg-teal-200 text-teal-950 font-black border-r-2 border-r-[#006064]"
+                        : "text-gray-500 hover:bg-teal-100"
+                    } ${freezeFirstCol ? "sticky left-0 z-10 bg-[#f8fafc]" : "bg-[#f8fafc]"}`}
                     title="Right-click for row options (insert, hide, delete)"
                   >
                     {hiddenRowsBefore.length > 0 && (
@@ -2069,17 +2737,40 @@ export function ExpenseSpreadsheet({
                     const cellCoord = getCellCoordinate(colIdx, idx);
                     const isReferencedInActiveFormula = editingCell && cellValue.startsWith("=") && referencedCoords.includes(cellCoord);
 
+                    const isInSelection = selectionBounds
+                      ? idx >= selectionBounds.minRow &&
+                        idx <= selectionBounds.maxRow &&
+                        colIdx >= selectionBounds.minCol &&
+                        colIdx <= selectionBounds.maxCol
+                      : false;
+                    const isSelectedMulti = isInSelection && isMultiCellSelected;
+                    const isSelected = !isMultiCellSelected && (selectedCell?.rowId === row.id && selectedCell?.colId === col.id);
+                    const isTopEdge = selectionBounds && idx === selectionBounds.minRow;
+                    const isBottomEdge = selectionBounds && idx === selectionBounds.maxRow;
+                    const isLeftEdge = selectionBounds && colIdx === selectionBounds.minCol;
+                    const isRightEdge = selectionBounds && colIdx === selectionBounds.maxCol;
+
                     return (
                       <td
                         key={col.id}
                         onMouseDown={(e) => handleCellMouseDown(row.id, col.id, e)}
                         onMouseEnter={() => handleCellMouseEnter(row.id, col.id)}
                         onClick={() => handleCellClick(row.id, col.id, val)}
+                        onDoubleClick={() => handleCellDoubleClick(row.id, col.id, val)}
                         onContextMenu={(e) => handleCellContextMenu(e, row.id, col.id, val)}
+                        onPaste={(e) => handleCellPaste(e, row.id, col.id)}
                         style={{ width: col.width || "160px", minWidth: "140px" }}
-                        className={`px-2.5 py-1.5 border-r border-gray-200 cursor-cell relative min-h-[30px] transition-all ${
+                        className={`px-2.5 py-1.5 border-r border-gray-200 cursor-cell relative min-h-[30px] select-none transition-colors ${
                           isEditing
                             ? "bg-white ring-2 ring-[#1ab0bc] ring-inset z-20"
+                            : isSelectedMulti
+                            ? `bg-teal-500/15 z-10 ${isTopEdge ? "!border-t-2 !border-t-[#006064]" : ""} ${
+                                isBottomEdge ? "!border-b-2 !border-b-[#006064]" : ""
+                              } ${isLeftEdge ? "!border-l-2 !border-l-[#006064]" : ""} ${
+                                isRightEdge ? "!border-r-2 !border-r-[#006064]" : ""
+                              }`
+                            : isSelected
+                            ? "bg-teal-500/10 ring-2 ring-[#006064] ring-inset z-20 font-medium"
                             : isReferencedInActiveFormula
                             ? "bg-indigo-50 ring-2 ring-indigo-500 ring-dashed z-10 animate-pulse"
                             : isFormula
@@ -2103,6 +2794,7 @@ export function ExpenseSpreadsheet({
                                 onChange={(e) => setCellValue(e.target.value)}
                                 onBlur={handleCellBlur}
                                 onKeyDown={handleCellKeyDown}
+                                onPaste={(e) => handleCellPaste(e, row.id, col.id)}
                                 placeholder="DD MMM YYYY"
                                 className="w-full h-full bg-transparent px-1 py-0.5 text-xs text-gray-900 outline-none font-mono font-medium"
                               />
@@ -2150,6 +2842,7 @@ export function ExpenseSpreadsheet({
                               onChange={(e) => setCellValue(e.target.value)}
                               onBlur={handleCellBlur}
                               onKeyDown={handleCellKeyDown}
+                              onPaste={(e) => handleCellPaste(e, row.id, col.id)}
                               className="w-full h-full bg-transparent px-1 py-0.5 text-xs text-gray-900 outline-none font-mono font-medium"
                             />
                           )
@@ -2468,6 +3161,13 @@ export function ExpenseSpreadsheet({
             >
               <Copy size={13} className="text-gray-500" />
               <span>Copy</span>
+            </button>
+            <button
+              onClick={() => handlePasteFromClipboardMenu(cellContextMenu.rowId, cellContextMenu.colId)}
+              className="w-full px-3 py-1.5 text-left hover:bg-teal-50 flex items-center gap-2 cursor-pointer font-medium text-teal-800"
+            >
+              <ClipboardPaste size={13} className="text-[#1ab0bc]" />
+              <span>Paste Cells (Ctrl+V)</span>
             </button>
             <button
               onClick={() => handleCutCell(cellContextMenu.rowId, cellContextMenu.colId, cellContextMenu.val)}

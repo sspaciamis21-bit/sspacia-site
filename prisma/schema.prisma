@@ -1286,3 +1286,33 @@ model QrBooking {
   @@index([createdAt])
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// OLD INVOICE HISTORY / PAST INVOICES ARCHIVE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OldInvoiceHistory {
+  id              Int       @id @default(autoincrement())
+  companyName     String
+  invoiceNo       String?
+  month           String    // e.g. "April 2026", "May 2026", "2026-04"
+  year            Int?      // e.g. 2026
+  invoiceUrl      String    @db.Text // PDF file path or URL
+  fileName        String?
+  fileSize        String?
+  amount          Decimal?  @db.Decimal(12, 2)
+  remarks         String?   @db.Text
+  locationId      Int?
+  locationName    String?
+  uploadedById    Int?
+  uploadedByName  String?
+  uploadedByRole  String?   // e.g. "COMMUNITY_MANAGER", "SUPER_ADMIN"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([companyName])
+  @@index([month])
+  @@index([locationId])
+  @@index([uploadedById])
+  @@index([createdAt])
+}
+

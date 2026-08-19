@@ -35,11 +35,13 @@ import {
   Award,
   DollarSign,
   AlertOctagon,
-  Sparkles
+  Sparkles,
+  FolderArchive
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
 import { useAuth } from '@/context/AuthContext';
+import { OldInvoicesArchive } from '@/components/admin/old-invoices-archive';
 
 interface AttachedInvoice {
   id: number;
@@ -160,6 +162,7 @@ export default function AdminInvoicesWorkflowPage() {
     }
   }, [canAccessCM, canAccessAccountant, userRoleView]);
 
+  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES'>('ACTIVE_WORKFLOW');
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -735,88 +738,101 @@ export default function AdminInvoicesWorkflowPage() {
 
   return (
     <div className="p-6 sm:p-10 max-w-[1600px] mx-auto space-y-8 bg-[#F8F9FA] min-h-screen text-[#1B1C1C]">
-      {/* Role Banner with STRICT ISOLATION */}
+      {/* ── TOP LEVEL SECTION SWITCHER (Active Invoices vs Old Invoices Archive) ── */}
       <FadeUp>
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-white border border-[var(--outline-variant)]/40 shadow-xs">
-          <div className="flex items-center gap-3">
-            <Receipt className="text-[var(--primary)] h-6 w-6" />
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#616161]">
-                Invoices Workflow Section
-              </div>
-              <div className="text-sm font-bold text-[#1B1C1C]">
-                {userRoleView === 'CM' ? 'Community Manager Invoice Review' : 'Accountant Tally PDF Processing'}
-              </div>
-              {/* Show strict role notification */}
-              {isCommunityManager && (
-                <div className="text-[9px] text-[var(--primary)] font-semibold mt-0.5 uppercase tracking-wider">
-                  {canAccessCM && !canAccessAccountant && '🔒 Community Manager View (Accountant view hidden)'}
-                  {canAccessAccountant && !canAccessCM && '🔒 Accountant View (CM view hidden)'}
-                </div>
-              )}
-            </div>
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-3 bg-white border border-[var(--outline-variant)]/40 shadow-xs">
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <button
+              type="button"
+              onClick={() => setActiveSection('ACTIVE_WORKFLOW')}
+              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                activeSection === 'ACTIVE_WORKFLOW'
+                  ? 'bg-[var(--primary)] text-white shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <FileText size={15} />
+              <span>Active Monthly Invoices & Tally</span>
+              <span className="px-1.5 py-0.2 bg-white/20 text-white rounded text-[10px] font-mono">
+                {invoices.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSection('OLD_INVOICES')}
+              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                activeSection === 'OLD_INVOICES'
+                  ? 'bg-[var(--primary)] text-white shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <FolderArchive size={15} />
+              <span>Old Invoices History Archive</span>
+              <span className="px-1.5 py-0.2 bg-teal-100 text-teal-800 rounded text-[10px] font-mono font-bold">
+                NEW
+              </span>
+            </button>
           </div>
 
-          {/* Admin view switcher (only visible to Admin if user has access to both) */}
-          {canAccessCM && canAccessAccountant ? (
-            <div className="flex items-center bg-[#F8F9FA] border border-[var(--outline-variant)] p-1 text-xs font-bold w-full sm:w-auto justify-center">
+          {activeSection === 'ACTIVE_WORKFLOW' && canAccessCM && canAccessAccountant && (
+            <div className="flex items-center bg-[#F8F9FA] border border-[var(--outline-variant)] p-1 text-xs font-bold">
               <button
                 type="button"
                 onClick={() => setUserRoleView('CM')}
-                className={`px-5 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
+                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
                   userRoleView === 'CM'
                     ? 'bg-[var(--primary)] text-white shadow-xs'
                     : 'text-[#616161] hover:text-[#1B1C1C]'
                 }`}
               >
-                <UserCheck size={16} /> Community Manager View
+                <UserCheck size={14} /> CM View
               </button>
               <button
                 type="button"
                 onClick={() => setUserRoleView('ACCOUNTANT')}
-                className={`px-5 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
+                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
                   userRoleView === 'ACCOUNTANT'
                     ? 'bg-[var(--primary)] text-white shadow-xs'
                     : 'text-[#616161] hover:text-[#1B1C1C]'
                 }`}
               >
-                <Calculator size={16} /> Accountant View
+                <Calculator size={14} /> Accountant View
               </button>
-            </div>
-          ) : (
-            <div className="flex items-center bg-[#F8F9FA] border border-[var(--outline-variant)] p-1 text-xs font-bold">
-              <div className="px-5 py-2 text-xs font-bold uppercase tracking-wider bg-[var(--primary)] text-white shadow-xs flex items-center gap-2">
-                {canAccessCM ? (
-                  <><UserCheck size={16} /> Community Manager Workspace</>
-                ) : (
-                  <><Calculator size={16} /> Accountant Processing Workspace</>
-                )}
-              </div>
             </div>
           )}
         </div>
       </FadeUp>
 
-      {/* Header */}
-      <FadeUp delay={0.05}>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[var(--outline-variant)]/40">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.25em] text-[var(--primary)] mb-1">
-              <FileCheck size={16} /> {userRoleView === 'CM' ? 'CM Monthly Invoices Review' : 'Accountant Tally PDF Attachment'}
+      {/* ── RENDER OLD INVOICES ARCHIVE OR ACTIVE INVOICE WORKFLOW ── */}
+      {activeSection === 'OLD_INVOICES' ? (
+        <OldInvoicesArchive
+          isSuperAdmin={isAdmin}
+          currentUserLocationId={(user as any)?.locationId || (user as any)?.assignedLocations?.[0]?.locationId}
+          currentUserLocationName={(user as any)?.location?.name || (user as any)?.assignedLocations?.[0]?.location?.name}
+        />
+      ) : (
+        <>
+          {/* Header */}
+          <FadeUp delay={0.05}>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[var(--outline-variant)]/40">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.25em] text-[var(--primary)] mb-1">
+                  <FileCheck size={16} /> {userRoleView === 'CM' ? 'CM Monthly Invoices Review' : 'Accountant Tally PDF Attachment'}
+                </div>
+                <h1 className="text-3xl sm:text-4xl font-display font-black tracking-tight text-[#1B1C1C]">
+                  Invoices & Tally PDF Processing
+                </h1>
+                <p className="text-sm text-[#616161] mt-1 font-light">
+                  {userRoleView === 'CM'
+                    ? 'Review entries that arrived automatically or manually from Client Master, send to Accountant, and review attached Tally PDF invoices.'
+                    : 'Inspect client entries sent by CM, attach Tally PDF invoices, review CM revision remarks, and re-submit.'}
+                </p>
+              </div>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-display font-black tracking-tight text-[#1B1C1C]">
-              Invoices & Tally PDF Processing
-            </h1>
-            <p className="text-sm text-[#616161] mt-1 font-light">
-              {userRoleView === 'CM'
-                ? 'Review entries that arrived automatically or manually from Client Master, send to Accountant, and review attached Tally PDF invoices.'
-                : 'Inspect client entries sent by CM, attach Tally PDF invoices, review CM revision remarks, and re-submit.'}
-            </p>
-          </div>
-        </div>
-      </FadeUp>
+          </FadeUp>
 
-      {/* KPI Cards */}
+          {/* KPI Cards */}
       <FadeUp delay={0.1}>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white p-5 border border-[var(--outline-variant)]/40 shadow-xs">
@@ -2336,6 +2352,8 @@ export default function AdminInvoicesWorkflowPage() {
           </div>
         )}
       </AnimatePresence>
+        </>
+      )}
     </div>
   );
 }
