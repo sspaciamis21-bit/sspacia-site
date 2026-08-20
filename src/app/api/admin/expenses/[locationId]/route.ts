@@ -100,6 +100,9 @@ export async function GET(
       return NextResponse.json({ error: 'Location center not found' }, { status: 404 });
     }
 
+    // Support ?since= for polling efficiency
+    const sinceParam = req.nextUrl.searchParams.get('since');
+
     let sheet: any = null;
     try {
       if ((prisma as any).locationExpenseSheet) {
@@ -126,8 +129,18 @@ export async function GET(
       };
     }
 
+    // If ?since= is provided, check if sheet was updated after that timestamp
+    if (sinceParam) {
+      const sinceTime = new Date(sinceParam).getTime();
+      const sheetUpdatedAt = new Date(sheet.updatedAt).getTime();
+      if (!isNaN(sinceTime) && sheetUpdatedAt <= sinceTime) {
+        return NextResponse.json({ success: true, changed: false });
+      }
+    }
+
     return NextResponse.json({
       success: true,
+      changed: true,
       sheet
     });
   } catch (error: any) {

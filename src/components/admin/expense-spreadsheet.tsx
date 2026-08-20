@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Save,
   Plus,
@@ -36,7 +36,10 @@ import {
   Calculator,
   ClipboardPaste,
   Clipboard,
-  Sigma
+  Sigma,
+  Undo2,
+  Redo2,
+  Users
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -52,6 +55,21 @@ export interface RowData {
   [key: string]: any;
 }
 
+interface UndoEntry {
+  rowId: string;
+  colId: string;
+  oldValue: any;
+  newValue: any;
+  timestamp: number;
+}
+
+interface PresenceUser {
+  userId: number;
+  userName: string;
+  rowId: string;
+  colId: string;
+}
+
 interface ExpenseSpreadsheetProps {
   locationId: number;
   locationName: string;
@@ -59,6 +77,8 @@ interface ExpenseSpreadsheetProps {
   initialRows: RowData[];
   isSuperAdmin?: boolean;
   onSaved?: () => void;
+  currentUserName?: string;
+  currentUserId?: number;
 }
 
 // ── DATE UTILITIES ──
@@ -384,7 +404,9 @@ export function ExpenseSpreadsheet({
   initialColumns,
   initialRows,
   isSuperAdmin = false,
-  onSaved
+  onSaved,
+  currentUserName = 'User',
+  currentUserId = 0
 }: ExpenseSpreadsheetProps) {
   const [columns, setColumns] = useState<ColumnConfig[]>(initialColumns);
   const [rows, setRows] = useState<RowData[]>([]);
@@ -494,6 +516,18 @@ export function ExpenseSpreadsheet({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const dateNativePickerRef = useRef<HTMLInputElement | null>(null);
   const prevLocationIdRef = useRef<number | null>(null);
+
+  // ── UNDO / REDO STACK ──
+  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
+  const MAX_UNDO = 50;
+
+  // ── LIVE SYNC STATE ──
+  const lastSyncTimestampRef = useRef<string>('');
+  const isSyncingRef = useRef(false);
+
+  // ── PRESENCE STATE ──
+  const [remoteUsers, setRemoteUsers] = useState<PresenceUser[]>([]);
 
   // Global mouseup listener for multi-cell and formula range drag-selection
   useEffect(() => {
@@ -630,7 +664,65 @@ export function ExpenseSpreadsheet({
     setAutoSaveStatus("saved");
   }, [locationId, initialColumns, initialRows]);
 
-  // Unified silent background save routine (zero disruption to user)
+  // ── IMMEDIATE CELL-LEVEL SAVE (MERGE-SAVE, NO DEBOUNCE) ──
+  const saveCellToServer = async (rowId: string, colId: string, value: any) => {
+    try {
+      setAutoSaveStatus("saving");
+      const res = await fetch(`/api/admin/expenses/${locationId}/cell`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowId, colId, value })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to save cell");
+      }
+
+      const data = await res.json();
+      if (data.updatedAt) {
+        lastSyncTimestampRef.current = data.updatedAt;
+      }
+
+      setHasChanges(false);
+      setAutoSaveStatus("saved");
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    } catch (err: any) {
+      console.error("Cell save error:", err);
+      setAutoSaveStatus("error");
+    }
+  };
+
+  // Batch cell save (for multi-cell paste/clear operations)
+  const saveBatchCellsToServer = async (cells: { rowId: string; colId: string; value: any }[]) => {
+    try {
+      setAutoSaveStatus("saving");
+      const res = await fetch(`/api/admin/expenses/${locationId}/cell`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cells })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to save cells");
+      }
+
+      const data = await res.json();
+      if (data.updatedAt) {
+        lastSyncTimestampRef.current = data.updatedAt;
+      }
+
+      setHasChanges(false);
+      setAutoSaveStatus("saved");
+      setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    } catch (err: any) {
+      console.error("Batch cell save error:", err);
+      setAutoSaveStatus("error");
+    }
+  };
+
+  // Full sheet save (for structural changes: add/delete columns, add rows, reorder)
   const saveToServer = async (isSilent = true) => {
     try {
       if (!isSilent) setSaving(true);
@@ -652,6 +744,11 @@ export function ExpenseSpreadsheet({
         throw new Error(errJson.error || "Failed to save expense sheet");
       }
 
+      const data = await res.json();
+      if (data.sheet?.updatedAt) {
+        lastSyncTimestampRef.current = data.sheet.updatedAt;
+      }
+
       setHasChanges(false);
       setAutoSaveStatus("saved");
       setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -659,7 +756,7 @@ export function ExpenseSpreadsheet({
         toast.success(`${locationName} Expense Sheet saved successfully!`);
       }
     } catch (err: any) {
-      console.error("Expense auto-save error:", err);
+      console.error("Expense save error:", err);
       setAutoSaveStatus("error");
       if (!isSilent) {
         toast.error(err.message || "Failed to save sheet");
@@ -669,7 +766,7 @@ export function ExpenseSpreadsheet({
     }
   };
 
-  // Schedule auto-save on any edit (debounced 1200ms for silent, smooth background saving)
+  // Schedule auto-save for structural changes only (debounced)
   const scheduleAutoSave = (newCols?: ColumnConfig[], newRows?: RowData[]) => {
     setHasChanges(true);
     setAutoSaveStatus("unsaved");
@@ -684,8 +781,183 @@ export function ExpenseSpreadsheet({
     }
     autoSaveTimerRef.current = setTimeout(() => {
       saveToServer(true);
-    }, 1200);
+    }, 800);
   };
+
+  // ── UNDO / REDO HANDLERS ──
+  const pushUndo = (rowId: string, colId: string, oldValue: any, newValue: any) => {
+    setUndoStack((prev) => {
+      const next = [...prev, { rowId, colId, oldValue, newValue, timestamp: Date.now() }];
+      if (next.length > MAX_UNDO) next.shift();
+      return next;
+    });
+    setRedoStack([]);
+  };
+
+  const handleUndo = useCallback(() => {
+    setUndoStack((prevUndo) => {
+      if (prevUndo.length === 0) {
+        toast.info("Nothing to undo");
+        return prevUndo;
+      }
+      const entry = prevUndo[prevUndo.length - 1];
+      const newUndo = prevUndo.slice(0, -1);
+
+      // Apply old value
+      setRows((prevRows) => {
+        const updatedRows = prevRows.map((r) =>
+          r.id === entry.rowId ? { ...r, [entry.colId]: entry.oldValue } : r
+        );
+        latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
+        return updatedRows;
+      });
+
+      // Save the reverted value immediately
+      saveCellToServer(entry.rowId, entry.colId, entry.oldValue);
+
+      setRedoStack((prevRedo) => [...prevRedo, entry]);
+      toast.success("Undo successful");
+      return newUndo;
+    });
+  }, [locationId]);
+
+  const handleRedo = useCallback(() => {
+    setRedoStack((prevRedo) => {
+      if (prevRedo.length === 0) {
+        toast.info("Nothing to redo");
+        return prevRedo;
+      }
+      const entry = prevRedo[prevRedo.length - 1];
+      const newRedo = prevRedo.slice(0, -1);
+
+      setRows((prevRows) => {
+        const updatedRows = prevRows.map((r) =>
+          r.id === entry.rowId ? { ...r, [entry.colId]: entry.newValue } : r
+        );
+        latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
+        return updatedRows;
+      });
+
+      saveCellToServer(entry.rowId, entry.colId, entry.newValue);
+
+      setUndoStack((prevUndo) => [...prevUndo, entry]);
+      toast.success("Redo successful");
+      return newRedo;
+    });
+  }, [locationId]);
+
+  // ── LIVE SYNC POLLING (Every 3 seconds) ──
+  useEffect(() => {
+    if (!locationId) return;
+
+    const syncInterval = setInterval(async () => {
+      if (isSyncingRef.current) return;
+      // Don't sync while user is actively editing a cell
+      if (editingCell) return;
+
+      isSyncingRef.current = true;
+      try {
+        const since = lastSyncTimestampRef.current;
+        const url = since
+          ? `/api/admin/expenses/${locationId}?since=${encodeURIComponent(since)}`
+          : `/api/admin/expenses/${locationId}`;
+
+        const res = await fetch(url);
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (!data.success) return;
+
+        // If no changes since last sync, skip
+        if (data.changed === false) return;
+
+        if (data.sheet) {
+          const remoteRows: RowData[] = data.sheet.rows || [];
+          const remoteCols: ColumnConfig[] = data.sheet.columns || [];
+
+          // Update columns if changed
+          if (JSON.stringify(remoteCols) !== JSON.stringify(latestDataRef.current.columns)) {
+            setColumns(remoteCols);
+          }
+
+          // Merge remote rows into local state
+          setRows((localRows) => {
+            const localMap = new Map(localRows.map((r) => [r.id, r]));
+            const mergedRows: RowData[] = [];
+
+            for (const remoteRow of remoteRows) {
+              const localRow = localMap.get(remoteRow.id);
+              if (localRow) {
+                // Merge: use remote values but keep local value for the actively selected cell
+                const merged = { ...remoteRow };
+                if (selectedCell && selectedCell.rowId === remoteRow.id) {
+                  // Keep local value for the cell user is looking at
+                  merged[selectedCell.colId] = localRow[selectedCell.colId];
+                }
+                mergedRows.push(merged);
+                localMap.delete(remoteRow.id);
+              } else {
+                mergedRows.push(remoteRow);
+              }
+            }
+
+            // Add any local-only rows (newly added rows not yet in DB)
+            for (const [, localRow] of localMap) {
+              mergedRows.push(localRow);
+            }
+
+            latestDataRef.current = { columns: remoteCols, rows: mergedRows };
+            return mergedRows;
+          });
+
+          if (data.sheet.updatedAt) {
+            lastSyncTimestampRef.current = data.sheet.updatedAt;
+          }
+        }
+      } catch (err) {
+        // Silent fail for polling
+      } finally {
+        isSyncingRef.current = false;
+      }
+    }, 3000);
+
+    return () => clearInterval(syncInterval);
+  }, [locationId, editingCell, selectedCell]);
+
+  // ── PRESENCE POLLING (Every 3 seconds) ──
+  useEffect(() => {
+    if (!locationId) return;
+
+    const presenceInterval = setInterval(async () => {
+      try {
+        // Send own presence
+        const activeRow = selectedCell?.rowId || editingCell?.rowId || '';
+        const activeCol = selectedCell?.colId || editingCell?.colId || '';
+        await fetch(`/api/admin/expenses/${locationId}/presence`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userName: currentUserName,
+            rowId: activeRow,
+            colId: activeCol,
+          }),
+        });
+
+        // Fetch others' presence
+        const res = await fetch(`/api/admin/expenses/${locationId}/presence`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.users) {
+            setRemoteUsers(data.users);
+          }
+        }
+      } catch {
+        // Silent fail
+      }
+    }, 3000);
+
+    return () => clearInterval(presenceInterval);
+  }, [locationId, selectedCell, editingCell, currentUserName]);
 
   // Manual save trigger
   const handleManualSave = () => {
@@ -1153,11 +1425,19 @@ export function ExpenseSpreadsheet({
     }
   };
 
-  // Save current cell content into state and auto-save
+  // Save current cell content into state, push undo, and save to server immediately
   const commitCurrentCell = (): RowData[] => {
     if (!editingCell) return rows;
     notifyFmsTyping();
     const { rowId, colId } = editingCell;
+
+    const currentRow = rows.find((r) => r.id === rowId);
+    const oldVal = currentRow ? currentRow[colId] : "";
+
+    if (String(oldVal || "") !== String(cellValue || "")) {
+      pushUndo(rowId, colId, oldVal, cellValue);
+      saveCellToServer(rowId, colId, cellValue);
+    }
 
     const updatedRows = rows.map((r) => {
       if (r.id === rowId) {
@@ -1167,7 +1447,7 @@ export function ExpenseSpreadsheet({
     });
 
     setRows(updatedRows);
-    scheduleAutoSave(undefined, updatedRows);
+    latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
     return updatedRows;
   };
 
@@ -1325,11 +1605,15 @@ export function ExpenseSpreadsheet({
       }
 
       let clearedCount = 0;
+      const cellsToSave: { rowId: string; colId: string; value: any }[] = [];
+
       const updatedRows = rows.map((row) => {
         if (targetRowIds.has(row.id)) {
           const newRow = { ...row };
           targetColIds.forEach((cId) => {
             if (newRow[cId] !== "") {
+              pushUndo(row.id, cId, newRow[cId], "");
+              cellsToSave.push({ rowId: row.id, colId: cId, value: "" });
               newRow[cId] = "";
               clearedCount++;
             }
@@ -1340,19 +1624,28 @@ export function ExpenseSpreadsheet({
       });
 
       setRows(updatedRows);
-      scheduleAutoSave(undefined, updatedRows);
+      latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
+      if (cellsToSave.length > 0) {
+        saveBatchCellsToServer(cellsToSave);
+      }
       setCellValue("");
       toast.info(`Cleared ${clearedCount} cell(s)`);
     } else {
       const rId = rowId || selectedCell?.rowId || editingCell?.rowId;
       const cId = colId || selectedCell?.colId || editingCell?.colId;
       if (rId && cId) {
+        const row = rows.find((r) => r.id === rId);
+        const oldVal = row ? row[cId] : "";
+        if (oldVal !== "") {
+          pushUndo(rId, cId, oldVal, "");
+          saveCellToServer(rId, cId, "");
+        }
         const updatedRows = rows.map((r) => (r.id === rId ? { ...r, [cId]: "" } : r));
         setRows(updatedRows);
+        latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
         if (editingCell?.rowId === rId && editingCell?.colId === cId) {
           setCellValue("");
         }
-        scheduleAutoSave(undefined, updatedRows);
         toast.info("Cleared cell");
       }
     }
@@ -1557,6 +1850,7 @@ export function ExpenseSpreadsheet({
 
     let cellsCount = 0;
     const maxColsPasted = Math.max(...grid.map((r) => r.length));
+    const cellsToSave: { rowId: string; colId: string; value: any }[] = [];
 
     for (let r = 0; r < grid.length; r++) {
       const rowData = grid[r];
@@ -1571,6 +1865,9 @@ export function ExpenseSpreadsheet({
         const targetColIndex = startColIdx + c;
         if (targetColIndex < visibleColumns.length) {
           const targetCol = visibleColumns[targetColIndex];
+          const oldVal = newRowObj[targetCol.id];
+          pushUndo(newRowObj.id, targetCol.id, oldVal, rowData[c]);
+          cellsToSave.push({ rowId: newRowObj.id, colId: targetCol.id, value: rowData[c] });
           newRowObj[targetCol.id] = rowData[c];
           cellsCount++;
         }
@@ -1580,7 +1877,9 @@ export function ExpenseSpreadsheet({
 
     setRows(updatedRows);
     latestDataRef.current = { columns, rows: updatedRows };
-    scheduleAutoSave(undefined, updatedRows);
+    if (cellsToSave.length > 0) {
+      saveBatchCellsToServer(cellsToSave);
+    }
 
     // Sync cellValue with the first pasted value
     const firstPastedVal = grid[0][0] !== undefined ? grid[0][0] : "";
@@ -1665,6 +1964,22 @@ export function ExpenseSpreadsheet({
         return;
       }
       if (activeEl?.tagName === "TEXTAREA") {
+        return;
+      }
+
+      // 0. CTRL + Z (Undo)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        if (activeEl !== inputRef.current || inputRef.current?.value === "") {
+          e.preventDefault();
+          handleUndo();
+          return;
+        }
+      }
+
+      // 0. CTRL + Y or CTRL + SHIFT + Z (Redo)
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
         return;
       }
 
@@ -2337,6 +2652,14 @@ export function ExpenseSpreadsheet({
 
         {/* TOP RIGHT QUICK ACTIONS */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* LIVE USERS PRESENCE BADGE */}
+          {remoteUsers.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded shadow-2xs animate-pulse">
+              <Users className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>{remoteUsers.map((u) => u.userName).join(', ')} live</span>
+            </div>
+          )}
+
           {/* ADVANCED CSV EXPORT BUTTON */}
           <button
             onClick={handleOpenCsvModal}
@@ -2379,6 +2702,31 @@ export function ExpenseSpreadsheet({
             className="pl-7 pr-2.5 py-1 bg-white border border-gray-300 text-xs text-gray-800 outline-none focus:border-[#1ab0bc] w-40 font-mono"
           />
         </div>
+
+        <div className="h-4 w-[1px] bg-gray-300 mx-1 shrink-0" />
+
+        {/* UNDO / REDO BUTTONS */}
+        <button
+          type="button"
+          onClick={handleUndo}
+          disabled={undoStack.length === 0}
+          className="bg-white hover:bg-gray-100 disabled:opacity-40 text-gray-800 px-2 py-1 text-xs font-bold border border-gray-300 flex items-center gap-1 transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo2 className="w-3.5 h-3.5 text-[#1ab0bc]" />
+          <span>Undo</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleRedo}
+          disabled={redoStack.length === 0}
+          className="bg-white hover:bg-gray-100 disabled:opacity-40 text-gray-800 px-2 py-1 text-xs font-bold border border-gray-300 flex items-center gap-1 transition-all cursor-pointer shrink-0 disabled:cursor-not-allowed"
+          title="Redo (Ctrl+Y)"
+        >
+          <Redo2 className="w-3.5 h-3.5 text-[#1ab0bc]" />
+          <span>Redo</span>
+        </button>
 
         <div className="h-4 w-[1px] bg-gray-300 mx-1 shrink-0" />
 
@@ -3080,6 +3428,7 @@ export function ExpenseSpreadsheet({
                       : false;
                     const isSelectedMulti = isInSelection && isMultiCellSelected;
                     const isSelected = !isMultiCellSelected && (selectedCell?.rowId === row.id && selectedCell?.colId === col.id);
+                    const remoteUserOnCell = remoteUsers.find((u) => u.rowId === row.id && u.colId === col.id);
                     const isTopEdge = selectionBounds && idx === selectionBounds.minRow;
                     const isBottomEdge = selectionBounds && idx === selectionBounds.maxRow;
                     const isLeftEdge = selectionBounds && colIdx === selectionBounds.minCol;
@@ -3098,6 +3447,8 @@ export function ExpenseSpreadsheet({
                         className={`px-2.5 py-1.5 border-r border-gray-200 cursor-cell relative min-h-[30px] select-none transition-colors ${
                           isEditing
                             ? "bg-white ring-2 ring-[#1ab0bc] ring-inset z-20"
+                            : remoteUserOnCell
+                            ? "bg-emerald-50 ring-2 ring-emerald-500 ring-inset z-15"
                             : isSelectedMulti
                             ? `bg-teal-500/15 z-10 ${isTopEdge ? "!border-t-2 !border-t-[#006064]" : ""} ${
                                 isBottomEdge ? "!border-b-2 !border-b-[#006064]" : ""
@@ -3113,6 +3464,13 @@ export function ExpenseSpreadsheet({
                             : "hover:bg-sky-50/50"
                         }`}
                       >
+                        {/* LIVE PRESENCE BADGE OVER CELL */}
+                        {remoteUserOnCell && !isEditing && (
+                          <div className="absolute -top-3 left-0 z-30 pointer-events-none bg-emerald-600 text-white text-[9px] font-bold px-1 py-0.2 rounded-xs shadow-xs uppercase tracking-wider flex items-center gap-1 animate-pulse whitespace-nowrap">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                            <span>{remoteUserOnCell.userName}</span>
+                          </div>
+                        )}
                         {isUploading ? (
                           <div className="flex items-center gap-1.5 text-xs text-teal-700 font-bold px-1 animate-pulse">
                             <Loader2 size={12} className="animate-spin" />

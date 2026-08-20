@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { FadeUp } from "@/components/ui/fade-up";
 import { ExpenseSpreadsheet } from "@/components/admin/expense-spreadsheet";
 
+import { useAuth } from "@/context/AuthContext";
+
 interface LocationInfo {
   id: number;
   name: string;
@@ -28,6 +30,7 @@ interface ExpenseSheetData {
 }
 
 export default function CommunityManagerExpensesPage() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [locations, setLocations] = useState<LocationInfo[]>([]);
@@ -130,6 +133,8 @@ export default function CommunityManagerExpensesPage() {
         initialColumns={assignedSheet.columns || []}
         initialRows={assignedSheet.rows || []}
         isSuperAdmin={false}
+        currentUserName={user?.name || 'Community Manager'}
+        currentUserId={user?.id ? Number(user.id) : 2}
       />
 
     </div>

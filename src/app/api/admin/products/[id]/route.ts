@@ -260,11 +260,38 @@ export const DELETE = withPermission('products', 'delete', async (
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    // 3. Soft delete + activity log
+    // 3. Permanent delete + activity log
     await prisma.$transaction(async (tx) => {
-      await tx.product.update({
+      // Clean up associated QrBookings
+      await tx.qrBooking.deleteMany({
+        where: { productId }
+      });
+
+      // Clean up any test bookings / booking units if present
+      const bookings = await tx.booking.findMany({
+        where: { productId },
+        select: { id: true }
+      });
+      const bookingIds = bookings.map((b) => b.id);
+
+      if (bookingIds.length > 0) {
+        await tx.bookingUnit.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        await tx.payment.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        await tx.document.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        await tx.contractRequest.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        await tx.contract.deleteMany({ where: { bookingId: { in: bookingIds } } });
+        await tx.booking.deleteMany({ where: { id: { in: bookingIds } } });
+      }
+
+      // Clean up child relations
+      await tx.productAmenity.deleteMany({ where: { productId } });
+      await tx.productImage.deleteMany({ where: { productId } });
+      await tx.pricingPlan.deleteMany({ where: { productId } });
+      await tx.productUnit.deleteMany({ where: { productId } });
+
+      // Permanently delete the product
+      await tx.product.delete({
         where: { id: productId },
-        data: { isActive: false },
       });
 
       // 4. Activity log
@@ -281,7 +308,7 @@ export const DELETE = withPermission('products', 'delete', async (
       });
     });
 
-    return NextResponse.json({ data: { message: 'Product deactivated successfully' } });
+    return NextResponse.json({ data: { message: 'Product deleted permanently' } });
   } catch (error) {
     console.error('[PRODUCT_DELETE]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

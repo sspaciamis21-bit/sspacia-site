@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { FadeUp } from "@/components/ui/fade-up";
 import { ExpenseSpreadsheet } from "@/components/admin/expense-spreadsheet";
 
+import { useAuth } from "@/context/AuthContext";
+
 interface LocationInfo {
   id: number;
   name: string;
@@ -28,6 +30,7 @@ interface ExpenseSheetData {
 }
 
 export default function SuperAdminExpensesPage() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [locations, setLocations] = useState<LocationInfo[]>([]);
@@ -149,6 +152,8 @@ export default function SuperAdminExpensesPage() {
           initialColumns={activeSheet?.columns || []}
           initialRows={activeSheet?.rows || []}
           isSuperAdmin={true}
+          currentUserName={user?.name || 'Super Admin'}
+          currentUserId={user?.id ? Number(user.id) : 1}
         />
       ) : (
         <div className="bg-white p-12 text-center border border-gray-200 text-gray-400 italic">

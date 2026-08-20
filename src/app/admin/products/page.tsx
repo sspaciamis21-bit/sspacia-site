@@ -145,14 +145,16 @@ export default function AdminProductsPage() {
   const handleDelete = async () => {
     if (!deletingProduct) return;
     setIsDeleting(true);
+    const targetProduct = deletingProduct;
     try {
-      const response = await fetch(`/api/admin/products/${deletingProduct.id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Decommission failed');
-      toast.success(`Asset "${deletingProduct.name}" removed successfully.`);
+      const response = await fetch(`/api/admin/products/${targetProduct.id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('Delete failed');
+      toast.success(`Product "${targetProduct.name}" deleted permanently.`);
       setDeletingProduct(null);
+      setProducts((prev) => prev.filter((p) => p.id !== targetProduct.id));
       await loadProducts();
     } catch {
-      toast.error('Failed to decommission asset');
+      toast.error('Failed to delete product');
     } finally {
       setIsDeleting(false);
     }
@@ -562,10 +564,10 @@ export default function AdminProductsPage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-display font-bold text-[#1B1C1C] uppercase">
-                    Confirm Decommission
+                    Confirm Delete Product
                   </h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    Are you sure you want to deactivate and remove <span className="font-bold text-gray-900">&quot;{deletingProduct.name}&quot;</span> from the active workspace catalog?
+                    Are you sure you want to permanently delete <span className="font-bold text-gray-900">&quot;{deletingProduct.name}&quot;</span> from the workspace catalog?
                   </p>
                 </div>
 
