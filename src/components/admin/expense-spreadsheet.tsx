@@ -1485,7 +1485,8 @@ export function ExpenseSpreadsheet({
       });
 
       if (!res.ok) {
-        throw new Error("Failed to upload document");
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to upload document");
       }
 
       const data = await res.json();
@@ -1495,6 +1496,10 @@ export function ExpenseSpreadsheet({
         throw new Error("No file URL returned from upload");
       }
 
+      const currentRow = rows.find((r) => r.id === rowId);
+      const oldVal = currentRow ? currentRow[colId] : "";
+      pushUndo(rowId, colId, oldVal, fileUrl);
+
       const updatedRows = rows.map((r) => {
         if (r.id === rowId) {
           return { ...r, [colId]: fileUrl };
@@ -1503,11 +1508,12 @@ export function ExpenseSpreadsheet({
       });
 
       setRows(updatedRows);
+      latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
       if (editingCell?.rowId === rowId && editingCell?.colId === colId) {
         setCellValue(fileUrl);
       }
-      scheduleAutoSave(undefined, updatedRows);
-      toast.success(`PDF attached to cell: ${file.name}`);
+      await saveCellToServer(rowId, colId, fileUrl);
+      toast.success(`Attached file: ${file.name}`);
     } catch (err: any) {
       console.error("PDF upload error:", err);
       toast.error(err.message || "Failed to attach PDF");
@@ -1517,9 +1523,14 @@ export function ExpenseSpreadsheet({
     }
   };
 
-  const handleRemoveAttachment = (rowId: string, colId: string) => {
+  const handleRemoveAttachment = async (rowId: string, colId: string) => {
     notifyFmsTyping();
     setCellContextMenu(null);
+    const currentRow = rows.find((r) => r.id === rowId);
+    const oldVal = currentRow ? currentRow[colId] : "";
+    if (oldVal) {
+      pushUndo(rowId, colId, oldVal, "");
+    }
     const updatedRows = rows.map((r) => {
       if (r.id === rowId) {
         return { ...r, [colId]: "" };
@@ -1527,10 +1538,11 @@ export function ExpenseSpreadsheet({
       return r;
     });
     setRows(updatedRows);
+    latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
     if (editingCell?.rowId === rowId && editingCell?.colId === colId) {
       setCellValue("");
     }
-    scheduleAutoSave(undefined, updatedRows);
+    await saveCellToServer(rowId, colId, "");
     toast.info("Attachment removed from cell");
   };
 

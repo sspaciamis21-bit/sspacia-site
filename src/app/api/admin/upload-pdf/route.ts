@@ -14,13 +14,28 @@ export async function POST(request: Request) {
 
     const cookieStore = await cookies();
     const token = cookieStore.get('auth-token')?.value;
-    let userId = 1;
+    let userId: number | null = null;
 
     if (token) {
       const payload = await verifyToken(token);
       if (payload?.id) {
         userId = Number(payload.id);
       }
+    }
+
+    // Ensure valid user ID exists in DB to prevent foreign key errors
+    let validUserId = userId;
+    if (validUserId) {
+      const userExists = await prisma.user.findUnique({
+        where: { id: validUserId },
+        select: { id: true },
+      });
+      if (!userExists) validUserId = null;
+    }
+
+    if (!validUserId) {
+      const firstUser = await prisma.user.findFirst({ select: { id: true } });
+      validUserId = firstUser ? firstUser.id : 1;
     }
 
     const bytes = await file.arrayBuffer();
@@ -35,7 +50,7 @@ export async function POST(request: Request) {
         mimeType: file.type || 'application/pdf',
         fileData: buffer,
         fileSize: file.size,
-        uploadedById: userId,
+        uploadedById: validUserId,
       },
     });
 
