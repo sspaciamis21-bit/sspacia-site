@@ -130,6 +130,10 @@ interface ClientMasterEntry {
   invoiceToBeRaised?: string | null;
   sorAmount: number | null;
   sorRecdDate: string | null;
+  sdrAmount?: number | null;
+  sdrRecdDate?: string | null;
+  sdrPdfUrl?: string | null;
+  sdrPdfName?: string | null;
   paymentDueDay?: number | null;
   clientStatus: string | null;
   isDispatchedToInvoices?: boolean;
@@ -248,13 +252,13 @@ export default function ClientMasterRegistryPage() {
   const [newProductName, setNewProductName] = useState('');
   const [addingProduct, setAddingProduct] = useState(false);
 
-  // Pro-Rata & Escalation Helper Modal State
-  const [activeProratedRowIndex, setActiveProratedRowIndex] = useState<number | null>(null);
+  // Unified Mid-Month Calculator State (Handles Point 4 Seat Additions & Point 8 Rate Escalations)
+  const [activeMidMonthRowIndex, setActiveMidMonthRowIndex] = useState<number | null>(null);
+  const [midMonthMode, setMidMonthMode] = useState<'ADDITION' | 'ESCALATION'>('ADDITION');
   const [prorateStartDate, setProrateStartDate] = useState('');
   const [prorateMonthlyRate, setProrateMonthlyRate] = useState<number | ''>('');
   const [prorateSeats, setProrateSeats] = useState<number | ''>('');
 
-  const [activeEscalatedRowIndex, setActiveEscalatedRowIndex] = useState<number | null>(null);
   const [escOldRate, setEscOldRate] = useState<number | ''>('');
   const [escNewRate, setEscNewRate] = useState<number | ''>('');
   const [escDate, setEscDate] = useState('');
@@ -272,11 +276,17 @@ export default function ClientMasterRegistryPage() {
   const [tdsPdfName, setTdsPdfName] = useState('');
   const [uploadingTdsPdf, setUploadingTdsPdf] = useState(false);
 
-  // Security Deposit & Payment Due
+  // Security Deposit (SDR) & Payment Due
   const [sorAmount, setSorAmount] = useState<number | ''>('');
   const [sorRecdDate, setSorRecdDate] = useState('');
+  const [sdrPdfUrl, setSdrPdfUrl] = useState('');
+  const [sdrPdfName, setSdrPdfName] = useState('');
+  const [uploadingSdrPdf, setUploadingSdrPdf] = useState(false);
   const [paymentDueDay, setPaymentDueDay] = useState<number | ''>('');
   const [clientStatus, setClientStatus] = useState('Active');
+
+  // Custom Editable Prorated Amount
+  const [prorateCustomAmount, setProrateCustomAmount] = useState<number | ''>('');
 
   // Fetch available products from DB
   const fetchAvailableProducts = useCallback(async () => {
@@ -483,11 +493,12 @@ export default function ClientMasterRegistryPage() {
     });
   };
 
-  // Upload Handlers for GST, TDS, and Agreement PDFs (Stored in Database)
-  const handleFileUpload = async (file: File, type: 'GST' | 'TDS' | 'AGREEMENT') => {
+  // Upload Handlers for GST, TDS, Agreement, and SDR Receipts (Stored in Database)
+  const handleFileUpload = async (file: File, type: 'GST' | 'TDS' | 'AGREEMENT' | 'SDR') => {
     if (type === 'GST') setUploadingGstPdf(true);
     if (type === 'TDS') setUploadingTdsPdf(true);
     if (type === 'AGREEMENT') setUploadingAgreementPdf(true);
+    if (type === 'SDR') setUploadingSdrPdf(true);
 
     try {
       const formData = new FormData();
@@ -512,6 +523,10 @@ export default function ClientMasterRegistryPage() {
           setAgreementPdfUrl(json.data.fileUrl);
           setAgreementPdfName(json.data.fileName);
           toast.success('Agreement PDF uploaded successfully');
+        } else if (type === 'SDR') {
+          setSdrPdfUrl(json.data.fileUrl);
+          setSdrPdfName(json.data.fileName);
+          toast.success('SDR Receipt uploaded successfully');
         }
       } else {
         toast.error(json.error || 'Upload failed');
@@ -522,6 +537,7 @@ export default function ClientMasterRegistryPage() {
       if (type === 'GST') setUploadingGstPdf(false);
       if (type === 'TDS') setUploadingTdsPdf(false);
       if (type === 'AGREEMENT') setUploadingAgreementPdf(false);
+      if (type === 'SDR') setUploadingSdrPdf(false);
     }
   };
 
@@ -562,10 +578,14 @@ export default function ClientMasterRegistryPage() {
     const day = dateObj.getDate();
     const monthName = dateObj.toLocaleString('en-IN', { month: 'short' });
 
+    const finalProratedSubtotal = prorateCustomAmount !== '' ? Number(prorateCustomAmount) : result.proratedSubtotal;
+    const finalProratedGst = roundCurrency((finalProratedSubtotal * 18) / 100);
+    const finalProratedTotal = Math.round(finalProratedSubtotal + finalProratedGst);
+
     setProductRows((prev) => {
       const updated = [...prev];
       const targetRow = updated[idx];
-      const existingName = (targetRow.cabinName || '').replace(/\s*\((?:Prorated|\+\d+\s+Seats).*?\)/gi, '').trim() || 'Workspace';
+      const existingName = (targetRow.cabinName || '').replace(/\s*\((?:Prorated|\+\d+\s+Seats|Mid-Month).*?\)/gi, '').trim() || 'Workspace';
       const existingSeats = Number(targetRow.noOfSeats) || 0;
       const existingRate = Number(targetRow.ratePerAgreement) || Number(prorateMonthlyRate);
       const existingBaseAmount = (existingSeats > 0 && existingRate > 0) ? computeProductAmount(existingSeats, existingRate) : (Number(targetRow.amount) || 0);
@@ -574,31 +594,33 @@ export default function ClientMasterRegistryPage() {
         // 1. Insert a dedicated new row for the extra prorated seats
         const newProratedRow: ProductRow = {
           ...createEmptyProductRow(),
-          cabinName: `${existingName} - Extra ${prorateSeats} Seats (Prorated ${day}-${result.daysInMonth} ${monthName})`,
+          cabinName: `${existingName} - Mid-Month Addition: ${prorateSeats} Extra Seats (Prorated ${day}-${result.daysInMonth} ${monthName})`,
           noOfSeats: Number(prorateSeats),
           ratePerAgreement: Number(prorateMonthlyRate),
-          amount: result.proratedSubtotal,
+          amount: finalProratedSubtotal,
           gstPercent: 18,
-          totalAmount: result.proratedTotal,
+          totalAmount: finalProratedTotal,
           billingType: 'PRORATED',
           proratedStartDate: prorateStartDate,
+          extraSeatsCount: Number(prorateSeats),
+          extraSeatsDate: prorateStartDate,
           paymentDuration: targetRow.paymentDuration || 'MONTHLY',
-          paymentDueDay: targetRow.paymentDueDay,
+          paymentDueDay: targetRow.paymentDueDay ?? 5,
           firstPaymentDate: targetRow.firstPaymentDate,
           isAmountManuallyEdited: true,
           isTotalAmountManuallyEdited: true,
         };
         updated.splice(idx + 1, 0, newProratedRow);
-        toast.success(`Added Extra Prorated Item: ₹${result.proratedSubtotal.toLocaleString()} (${result.activeDays} days for ${prorateSeats} seats)`);
+        toast.success(`Added Mid-Month Extra Prorated Item: ₹${finalProratedSubtotal.toLocaleString()} (${result.activeDays} days for ${prorateSeats} seats)`);
       } else if (mode === 'COMBINE_ROW') {
         // 2. Combine base seats + extra prorated seats in the current item row
         const combinedSeats = existingSeats + Number(prorateSeats);
-        const combinedAmount = roundCurrency(existingBaseAmount + result.proratedSubtotal);
+        const combinedAmount = roundCurrency(existingBaseAmount + finalProratedSubtotal);
         const combinedTotal = computeProductTotal(combinedAmount, 18);
 
         updated[idx] = {
           ...targetRow,
-          cabinName: `${existingName} (+${prorateSeats} Seats Prorated from ${day} ${monthName})`,
+          cabinName: `${existingName} (${combinedSeats} Seats - includes ${prorateSeats} extra seats added on ${day} ${monthName})`,
           noOfSeats: combinedSeats,
           ratePerAgreement: existingRate,
           amount: combinedAmount,
@@ -606,10 +628,12 @@ export default function ClientMasterRegistryPage() {
           totalAmount: combinedTotal,
           billingType: 'PRORATED',
           proratedStartDate: prorateStartDate,
+          extraSeatsCount: Number(prorateSeats),
+          extraSeatsDate: prorateStartDate,
           isAmountManuallyEdited: true,
           isTotalAmountManuallyEdited: true,
         };
-        toast.success(`Updated Item: Base (₹${existingBaseAmount.toLocaleString()}) + Prorated Extra (₹${result.proratedSubtotal.toLocaleString()}) = ₹${combinedAmount.toLocaleString()}`);
+        toast.success(`Updated Item: Base (₹${existingBaseAmount.toLocaleString()}) + Prorated Extra (₹${finalProratedSubtotal.toLocaleString()}) = ₹${combinedAmount.toLocaleString()}`);
       } else {
         // 3. Replace current item with only the prorated amount (e.g. for brand new mid-month joiner)
         updated[idx] = {
@@ -617,21 +641,24 @@ export default function ClientMasterRegistryPage() {
           cabinName: `${existingName} (Prorated ${day}-${result.daysInMonth} ${monthName})`,
           noOfSeats: Number(prorateSeats),
           ratePerAgreement: Number(prorateMonthlyRate),
-          amount: result.proratedSubtotal,
+          amount: finalProratedSubtotal,
           gstPercent: 18,
-          totalAmount: result.proratedTotal,
+          totalAmount: finalProratedTotal,
           billingType: 'PRORATED',
           proratedStartDate: prorateStartDate,
+          extraSeatsCount: Number(prorateSeats),
+          extraSeatsDate: prorateStartDate,
           isAmountManuallyEdited: true,
           isTotalAmountManuallyEdited: true,
         };
-        toast.success(`Applied Prorated: ₹${result.proratedSubtotal.toLocaleString()} for ${result.activeDays} days`);
+        toast.success(`Applied Prorated: ₹${finalProratedSubtotal.toLocaleString()} for ${result.activeDays} days`);
       }
 
       return updated;
     });
 
-    setActiveProratedRowIndex(null);
+    setActiveMidMonthRowIndex(null);
+    setProrateCustomAmount('');
   };
 
   // Apply Mid-Month Escalation Split to product row
@@ -667,7 +694,7 @@ export default function ClientMasterRegistryPage() {
     });
 
     toast.success(`Applied Escalated Split: Pre ₹${result.preAmount.toLocaleString()} (${result.preDays}d) + Post ₹${result.postAmount.toLocaleString()} (${result.postDays}d) = Total ₹${result.totalSubtotal.toLocaleString()}`);
-    setActiveEscalatedRowIndex(null);
+    setActiveMidMonthRowIndex(null);
   };
 
   // Reset Form
@@ -714,6 +741,9 @@ export default function ClientMasterRegistryPage() {
 
     setSorAmount('');
     setSorRecdDate('');
+    setSdrPdfUrl('');
+    setSdrPdfName('');
+    setProrateCustomAmount('');
     setPaymentDueDay('');
     setClientStatus('Active');
 
@@ -834,8 +864,10 @@ export default function ClientMasterRegistryPage() {
     setTdsPdfUrl(entry.tdsPdfUrl || '');
     setTdsPdfName(entry.tdsPdfName || '');
 
-    setSorAmount(entry.sorAmount ?? '');
-    setSorRecdDate(entry.sorRecdDate ? new Date(entry.sorRecdDate).toISOString().split('T')[0] : '');
+    setSorAmount(entry.sorAmount ?? entry.sdrAmount ?? '');
+    setSorRecdDate(entry.sorRecdDate ? new Date(entry.sorRecdDate).toISOString().split('T')[0] : (entry.sdrRecdDate ? new Date(entry.sdrRecdDate).toISOString().split('T')[0] : ''));
+    setSdrPdfUrl(entry.sdrPdfUrl || '');
+    setSdrPdfName(entry.sdrPdfName || '');
     setPaymentDueDay(entry.paymentDueDay ?? '');
     setClientStatus(entry.clientStatus || 'Active');
 
@@ -937,6 +969,10 @@ export default function ClientMasterRegistryPage() {
 
       sorAmount: sorAmount !== '' ? Number(sorAmount) : null,
       sorRecdDate: sorRecdDate || null,
+      sdrAmount: sorAmount !== '' ? Number(sorAmount) : null,
+      sdrRecdDate: sorRecdDate || null,
+      sdrPdfUrl: sdrPdfUrl || null,
+      sdrPdfName: sdrPdfName || null,
       paymentDueDay: paymentDueDay !== '' ? Number(paymentDueDay) : null,
       clientStatus,
     };
@@ -2174,43 +2210,36 @@ export default function ClientMasterRegistryPage() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (activeProratedRowIndex === idx) {
-                                    setActiveProratedRowIndex(null);
+                                  if (activeMidMonthRowIndex === idx) {
+                                    setActiveMidMonthRowIndex(null);
                                   } else {
-                                    setActiveProratedRowIndex(idx);
+                                    setActiveMidMonthRowIndex(idx);
                                     const currentRate = row.ratePerAgreement !== '' && Number(row.ratePerAgreement) > 0
                                       ? Number(row.ratePerAgreement)
                                       : '';
+                                    const currentSeats = row.noOfSeats !== '' && Number(row.noOfSeats) > 0 ? Number(row.noOfSeats) : 1;
+                                    const today = new Date().toISOString().split('T')[0];
+
                                     setProrateMonthlyRate(currentRate);
-                                    setProrateSeats(row.noOfSeats !== '' && Number(row.noOfSeats) > 0 ? Number(row.noOfSeats) : 1);
-                                    setProrateStartDate(new Date().toISOString().split('T')[0]);
+                                    setProrateSeats(currentSeats);
+                                    setProrateStartDate(today);
+                                    setProrateCustomAmount('');
+
+                                    setEscSeats(currentSeats);
+                                    setEscOldRate(currentRate);
+                                    setEscNewRate('');
+                                    setEscDate(today);
                                   }
                                 }}
-                                className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors ${
-                                  activeProratedRowIndex === idx
-                                    ? 'bg-amber-600 text-white'
-                                    : 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+                                className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded flex items-center gap-1.5 transition-colors ${
+                                  activeMidMonthRowIndex === idx
+                                    ? 'bg-amber-600 text-white shadow-xs'
+                                    : 'bg-amber-50 text-amber-950 border border-amber-300 hover:bg-amber-100'
                                 }`}
+                                title="Calculate mid-month seat additions (Point 4) or mid-month rate escalation split (Point 8)"
                               >
-                                ⚡ Prorate Mid-Month Seats
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveEscalatedRowIndex(activeEscalatedRowIndex === idx ? null : idx);
-                                  setEscSeats(row.noOfSeats || '');
-                                  setEscOldRate(row.ratePerAgreement || '');
-                                  setEscNewRate('');
-                                  setEscDate(new Date().toISOString().split('T')[0]);
-                                }}
-                                className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors ${
-                                  activeEscalatedRowIndex === idx
-                                    ? 'bg-purple-600 text-white'
-                                    : 'bg-purple-50 text-purple-900 border border-purple-300 hover:bg-purple-100'
-                                }`}
-                              >
-                                📈 Mid-Month Escalation Split
+                                <span>⚡ Mid-Month Seat & Rate Calculator</span>
+                                {activeMidMonthRowIndex === idx && <span className="text-[9px]">▲</span>}
                               </button>
 
                               <button
@@ -2235,209 +2264,276 @@ export default function ClientMasterRegistryPage() {
                             )}
                           </div>
 
-                          {/* Inline Prorate Calculator Drawer */}
-                          {activeProratedRowIndex === idx && (() => {
+                          {/* Unified Mid-Month Seat & Rate Calculator Drawer */}
+                          {activeMidMonthRowIndex === idx && (() => {
                             const sCount = Number(prorateSeats) || 0;
                             const sRate = Number(prorateMonthlyRate) || 0;
                             const sDate = prorateStartDate || new Date().toISOString().split('T')[0];
                             const calc = calculateProratedAmount(sCount, sRate, sDate);
+                            const effectiveProratedSubtotal = prorateCustomAmount !== '' ? Number(prorateCustomAmount) : calc.proratedSubtotal;
+                            const effectiveProratedGst = roundCurrency((effectiveProratedSubtotal * 18) / 100);
+                            const effectiveProratedTotal = Math.round(effectiveProratedSubtotal + effectiveProratedGst);
+
                             const baseSeats = Number(row.noOfSeats) || 0;
                             const baseRate = Number(row.ratePerAgreement) || sRate;
                             const baseAmt = (baseSeats > 0 && baseRate > 0) ? computeProductAmount(baseSeats, baseRate) : (Number(row.amount) || 0);
-                            const combinedAmt = roundCurrency(baseAmt + calc.proratedSubtotal);
-                            const combinedTotal = computeProductTotal(combinedAmt, 18);
+                            const combinedAmt = roundCurrency(baseAmt + effectiveProratedSubtotal);
+
+                            const escResult = (escOldRate && escNewRate && escDate && escSeats)
+                              ? calculateEscalatedSplit(Number(escSeats), Number(escOldRate), Number(escNewRate), escDate)
+                              : null;
 
                             return (
-                              <div className="p-3 bg-amber-50 border border-amber-300 rounded space-y-3 shadow-xs">
-                                <div className="flex items-center justify-between text-xs font-bold text-amber-950 uppercase">
-                                  <span className="flex items-center gap-1.5">
-                                    <span>⚡ Calculate Prorated Billing (Mid-Month Additions)</span>
-                                  </span>
+                              <div className="p-3.5 bg-amber-50/80 border-2 border-amber-400 rounded-lg space-y-3 shadow-xs">
+                                {/* Header & Mode Tabs */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200 pb-2.5">
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950 uppercase">
+                                    <span>⚡ Mid-Month Adjustments (Item #{idx + 1})</span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 bg-white p-1 rounded border border-amber-300 shadow-xs self-start sm:self-auto">
+                                    <button
+                                      type="button"
+                                      onClick={() => setMidMonthMode('ADDITION')}
+                                      className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded transition-colors cursor-pointer ${
+                                        midMonthMode === 'ADDITION'
+                                          ? 'bg-amber-600 text-white shadow-xs'
+                                          : 'text-amber-900 hover:bg-amber-50'
+                                      }`}
+                                    >
+                                      ⚡ Point 4: Mid-Month Added Seats (Prorated)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setMidMonthMode('ESCALATION')}
+                                      className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded transition-colors cursor-pointer ${
+                                        midMonthMode === 'ESCALATION'
+                                          ? 'bg-purple-700 text-white shadow-xs'
+                                          : 'text-purple-900 hover:bg-purple-50'
+                                      }`}
+                                    >
+                                      📈 Point 8: Mid-Month Rate Escalation (2 Rates)
+                                    </button>
+                                  </div>
+
                                   <button
                                     type="button"
-                                    onClick={() => setActiveProratedRowIndex(null)}
-                                    className="text-amber-800 hover:text-black font-bold p-0.5 cursor-pointer"
+                                    onClick={() => {
+                                      setActiveMidMonthRowIndex(null);
+                                      setProrateCustomAmount('');
+                                    }}
+                                    className="text-amber-800 hover:text-black font-bold p-1 cursor-pointer self-end sm:self-center"
+                                    title="Close calculator"
                                   >
                                     ✕
                                   </button>
                                 </div>
-                                <p className="text-[11px] text-amber-900">
-                                  Calculates exact pro-rata billing based on days remaining in the month.
-                                </p>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-amber-950 uppercase mb-1">
-                                      Addition Start Date
-                                    </label>
-                                    <input
-                                      type="date"
-                                      value={prorateStartDate}
-                                      onChange={(e) => setProrateStartDate(e.target.value)}
-                                      className="w-full bg-white border border-amber-400 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-amber-950 uppercase mb-1">
-                                      Seats Added (Extra)
-                                    </label>
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      placeholder="e.g. 2"
-                                      value={prorateSeats}
-                                      onChange={(e) => setProrateSeats(e.target.value === '' ? '' : Number(e.target.value))}
-                                      className="w-full bg-white border border-amber-400 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-[10px] font-bold text-amber-950 uppercase mb-1">
-                                      Rate Per Seat (₹/month)
-                                    </label>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      placeholder="e.g. 300"
-                                      value={prorateMonthlyRate}
-                                      onChange={(e) => setProrateMonthlyRate(e.target.value === '' ? '' : Number(e.target.value))}
-                                      className="w-full bg-white border border-amber-400 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                    />
-                                  </div>
-                                </div>
+                                {/* MODE 1: POINT 4 - MID-MONTH ADDED SEATS */}
+                                {midMonthMode === 'ADDITION' && (
+                                  <div className="space-y-3">
+                                    <p className="text-[11px] text-amber-900 leading-relaxed">
+                                      <strong>Point 4 Workflow:</strong> If seats are added in the middle of the month, calculate pro-rata billing for remaining days. You can add a dedicated extra prorated row (for separate first invoice) or combine into this item.
+                                    </p>
 
-                                {/* LIVE CALCULATION BREAKDOWN BOX */}
-                                {sCount > 0 && sRate > 0 && (
-                                  <div className="p-2.5 bg-amber-100/70 border border-amber-300/80 rounded text-xs text-amber-950 space-y-1.5">
-                                    <div className="flex flex-wrap items-center justify-between font-bold text-[11px]">
-                                      <span>
-                                        Prorated for {calc.activeDays} of {calc.daysInMonth} days ({sCount} seats @ ₹{sRate}/seat):
-                                      </span>
-                                      <span className="font-mono text-emerald-800 text-sm font-black">
-                                        ₹{calc.proratedSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                        <span className="text-[10px] text-gray-600 font-normal"> (+18% GST: ₹{calc.proratedTotal.toLocaleString('en-IN')})</span>
-                                      </span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-amber-950 uppercase mb-1">
+                                          Addition Start Date
+                                        </label>
+                                        <input
+                                          type="date"
+                                          value={prorateStartDate}
+                                          onChange={(e) => setProrateStartDate(e.target.value)}
+                                          className="w-full bg-white border border-amber-400 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-amber-950 uppercase mb-1">
+                                          Seats Added (Extra)
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          placeholder="e.g. 2"
+                                          value={prorateSeats}
+                                          onChange={(e) => setProrateSeats(e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full bg-white border border-amber-400 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-amber-950 uppercase mb-1">
+                                          Rate Per Seat (₹/month)
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          placeholder="e.g. 300"
+                                          value={prorateMonthlyRate}
+                                          onChange={(e) => setProrateMonthlyRate(e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full bg-white border border-amber-400 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-amber-950 uppercase mb-1 flex items-center justify-between">
+                                          <span>Prorated Amount (₹)</span>
+                                          <span className="text-[9px] text-amber-800 font-normal lowercase">(editable)</span>
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="any"
+                                          placeholder={`₹${calc.proratedSubtotal || '0.00'}`}
+                                          value={prorateCustomAmount !== '' ? prorateCustomAmount : (calc.proratedSubtotal > 0 ? calc.proratedSubtotal : '')}
+                                          onChange={(e) => setProrateCustomAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full bg-white border border-amber-400 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono text-right"
+                                        />
+                                      </div>
                                     </div>
-                                    {baseSeats > 0 && baseAmt > 0 && (
-                                      <div className="text-[10px] text-amber-900 border-t border-amber-200 pt-1 flex items-center justify-between">
-                                        <span>Existing {baseSeats} seats (₹{baseAmt.toLocaleString()}) + {sCount} Extra seats prorated (₹{calc.proratedSubtotal.toLocaleString()}):</span>
-                                        <span className="font-bold text-emerald-900 font-mono">Combined Subtotal = ₹{combinedAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+
+                                    {/* LIVE CALCULATION BREAKDOWN BOX */}
+                                    {sCount > 0 && sRate > 0 && (
+                                      <div className="p-2.5 bg-amber-100/80 border border-amber-300 rounded text-xs text-amber-950 space-y-1.5">
+                                        <div className="flex flex-wrap items-center justify-between font-bold text-[11px]">
+                                          <span>
+                                            Prorated for {calc.activeDays} of {calc.daysInMonth} days ({sCount} seats @ ₹{sRate}/seat):
+                                          </span>
+                                          <span className="font-mono text-emerald-800 text-sm font-black">
+                                            ₹{effectiveProratedSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            <span className="text-[10px] text-gray-600 font-normal"> (+18% GST: ₹{effectiveProratedTotal.toLocaleString('en-IN')})</span>
+                                          </span>
+                                        </div>
+                                        {baseSeats > 0 && baseAmt > 0 && (
+                                          <div className="text-[10px] text-amber-900 border-t border-amber-200 pt-1 flex items-center justify-between">
+                                            <span>Existing {baseSeats} seats (₹{baseAmt.toLocaleString()}) + {sCount} Extra seats prorated (₹{effectiveProratedSubtotal.toLocaleString()}):</span>
+                                            <span className="font-bold text-emerald-900 font-mono">Combined Subtotal = ₹{combinedAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                          </div>
+                                        )}
                                       </div>
                                     )}
+
+                                    {/* ACTION BUTTONS */}
+                                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApplyProrateToRow(idx, 'ADD_NEW_ROW')}
+                                        className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-3.5 py-2 uppercase tracking-wider rounded flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                        title="Keeps current item intact and adds a dedicated row for the extra prorated seats (Generates 1st separate invoice)"
+                                      >
+                                        <span>➕ Add as Dedicated Extra Prorated Row</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApplyProrateToRow(idx, 'COMBINE_ROW')}
+                                        className="bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs px-3.5 py-2 uppercase tracking-wider rounded flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                        title="Combines base seats + extra prorated seats into this item"
+                                      >
+                                        <span>⚡ Combine into This Item</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApplyProrateToRow(idx, 'REPLACE_ROW')}
+                                        className="bg-white hover:bg-amber-50 text-amber-900 border border-amber-400 font-bold text-xs px-3 py-2 uppercase tracking-wider rounded cursor-pointer"
+                                        title="Replace entire item with only the prorated amount (e.g. for brand new mid-month joining client)"
+                                      >
+                                        <span>Replace Item</span>
+                                      </button>
+                                    </div>
                                   </div>
                                 )}
 
-                                {/* ACTION BUTTONS */}
-                                <div className="flex flex-wrap items-center gap-2 pt-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApplyProrateToRow(idx, 'ADD_NEW_ROW')}
-                                    className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs px-3.5 py-2 uppercase tracking-wider rounded flex items-center gap-1.5 cursor-pointer shadow-xs"
-                                    title="Keeps current item intact and adds a new row for the extra prorated seats"
-                                  >
-                                    <span>➕ Add as Extra Prorated Row</span>
-                                  </button>
+                                {/* MODE 2: POINT 8 - MID-MONTH RATE ESCALATION SPLIT */}
+                                {midMonthMode === 'ESCALATION' && (
+                                  <div className="space-y-3 bg-purple-50/70 p-3 rounded border border-purple-200">
+                                    <p className="text-[11px] text-purple-900 leading-relaxed">
+                                      <strong>Point 8 Workflow:</strong> If rate escalation applies in the middle of the month, computes a 2-rate split on the same month: Pre-escalation days @ Old Rate + Post-escalation days @ New Rate.
+                                    </p>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApplyProrateToRow(idx, 'COMBINE_ROW')}
-                                    className="bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs px-3.5 py-2 uppercase tracking-wider rounded flex items-center gap-1.5 cursor-pointer shadow-xs"
-                                    title="Combines base seats + extra prorated seats into this item"
-                                  >
-                                    <span>⚡ Combine into This Item</span>
-                                  </button>
+                                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-purple-950 uppercase mb-1">
+                                          Escalation Date
+                                        </label>
+                                        <input
+                                          type="date"
+                                          value={escDate}
+                                          onChange={(e) => setEscDate(e.target.value)}
+                                          className="w-full bg-white border border-purple-300 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-purple-950 uppercase mb-1">
+                                          Seats Affected
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          placeholder="Seats..."
+                                          value={escSeats}
+                                          onChange={(e) => setEscSeats(e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full bg-white border border-purple-300 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-purple-950 uppercase mb-1">
+                                          Old Rate (₹/seat)
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          placeholder="Old rate..."
+                                          value={escOldRate}
+                                          onChange={(e) => setEscOldRate(e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full bg-white border border-purple-300 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] font-bold text-purple-950 uppercase mb-1">
+                                          New Escalated Rate (₹/seat)
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          placeholder="New rate..."
+                                          value={escNewRate}
+                                          onChange={(e) => setEscNewRate(e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full bg-white border border-purple-300 px-2.5 py-1.5 text-xs font-bold text-black rounded focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                        />
+                                      </div>
+                                    </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApplyProrateToRow(idx, 'REPLACE_ROW')}
-                                    className="bg-white hover:bg-amber-50 text-amber-900 border border-amber-400 font-bold text-xs px-3 py-2 uppercase tracking-wider rounded cursor-pointer"
-                                    title="Replace entire item with only the prorated amount (e.g. for mid-month joining client)"
-                                  >
-                                    <span>Replace Item</span>
-                                  </button>
-                                </div>
+                                    {/* Live Breakdown Box */}
+                                    {escResult && (
+                                      <div className="p-2.5 bg-purple-100/90 border border-purple-300 rounded text-xs text-purple-950 space-y-1.5">
+                                        <div className="flex flex-wrap items-center justify-between font-bold text-[11px]">
+                                          <span>
+                                            Split Calculation: {escResult.preDays} days @ ₹{escOldRate} (₹{escResult.preAmount.toLocaleString()}) + {escResult.postDays} days @ ₹{escNewRate} (₹{escResult.postAmount.toLocaleString()})
+                                          </span>
+                                          <span className="font-mono text-purple-950 text-sm font-black">
+                                            Total Subtotal = ₹{escResult.totalSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            <span className="text-[10px] text-gray-700 font-normal"> (+18% GST: ₹{escResult.grandTotal.toLocaleString('en-IN')})</span>
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Action Button */}
+                                    <div className="flex items-center gap-2 pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApplyEscalationToRow(idx)}
+                                        className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-4 py-2 uppercase tracking-wider rounded flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                      >
+                                        <span>📈 Apply 2-Rate Escalation Split to Item</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })()}
-
-                          {/* Inline Escalation Split Drawer */}
-                          {activeEscalatedRowIndex === idx && (
-                            <div className="p-3 bg-purple-50 border border-purple-300 rounded space-y-3">
-                              <div className="flex items-center justify-between text-xs font-bold text-purple-900 uppercase">
-                                <span>📈 Mid-Month Escalation Rate Split (2 Rates in 1 Month)</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setActiveEscalatedRowIndex(null)}
-                                  className="text-purple-700 hover:text-purple-950 font-bold"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                              <p className="text-[11px] text-purple-800">
-                                Computes split invoice: Pre-escalation days @ Old Rate + Post-escalation days @ New Rate.
-                              </p>
-                              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end">
-                                <div>
-                                  <label className="block text-[10px] font-bold text-purple-900 uppercase mb-0.5">
-                                    Escalation Date
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={escDate}
-                                    onChange={(e) => setEscDate(e.target.value)}
-                                    className="w-full bg-white border border-purple-300 px-2 py-1.5 text-xs font-bold text-black"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold text-purple-900 uppercase mb-0.5">
-                                    Seats
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    placeholder="Seats..."
-                                    value={escSeats}
-                                    onChange={(e) => setEscSeats(e.target.value === '' ? '' : Number(e.target.value))}
-                                    className="w-full bg-white border border-purple-300 px-2 py-1.5 text-xs font-bold text-black"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold text-purple-900 uppercase mb-0.5">
-                                    Old Rate (₹)
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    placeholder="Old rate..."
-                                    value={escOldRate}
-                                    onChange={(e) => setEscOldRate(e.target.value === '' ? '' : Number(e.target.value))}
-                                    className="w-full bg-white border border-purple-300 px-2 py-1.5 text-xs font-bold text-black"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold text-purple-900 uppercase mb-0.5">
-                                    New Rate (₹)
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    placeholder="New rate..."
-                                    value={escNewRate}
-                                    onChange={(e) => setEscNewRate(e.target.value === '' ? '' : Number(e.target.value))}
-                                    className="w-full bg-white border border-purple-300 px-2 py-1.5 text-xs font-bold text-black"
-                                  />
-                                </div>
-                                <div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleApplyEscalationToRow(idx)}
-                                    className="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs py-2 uppercase tracking-wider rounded"
-                                  >
-                                    Apply Split Rate
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
 
                           {/* Separate Secondary Agreement Details Drawer */}
                           {row.hasSeparateAgreement && (
@@ -2643,10 +2739,10 @@ export default function ClientMasterRegistryPage() {
                     <Shield size={16} className="text-[#006064]" /> 8. Security Deposit (SDR) & Payment Due Day
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5 items-end">
                     <div>
                       <label className="block font-bold uppercase text-[#616161] mb-1">
-                        SDR Amount (Security Deposit)
+                        SDR Amount (Deposit)
                       </label>
                       <input
                         type="number"
@@ -2654,7 +2750,7 @@ export default function ClientMasterRegistryPage() {
                         placeholder="Security Deposit..."
                         value={sorAmount}
                         onChange={(e) => setSorAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2.5 text-xs focus:outline-none focus:border-[#006064] font-bold text-right"
+                        className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold text-right"
                       />
                     </div>
 
@@ -2666,13 +2762,83 @@ export default function ClientMasterRegistryPage() {
                         type="date"
                         value={sorRecdDate}
                         onChange={(e) => setSorRecdDate(e.target.value)}
-                        className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2.5 text-xs focus:outline-none focus:border-[#006064]"
+                        className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064]"
                       />
+                    </div>
+
+                    {/* SDR RECEIPT ATTACHMENT */}
+                    <div>
+                      <label className="block font-bold uppercase text-[#616161] mb-1 flex items-center justify-between">
+                        <span>Attach SDR Receipt</span>
+                        {sdrPdfName && <span className="text-emerald-700 text-[10px] lowercase font-normal truncate max-w-[90px]">({sdrPdfName})</span>}
+                      </label>
+                      {sdrPdfUrl ? (
+                        <div className="flex items-center gap-1.5 p-1.5 bg-emerald-50 border border-emerald-300 rounded text-xs min-h-[38px]">
+                          <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                          <a
+                            href={sdrPdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-bold text-emerald-800 hover:underline truncate flex-1 text-[11px]"
+                            title="Click to view SDR receipt"
+                          >
+                            {sdrPdfName || 'View Receipt'}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSdrPdfUrl('');
+                              setSdrPdfName('');
+                            }}
+                            className="text-red-500 hover:text-red-700 p-0.5 cursor-pointer"
+                            title="Remove SDR receipt"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <input
+                            type="file"
+                            id="sdr-receipt-file-input"
+                            accept="application/pdf,image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (file.size > 50 * 1024 * 1024) {
+                                  toast.error('File size exceeds 50MB limit.');
+                                  return;
+                                }
+                                handleFileUpload(file, 'SDR');
+                              }
+                            }}
+                            className="hidden"
+                          />
+                          <label
+                            htmlFor="sdr-receipt-file-input"
+                            className={`w-full py-2 px-2.5 border border-dashed border-neutral-300 bg-[#F8F9FA] hover:bg-neutral-100 flex items-center justify-center gap-1.5 cursor-pointer text-xs font-bold text-neutral-700 transition-colors min-h-[38px] ${
+                              uploadingSdrPdf ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                          >
+                            {uploadingSdrPdf ? (
+                              <>
+                                <Loader2 size={13} className="animate-spin text-[#006064]" />
+                                <span className="text-[11px]">Uploading...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Paperclip size={13} className="text-[#006064]" />
+                                <span className="text-[11px]">Attach SDR Receipt</span>
+                              </>
+                            )}
+                          </label>
+                        </div>
+                      )}
                     </div>
 
                     <div>
                       <label className="block font-bold uppercase text-[#616161] mb-1">
-                        Payment Due Day (1 to 31)
+                        Master Due Day (1-31)
                       </label>
                       <input
                         type="number"
@@ -2681,7 +2847,7 @@ export default function ClientMasterRegistryPage() {
                         placeholder="e.g. 5 or 10"
                         value={paymentDueDay}
                         onChange={(e) => setPaymentDueDay(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2.5 text-xs focus:outline-none focus:border-[#006064] font-bold"
+                        className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold"
                       />
                     </div>
 
@@ -2692,7 +2858,7 @@ export default function ClientMasterRegistryPage() {
                       <select
                         value={clientStatus}
                         onChange={(e) => setClientStatus(e.target.value)}
-                        className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2.5 text-xs focus:outline-none focus:border-[#006064] font-bold"
+                        className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold"
                       >
                         {CLIENT_STATUS_OPTIONS.map((st) => (
                           <option key={st} value={st}>
@@ -3058,16 +3224,26 @@ export default function ClientMasterRegistryPage() {
                 <div>
                   <div className="font-bold uppercase text-[#616161] text-[10px]">Security Deposit (SDR) & Payment Due</div>
                   <div className="font-bold text-[#1B1C1C] mt-0.5">
-                    Amount: ₹{Number(entryToViewDetails.sorAmount || 0).toLocaleString('en-IN')}
+                    Amount: ₹{Number(entryToViewDetails.sorAmount || entryToViewDetails.sdrAmount || 0).toLocaleString('en-IN')}
                   </div>
-                  {entryToViewDetails.sorRecdDate && (
+                  {(entryToViewDetails.sorRecdDate || entryToViewDetails.sdrRecdDate) && (
                     <div className="text-neutral-600 text-[10px]">
-                      SDR Recd Date: {new Date(entryToViewDetails.sorRecdDate).toLocaleDateString('en-IN')}
+                      SDR Recd Date: {new Date(entryToViewDetails.sorRecdDate || entryToViewDetails.sdrRecdDate || '').toLocaleDateString('en-IN')}
                     </div>
+                  )}
+                  {entryToViewDetails.sdrPdfUrl && (
+                    <a
+                      href={entryToViewDetails.sdrPdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-[#006064] font-bold hover:underline flex items-center gap-1 mt-1"
+                    >
+                      <Paperclip size={10} /> View SDR Receipt ({entryToViewDetails.sdrPdfName || 'Document'})
+                    </a>
                   )}
                   {entryToViewDetails.paymentDueDay && (
                     <div className="text-emerald-800 font-bold text-[10px] mt-0.5">
-                      Payment Due Day: {entryToViewDetails.paymentDueDay} of month
+                      Master Due Day: {entryToViewDetails.paymentDueDay} of month
                     </div>
                   )}
                 </div>

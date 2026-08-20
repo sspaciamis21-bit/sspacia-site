@@ -117,6 +117,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       companyName,
+      locationId,
+      locationName,
+      invoices,
       invoiceNo,
       month,
       year,
@@ -125,8 +128,6 @@ export async function POST(request: Request) {
       fileSize,
       amount,
       remarks,
-      locationId,
-      locationName,
     } = body;
 
     if (!companyName || !companyName.trim()) {
@@ -136,6 +137,55 @@ export async function POST(request: Request) {
       );
     }
 
+    // ── BATCH CREATION SUPPORT (MULTIPLE INVOICES FOR SAME COMPANY) ──
+    if (Array.isArray(invoices) && invoices.length > 0) {
+      const validInvoices = invoices.filter((inv: any) => inv && inv.invoiceUrl && inv.invoiceUrl.trim());
+      if (validInvoices.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'At least one invoice file is required' },
+          { status: 400 }
+        );
+      }
+
+      const createdList = [];
+      for (const inv of validInvoices) {
+        const invMonth = (inv.month || month || 'April 2026').trim();
+        let parsedYear = inv.year ? parseInt(String(inv.year), 10) : null;
+        if (!parsedYear) {
+          const yearMatch = invMonth.match(/\b(20\d{2})\b/);
+          parsedYear = yearMatch ? parseInt(yearMatch[1], 10) : new Date().getFullYear();
+        }
+
+        const parsedAmount = inv.amount ? parseFloat(String(inv.amount).replace(/[^0-9.-]+/g, '')) : null;
+
+        const record = await createOldInvoice({
+          companyName: companyName.trim(),
+          invoiceNo: inv.invoiceNo ? inv.invoiceNo.trim() : null,
+          month: invMonth,
+          year: isNaN(parsedYear) ? null : parsedYear,
+          invoiceUrl: inv.invoiceUrl.trim(),
+          fileName: inv.fileName || 'Invoice.pdf',
+          fileSize: inv.fileSize ? String(inv.fileSize) : null,
+          amount: parsedAmount !== null && !isNaN(parsedAmount) ? parsedAmount : null,
+          remarks: inv.remarks ? inv.remarks.trim() : null,
+          locationId: locationId ? parseInt(String(locationId), 10) : null,
+          locationName: locationName || null,
+          uploadedById: currentUserId,
+          uploadedByName: currentUserName,
+          uploadedByRole: currentUserRole,
+        });
+        createdList.push(record);
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: createdList,
+        count: createdList.length,
+        message: `Successfully archived ${createdList.length} invoice(s) for ${companyName}!`,
+      });
+    }
+
+    // ── SINGLE INVOICE CREATION (BACKWARD COMPATIBILITY) ──
     if (!month || !month.trim()) {
       return NextResponse.json(
         { success: false, error: 'Billing month is required' },

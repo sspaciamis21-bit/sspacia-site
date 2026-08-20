@@ -24,9 +24,9 @@ export async function GET() {
       success: true,
       data: setting || {
         signatureUrl: '',
-        signerName: 'Community Manager',
-        signerTitle: 'Authorized Signatory',
-        companyName: 'SSPACIA Workspaces',
+        signerName: 'PRAVEEN DILIPKUMAR AGARWAL',
+        signerTitle: 'Director',
+        companyName: 'SSPACIA INDIA PVT LTD',
         isActive: false,
       },
     });
@@ -52,9 +52,9 @@ export async function POST(request: Request) {
     const contentType = request.headers.get('content-type') || '';
 
     let signatureUrl = '';
-    let signerName = 'Community Manager';
-    let signerTitle = 'Authorized Signatory';
-    let companyName = 'SSPACIA Workspaces';
+    let signerName = 'PRAVEEN DILIPKUMAR AGARWAL';
+    let signerTitle = 'Director';
+    let companyName = 'SSPACIA INDIA PVT LTD';
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();

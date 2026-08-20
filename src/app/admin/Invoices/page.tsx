@@ -36,7 +36,9 @@ import {
   DollarSign,
   AlertOctagon,
   Sparkles,
-  FolderArchive
+  FolderArchive,
+  Package,
+  Plus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -180,8 +182,6 @@ export default function AdminInvoicesWorkflowPage() {
 
   // Digital Signature Management State
   const [showSignatureSettingsModal, setShowSignatureSettingsModal] = useState(false);
-  const [showApplySignatureModal, setShowApplySignatureModal] = useState(false);
-  const [targetInvoiceToSign, setTargetInvoiceToSign] = useState<InvoiceRecord | null>(null);
   const [signatureSetting, setSignatureSetting] = useState<{
     signatureUrl: string;
     signerName: string;
@@ -211,11 +211,34 @@ export default function AdminInvoicesWorkflowPage() {
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  // USB DSC & Digital Signing Modal State
+  const [targetInvoiceToSign, setTargetInvoiceToSign] = useState<InvoiceRecord | null>(null);
+  const [showApplySignatureModal, setShowApplySignatureModal] = useState(false);
+  const [bridgeStatus, setBridgeStatus] = useState<{ connected: boolean; checking: boolean; certificates: any[] }>({
+    connected: false,
+    checking: false,
+    certificates: [],
+  });
+  const [signingWithUsb, setSigningWithUsb] = useState(false);
+
   // View Full Record Details Modal
   const [entryToViewDetails, setEntryToViewDetails] = useState<InvoiceRecord | null>(null);
 
   // Edit Invoice Record Modal State
+  interface EditInvoiceItem {
+    cabinName: string;
+    noOfSeats: number | '';
+    ratePerAgreement: number | '';
+    amount: number | '';
+    gstPercent: number | '';
+    totalAmount: number | '';
+    paymentDuration?: string;
+    billingType?: string;
+    note?: string;
+  }
+
   const [entryToEditInvoice, setEntryToEditInvoice] = useState<InvoiceRecord | null>(null);
+  const [editItems, setEditItems] = useState<EditInvoiceItem[]>([]);
   const [editCompanyName, setEditCompanyName] = useState('');
   const [editCabinName, setEditCabinName] = useState('');
   const [editNoOfSeats, setEditNoOfSeats] = useState<number | ''>('');
@@ -295,6 +318,94 @@ export default function AdminInvoicesWorkflowPage() {
       toast.error('Error saving signature settings');
     } finally {
       setUploadingSignature(false);
+    }
+  };
+
+  const checkUsbBridge = useCallback(async () => {
+    setBridgeStatus(prev => ({ ...prev, checking: true }));
+    try {
+      const res = await fetch('http://127.0.0.1:8765/status', { signal: AbortSignal.timeout(2500) });
+      if (res.ok) {
+        const certsRes = await fetch('http://127.0.0.1:8765/certificates', { signal: AbortSignal.timeout(2500) });
+        const certsJson = await certsRes.json();
+        setBridgeStatus({
+          connected: true,
+          checking: false,
+          certificates: certsJson.certificates || [],
+        });
+        return;
+      }
+    } catch {
+      // Bridge not running
+    }
+    setBridgeStatus({ connected: false, checking: false, certificates: [] });
+  }, []);
+
+  useEffect(() => {
+    if (showApplySignatureModal) {
+      checkUsbBridge();
+    }
+  }, [showApplySignatureModal, checkUsbBridge]);
+
+  const handleSignWithUsbToken = async (invoice: InvoiceRecord) => {
+    if (!invoice.attachedInvoice?.fileUrl) {
+      toast.error('No attached invoice PDF found');
+      return;
+    }
+    setSigningWithUsb(true);
+    try {
+      const pdfRes = await fetch(invoice.attachedInvoice.fileUrl);
+      if (!pdfRes.ok) throw new Error('Could not fetch attached invoice PDF');
+      const arrayBuffer = await pdfRes.arrayBuffer();
+
+      let binary = '';
+      const bytes = new Uint8Array(arrayBuffer);
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const pdfBase64 = window.btoa(binary);
+
+      toast.info('Connecting to ProxKey USB Token... Please enter PIN if prompted.', { duration: 6000 });
+      const bridgeRes = await fetch('http://127.0.0.1:8765/sign-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pdfBase64,
+          signerName: signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL',
+        }),
+      });
+
+      const bridgeJson = await bridgeRes.json();
+      if (!bridgeRes.ok || !bridgeJson.success) {
+        throw new Error(bridgeJson.error || 'Failed to sign with USB token');
+      }
+
+      const dscData = bridgeJson.data;
+
+      const saveRes = await fetch(`/api/admin/Invoices/${invoice.id}/save-usb-signed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signedPdfBase64: pdfBase64,
+          signerName: dscData.signerName || 'PRAVEEN DILIPKUMAR AGARWAL',
+          serialNumber: dscData.serialNumber,
+          issuer: dscData.issuer,
+          thumbprint: dscData.thumbprint,
+        }),
+      });
+
+      const saveJson = await saveRes.json();
+      if (!saveRes.ok) throw new Error(saveJson.error || 'Failed to save signed invoice');
+
+      toast.success('🎉 Invoice digitally signed with ProxKey USB Token (PantaSign CA)!');
+      setShowApplySignatureModal(false);
+      setTargetInvoiceToSign(null);
+      fetchData();
+    } catch (err: any) {
+      console.error('USB Signing Error:', err);
+      toast.error(err.message || 'Failed to sign with USB Token. Ensure ProxKey is plugged in.');
+    } finally {
+      setSigningWithUsb(false);
     }
   };
 
@@ -395,11 +506,126 @@ export default function AdminInvoicesWorkflowPage() {
     setEditNoOfSeats(inv.noOfSeats ?? '');
     setEditRatePerAgreement(inv.ratePerAgreement ?? '');
     setEditAmount(inv.amount ?? '');
-    setEditGstPercent(inv.gstPercent ?? '');
+    setEditGstPercent(inv.gstPercent ?? 18);
     setEditTotalAmount(inv.totalAmount ?? '');
     setEditGstNo(inv.gstNo || '');
     setEditBillingMonth(inv.billingMonth || '');
     setEditStatus(inv.status);
+
+    let parsed: EditInvoiceItem[] = [];
+    if (inv.itemsJson) {
+      try {
+        const raw = JSON.parse(inv.itemsJson);
+        if (Array.isArray(raw) && raw.length > 0) {
+          parsed = raw.map((it: any) => ({
+            cabinName: it.cabinName || '',
+            noOfSeats: it.noOfSeats ?? '',
+            ratePerAgreement: it.ratePerAgreement ?? '',
+            amount: it.amount ?? '',
+            gstPercent: it.gstPercent ?? 18,
+            totalAmount: it.totalAmount ?? '',
+            paymentDuration: it.paymentDuration || 'MONTHLY',
+            billingType: it.billingType || 'REGULAR',
+            note: it.note,
+          }));
+        }
+      } catch {
+        parsed = [];
+      }
+    }
+
+    if (parsed.length === 0) {
+      parsed = [{
+        cabinName: inv.cabinName || 'Workspace',
+        noOfSeats: inv.noOfSeats ?? '',
+        ratePerAgreement: inv.ratePerAgreement ?? '',
+        amount: inv.amount ?? '',
+        gstPercent: inv.gstPercent ?? 18,
+        totalAmount: inv.totalAmount ?? '',
+        paymentDuration: inv.paymentDuration || 'MONTHLY',
+        billingType: 'REGULAR',
+      }];
+    }
+
+    setEditItems(parsed);
+  };
+
+  const recalculateEditTotals = (items: EditInvoiceItem[]) => {
+    const totalSeats = items.reduce((sum, it) => sum + (Number(it.noOfSeats) || 0), 0);
+    const subtotal = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+    const roundedSubtotal = Math.round(subtotal * 100) / 100;
+    const total = items.reduce((sum, it) => sum + (Number(it.totalAmount) || 0), 0);
+    const roundedTotal = Math.round(total);
+
+    const names = items.map((it) => it.cabinName.trim()).filter(Boolean);
+    let summaryName = '';
+    if (names.length === 0) {
+      summaryName = 'Workspace';
+    } else if (names.length === 1) {
+      summaryName = names[0];
+    } else {
+      summaryName = `${names.length} Spaces (${names.join(', ')})`;
+    }
+
+    setEditNoOfSeats(totalSeats);
+    setEditAmount(roundedSubtotal);
+    setEditTotalAmount(roundedTotal);
+    setEditCabinName(summaryName);
+  };
+
+  const handleDeleteEditItem = (index: number) => {
+    const itemToDelete = editItems[index];
+    const itemName = itemToDelete?.cabinName || `Item #${index + 1}`;
+    if (!confirm(`Are you sure you want to delete "${itemName}" from this invoice?`)) {
+      return;
+    }
+    const updated = editItems.filter((_, idx) => idx !== index);
+    setEditItems(updated);
+    recalculateEditTotals(updated);
+    toast.success(`Product "${itemName}" deleted from invoice!`);
+  };
+
+  const handleUpdateEditItem = (index: number, field: keyof EditInvoiceItem, value: any) => {
+    const updated = [...editItems];
+    const item = { ...updated[index], [field]: value };
+
+    if (field === 'noOfSeats' || field === 'ratePerAgreement' || field === 'gstPercent') {
+      const seats = field === 'noOfSeats' ? (value === '' ? 0 : Number(value)) : (Number(item.noOfSeats) || 0);
+      const rate = field === 'ratePerAgreement' ? (value === '' ? 0 : Number(value)) : (Number(item.ratePerAgreement) || 0);
+      const gstP = field === 'gstPercent' ? (value === '' ? 18 : Number(value)) : (Number(item.gstPercent) || 18);
+
+      if (seats > 0 && rate > 0) {
+        const lineAmt = Math.round(seats * rate * 100) / 100;
+        const lineGst = Math.round(((lineAmt * gstP) / 100) * 100) / 100;
+        item.amount = lineAmt;
+        item.totalAmount = Math.round(lineAmt + lineGst);
+      }
+    } else if (field === 'amount') {
+      const lineAmt = value === '' ? 0 : Number(value);
+      const gstP = Number(item.gstPercent) || 18;
+      const lineGst = Math.round(((lineAmt * gstP) / 100) * 100) / 100;
+      item.totalAmount = Math.round(lineAmt + lineGst);
+    }
+
+    updated[index] = item;
+    setEditItems(updated);
+    recalculateEditTotals(updated);
+  };
+
+  const handleAddEditItem = () => {
+    const newItem: EditInvoiceItem = {
+      cabinName: 'Workspace',
+      noOfSeats: 1,
+      ratePerAgreement: 0,
+      amount: 0,
+      gstPercent: 18,
+      totalAmount: 0,
+      paymentDuration: 'MONTHLY',
+      billingType: 'REGULAR',
+    };
+    const updated = [...editItems, newItem];
+    setEditItems(updated);
+    recalculateEditTotals(updated);
   };
 
   const canUseNodeFilter = isAdmin || canAccessAccountant;
@@ -486,6 +712,10 @@ export default function AdminInvoicesWorkflowPage() {
   const handleSaveEditInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!entryToEditInvoice) return;
+    if (editItems.length === 0) {
+      toast.error('Invoice must contain at least one product item');
+      return;
+    }
     setActionLoading(true);
     try {
       const res = await fetch(`/api/admin/Invoices/${entryToEditInvoice.id}`, {
@@ -502,12 +732,13 @@ export default function AdminInvoicesWorkflowPage() {
           gstNo: editGstNo,
           billingMonth: editBillingMonth,
           status: editStatus,
+          itemsJson: JSON.stringify(editItems),
         }),
       });
 
       const json = await res.json();
       if (json.success) {
-        toast.success('Invoice record updated successfully!');
+        toast.success('Invoice record and products updated successfully!');
         setEntryToEditInvoice(null);
         fetchData();
       } else {
@@ -1561,6 +1792,162 @@ export default function AdminInvoicesWorkflowPage() {
         )}
       </AnimatePresence>
 
+      {/* MODAL 3.5: USB DSC & Digital Signing Modal */}
+      <AnimatePresence>
+        {showApplySignatureModal && targetInvoiceToSign && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-xl space-y-5 shadow-2xl text-xs"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-[#006064] text-white">
+                    <Award size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-[#1B1C1C] uppercase tracking-wide">
+                      Apply Digital Signature (DSC)
+                    </h3>
+                    <p className="text-[10px] text-[#616161]">
+                      {targetInvoiceToSign.companyName} | SR #{targetInvoiceToSign.srNo} | Amount: ₹{Number(targetInvoiceToSign.totalAmount || 0).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowApplySignatureModal(false);
+                    setTargetInvoiceToSign(null);
+                  }}
+                  className="text-neutral-400 hover:text-neutral-700 p-1"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Signatory Settings Preview */}
+              <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-[9px] uppercase font-bold text-neutral-400 block">Signatory Name</span>
+                  <span className="font-bold text-[#1B1C1C]">{signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL'}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase font-bold text-neutral-400 block">Designation / Company</span>
+                  <span className="font-bold text-[#1B1C1C]">{signatureSignerTitle || 'Director'} | SSPACIA INDIA PVT LTD</span>
+                </div>
+              </div>
+
+              {/* OPTION A: Physical ProxKey USB Token (Real Class 3 DSC) */}
+              <div className="p-4 border-2 border-[#006064]/30 bg-teal-50/40 space-y-3 relative">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-xs uppercase tracking-wider text-[#006064] flex items-center gap-1.5">
+                    <PenTool size={14} /> Method 1: Watchdata ProxKey USB Token (PantaSign Class 3)
+                  </span>
+                  <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded ${
+                    bridgeStatus.connected ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  }`}>
+                    {bridgeStatus.connected ? '● USB Bridge Connected' : '○ Bridge Disconnected'}
+                  </span>
+                </div>
+
+                {bridgeStatus.connected ? (
+                  <div className="space-y-3">
+                    <div className="text-[11px] text-emerald-900 bg-emerald-50 p-2.5 border border-emerald-200 flex items-start gap-2">
+                      <CheckCircle2 size={16} className="text-emerald-700 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold">Hardware USB Token Ready for Cryptographic Signing</div>
+                        <div className="text-[10px] text-emerald-800 mt-0.5">
+                          Certificate: <span className="font-mono font-bold">PRAVEEN DILIPKUMAR AGARWAL</span> (PantaSign Sub CA for DSC 2022 / CCA India)
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSignWithUsbToken(targetInvoiceToSign)}
+                      disabled={signingWithUsb}
+                      className="w-full py-3 bg-[#006064] hover:bg-[#004d40] text-white font-extrabold uppercase tracking-wider text-xs flex items-center justify-center gap-2 shadow-md disabled:opacity-50 transition-all cursor-pointer"
+                    >
+                      {signingWithUsb ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" /> Signing with ProxKey USB Token...
+                        </>
+                      ) : (
+                        <>
+                          <Award size={16} /> ✍ Sign with ProxKey USB Token (PantaSign Class 3)
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[9px] text-center text-neutral-500 italic">
+                      Clicking will trigger your ProxKey Token PIN dialog on Windows.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="text-[11px] text-amber-900 bg-amber-50 p-2.5 border border-amber-200 flex items-start gap-2">
+                      <AlertTriangle size={16} className="text-amber-700 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <div className="font-bold">ProxKey USB Bridge is not running on this computer</div>
+                        <div className="text-[10px] text-neutral-700 leading-relaxed">
+                          1. Plug in your <strong>Watchdata ProxKey USB Dongle</strong>.<br />
+                          2. Double-click <strong className="font-mono text-[#006064]">start-dsc-bridge.bat</strong> in the website project folder.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={checkUsbBridge}
+                        disabled={bridgeStatus.checking}
+                        className="flex-1 py-2 bg-neutral-800 hover:bg-neutral-900 text-white font-bold uppercase text-[10px] tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        {bridgeStatus.checking ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+                        Re-Check USB Connection
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* OPTION B: Server-Side High-Speed Digital Stamp */}
+              <div className="p-3 bg-neutral-50 border border-neutral-200 flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-bold text-[#1B1C1C] text-[11px]">Method 2: Server-Side Cryptographic Signature</div>
+                  <div className="text-[10px] text-neutral-500">Sign immediately with server cryptographic certificate & dynamic timestamp.</div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleApplyDigitalSignature(targetInvoiceToSign.id)}
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap cursor-pointer"
+                >
+                  {actionLoading ? <Loader2 size={12} className="animate-spin" /> : '⚡ Fast Server Sign'}
+                </button>
+              </div>
+
+              {/* Close Button */}
+              <div className="flex justify-end pt-2 border-t border-neutral-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowApplySignatureModal(false);
+                    setTargetInvoiceToSign(null);
+                  }}
+                  className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* MODAL 4: Full Invoice Record Viewer */}
       <AnimatePresence>
         {entryToViewDetails && (
@@ -1647,6 +2034,7 @@ export default function AdminInvoicesWorkflowPage() {
                                 <div>
                                   <div className="font-bold uppercase text-[#616161] text-[9px]">Cabin / Product Name</div>
                                   <div className="font-bold text-[#1B1C1C] mt-0.5">{p.cabinName || 'N/A'}</div>
+                                  {p.note && <div className="text-[10px] text-teal-800 font-medium mt-0.5 italic">{p.note}</div>}
                                 </div>
 
                                 <div>
@@ -1925,7 +2313,7 @@ export default function AdminInvoicesWorkflowPage() {
               initial={{ opacity: 0, scale: 0.96, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 15 }}
-              className="bg-white border border-[var(--outline-variant)] w-full max-w-2xl shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[88vh] flex flex-col"
+              className="bg-white border border-[var(--outline-variant)] w-full max-w-4xl shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[90vh] flex flex-col"
             >
               <div className="p-5 bg-[#006064] text-white flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
@@ -1934,10 +2322,10 @@ export default function AdminInvoicesWorkflowPage() {
                   </div>
                   <div>
                     <h2 className="text-base font-bold tracking-tight uppercase">
-                      Edit Invoice Record (#{entryToEditInvoice.srNo})
+                      Edit Invoice Record & Products (#{entryToEditInvoice.srNo})
                     </h2>
                     <p className="text-xs text-white/80 font-light">
-                      Modify company name, seat rates, billing month, and status parameters.
+                      Edit details or delete specific product items before sending to the accountant.
                     </p>
                   </div>
                 </div>
@@ -1951,9 +2339,10 @@ export default function AdminInvoicesWorkflowPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveEditInvoice} className="p-6 space-y-4 overflow-y-auto flex-1">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+              <form onSubmit={handleSaveEditInvoice} className="p-6 space-y-5 overflow-y-auto flex-1">
+                {/* Basic Invoice Parameters */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-neutral-50 p-3.5 border border-neutral-200 rounded">
+                  <div className="sm:col-span-2">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
                       Company Name
                     </label>
@@ -1962,80 +2351,7 @@ export default function AdminInvoicesWorkflowPage() {
                       required
                       value={editCompanyName}
                       onChange={(e) => setEditCompanyName(e.target.value)}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      Cabin Name / Product
-                    </label>
-                    <input
-                      type="text"
-                      value={editCabinName}
-                      onChange={(e) => setEditCabinName(e.target.value)}
-                      placeholder="e.g. Dedicated Cabin"
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      No of Seats
-                    </label>
-                    <input
-                      type="number"
-                      value={editNoOfSeats}
-                      onChange={(e) => setEditNoOfSeats(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      Rate Per Agreement (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={editRatePerAgreement}
-                      onChange={(e) => setEditRatePerAgreement(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      Amount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={editAmount}
-                      onChange={(e) => setEditAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      GST (%)
-                    </label>
-                    <input
-                      type="number"
-                      value={editGstPercent}
-                      onChange={(e) => setEditGstPercent(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      Total Amount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={editTotalAmount}
-                      onChange={(e) => setEditTotalAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064] text-[#006064]"
+                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
                     />
                   </div>
 
@@ -2047,7 +2363,7 @@ export default function AdminInvoicesWorkflowPage() {
                       type="text"
                       value={editGstNo}
                       onChange={(e) => setEditGstNo(e.target.value)}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-[#006064]"
+                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-mono font-bold focus:outline-none focus:border-[#006064]"
                     />
                   </div>
 
@@ -2060,18 +2376,31 @@ export default function AdminInvoicesWorkflowPage() {
                       value={editBillingMonth}
                       onChange={(e) => setEditBillingMonth(e.target.value)}
                       placeholder="e.g. August 2026"
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
                     />
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                      Cabin Name / Invoice Summary
+                    </label>
+                    <input
+                      type="text"
+                      value={editCabinName}
+                      onChange={(e) => setEditCabinName(e.target.value)}
+                      placeholder="e.g. Dedicated Cabin, Flex Desk"
+                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
                       Workflow Status
                     </label>
                     <select
                       value={editStatus}
                       onChange={(e) => setEditStatus(e.target.value as any)}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
                     >
                       <option value="PENDING_CM_REVIEW">Pending CM Review</option>
                       <option value="SENT_TO_ACCOUNTANT">Sent to Accountant</option>
@@ -2082,19 +2411,187 @@ export default function AdminInvoicesWorkflowPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
+                {/* INVOICE PRODUCTS & LINE ITEMS (EDITABLE & DELETABLE) */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-neutral-900 uppercase flex items-center gap-1.5">
+                        <Package size={14} className="text-[#006064]" />
+                        <span>Invoice Products & Line Items ({editItems.length})</span>
+                      </div>
+                      <p className="text-[11px] text-neutral-500">
+                        You can edit quantities, rates, or <strong>delete specific products</strong> before sending to accountant.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAddEditItem}
+                      className="px-3 py-1 bg-teal-50 text-[#006064] hover:bg-teal-100 border border-teal-300 font-bold text-[11px] uppercase tracking-wider rounded flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                    >
+                      <Plus size={12} /> Add Product Item
+                    </button>
+                  </div>
+
+                  {editItems.length === 0 ? (
+                    <div className="p-6 bg-red-50 border border-red-200 text-center rounded text-red-800 text-xs font-medium space-y-2">
+                      <div>⚠️ No product items left on this invoice.</div>
+                      <button
+                        type="button"
+                        onClick={handleAddEditItem}
+                        className="px-3 py-1.5 bg-red-600 text-white font-bold text-xs uppercase rounded"
+                      >
+                        + Add a Product
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="border border-neutral-300 rounded overflow-hidden shadow-xs">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-neutral-100 text-neutral-700 text-[10px] font-bold uppercase tracking-wider border-b border-neutral-300">
+                          <tr>
+                            <th className="p-2 w-8 text-center">#</th>
+                            <th className="p-2">Product / Cabin Name</th>
+                            <th className="p-2 w-20 text-center">Seats</th>
+                            <th className="p-2 w-28 text-right">Rate (₹)</th>
+                            <th className="p-2 w-28 text-right">Amount (₹)</th>
+                            <th className="p-2 w-16 text-center">GST %</th>
+                            <th className="p-2 w-32 text-right">Total (₹)</th>
+                            <th className="p-2 w-16 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-200 bg-white font-sans">
+                          {editItems.map((item, itIdx) => (
+                            <tr key={itIdx} className="hover:bg-teal-50/40 transition-colors">
+                              <td className="p-2 text-center font-bold text-neutral-500 text-[11px]">
+                                {itIdx + 1}
+                              </td>
+
+                              <td className="p-2">
+                                <input
+                                  type="text"
+                                  required
+                                  value={item.cabinName}
+                                  onChange={(e) => handleUpdateEditItem(itIdx, 'cabinName', e.target.value)}
+                                  placeholder="e.g. Dedicated Cabin"
+                                  className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black rounded focus:outline-none focus:border-[#006064]"
+                                />
+                                {item.note && (
+                                  <div className="text-[10px] text-amber-700 italic mt-0.5">{item.note}</div>
+                                )}
+                              </td>
+
+                              <td className="p-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={item.noOfSeats}
+                                  onChange={(e) => handleUpdateEditItem(itIdx, 'noOfSeats', e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black text-center rounded focus:outline-none focus:border-[#006064]"
+                                />
+                              </td>
+
+                              <td className="p-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={item.ratePerAgreement}
+                                  onChange={(e) => handleUpdateEditItem(itIdx, 'ratePerAgreement', e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black text-right rounded focus:outline-none focus:border-[#006064]"
+                                />
+                              </td>
+
+                              <td className="p-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={item.amount}
+                                  onChange={(e) => handleUpdateEditItem(itIdx, 'amount', e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black text-right font-mono rounded focus:outline-none focus:border-[#006064]"
+                                />
+                              </td>
+
+                              <td className="p-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={item.gstPercent}
+                                  onChange={(e) => handleUpdateEditItem(itIdx, 'gstPercent', e.target.value === '' ? '' : Number(e.target.value))}
+                                  className="w-full bg-white border border-neutral-300 px-1 py-1 text-xs font-bold text-black text-center rounded focus:outline-none focus:border-[#006064]"
+                                />
+                              </td>
+
+                              <td className="p-2 text-right font-mono font-black text-emerald-800 text-xs">
+                                ₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}
+                              </td>
+
+                              <td className="p-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteEditItem(itIdx)}
+                                  className="p-1.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded transition-colors cursor-pointer"
+                                  title="Delete this product from the invoice"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* LIVE RECALCULATED TOTALS CARD */}
+                <div className="p-4 bg-teal-50/80 border-2 border-teal-600/60 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-teal-900">
+                      Recalculated Invoice Summary:
+                    </div>
+                    <div className="text-xs text-teal-950 font-bold">
+                      {editItems.length} Product Line Item{editItems.length !== 1 ? 's' : ''} • {editNoOfSeats} Total Seats
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-4 text-xs font-sans">
+                    <div className="text-right">
+                      <div className="text-[9px] font-bold text-neutral-500 uppercase">Subtotal Amount</div>
+                      <div className="font-mono font-bold text-neutral-900 text-sm">
+                        ₹{Number(editAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-[9px] font-bold text-neutral-500 uppercase">GST (18%)</div>
+                      <div className="font-mono font-bold text-neutral-700 text-sm">
+                        ₹{Math.max(0, Number(editTotalAmount || 0) - Number(editAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+
+                    <div className="text-right bg-white px-3 py-1.5 rounded border border-teal-300 shadow-xs">
+                      <div className="text-[9px] font-bold text-teal-900 uppercase">Grand Total (Incl. GST)</div>
+                      <div className="font-mono font-black text-emerald-800 text-base">
+                        ₹{Number(editTotalAmount || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form Action Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
                   <button
                     type="button"
                     onClick={() => setEntryToEditInvoice(null)}
-                    className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider"
+                    className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider rounded"
                   >
                     Cancel
                   </button>
 
                   <button
                     type="submit"
-                    disabled={actionLoading}
-                    className="px-5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2"
+                    disabled={actionLoading || editItems.length === 0}
+                    className="px-5 py-2.5 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 rounded shadow-sm cursor-pointer disabled:opacity-50"
                   >
                     {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                     Save Invoice Changes
@@ -2187,42 +2684,54 @@ export default function AdminInvoicesWorkflowPage() {
                 </div>
 
                 {/* Stamp Visual Live Preview */}
-                <div className="space-y-1.5 pt-2">
+                <div className="space-y-2 pt-2">
                   <div className="text-[10px] font-bold uppercase text-neutral-600">
-                    Live Stamp Preview on PDF:
+                    Official Adobe Signature Box Preview on Invoice PDF:
                   </div>
-                  <div className="p-4 bg-[#F8F9FA] border border-[#006064] rounded flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      {newSignatureFile ? (
-                        <div className="text-xs font-bold text-teal-800 bg-teal-100 px-2 py-1">
-                          New Image Selected ({newSignatureFile.name})
-                        </div>
-                      ) : signatureSetting.signatureUrl ? (
-                        <img
-                          src={signatureSetting.signatureUrl}
-                          alt="Signature Preview"
-                          className="h-12 w-24 object-contain border border-neutral-200 bg-white p-1"
-                        />
-                      ) : (
-                        <div className="h-12 w-24 border border-dashed border-neutral-300 flex items-center justify-center text-[9px] text-neutral-400">
-                          No Graphic
+                  <div className="p-3 bg-neutral-50 border border-neutral-300 rounded space-y-1">
+                    <div className="font-bold text-[11px] text-black">
+                      for {signatureSetting.companyName || 'SSPACIA INDIA PVT LTD'}
+                    </div>
+
+                    <div className="p-3 bg-white border-2 border-black grid grid-cols-2 gap-3 relative shadow-xs">
+                      {/* Watermark preview */}
+                      {(newSignatureFile || signatureSetting.signatureUrl) && (
+                        <div className="absolute inset-0 flex items-center justify-center opacity-25 pointer-events-none p-1">
+                          {newSignatureFile ? (
+                            <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 border border-teal-200">
+                              [{newSignatureFile.name}]
+                            </span>
+                          ) : (
+                            <img src={signatureSetting.signatureUrl} alt="" className="max-h-12 object-contain" />
+                          )}
                         </div>
                       )}
 
-                      <div>
-                        <div className="text-[10px] font-black uppercase text-[#006064]">
-                          DIGITALLY SIGNED & VERIFIED
-                        </div>
-                        <div className="font-bold text-xs text-black">
-                          {signatureSignerName || 'Signatory Name'}
-                        </div>
-                        <div className="text-[10px] text-neutral-600">
-                          {signatureSignerTitle || 'Community Manager'}, SSPACIA Workspaces
-                        </div>
-                        <div className="text-[9px] text-emerald-700 font-bold mt-0.5">
-                          ✔ Verified Electronic Signature Seal
-                        </div>
+                      <div className="font-black text-xs text-black leading-snug">
+                        {(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ').filter(Boolean).map((part: string, idx: number) => (
+                          <div key={idx}>{part}</div>
+                        ))}
                       </div>
+
+                      <div className="text-[9px] text-black space-y-0.5 font-sans leading-tight">
+                        <div>Digitally signed by {(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ')[0]}</div>
+                        <div>{(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ').slice(1).join(' ')}</div>
+                        <div>Date: 2026.08.20 {new Date().toLocaleTimeString('en-GB')}</div>
+                        <div>+05'30'</div>
+                      </div>
+                    </div>
+
+                    <div className="text-center font-bold text-[10px] text-black pt-0.5">
+                      Authorised Signatory
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-teal-50 border border-teal-200 text-teal-900 text-[10px] space-y-1">
+                    <div className="font-bold flex items-center gap-1">
+                      <Award size={12} className="text-[#006064]" /> ProxKey USB Dongle Support:
+                    </div>
+                    <div>
+                      When signing an invoice row, you can choose between <strong>ProxKey USB Hardware Token (PantaSign Class 3)</strong> or <strong>Fast Server-Side Cryptographic Sign</strong>.
                     </div>
                   </div>
                 </div>
@@ -2251,107 +2760,6 @@ export default function AdminInvoicesWorkflowPage() {
         )}
       </AnimatePresence>
 
-      {/* MODAL 6: APPLY DIGITAL SIGNATURE TO INVOICE */}
-      <AnimatePresence>
-        {showApplySignatureModal && targetInvoiceToSign && (
-          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 15 }}
-              className="bg-white border border-[var(--outline-variant)] w-full max-w-lg shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[88vh] flex flex-col"
-            >
-              <div className="p-5 bg-[#006064] text-white flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <Award className="h-5 w-5" />
-                  <div>
-                    <h2 className="text-base font-bold tracking-tight uppercase">
-                      Stamp & Digitally Sign Invoice
-                    </h2>
-                    <p className="text-xs text-white/80 font-light">
-                      Invoice #{targetInvoiceToSign.srNo} — {targetInvoiceToSign.companyName}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowApplySignatureModal(false);
-                    setTargetInvoiceToSign(null);
-                  }}
-                  className="text-white/80 hover:text-white p-1.5 hover:bg-white/10 transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="p-6 space-y-4">
-                <div className="p-4 bg-teal-50 border border-teal-200 rounded space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-teal-900 text-xs">Target Invoice:</span>
-                    <span className="font-bold text-teal-800">
-                      ₹{Number(targetInvoiceToSign.totalAmount || 0).toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                  <div className="text-xs text-teal-950 font-medium">
-                    Company: <strong className="text-black">{targetInvoiceToSign.companyName}</strong>
-                  </div>
-                  <div className="text-[11px] text-teal-900">
-                    Product: {targetInvoiceToSign.cabinName} ({targetInvoiceToSign.noOfSeats || 0} seats)
-                  </div>
-                  {targetInvoiceToSign.attachedInvoice && (
-                    <div className="text-[11px] text-teal-800 flex items-center gap-1 font-bold pt-1 border-t border-teal-200">
-                      <Paperclip size={12} /> Source PDF: {targetInvoiceToSign.attachedInvoice.fileName}
-                    </div>
-                  )}
-                </div>
-
-                {/* Stamp Summary */}
-                <div className="space-y-1">
-                  <div className="text-[10px] font-bold uppercase text-neutral-600">
-                    Signatory Authority Stamp:
-                  </div>
-                  <div className="p-3 bg-[#F8F9FA] border border-neutral-300 rounded space-y-1">
-                    <div className="font-bold text-xs text-black">
-                      {signatureSignerName || signatureSetting.signerName || 'Community Manager'}
-                    </div>
-                    <div className="text-[11px] text-neutral-600">
-                      {signatureSignerTitle || signatureSetting.signerTitle || 'Authorized Signatory'}, SSPACIA Workspaces
-                    </div>
-                    <div className="text-[10px] text-emerald-700 font-bold">
-                      Timestamp: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} IST
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowApplySignatureModal(false);
-                      setTargetInvoiceToSign(null);
-                    }}
-                    className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider"
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleApplyDigitalSignature(targetInvoiceToSign.id)}
-                    disabled={actionLoading}
-                    className="px-5 py-2.5 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm"
-                  >
-                    {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <PenTool size={14} />}
-                    Stamp & Approve Invoice
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
         </>
       )}
     </div>

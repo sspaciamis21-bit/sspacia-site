@@ -83,8 +83,10 @@ interface ExpenseSpreadsheetProps {
 
 // ── DATE UTILITIES ──
 const MONTHS_MAP: Record<string, string> = {
-  jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
-  jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12"
+  jan: "01", january: "01", feb: "02", february: "02", mar: "03", march: "03",
+  apr: "04", april: "04", may: "05", jun: "06", june: "06",
+  jul: "07", july: "07", aug: "08", august: "08", sep: "09", september: "09",
+  oct: "10", october: "10", nov: "11", november: "11", dec: "12", december: "12"
 };
 const MONTH_NAMES = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
@@ -94,22 +96,32 @@ function parseDateToTimestamp(raw: any): number | null {
   if (!str) return null;
 
   // 1. YYYY-MM-DD
-  const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  const isoMatch = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
   if (isoMatch) {
     return new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3])).getTime();
   }
 
-  // 2. DD MMM YYYY (e.g. "01 APR 2026" or "19 AUG 2026")
-  const textMatch = str.match(/^(\d{1,2})[\s\-\/]+([A-Za-z]{3,4})[\s\-\/]+(\d{4})/);
+  // 2. DD MMM YYYY (e.g. "01 APR 2026" or "19-AUG-2026" or "19 August 2026")
+  const textMatch = str.match(/^(\d{1,2})[\s\-\/]+([A-Za-z]{3,12})[\s\-\/]+(\d{4})/);
   if (textMatch) {
     const day = parseInt(textMatch[1]);
-    const monthKey = textMatch[2].substring(0, 3).toLowerCase();
+    const monthKey = textMatch[2].toLowerCase();
     const month = MONTHS_MAP[monthKey] !== undefined ? parseInt(MONTHS_MAP[monthKey]) - 1 : 0;
     const year = parseInt(textMatch[3]);
     return new Date(year, month, day).getTime();
   }
 
-  // 3. DD/MM/YYYY or DD-MM-YYYY
+  // 3. MMM DD, YYYY (e.g. "August 20, 2026" or "Aug 20 2026")
+  const mdyTextMatch = str.match(/^([A-Za-z]{3,12})[\s\-\/]+(\d{1,2}),?[\s\-\/]+(\d{4})/);
+  if (mdyTextMatch) {
+    const monthKey = mdyTextMatch[1].toLowerCase();
+    const month = MONTHS_MAP[monthKey] !== undefined ? parseInt(MONTHS_MAP[monthKey]) - 1 : 0;
+    const day = parseInt(mdyTextMatch[2]);
+    const year = parseInt(mdyTextMatch[3]);
+    return new Date(year, month, day).getTime();
+  }
+
+  // 4. DD/MM/YYYY or DD-MM-YYYY
   const dmyMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
   if (dmyMatch) {
     const day = parseInt(dmyMatch[1]);
@@ -556,6 +568,14 @@ export function ExpenseSpreadsheet({
   // Column renaming state
   const [editingColId, setEditingColId] = useState<string | null>(null);
   const [colLabelInput, setColLabelInput] = useState<string>("");
+
+  // Dedicated Column Rename Modal (Universal across all devices)
+  const [renameModalColId, setRenameModalColId] = useState<string | null>(null);
+  const [renameModalLabel, setRenameModalLabel] = useState<string>("");
+
+  // Row & Column Copy/Paste State
+  const [copiedRowData, setCopiedRowData] = useState<RowData | null>(null);
+  const [copiedColData, setCopiedColData] = useState<{ colId: string; label: string; values: Record<string, any> } | null>(null);
 
   // Freeze Settings
   const [freezeHeader, setFreezeHeader] = useState<boolean>(true);
@@ -1708,6 +1728,16 @@ export function ExpenseSpreadsheet({
     } else {
       setEditingCell(null);
     }
+
+    // Auto scroll container horizontally & vertically to follow active cell (Google Sheets behavior)
+    if (typeof window !== "undefined") {
+      requestAnimationFrame(() => {
+        const cellEl = document.querySelector(`[data-cell-coord="${targetRow.id}_${targetCol.id}"]`) as HTMLElement;
+        if (cellEl) {
+          cellEl.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        }
+      });
+    }
   };
 
   // ── KEYBOARD NAVIGATION (EXCEL / GOOGLE SHEETS LIKE) ──
@@ -2247,7 +2277,28 @@ export function ExpenseSpreadsheet({
     toast.success(`Added column: ${newColLabel}`);
   };
 
-  // Column Management: Rename Column
+  // Column Management: Rename Column (Inline & Dedicated Modal)
+  const handleOpenRenameModal = (colId: string, currentLabel: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setActiveColMenu(null);
+    setColContextMenu(null);
+    setRenameModalColId(colId);
+    setRenameModalLabel(currentLabel);
+  };
+
+  const handleConfirmRenameModal = () => {
+    if (!renameModalColId || !renameModalLabel.trim()) {
+      setRenameModalColId(null);
+      return;
+    }
+    const newCols = columns.map((c) => (c.id === renameModalColId ? { ...c, label: renameModalLabel.trim() } : c));
+    setColumns(newCols);
+    latestDataRef.current = { ...latestDataRef.current, columns: newCols };
+    scheduleAutoSave(newCols);
+    setRenameModalColId(null);
+    toast.success("Column name updated successfully!");
+  };
+
   const handleStartRenameCol = (colId: string, currentLabel: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setActiveColMenu(null);
@@ -2263,9 +2314,147 @@ export function ExpenseSpreadsheet({
     }
     const newCols = columns.map((c) => (c.id === colId ? { ...c, label: colLabelInput.trim() } : c));
     setColumns(newCols);
+    latestDataRef.current = { ...latestDataRef.current, columns: newCols };
     setEditingColId(null);
     scheduleAutoSave(newCols);
     toast.success("Column header updated!");
+  };
+
+  // ── ROW COPY / PASTE HANDLERS ──
+  const handleCopyEntireRow = (rowId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setRowContextMenu(null);
+    const row = rows.find((r) => r.id === rowId);
+    if (!row) return;
+
+    setCopiedRowData(row);
+    // Write tab-separated line to clipboard for Excel / Google Sheets compatibility
+    const line = visibleColumns.map((c) => (row[c.id] !== undefined && row[c.id] !== null ? String(row[c.id]) : "")).join("\t");
+    navigator.clipboard.writeText(line).catch(() => {});
+    toast.success("Copied entire row to clipboard!");
+  };
+
+  const handlePasteRowValues = async (targetRowId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setRowContextMenu(null);
+
+    let sourceData = copiedRowData;
+    if (!sourceData) {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          const parts = text.split("\t");
+          const synthesized: RowData = { id: targetRowId };
+          visibleColumns.forEach((c, idx) => {
+            if (parts[idx] !== undefined) synthesized[c.id] = parts[idx].trim();
+          });
+          sourceData = synthesized;
+        }
+      } catch {}
+    }
+
+    if (!sourceData) {
+      toast.error("No copied row data to paste. Please copy a row first.");
+      return;
+    }
+
+    const cellsToSave: { rowId: string; colId: string; value: any }[] = [];
+    const updatedRows = rows.map((r) => {
+      if (r.id === targetRowId) {
+        const updated = { ...r };
+        visibleColumns.forEach((c) => {
+          const newVal = sourceData![c.id];
+          if (newVal !== undefined) {
+            pushUndo(targetRowId, c.id, r[c.id] || "", newVal);
+            updated[c.id] = newVal;
+            cellsToSave.push({ rowId: targetRowId, colId: c.id, value: newVal });
+          }
+        });
+        return updated;
+      }
+      return r;
+    });
+
+    setRows(updatedRows);
+    latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
+    if (cellsToSave.length > 0) {
+      saveBatchCellsToServer(cellsToSave);
+    }
+    toast.success("Pasted row values successfully!");
+  };
+
+  const handleInsertCopiedRow = (targetRowId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setRowContextMenu(null);
+    if (!copiedRowData) {
+      toast.error("No copied row to insert. Please copy a row first.");
+      return;
+    }
+
+    const targetIdx = rows.findIndex((r) => r.id === targetRowId);
+    if (targetIdx === -1) return;
+
+    const newRowId = `row_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const newRow: RowData = { id: newRowId };
+    visibleColumns.forEach((c) => {
+      if (copiedRowData[c.id] !== undefined) {
+        newRow[c.id] = copiedRowData[c.id];
+      }
+    });
+
+    const updatedRows = [...rows];
+    updatedRows.splice(targetIdx + 1, 0, newRow);
+    setRows(updatedRows);
+    latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
+    scheduleAutoSave(undefined, updatedRows);
+    toast.success("Inserted copied row below!");
+  };
+
+  // ── COLUMN COPY / PASTE HANDLERS ──
+  const handleCopyEntireColumn = (colId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setActiveColMenu(null);
+    setColContextMenu(null);
+
+    const col = columns.find((c) => c.id === colId);
+    if (!col) return;
+
+    const values: Record<string, any> = {};
+    const colLines: string[] = [col.label];
+    rows.forEach((r) => {
+      values[r.id] = r[colId] || "";
+      colLines.push(String(r[colId] || ""));
+    });
+
+    setCopiedColData({ colId, label: col.label, values });
+    navigator.clipboard.writeText(colLines.join("\n")).catch(() => {});
+    toast.success(`Copied column "${col.label}" values to clipboard!`);
+  };
+
+  const handlePasteColumnValues = async (targetColId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setActiveColMenu(null);
+    setColContextMenu(null);
+
+    if (!copiedColData) {
+      toast.error("No copied column data to paste. Please copy a column first.");
+      return;
+    }
+
+    const cellsToSave: { rowId: string; colId: string; value: any }[] = [];
+    const updatedRows = rows.map((r) => {
+      const newVal = copiedColData.values[r.id] !== undefined ? copiedColData.values[r.id] : "";
+      pushUndo(r.id, targetColId, r[targetColId] || "", newVal);
+      cellsToSave.push({ rowId: r.id, colId: targetColId, value: newVal });
+      return { ...r, [targetColId]: newVal };
+    });
+
+    setRows(updatedRows);
+    latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
+    if (cellsToSave.length > 0) {
+      saveBatchCellsToServer(cellsToSave);
+    }
+    toast.success(`Pasted values into column!`);
   };
 
   // Column Management: Delete Column
@@ -2503,21 +2692,40 @@ export function ExpenseSpreadsheet({
 
         allSheetsData.forEach((sheet) => {
           const centerName = sheet.location?.name || `Center #${sheet.locationId}`;
-          const sheetCols: ColumnConfig[] = sheet.columns || columns;
+          const sheetCols: ColumnConfig[] = sheet.columns && sheet.columns.length > 0 ? sheet.columns : columns;
           const sheetRows: RowData[] = sheet.rows || [];
 
           const validRows = sheetRows.filter(r => !isRowEmpty(r) && matchesDateFilter(r, sheetCols));
 
           validRows.forEach((r) => {
             totalExportedRows++;
-            const dateVal = r.col_1 || r['Date'] || "";
-            const catVal = r.col_2 || r['Expense Category / Item'] || "";
-            const vendorVal = r.col_3 || r['Vendor / Paid To'] || "";
-            const amtVal = r.col_4 || r['Amount (₹)'] || "";
-            const modeVal = r.col_5 || r['Payment Mode'] || "";
-            const refVal = r.col_6 || r['Receipt / Ref #'] || "";
-            const notesVal = r.col_7 || r['Remarks / Notes'] || "";
 
+            // Dynamic column value extractor by label or index
+            const getColVal = (keyword: string, fallbackIdx: number) => {
+              const matchedCol = sheetCols.find(
+                (c) => c.label.toLowerCase().includes(keyword.toLowerCase()) || c.id.toLowerCase().includes(keyword.toLowerCase())
+              );
+              if (matchedCol && r[matchedCol.id] !== undefined && r[matchedCol.id] !== null) {
+                return r[matchedCol.id];
+              }
+              const fallbackCol = sheetCols[fallbackIdx];
+              if (fallbackCol && r[fallbackCol.id] !== undefined && r[fallbackCol.id] !== null) {
+                return r[fallbackCol.id];
+              }
+              return "";
+            };
+
+            const dateVal = getColVal("date", 0);
+            const catVal = getColVal("category", 1);
+            const vendorVal = getColVal("vendor", 2);
+            let amtVal = getColVal("amount", 3);
+            const modeVal = getColVal("mode", 4);
+            const refVal = getColVal("receipt", 5) || getColVal("ref", 5);
+            const notesVal = getColVal("remark", 6) || getColVal("note", 6);
+
+            if (typeof amtVal === "string" && amtVal.startsWith("=")) {
+              amtVal = evaluateFormula(amtVal, sheetCols, sheetRows);
+            }
             const num = parseFloat(String(amtVal).replace(/[^0-9.-]+/g, ""));
             if (!isNaN(num)) grandSum += num;
 
@@ -2526,13 +2734,13 @@ export function ExpenseSpreadsheet({
               String(dateVal || ""),
               String(catVal || ""),
               String(vendorVal || ""),
-              String(amtVal || ""),
+              String(amtVal !== undefined && amtVal !== null ? amtVal : ""),
               String(modeVal || ""),
               String(refVal || ""),
               String(notesVal || "")
             ];
 
-            csvLines.push(rowCells.map(c => `"${c.replace(/"/g, '""')}"`).join(","));
+            csvLines.push(rowCells.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","));
           });
         });
 
@@ -2549,7 +2757,8 @@ export function ExpenseSpreadsheet({
         let centerSum = 0;
         validRows.forEach((r) => {
           const rowCells = exportCols.map(c => {
-            let val = r[c.id] || "";
+            let val = r[c.id];
+            if (val === undefined || val === null) val = "";
             if (typeof val === "string" && val.startsWith("=")) {
               val = evaluateFormula(val, exportCols, validRows);
             }
@@ -2570,14 +2779,17 @@ export function ExpenseSpreadsheet({
         toast.info("No records matched the selected date filter.");
       }
 
-      const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + csvLines.join("\n");
-      const encodedUri = encodeURI(csvContent);
+      // Robust UTF-8 BOM Blob download
+      const csvString = "\uFEFF" + csvLines.join("\r\n");
+      const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
+      link.setAttribute("href", url);
       link.setAttribute("download", filename);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
       setIsCsvModalOpen(false);
       toast.success(`Exported ${filename}!`);
@@ -3313,11 +3525,27 @@ export function ExpenseSpreadsheet({
                                 Column Options
                               </div>
                               <button
-                                onClick={(e) => handleStartRenameCol(col.id, col.label, e)}
+                                onClick={(e) => handleOpenRenameModal(col.id, col.label, e)}
+                                className="w-full px-3 py-1.5 text-left hover:bg-teal-50 flex items-center gap-2 text-gray-800 cursor-pointer font-bold"
+                              >
+                                <Edit2 className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                                <span>Rename Column Header</span>
+                              </button>
+
+                              <button
+                                onClick={(e) => handleCopyEntireColumn(col.id, e)}
                                 className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 text-gray-700 cursor-pointer"
                               >
-                                <Edit2 className="w-3.5 h-3.5 text-gray-500" />
-                                <span>Rename Column</span>
+                                <Copy className="w-3.5 h-3.5 text-gray-500" />
+                                <span>Copy Entire Column</span>
+                              </button>
+
+                              <button
+                                onClick={(e) => handlePasteColumnValues(col.id, e)}
+                                className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 text-gray-700 cursor-pointer"
+                              >
+                                <ClipboardPaste className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                                <span>Paste Column Values</span>
                               </button>
                               
                               {colIdx > 0 && (
@@ -3422,10 +3650,16 @@ export function ExpenseSpreadsheet({
                     const isUploading = uploadingCell?.rowId === row.id && uploadingCell?.colId === col.id;
                     const val = row[col.id];
                     const isDate = isDateCol(col.id);
-                    const isPdf = typeof val === "string" && (
+                    const isAttachment = typeof val === "string" && (
                       val.includes("/api/admin/stored-documents/") ||
                       val.includes("/uploads/") ||
-                      val.toLowerCase().endsWith(".pdf")
+                      val.toLowerCase().endsWith(".pdf") ||
+                      val.toLowerCase().endsWith(".png") ||
+                      val.toLowerCase().endsWith(".jpg") ||
+                      val.toLowerCase().endsWith(".jpeg") ||
+                      val.toLowerCase().endsWith(".webp") ||
+                      val.toLowerCase().endsWith(".docx") ||
+                      val.toLowerCase().endsWith(".xlsx")
                     );
                     const isFormula = typeof val === "string" && val.startsWith("=");
                     const evaluatedFormulaVal = isFormula ? evaluateFormula(val, visibleColumns, rows) : null;
@@ -3449,6 +3683,9 @@ export function ExpenseSpreadsheet({
                     return (
                       <td
                         key={col.id}
+                        data-cell-coord={`${row.id}_${col.id}`}
+                        data-row-idx={idx}
+                        data-col-idx={colIdx}
                         onMouseDown={(e) => handleCellMouseDown(row.id, col.id, e)}
                         onMouseEnter={() => handleCellMouseEnter(row.id, col.id)}
                         onClick={() => handleCellClick(row.id, col.id, val)}
@@ -3551,20 +3788,31 @@ export function ExpenseSpreadsheet({
                               className="w-full h-full bg-transparent px-1 py-0.5 text-xs text-gray-900 outline-none font-mono font-medium"
                             />
                           )
-                        ) : isPdf ? (
-                          <div className="flex items-center justify-between gap-1 w-full px-1">
+                        ) : isAttachment ? (
+                          <div className="flex items-center justify-between gap-1 w-full px-1 group/doc">
                             <a
                               href={val}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[10px] font-bold truncate max-w-[220px] transition-colors"
-                              title="Click to view attached PDF document"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[10px] font-bold truncate max-w-[200px] transition-colors"
+                              title="Click to view/download attached document"
                             >
-                              <FileText size={10} className="text-emerald-600 shrink-0" />
-                              <span className="truncate">📄 View PDF</span>
+                              <Paperclip size={10} className="text-emerald-600 shrink-0" />
+                              <span className="truncate">📎 Document</span>
                               <ExternalLink size={9} className="shrink-0 text-emerald-500" />
                             </a>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveAttachment(row.id, col.id);
+                              }}
+                              className="opacity-0 group-hover/doc:opacity-100 p-0.5 text-red-500 hover:bg-red-50 rounded transition-opacity cursor-pointer shrink-0"
+                              title="Remove attachment"
+                            >
+                              <X size={11} />
+                            </button>
                           </div>
                         ) : isFormula ? (
                           <div className="flex items-center justify-between min-h-[18px] px-1 group/cell">
@@ -3897,25 +4145,48 @@ export function ExpenseSpreadsheet({
         <div
           onClick={(e) => e.stopPropagation()}
           style={{ top: rowContextMenu.y, left: rowContextMenu.x }}
-          className="fixed z-50 bg-white border border-gray-200 shadow-2xl rounded py-1.5 w-48 font-sans text-xs text-gray-700 divide-y divide-gray-100"
+          className="fixed z-50 bg-white border border-gray-200 shadow-2xl rounded py-1.5 w-52 font-sans text-xs text-gray-700 divide-y divide-gray-100"
         >
           <div className="px-3 py-1 text-[10px] font-bold uppercase text-gray-400 tracking-wider">
             Row #{rowContextMenu.rowIndex + 1} Options
           </div>
           <div className="py-1">
             <button
+              onClick={(e) => handleCopyEntireRow(rowContextMenu.rowId, e)}
+              className="w-full px-3 py-1.5 text-left hover:bg-teal-50 text-gray-800 flex items-center gap-2 cursor-pointer font-medium"
+            >
+              <Copy size={13} className="text-[#1ab0bc]" />
+              <span>Copy Entire Row</span>
+            </button>
+            <button
+              onClick={(e) => handlePasteRowValues(rowContextMenu.rowId, e)}
+              className="w-full px-3 py-1.5 text-left hover:bg-teal-50 text-gray-800 flex items-center gap-2 cursor-pointer font-medium"
+            >
+              <ClipboardPaste size={13} className="text-[#1ab0bc]" />
+              <span>Paste Row Values</span>
+            </button>
+            <button
+              onClick={(e) => handleInsertCopiedRow(rowContextMenu.rowId, e)}
+              className="w-full px-3 py-1.5 text-left hover:bg-teal-50 text-gray-800 flex items-center gap-2 cursor-pointer font-medium"
+            >
+              <PlusCircle size={13} className="text-teal-600" />
+              <span>Insert Copied Row Below</span>
+            </button>
+          </div>
+          <div className="py-1">
+            <button
               onClick={(e) => handleInsertRow(rowContextMenu.rowId, 'above', e)}
               className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 cursor-pointer"
             >
-              <PlusCircle size={13} className="text-[#1ab0bc]" />
-              <span>Insert Row Above</span>
+              <PlusCircle size={13} className="text-gray-500" />
+              <span>Insert Empty Row Above</span>
             </button>
             <button
               onClick={(e) => handleInsertRow(rowContextMenu.rowId, 'below', e)}
               className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 cursor-pointer"
             >
-              <PlusCircle size={13} className="text-[#1ab0bc]" />
-              <span>Insert Row Below</span>
+              <PlusCircle size={13} className="text-gray-500" />
+              <span>Insert Empty Row Below</span>
             </button>
           </div>
           <div className="py-1">
@@ -3956,12 +4227,28 @@ export function ExpenseSpreadsheet({
           </div>
           <div className="py-1">
             <button
-              onClick={(e) => handleStartRenameCol(colContextMenu.colId, colContextMenu.label, e)}
-              className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 cursor-pointer"
+              onClick={(e) => handleOpenRenameModal(colContextMenu.colId, colContextMenu.label, e)}
+              className="w-full px-3 py-1.5 text-left hover:bg-teal-50 flex items-center gap-2 cursor-pointer font-bold text-gray-800"
             >
-              <Edit2 size={13} className="text-gray-500" />
-              <span>Rename Column</span>
+              <Edit2 size={13} className="text-[#1ab0bc]" />
+              <span>Rename Column Header</span>
             </button>
+            <button
+              onClick={(e) => handleCopyEntireColumn(colContextMenu.colId, e)}
+              className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 cursor-pointer font-medium"
+            >
+              <Copy size={13} className="text-gray-600" />
+              <span>Copy Entire Column</span>
+            </button>
+            <button
+              onClick={(e) => handlePasteColumnValues(colContextMenu.colId, e)}
+              className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 cursor-pointer font-medium"
+            >
+              <ClipboardPaste size={13} className="text-[#1ab0bc]" />
+              <span>Paste Column Values</span>
+            </button>
+          </div>
+          <div className="py-1">
             {colContextMenu.colIndex > 0 && (
               <button
                 onClick={(e) => handleMoveColumnByStep(colContextMenu.colId, 'left', e)}
@@ -4016,11 +4303,73 @@ export function ExpenseSpreadsheet({
         </div>
       )}
 
-      {/* HIDDEN FILE INPUT FOR CELL PDF ATTACHMENTS */}
+      {/* ── DEDICATED COLUMN RENAME MODAL (WORKS ON ALL COMPUTERS & DEVICES) ── */}
+      {renameModalColId && (
+        <div
+          onClick={() => setRenameModalColId(null)}
+          className="fixed inset-0 z-[999999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white border border-gray-200 shadow-2xl rounded-lg w-full max-w-sm overflow-hidden p-5 space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <h3 className="font-bold text-sm text-gray-900 uppercase tracking-tight flex items-center gap-2">
+                <Edit2 size={15} className="text-[#1ab0bc]" />
+                <span>Rename Column Header</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setRenameModalColId(null)}
+                className="text-gray-400 hover:text-gray-700 p-1 rounded"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+                Column Name / Header
+              </label>
+              <input
+                autoFocus
+                type="text"
+                value={renameModalLabel}
+                onChange={(e) => setRenameModalLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleConfirmRenameModal();
+                  if (e.key === "Escape") setRenameModalColId(null);
+                }}
+                placeholder="e.g. Vendor Name, GST Amount..."
+                className="w-full bg-white border border-gray-300 px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:border-[#1ab0bc] focus:ring-1 focus:ring-[#1ab0bc] rounded"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setRenameModalColId(null)}
+                className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs font-bold rounded hover:bg-gray-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRenameModal}
+                className="px-4 py-1.5 bg-[#1ab0bc] hover:bg-teal-600 text-white text-xs font-bold rounded uppercase tracking-wider cursor-pointer"
+              >
+                Save Header
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HIDDEN FILE INPUT FOR CELL PDF / DOCUMENT ATTACHMENTS (UP TO 50MB) */}
       <input
         ref={fileInputRef}
         type="file"
-        accept="application/pdf,image/png,image/jpeg,image/webp"
+        accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx,.txt"
         onChange={handleFileUpload}
         className="hidden"
       />

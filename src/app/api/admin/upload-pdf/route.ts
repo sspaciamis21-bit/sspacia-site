@@ -12,6 +12,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
+    if (file.size > 50 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size cannot exceed 50MB limit' }, { status: 400 });
+    }
+
     const cookieStore = await cookies();
     const token = cookieStore.get('auth-token')?.value;
     let userId: number | null = null;

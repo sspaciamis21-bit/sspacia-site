@@ -162,6 +162,9 @@ export interface ProductRow {
   billingType?: string; // 'REGULAR' | 'PRORATED' | 'ESCALATED'
   proratedStartDate?: string;
   proratedEndDate?: string;
+  parentProductId?: number | null;
+  extraSeatsCount?: number | '';
+  extraSeatsDate?: string;
   escalationPercent?: number | '';
   escalationApplicable?: string;
   preEscalationRate?: number | '';
@@ -190,6 +193,9 @@ export function createEmptyProductRow(): ProductRow {
     billingType: 'REGULAR',
     proratedStartDate: '',
     proratedEndDate: '',
+    parentProductId: null,
+    extraSeatsCount: '',
+    extraSeatsDate: '',
     escalationPercent: '',
     escalationApplicable: '',
     preEscalationRate: '',

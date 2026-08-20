@@ -41,10 +41,22 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     invoiceToBeRaised,
     sorAmount,
     sorRecdDate,
+    sdrAmount,
+    sdrRecdDate,
+    sdrPdfUrl,
+    sdrPdfName,
     paymentDueDay,
     clientStatus = 'Active',
     contactPersons = [],
   } = body;
+
+  const resolvedSdrAmount = sdrAmount !== undefined && sdrAmount !== null && sdrAmount !== ''
+    ? Number(sdrAmount)
+    : (sorAmount !== undefined && sorAmount !== null && sorAmount !== '' ? Number(sorAmount) : null);
+
+  const resolvedSdrDate = sdrRecdDate
+    ? new Date(String(sdrRecdDate))
+    : (sorRecdDate ? new Date(String(sorRecdDate)) : null);
 
   const productList = Array.isArray(products) ? products : [];
   const firstProduct = productList[0] || {};
@@ -123,8 +135,12 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     invoiceToBeRaised: hasBrokerCommission && invoiceToBeRaised
       ? String(invoiceToBeRaised)
       : null,
-    sorAmount: sorAmount ? Number(sorAmount) : null,
-    sorRecdDate: sorRecdDate ? new Date(String(sorRecdDate)) : null,
+    sorAmount: resolvedSdrAmount,
+    sorRecdDate: resolvedSdrDate,
+    sdrAmount: resolvedSdrAmount,
+    sdrRecdDate: resolvedSdrDate,
+    sdrPdfUrl: sdrPdfUrl ? String(sdrPdfUrl).trim() : null,
+    sdrPdfName: sdrPdfName ? String(sdrPdfName).trim() : null,
     paymentDueDay: paymentDueDay ? Number(paymentDueDay) : null,
     clientStatus: clientStatus ? String(clientStatus) : 'Active',
     contactPersons: Array.isArray(contactPersons) ? contactPersons : [],
@@ -146,6 +162,9 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
       billingType: p.billingType ? String(p.billingType) : 'REGULAR',
       proratedStartDate: p.proratedStartDate ? new Date(String(p.proratedStartDate)) : null,
       proratedEndDate: p.proratedEndDate ? new Date(String(p.proratedEndDate)) : null,
+      parentProductId: p.parentProductId ? Number(p.parentProductId) : null,
+      extraSeatsCount: p.extraSeatsCount ? Number(p.extraSeatsCount) : null,
+      extraSeatsDate: p.extraSeatsDate ? new Date(String(p.extraSeatsDate)) : null,
       escalationPercent: p.escalationPercent ? Number(p.escalationPercent) : null,
       escalationApplicable: p.escalationApplicable ? new Date(String(p.escalationApplicable)) : null,
       preEscalationRate: p.preEscalationRate ? Number(p.preEscalationRate) : null,

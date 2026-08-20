@@ -93,7 +93,7 @@ export async function POST(request: Request) {
 
     for (const cm of clientsToDispatch) {
       if (cm.products && cm.products.length > 0) {
-        // Filter and group products by (dueDay + duration)
+        // Filter and group products by (dueDay + duration), isolating mid-month additions in their initial month
         const groupsMap = new Map<string, any[]>();
 
         for (const p of cm.products) {
@@ -125,12 +125,71 @@ export async function POST(request: Request) {
             continue; // Skip products not due in this calendar month cycle
           }
 
-          // Option B: Group strictly by Due Day so accountant gets 1 consolidated invoice for all items due on that day
-          const key = `DUE_${pDueDay}`;
-          if (!groupsMap.has(key)) {
-            groupsMap.set(key, []);
+          const isProratedMidMonth = p.billingType === 'PRORATED' && (p.proratedStartDate || p.extraSeatsDate);
+          let isInitialAdditionMonth = false;
+          let isSubsequentMonth = false;
+
+          if (isProratedMidMonth) {
+            const addDate = new Date(p.proratedStartDate || p.extraSeatsDate);
+            const addYear = addDate.getFullYear();
+            const addMonth = addDate.getMonth();
+
+            if (addYear === currentYear && addMonth === currentMonthIndex) {
+              isInitialAdditionMonth = true;
+            } else if (currentYear > addYear || (currentYear === addYear && currentMonthIndex > addMonth)) {
+              isSubsequentMonth = true;
+            }
           }
-          groupsMap.get(key)!.push(p);
+
+          let processedItem = { ...p };
+
+          if (isInitialAdditionMonth) {
+            // Initial month: generate standalone unique invoice for the mid-month extra seats
+            const key = `PRORATED_${p.id || p.cabinName}_DUE_${pDueDay}`;
+            if (!groupsMap.has(key)) groupsMap.set(key, []);
+            groupsMap.get(key)!.push({
+              ...processedItem,
+              _isInitialProrated: true,
+              _pDueDay: pDueDay,
+              _pDuration: pDuration,
+            });
+          } else if (isSubsequentMonth) {
+            // Subsequent months: convert extra seats to full regular monthly amount and combine with main product
+            const seats = Number(p.noOfSeats) || 0;
+            const rate = Number(p.ratePerAgreement) || 0;
+            const gstPct = Number(p.gstPercent) || 18;
+            const fullAmount = seats * rate;
+            const fullTotal = Math.round(fullAmount + (fullAmount * gstPct) / 100);
+
+            const addDate = new Date(p.proratedStartDate || p.extraSeatsDate);
+            const formattedDate = addDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+            processedItem = {
+              ...p,
+              amount: fullAmount,
+              totalAmount: fullTotal,
+              _isRolledOverExtra: true,
+              _extraSeatsAddedDate: formattedDate,
+              _extraSeatsCount: seats,
+            };
+
+            const key = `DUE_${pDueDay}`;
+            if (!groupsMap.has(key)) groupsMap.set(key, []);
+            groupsMap.get(key)!.push({
+              ...processedItem,
+              _pDueDay: pDueDay,
+              _pDuration: pDuration,
+            });
+          } else {
+            // Standard regular product
+            const key = `DUE_${pDueDay}`;
+            if (!groupsMap.has(key)) groupsMap.set(key, []);
+            groupsMap.get(key)!.push({
+              ...processedItem,
+              _pDueDay: pDueDay,
+              _pDuration: pDuration,
+            });
+          }
         }
 
         for (const [groupKey, pList] of Array.from(groupsMap.entries())) {
@@ -142,16 +201,34 @@ export async function POST(request: Request) {
 
           existingSet.add(dedupeKey);
           const firstP = pList[0];
-          const dueDayNum = Number(firstP.paymentDueDay ?? cm.paymentDueDay ?? 5);
+          const dueDayNum = Number(firstP._pDueDay ?? cm.paymentDueDay ?? 5);
           const daysInCurrentMonth = new Date(currentYear, currentMonthIndex + 1, 0).getDate();
           const calculatedDueDate = new Date(currentYear, currentMonthIndex, Math.min(dueDayNum, daysInCurrentMonth));
 
           const totalSeats = pList.reduce((sum: number, p: any) => sum + (Number(p.noOfSeats) || 0), 0);
           const subAmount = pList.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
           const totalAmt = pList.reduce((sum: number, p: any) => sum + (Number(p.totalAmount) || 0), 0);
-          const cabinSummary = pList.length > 1
-            ? `${pList.length} Spaces (${pList.map((p: any) => p.cabinName).filter(Boolean).join(', ')})`
-            : (pList[0].cabinName || cm.cabinName || 'N/A');
+
+          let cabinSummary = '';
+          if (firstP._isInitialProrated) {
+            const addDate = new Date(firstP.proratedStartDate || firstP.extraSeatsDate);
+            const formattedDate = addDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+            const cleanBase = (firstP.cabinName || 'Workspace').replace(/\s*\(.*?\)/g, '').trim();
+            cabinSummary = `${cleanBase} - Mid-Month Addition: ${firstP.noOfSeats} Extra Seats (Prorated ${formattedDate} - ${daysInCurrentMonth} ${monthNames[currentMonthIndex]})`;
+          } else {
+            const rolledOverExtras = pList.filter((p: any) => p._isRolledOverExtra);
+            const cleanNames = Array.from(new Set(pList.map((p: any) => (p.cabinName || '').replace(/\s*\(.*?\)/g, '').trim()).filter(Boolean)));
+            const baseName = cleanNames.join(', ') || cm.cabinName || 'Workspace';
+
+            if (rolledOverExtras.length > 0) {
+              const notes = rolledOverExtras.map((rx: any) => `${rx._extraSeatsCount} extra seats added on ${rx._extraSeatsAddedDate}`).join(', ');
+              cabinSummary = `${baseName} (${totalSeats} Seats - includes ${notes})`;
+            } else if (pList.length > 1) {
+              cabinSummary = `${pList.length} Spaces (${pList.map((p: any) => p.cabinName).filter(Boolean).join(', ')})`;
+            } else {
+              cabinSummary = pList[0].cabinName || cm.cabinName || 'N/A';
+            }
+          }
 
           // Determine duration label (single frequency vs combined frequencies)
           const uniqueDurations = Array.from(new Set(pList.map((p: any) => (p.paymentDuration || 'MONTHLY').toUpperCase())));
@@ -176,18 +253,27 @@ export async function POST(request: Request) {
                 lateFeePerDay: 100.0,
                 productGroupKey: groupKey,
                 itemsJson: JSON.stringify(pList.map((p: any) => ({
-                  cabinName: p.cabinName,
+                  cabinName: p._isInitialProrated
+                    ? `${(p.cabinName || 'Workspace').replace(/\s*\(.*?\)/g, '').trim()} - Mid-Month Addition: ${p.noOfSeats} Extra Seats`
+                    : (p._isRolledOverExtra
+                        ? `${(p.cabinName || 'Workspace').replace(/\s*\(.*?\)/g, '').trim()} (${p._extraSeatsCount} Extra Seats added on ${p._extraSeatsAddedDate})`
+                        : p.cabinName),
                   noOfSeats: p.noOfSeats,
                   ratePerAgreement: p.ratePerAgreement,
                   amount: p.amount,
                   gstPercent: p.gstPercent,
                   totalAmount: p.totalAmount,
                   paymentDuration: p.paymentDuration,
-                  paymentDueDay: p.paymentDueDay,
+                  paymentDueDay: p._pDueDay,
                   firstPaymentDate: p.firstPaymentDate,
-                  billingType: p.billingType || 'REGULAR',
+                  billingType: p._isInitialProrated ? 'PRORATED' : (p.billingType || 'REGULAR'),
                   agreementPdfUrl: p.agreementPdfUrl,
                   agreementPdfName: p.agreementPdfName,
+                  note: p._isInitialProrated
+                    ? `Initial mid-month added seats invoice (Prorated from ${new Date(p.proratedStartDate || p.extraSeatsDate).toLocaleDateString('en-IN')})`
+                    : (p._isRolledOverExtra
+                        ? `Regular monthly billing for ${p._extraSeatsCount} seats added on ${p._extraSeatsAddedDate}`
+                        : undefined),
                 }))),
                 gstNo: cm.gstNo,
                 billingMonth: currentBillingMonth,

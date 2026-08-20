@@ -60,9 +60,9 @@ export async function POST(
     });
 
     const activeSignatureUrl = customSignatureUrl || signatureSetting?.signatureUrl || '';
-    const activeSigner = signerName || signatureSetting?.signerName || userName;
-    const activeTitle = signerTitle || signatureSetting?.signerTitle || 'Authorized Signatory';
-    const company = signatureSetting?.companyName || 'SSPACIA Workspaces';
+    const activeSigner = signerName || signatureSetting?.signerName || 'PRAVEEN DILIPKUMAR AGARWAL';
+    const activeTitle = signerTitle || signatureSetting?.signerTitle || 'Director';
+    const company = signatureSetting?.companyName || 'SSPACIA INDIA PVT LTD';
 
     // 3. Read base PDF bytes
     let pdfBuffer: Buffer;

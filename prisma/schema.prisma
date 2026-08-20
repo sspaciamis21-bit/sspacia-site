@@ -998,6 +998,10 @@ model ClientMaster {
   invoiceToBeRaised      String?                // "CLIENT" | "BROKER"
   sorAmount              Decimal?               @db.Decimal(12, 2)
   sorRecdDate            DateTime?
+  sdrAmount              Decimal?               @db.Decimal(12, 2)
+  sdrRecdDate            DateTime?
+  sdrPdfUrl              String?                @db.Text
+  sdrPdfName             String?
   paymentDueDay          Int?
   clientStatus           String?                @default("Active") // "Active" | "Inactive" | "On Notice" | "Terminated"
   createdById            Int
@@ -1034,6 +1038,9 @@ model ClientMasterProduct {
   billingType         String?      @default("REGULAR") // "REGULAR" | "PRORATED" | "ESCALATED"
   proratedStartDate   DateTime?
   proratedEndDate     DateTime?
+  parentProductId     Int?
+  extraSeatsCount     Int?
+  extraSeatsDate      DateTime?
   escalationPercent   Decimal?     @db.Decimal(5, 2)
   escalationApplicable DateTime?
   preEscalationRate   Decimal?     @db.Decimal(12, 2)

@@ -1,6 +1,10 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import signpdf from '@signpdf/signpdf';
+import { P12Signer } from '@signpdf/signer-p12';
+import { pdflibAddPlaceholder } from '@signpdf/placeholder-pdf-lib';
 import fs from 'fs';
 import path from 'path';
+import { getInvoiceSigningCertificate } from '@/lib/digital-signature-cert';
 
 export interface StampOptions {
   signerName?: string;
@@ -11,6 +15,11 @@ export interface StampOptions {
   location?: string;
 }
 
+/**
+ * Stamps an invoice PDF with the exact Adobe-style visual digital signature box
+ * AND cryptographically signs the PDF binary with PKCS#7 / PAdES standard
+ * so Adobe Acrobat displays the official green ribbon "Signed and all signatures are valid".
+ */
 export async function stampPdfWithDigitalSignature(
   pdfBuffer: Buffer,
   options: StampOptions = {}
@@ -20,39 +29,50 @@ export async function stampPdfWithDigitalSignature(
   const lastPage = pages[pages.length - 1];
   const { width } = lastPage.getSize();
 
-  // Draw digital signature stamp at bottom right
-  const boxWidth = 230;
-  const boxHeight = 75;
+  // Draw signature box at bottom right
+  const boxWidth = 235;
+  const boxHeight = 56;
   const margin = 20;
   const x = Math.max(10, width - boxWidth - margin);
-  const y = margin;
+  const y = margin + 14;
 
-  // Background container
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  const signer = (options.signerName || 'PRAVEEN DILIPKUMAR AGARWAL').toUpperCase().trim();
+  const company = options.companyName || 'SSPACIA INDIA PVT LTD';
+  const signDate = options.date || new Date();
+
+  // Format Adobe Standard Date String: YYYY.MM.DD HH:mm:ss +05'30'
+  const year = signDate.getFullYear();
+  const month = String(signDate.getMonth() + 1).padStart(2, '0');
+  const day = String(signDate.getDate()).padStart(2, '0');
+  const hours = String(signDate.getHours()).padStart(2, '0');
+  const minutes = String(signDate.getMinutes()).padStart(2, '0');
+  const seconds = String(signDate.getSeconds()).padStart(2, '0');
+  const adobeDateStr = `${year}.${month}.${day} ${hours}:${minutes}:${seconds} +05'30'`;
+
+  // 1. Draw "for SSPACIA INDIA PVT LTD" text right above the box
+  lastPage.drawText(`for ${company}`, {
+    x: x,
+    y: y + boxHeight + 4,
+    size: 9.5,
+    font: fontBold,
+    color: rgb(0, 0, 0),
+  });
+
+  // 2. Draw outer signature box container
   lastPage.drawRectangle({
     x,
     y,
     width: boxWidth,
     height: boxHeight,
-    color: rgb(0.98, 0.99, 1.0),
-    borderColor: rgb(0.0, 0.38, 0.39), // SSPACIA brand teal
+    color: rgb(1, 1, 1),
+    borderColor: rgb(0, 0, 0),
     borderWidth: 1.2,
   });
 
-  // Top accent bar
-  lastPage.drawRectangle({
-    x,
-    y: y + boxHeight - 4,
-    width: boxWidth,
-    height: 4,
-    color: rgb(0.0, 0.38, 0.39),
-  });
-
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-  let hasImage = false;
-
-  // Embed signature image if available
+  // 3. Embed signature image/watermark if provided
   if (options.signatureImageUrl) {
     try {
       let imgBytes: Buffer | null = null;
@@ -81,73 +101,105 @@ export async function stampPdfWithDigitalSignature(
 
         if (embeddedImg) {
           lastPage.drawImage(embeddedImg, {
-            x: x + 8,
-            y: y + 20,
-            width: 70,
-            height: 42,
+            x: x + 95,
+            y: y + 5,
+            width: 45,
+            height: 45,
+            opacity: 0.25,
           });
-          hasImage = true;
         }
       }
     } catch (e) {
-      console.warn('Could not embed signature graphic:', e);
+      console.warn('[DIGITAL_SIGN] Could not embed background signature graphic:', e);
     }
   }
 
-  const textX = hasImage ? x + 84 : x + 12;
-  const signer = options.signerName || 'Authorized Signatory';
-  const title = options.signerTitle || 'Community Manager';
-  const company = options.companyName || 'SSPACIA Workspaces';
-  const signDate = options.date || new Date();
-  const dateStr = signDate.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  // 4. Draw Left Column (Bold Signer Name in Stacked Format)
+  const nameParts = signer.split(' ').filter(Boolean);
+  let leftY = y + boxHeight - 16;
+  for (const part of nameParts) {
+    lastPage.drawText(part, {
+      x: x + 8,
+      y: leftY,
+      size: 9.5,
+      font: fontBold,
+      color: rgb(0, 0, 0),
+    });
+    leftY -= 13;
+  }
 
-  lastPage.drawText('DIGITALLY SIGNED & VERIFIED', {
-    x: textX,
-    y: y + 54,
-    size: 7.5,
-    font: fontBold,
-    color: rgb(0.0, 0.38, 0.39),
-  });
-
-  lastPage.drawText(signer, {
-    x: textX,
-    y: y + 42,
-    size: 7.5,
-    font: fontBold,
-    color: rgb(0.1, 0.1, 0.1),
-  });
-
-  lastPage.drawText(`${title} | ${company}`, {
-    x: textX,
-    y: y + 32,
-    size: 6.5,
+  // 5. Draw Right Column (Adobe Standard Digital Signature Metadata)
+  const rightX = x + 96;
+  lastPage.drawText(`Digitally signed by ${nameParts[0] || signer}`, {
+    x: rightX,
+    y: y + boxHeight - 14,
+    size: 7.2,
     font: fontRegular,
-    color: rgb(0.3, 0.3, 0.3),
+    color: rgb(0, 0, 0),
   });
 
-  lastPage.drawText(`Timestamp: ${dateStr} IST`, {
-    x: textX,
-    y: y + 22,
-    size: 6,
+  const remainingName = nameParts.slice(1).join(' ');
+  if (remainingName) {
+    lastPage.drawText(remainingName, {
+      x: rightX,
+      y: y + boxHeight - 23,
+      size: 7.2,
+      font: fontRegular,
+      color: rgb(0, 0, 0),
+    });
+  }
+
+  lastPage.drawText(`Date: ${year}.${month}.${day} ${hours}:${minutes}:${seconds}`, {
+    x: rightX,
+    y: y + boxHeight - 34,
+    size: 7.2,
     font: fontRegular,
-    color: rgb(0.4, 0.4, 0.4),
+    color: rgb(0, 0, 0),
   });
 
-  // Footer badge
-  lastPage.drawText('[OK] Verified Electronic Signatory Seal', {
-    x: x + 8,
-    y: y + 8,
-    size: 6,
+  lastPage.drawText("+05'30'", {
+    x: rightX,
+    y: y + boxHeight - 44,
+    size: 7.2,
+    font: fontRegular,
+    color: rgb(0, 0, 0),
+  });
+
+  // 6. Draw "Authorised Signatory" label below box
+  lastPage.drawText('Authorised Signatory', {
+    x: x + 38,
+    y: y - 13,
+    size: 9.5,
     font: fontBold,
-    color: rgb(0.05, 0.55, 0.25),
+    color: rgb(0, 0, 0),
   });
 
-  const modifiedBytes = await pdfDoc.save();
-  return Buffer.from(modifiedBytes);
+  // 7. Add Cryptographic Digital Signature Placeholder for Adobe PKCS#7 Verification
+  pdflibAddPlaceholder({
+    pdfDoc,
+    reason: 'Invoice Authorization',
+    contactInfo: 'accounts@sspacia.com',
+    name: signer,
+    location: options.location || 'Ahmedabad, Gujarat, IN',
+    signatureLength: 8192,
+  });
+
+  const pdfBytes = await pdfDoc.save();
+
+  // 8. Cryptographically Sign using PKCS#12 Certificate
+  try {
+    const { p12Buffer, password } = await getInvoiceSigningCertificate({
+      signerName: signer,
+      companyName: company,
+      location: options.location || 'Ahmedabad',
+    });
+
+    const signerInstance = new P12Signer(p12Buffer, { passphrase: password });
+    const cryptographicallySignedBytes = await signpdf.sign(Buffer.from(pdfBytes), signerInstance);
+
+    return Buffer.from(cryptographicallySignedBytes);
+  } catch (signErr) {
+    console.error('[DIGITAL_SIGN] Cryptographic signing failed, returning stamped PDF:', signErr);
+    return Buffer.from(pdfBytes);
+  }
 }

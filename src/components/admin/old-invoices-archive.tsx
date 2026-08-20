@@ -67,6 +67,19 @@ const MONTH_NAMES = [
 
 const YEARS = [2027, 2026, 2025, 2024, 2023, 2022];
 
+export interface MultiInvoiceItem {
+  id: string;
+  monthName: string;
+  year: number;
+  invoiceNo: string;
+  amount: string;
+  remarks: string;
+  fileUrl: string;
+  fileName: string;
+  fileSize: string;
+  uploading?: boolean;
+}
+
 interface OldInvoicesArchiveProps {
   isSuperAdmin?: boolean;
   currentUserLocationId?: number | null;
@@ -100,25 +113,217 @@ export function OldInvoicesArchive({
 
   // Form Fields
   const [formCompany, setFormCompany] = useState<string>('');
+  const [formLocationId, setFormLocationId] = useState<string>(currentUserLocationId ? String(currentUserLocationId) : '');
+  const [formLocationName, setFormLocationName] = useState<string>(currentUserLocationName || '');
+
+  // Multi-Invoice Upload Items (for upload mode)
+  const [uploadItems, setUploadItems] = useState<MultiInvoiceItem[]>([
+    {
+      id: 'item_1',
+      monthName: 'April',
+      year: new Date().getFullYear(),
+      invoiceNo: '',
+      amount: '',
+      remarks: '',
+      fileUrl: '',
+      fileName: '',
+      fileSize: '',
+      uploading: false,
+    },
+  ]);
+
+  // Single Form Fields (for edit mode)
   const [formMonthName, setFormMonthName] = useState<string>('April');
   const [formYear, setFormYear] = useState<number>(2026);
   const [formInvoiceNo, setFormInvoiceNo] = useState<string>('');
   const [formAmount, setFormAmount] = useState<string>('');
   const [formRemarks, setFormRemarks] = useState<string>('');
-  const [formLocationId, setFormLocationId] = useState<string>(currentUserLocationId ? String(currentUserLocationId) : '');
-  const [formLocationName, setFormLocationName] = useState<string>(currentUserLocationName || '');
-
-  // File Upload State
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string>('');
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const [uploadedFileSize, setUploadedFileSize] = useState<string>('');
   const [uploadingFile, setUploadingFile] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const batchFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // PDF Preview Modal
   const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
   const [previewPdfTitle, setPreviewPdfTitle] = useState<string>('');
+
+  // Multi-Item Management Handlers
+  const handleAddUploadItem = () => {
+    const lastItem = uploadItems[uploadItems.length - 1];
+    let nextMonth = 'April';
+    let nextYear = new Date().getFullYear();
+    if (lastItem) {
+      const curIdx = MONTH_NAMES.indexOf(lastItem.monthName);
+      if (curIdx >= 0 && curIdx < MONTH_NAMES.length - 1) {
+        nextMonth = MONTH_NAMES[curIdx + 1];
+        nextYear = lastItem.year;
+      } else if (curIdx === MONTH_NAMES.length - 1) {
+        nextMonth = MONTH_NAMES[0];
+        nextYear = lastItem.year + 1;
+      }
+    }
+
+    const newItem: MultiInvoiceItem = {
+      id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      monthName: nextMonth,
+      year: nextYear,
+      invoiceNo: '',
+      amount: '',
+      remarks: '',
+      fileUrl: '',
+      fileName: '',
+      fileSize: '',
+      uploading: false,
+    };
+    setUploadItems([...uploadItems, newItem]);
+  };
+
+  const handleRemoveUploadItem = (itemId: string) => {
+    if (uploadItems.length <= 1) {
+      toast.info('At least one invoice row is required');
+      return;
+    }
+    setUploadItems(uploadItems.filter((it) => it.id !== itemId));
+  };
+
+  const handleUpdateUploadItem = (itemId: string, updates: Partial<MultiInvoiceItem>) => {
+    setUploadItems((prev) =>
+      prev.map((it) => (it.id === itemId ? { ...it, ...updates } : it))
+    );
+  };
+
+  // Upload PDF for specific multi-invoice item (up to 50MB)
+  const handleItemFileUpload = async (itemId: string, file: File) => {
+    if (!file) return;
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Please select a valid PDF document');
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('File size cannot exceed 50MB limit');
+      return;
+    }
+
+    handleUpdateUploadItem(itemId, { uploading: true });
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/admin/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+      const json = await res.json();
+
+      if (json.success && json.data) {
+        handleUpdateUploadItem(itemId, {
+          fileUrl: json.data.fileUrl,
+          fileName: json.data.fileName,
+          fileSize: `${(json.data.fileSize / 1024).toFixed(1)} KB`,
+          uploading: false,
+        });
+        toast.success(`Attached ${file.name}`);
+      } else {
+        toast.error(json.error || 'Failed to upload PDF');
+        handleUpdateUploadItem(itemId, { uploading: false });
+      }
+    } catch (err: any) {
+      toast.error('Error uploading PDF');
+      handleUpdateUploadItem(itemId, { uploading: false });
+    }
+  };
+
+  // Batch upload multiple files at once
+  const handleBatchFilesUpload = async (files: FileList | File[]) => {
+    const validFiles = Array.from(files).filter(
+      (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
+    );
+
+    if (validFiles.length === 0) {
+      toast.error('Please select PDF files');
+      return;
+    }
+
+    toast.info(`Uploading ${validFiles.length} invoice document(s)...`);
+
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
+      if (file.size > 50 * 1024 * 1024) {
+        toast.error(`${file.name} exceeds 50MB limit, skipping.`);
+        continue;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch('/api/admin/upload-pdf', {
+          method: 'POST',
+          body: formData,
+        });
+        const json = await res.json();
+
+        if (json.success && json.data) {
+          // Auto-detect month/year from filename if present (e.g. "Acme_April_2026.pdf")
+          let detectedMonth = 'April';
+          let detectedYear = new Date().getFullYear();
+          const lowerName = file.name.toLowerCase();
+
+          for (const m of MONTH_NAMES) {
+            if (lowerName.includes(m.toLowerCase())) {
+              detectedMonth = m;
+              break;
+            }
+          }
+
+          const yearMatch = file.name.match(/\b(202\d)\b/);
+          if (yearMatch) {
+            detectedYear = parseInt(yearMatch[1], 10);
+          }
+
+          setUploadItems((prev) => {
+            // If the first item is empty, replace it
+            if (prev.length === 1 && !prev[0].fileUrl) {
+              return [
+                {
+                  ...prev[0],
+                  monthName: detectedMonth,
+                  year: detectedYear,
+                  fileName: json.data.fileName,
+                  fileUrl: json.data.fileUrl,
+                  fileSize: `${(json.data.fileSize / 1024).toFixed(1)} KB`,
+                },
+              ];
+            }
+            // Otherwise append a new row
+            return [
+              ...prev,
+              {
+                id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+                monthName: detectedMonth,
+                year: detectedYear,
+                invoiceNo: '',
+                amount: '',
+                remarks: '',
+                fileName: json.data.fileName,
+                fileUrl: json.data.fileUrl,
+                fileSize: `${(json.data.fileSize / 1024).toFixed(1)} KB`,
+                uploading: false,
+              },
+            ];
+          });
+        }
+      } catch (err) {
+        console.error('Batch upload error:', err);
+      }
+    }
+    toast.success('Batch documents attached!');
+  };
 
   // Fetch Old Invoices from API
   const fetchOldInvoices = async () => {
@@ -203,16 +408,22 @@ export function OldInvoicesArchive({
     setModalMode('upload');
     setEditingRecordId(null);
     setFormCompany(prefillCompany || '');
-    setFormMonthName('April');
-    setFormYear(new Date().getFullYear());
-    setFormInvoiceNo('');
-    setFormAmount('');
-    setFormRemarks('');
     setFormLocationId(currentUserLocationId ? String(currentUserLocationId) : (locations[0]?.id ? String(locations[0].id) : ''));
     setFormLocationName(currentUserLocationName || locations[0]?.name || '');
-    setUploadedFileUrl('');
-    setUploadedFileName('');
-    setUploadedFileSize('');
+    setUploadItems([
+      {
+        id: `item_${Date.now()}`,
+        monthName: 'April',
+        year: new Date().getFullYear(),
+        invoiceNo: '',
+        amount: '',
+        remarks: '',
+        fileUrl: '',
+        fileName: '',
+        fileSize: '',
+        uploading: false,
+      },
+    ]);
     setIsModalOpen(true);
   };
 
@@ -252,45 +463,55 @@ export function OldInvoicesArchive({
       return;
     }
 
-    if (!uploadedFileUrl.trim()) {
-      toast.error('Please upload an invoice PDF document');
-      return;
-    }
-
-    const fullMonthString = `${formMonthName} ${formYear}`;
     const selectedLoc = locations.find((l) => String(l.id) === formLocationId);
     const locName = selectedLoc ? selectedLoc.name : formLocationName;
 
     setSubmitting(true);
     try {
       if (modalMode === 'upload') {
+        const validItems = uploadItems.filter((it) => it.fileUrl && it.fileUrl.trim());
+        if (validItems.length === 0) {
+          toast.error('Please attach at least one invoice PDF document');
+          setSubmitting(false);
+          return;
+        }
+
         const res = await fetch('/api/admin/old-invoices', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             companyName: formCompany.trim(),
-            invoiceNo: formInvoiceNo.trim() || null,
-            month: fullMonthString,
-            year: formYear,
-            amount: formAmount ? parseFloat(formAmount) : null,
-            remarks: formRemarks.trim() || null,
-            invoiceUrl: uploadedFileUrl,
-            fileName: uploadedFileName || 'Invoice.pdf',
-            fileSize: uploadedFileSize || null,
             locationId: formLocationId ? parseInt(formLocationId, 10) : null,
             locationName: locName || null,
+            invoices: validItems.map((it) => ({
+              invoiceNo: it.invoiceNo.trim() || null,
+              month: `${it.monthName} ${it.year}`,
+              year: it.year,
+              amount: it.amount ? parseFloat(it.amount) : null,
+              remarks: it.remarks.trim() || null,
+              invoiceUrl: it.fileUrl,
+              fileName: it.fileName || 'Invoice.pdf',
+              fileSize: it.fileSize || null,
+            })),
           }),
         });
 
         const json = await res.json();
         if (json.success) {
-          toast.success('Old Invoice archived successfully!');
+          toast.success(json.message || `Archived ${validItems.length} invoice(s) successfully!`);
           setIsModalOpen(false);
           fetchOldInvoices();
         } else {
-          toast.error(json.error || 'Failed to save old invoice');
+          toast.error(json.error || 'Failed to save old invoices');
         }
       } else if (modalMode === 'edit' && editingRecordId) {
+        if (!uploadedFileUrl.trim()) {
+          toast.error('Please upload an invoice PDF document');
+          setSubmitting(false);
+          return;
+        }
+
+        const fullMonthString = `${formMonthName} ${formYear}`;
         const res = await fetch(`/api/admin/old-invoices/${editingRecordId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -780,20 +1001,24 @@ export function OldInvoicesArchive({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white border border-gray-200 shadow-2xl rounded-lg w-full max-w-xl overflow-hidden font-sans"
+              className={`bg-white border border-gray-200 shadow-2xl rounded-lg w-full ${
+                modalMode === 'upload' ? 'max-w-3xl max-h-[90vh]' : 'max-w-xl'
+              } overflow-hidden font-sans flex flex-col`}
             >
               {/* MODAL HEADER */}
-              <div className="px-6 py-4 bg-[#f8fafc] border-b border-gray-200 flex items-center justify-between">
+              <div className="px-6 py-4 bg-[#f8fafc] border-b border-gray-200 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 bg-teal-50 text-[#1ab0bc] border border-teal-200 flex items-center justify-center rounded">
                     <FolderArchive size={18} />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-gray-900 uppercase tracking-tight">
-                      {modalMode === 'upload' ? 'Upload Historical Old Invoice' : 'Edit Old Invoice Record'}
+                      {modalMode === 'upload' ? 'Archive Historical Old Invoices' : 'Edit Old Invoice Record'}
                     </h3>
                     <p className="text-[11px] text-gray-500">
-                      Store past monthly client invoice for records & accountant reference.
+                      {modalMode === 'upload'
+                        ? 'Attach single or multiple monthly invoices for this company in one submission.'
+                        : 'Update past monthly client invoice details.'}
                     </p>
                   </div>
                 </div>
@@ -809,100 +1034,31 @@ export function OldInvoicesArchive({
               </div>
 
               {/* FORM BODY */}
-              <form onSubmit={handleSubmitForm} className="p-6 space-y-4 text-xs">
-                {/* 1. COMPANY NAME (WITH AUTO-SUGGEST) */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                    Company / Client Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    list="company-suggestions-list"
-                    value={formCompany}
-                    onChange={(e) => setFormCompany(e.target.value)}
-                    placeholder="e.g. Acme Technologies Private Limited"
-                    className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] focus:ring-1 focus:ring-[#1ab0bc]"
-                  />
-                  <datalist id="company-suggestions-list">
-                    {companySuggestions.map((comp) => (
-                      <option key={comp} value={comp} />
-                    ))}
-                  </datalist>
-                  <span className="text-[10px] text-gray-400 mt-0.5 block">
-                    Type to search existing clients or enter a new company name.
-                  </span>
-                </div>
-
-                {/* 2. MONTH & YEAR PICKER */}
-                <div className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleSubmitForm} className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
+                {/* 1. COMPANY & CENTER HEADER */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-gray-50 p-3.5 border border-gray-200 rounded">
+                  {/* COMPANY NAME */}
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                      Billing Month <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formMonthName}
-                      onChange={(e) => setFormMonthName(e.target.value)}
-                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] font-medium cursor-pointer"
-                    >
-                      {MONTH_NAMES.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                      Billing Year <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formYear}
-                      onChange={(e) => setFormYear(parseInt(e.target.value, 10))}
-                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] font-medium cursor-pointer"
-                    >
-                      {YEARS.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* 3. INVOICE NO & AMOUNT */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                      Invoice Number
+                      Company / Client Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
-                      value={formInvoiceNo}
-                      onChange={(e) => setFormInvoiceNo(e.target.value)}
-                      placeholder="e.g. INV/2026/042 or TALLY-99"
-                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs font-mono text-gray-900 outline-none focus:border-[#1ab0bc]"
+                      required
+                      list="company-suggestions-list"
+                      value={formCompany}
+                      onChange={(e) => setFormCompany(e.target.value)}
+                      placeholder="e.g. Acme Technologies Private Limited"
+                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] font-medium"
                     />
+                    <datalist id="company-suggestions-list">
+                      {companySuggestions.map((comp) => (
+                        <option key={comp} value={comp} />
+                      ))}
+                    </datalist>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                      Invoice Amount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formAmount}
-                      onChange={(e) => setFormAmount(e.target.value)}
-                      placeholder="e.g. 45000"
-                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs font-mono text-gray-900 outline-none focus:border-[#1ab0bc]"
-                    />
-                  </div>
-                </div>
-
-                {/* 4. CENTER / LOCATION (IF MULTIPLE LOCATIONS) */}
-                {locations.length > 0 && (
+                  {/* CENTER / LOCATION */}
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
                       Center / Location
@@ -912,7 +1068,7 @@ export function OldInvoicesArchive({
                       onChange={(e) => setFormLocationId(e.target.value)}
                       className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] cursor-pointer"
                     >
-                      <option value="">Select Center...</option>
+                      <option value="">All / Specific Center...</option>
                       {locations.map((loc) => (
                         <option key={loc.id} value={loc.id}>
                           {loc.name}
@@ -920,125 +1076,447 @@ export function OldInvoicesArchive({
                       ))}
                     </select>
                   </div>
-                )}
+                </div>
 
-                {/* 5. UPLOAD PDF INVOICE */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                    Invoice Document (PDF) <span className="text-red-500">*</span>
-                  </label>
+                {/* ── MODE: UPLOAD MULTIPLE INVOICES ── */}
+                {modalMode === 'upload' ? (
+                  <div className="space-y-4">
+                    {/* BATCH DROPZONE SHORTCUT */}
+                    <div
+                      onClick={() => batchFileInputRef.current?.click()}
+                      className="p-3 bg-teal-50/50 hover:bg-teal-50 border border-dashed border-[#1ab0bc] rounded text-center cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center justify-center gap-2 text-teal-800 font-bold text-xs">
+                        <Upload size={14} className="text-[#1ab0bc]" />
+                        <span>⚡ Drag & drop or select multiple invoice PDFs (Auto-creates rows)</span>
+                      </div>
+                      <p className="text-[10px] text-teal-600 mt-0.5">Supports PDF documents up to 50MB each</p>
+                      <input
+                        ref={batchFileInputRef}
+                        type="file"
+                        multiple
+                        accept="application/pdf"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            handleBatchFilesUpload(e.target.files);
+                            e.target.value = '';
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </div>
 
-                  {uploadedFileUrl ? (
-                    <div className="p-3 bg-emerald-50 border border-emerald-300 rounded flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText size={18} className="text-emerald-600 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="font-bold text-xs text-emerald-900 truncate">
-                            {uploadedFileName || 'Uploaded Invoice.pdf'}
-                          </p>
-                          {uploadedFileSize && (
-                            <p className="text-[10px] text-emerald-700 font-mono">{uploadedFileSize}</p>
-                          )}
-                        </div>
+                    {/* INVOICES LIST */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-gray-700 uppercase tracking-wider">
+                        <span>Invoices to Archive ({uploadItems.length})</span>
+                        <button
+                          type="button"
+                          onClick={handleAddUploadItem}
+                          className="text-[#1ab0bc] hover:underline flex items-center gap-1 font-bold lowercase cursor-pointer"
+                        >
+                          <Plus size={13} />
+                          <span>+ add another invoice</span>
+                        </button>
                       </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPreviewPdfUrl(uploadedFileUrl);
-                            setPreviewPdfTitle(uploadedFileName || 'Invoice Preview');
-                          }}
-                          className="px-2 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[11px] font-bold cursor-pointer"
+                      {uploadItems.map((item, idx) => (
+                        <div
+                          key={item.id}
+                          className="p-3.5 bg-white border border-gray-200 rounded shadow-2xs space-y-3 relative group"
                         >
-                          Preview
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setUploadedFileUrl('');
-                            setUploadedFileName('');
-                            setUploadedFileSize('');
-                          }}
-                          className="p-1 text-red-500 hover:bg-red-100 rounded cursor-pointer"
-                          title="Change file"
+                          {/* ITEM HEADER */}
+                          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 bg-[#006064] text-white rounded-full flex items-center justify-center text-[10px] font-bold">
+                                {idx + 1}
+                              </span>
+                              <span className="font-bold text-gray-900 text-xs">
+                                Invoice #{idx + 1} ({item.monthName} {item.year})
+                              </span>
+                            </div>
+
+                            {uploadItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveUploadItem(item.id)}
+                                className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded cursor-pointer"
+                                title="Remove this invoice row"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* ROW 1: MONTH, YEAR, INVOICE NO, AMOUNT */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-gray-600 mb-1">
+                                Month <span className="text-red-500">*</span>
+                              </label>
+                              <select
+                                value={item.monthName}
+                                onChange={(e) => handleUpdateUploadItem(item.id, { monthName: e.target.value })}
+                                className="w-full bg-white border border-gray-300 px-2 py-1.5 text-xs text-gray-900 outline-none focus:border-[#1ab0bc]"
+                              >
+                                {MONTH_NAMES.map((m) => (
+                                  <option key={m} value={m}>
+                                    {m}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-gray-600 mb-1">
+                                Year <span className="text-red-500">*</span>
+                              </label>
+                              <select
+                                value={item.year}
+                                onChange={(e) =>
+                                  handleUpdateUploadItem(item.id, { year: parseInt(e.target.value, 10) })
+                                }
+                                className="w-full bg-white border border-gray-300 px-2 py-1.5 text-xs text-gray-900 outline-none focus:border-[#1ab0bc]"
+                              >
+                                {YEARS.map((y) => (
+                                  <option key={y} value={y}>
+                                    {y}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-gray-600 mb-1">
+                                Invoice #
+                              </label>
+                              <input
+                                type="text"
+                                value={item.invoiceNo}
+                                onChange={(e) => handleUpdateUploadItem(item.id, { invoiceNo: e.target.value })}
+                                placeholder="INV/2026/042"
+                                className="w-full bg-white border border-gray-300 px-2 py-1.5 text-xs font-mono text-gray-900 outline-none focus:border-[#1ab0bc]"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-gray-600 mb-1">
+                                Amount (₹)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={item.amount}
+                                onChange={(e) => handleUpdateUploadItem(item.id, { amount: e.target.value })}
+                                placeholder="45000"
+                                className="w-full bg-white border border-gray-300 px-2 py-1.5 text-xs font-mono text-gray-900 outline-none focus:border-[#1ab0bc]"
+                              />
+                            </div>
+                          </div>
+
+                          {/* ROW 2: PDF DOCUMENT UPLOAD & REMARKS */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-center">
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-gray-600 mb-1">
+                                PDF Document <span className="text-red-500">*</span>
+                              </label>
+
+                              {item.fileUrl ? (
+                                <div className="p-2 bg-emerald-50 border border-emerald-300 rounded flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <FileText size={14} className="text-emerald-600 shrink-0" />
+                                    <span className="font-bold text-xs text-emerald-900 truncate">
+                                      {item.fileName || 'Invoice.pdf'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setPreviewPdfUrl(item.fileUrl);
+                                        setPreviewPdfTitle(item.fileName || 'Invoice Preview');
+                                      }}
+                                      className="px-1.5 py-0.5 bg-white text-emerald-800 border border-emerald-300 rounded text-[10px] font-bold cursor-pointer"
+                                    >
+                                      Preview
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateUploadItem(item.id, {
+                                          fileUrl: '',
+                                          fileName: '',
+                                          fileSize: '',
+                                        })
+                                      }
+                                      className="p-1 text-red-500 hover:bg-red-100 rounded cursor-pointer"
+                                      title="Remove PDF"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <label className="flex items-center justify-center gap-1.5 p-2 bg-gray-50 hover:bg-teal-50 border border-dashed border-gray-300 hover:border-[#1ab0bc] rounded cursor-pointer transition-colors">
+                                  {item.uploading ? (
+                                    <>
+                                      <Loader2 size={13} className="animate-spin text-[#1ab0bc]" />
+                                      <span className="text-xs text-teal-700 font-medium">Uploading...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Paperclip size={13} className="text-gray-400" />
+                                      <span className="text-xs text-gray-700 font-medium">
+                                        Attach PDF (up to 50MB)
+                                      </span>
+                                      <input
+                                        type="file"
+                                        accept="application/pdf"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleItemFileUpload(item.id, file);
+                                        }}
+                                        className="hidden"
+                                      />
+                                    </>
+                                  )}
+                                </label>
+                              )}
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase text-gray-600 mb-1">
+                                Remarks / Notes
+                              </label>
+                              <input
+                                type="text"
+                                value={item.remarks}
+                                onChange={(e) => handleUpdateUploadItem(item.id, { remarks: e.target.value })}
+                                placeholder="e.g. Paid via NEFT / Tally sync"
+                                className="w-full bg-white border border-gray-300 px-2 py-1.5 text-xs text-gray-900 outline-none focus:border-[#1ab0bc]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* ADD ANOTHER INVOICE BUTTON */}
+                    <button
+                      type="button"
+                      onClick={handleAddUploadItem}
+                      className="w-full py-2 bg-slate-50 hover:bg-teal-50 border border-dashed border-gray-300 hover:border-[#1ab0bc] text-gray-700 hover:text-teal-900 text-xs font-bold flex items-center justify-center gap-1.5 rounded cursor-pointer transition-colors"
+                    >
+                      <Plus size={14} className="text-[#1ab0bc]" />
+                      <span>Add Another Invoice for this Company</span>
+                    </button>
+                  </div>
+                ) : (
+                  /* ── MODE: EDIT SINGLE INVOICE ── */
+                  <div className="space-y-4">
+                    {/* MONTH & YEAR PICKER */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                          Billing Month <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={formMonthName}
+                          onChange={(e) => setFormMonthName(e.target.value)}
+                          className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] font-medium cursor-pointer"
                         >
-                          <X size={14} />
-                        </button>
+                          {MONTH_NAMES.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                          Billing Year <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={formYear}
+                          onChange={(e) => setFormYear(parseInt(e.target.value, 10))}
+                          className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] font-medium cursor-pointer"
+                        >
+                          {YEARS.map((y) => (
+                            <option key={y} value={y}>
+                              {y}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
-                  ) : (
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-5 border-2 border-dashed border-gray-300 hover:border-[#1ab0bc] bg-gray-50 hover:bg-teal-50/40 rounded cursor-pointer text-center transition-colors"
-                    >
-                      {uploadingFile ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <Loader2 size={24} className="animate-spin text-[#1ab0bc]" />
-                          <span className="text-xs font-bold text-gray-700">Uploading PDF document...</span>
+
+                    {/* INVOICE NO & AMOUNT */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                          Invoice Number
+                        </label>
+                        <input
+                          type="text"
+                          value={formInvoiceNo}
+                          onChange={(e) => setFormInvoiceNo(e.target.value)}
+                          placeholder="e.g. INV/2026/042"
+                          className="w-full bg-white border border-gray-300 px-3 py-2 text-xs font-mono text-gray-900 outline-none focus:border-[#1ab0bc]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                          Invoice Amount (₹)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formAmount}
+                          onChange={(e) => setFormAmount(e.target.value)}
+                          placeholder="e.g. 45000"
+                          className="w-full bg-white border border-gray-300 px-3 py-2 text-xs font-mono text-gray-900 outline-none focus:border-[#1ab0bc]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* PDF DOCUMENT */}
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                        Invoice Document (PDF) <span className="text-red-500">*</span>
+                      </label>
+
+                      {uploadedFileUrl ? (
+                        <div className="p-3 bg-emerald-50 border border-emerald-300 rounded flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText size={18} className="text-emerald-600 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="font-bold text-xs text-emerald-900 truncate">
+                                {uploadedFileName || 'Uploaded Invoice.pdf'}
+                              </p>
+                              {uploadedFileSize && (
+                                <p className="text-[10px] text-emerald-700 font-mono">{uploadedFileSize}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPreviewPdfUrl(uploadedFileUrl);
+                                setPreviewPdfTitle(uploadedFileName || 'Invoice Preview');
+                              }}
+                              className="px-2 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[11px] font-bold cursor-pointer"
+                            >
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setUploadedFileUrl('');
+                                setUploadedFileName('');
+                                setUploadedFileSize('');
+                              }}
+                              className="p-1 text-red-500 hover:bg-red-100 rounded cursor-pointer"
+                              title="Change file"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
                         </div>
                       ) : (
-                        <div className="space-y-1">
-                          <Upload size={22} className="text-gray-400 mx-auto mb-1" />
-                          <div className="font-bold text-xs text-gray-700">
-                            Click to browse or drag & drop invoice PDF
-                          </div>
-                          <div className="text-[10px] text-gray-400">PDF up to 25MB supported</div>
+                        <div
+                          onClick={() => fileInputRef.current?.click()}
+                          className="p-5 border-2 border-dashed border-gray-300 hover:border-[#1ab0bc] bg-gray-50 hover:bg-teal-50/40 rounded cursor-pointer text-center transition-colors"
+                        >
+                          {uploadingFile ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <Loader2 size={24} className="animate-spin text-[#1ab0bc]" />
+                              <span className="text-xs font-bold text-gray-700">Uploading PDF document...</span>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <Upload size={22} className="text-gray-400 mx-auto mb-1" />
+                              <div className="font-bold text-xs text-gray-700">
+                                Click to browse or drag & drop invoice PDF
+                              </div>
+                              <div className="text-[10px] text-gray-400">PDF up to 50MB supported</div>
+                            </div>
+                          )}
                         </div>
                       )}
+
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="application/pdf"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
                     </div>
-                  )}
 
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </div>
-
-                {/* 6. REMARKS / NOTES */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                    Remarks / Additional Notes
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={formRemarks}
-                    onChange={(e) => setFormRemarks(e.target.value)}
-                    placeholder="e.g. Paid via NEFT on 12th April. GST input claimed."
-                    className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] resize-none"
-                  />
-                </div>
+                    {/* REMARKS */}
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                        Remarks / Additional Notes
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={formRemarks}
+                        onChange={(e) => setFormRemarks(e.target.value)}
+                        placeholder="e.g. Paid via NEFT on 12th April. GST input claimed."
+                        className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] resize-none"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* MODAL FOOTER BUTTONS */}
-                <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    disabled={submitting}
-                    className="px-4 py-2 border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold text-xs cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting || uploadingFile}
-                    className="px-5 py-2 bg-[#1ab0bc] hover:bg-teal-600 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin" />
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 size={13} />
-                        <span>{modalMode === 'upload' ? 'Archive Invoice' : 'Update Record'}</span>
-                      </>
+                <div className="pt-3 border-t border-gray-200 flex items-center justify-between shrink-0">
+                  <div className="text-[11px] text-gray-500">
+                    {modalMode === 'upload' && formCompany.trim() && (
+                      <span>
+                        Archiving for: <strong className="text-gray-900">{formCompany}</strong>
+                      </span>
                     )}
-                  </button>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      disabled={submitting}
+                      className="px-4 py-2 border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold text-xs cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submitting || uploadingFile}
+                      className="px-5 py-2 bg-[#1ab0bc] hover:bg-teal-600 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={13} />
+                          <span>
+                            {modalMode === 'upload'
+                              ? `Archive ${
+                                  uploadItems.filter((it) => it.fileUrl).length > 0
+                                    ? `${uploadItems.filter((it) => it.fileUrl).length} Invoices`
+                                    : 'Invoices'
+                                }`
+                              : 'Update Record'}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </form>
             </motion.div>
