@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Sparkles, Plus, Edit2, Trash2, Power, Loader2, CheckCircle2, ArrowUpDown } from "lucide-react";
+import { Sparkles, Plus, Edit2, Trash2, Power, Loader2, CheckCircle2, ArrowUpDown, Tag, ArrowRight } from "lucide-react";
 import { FadeUp } from "@/components/ui/fade-up";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import Link from "next/link";
 
 interface AnnouncementItem {
   id: number;
@@ -156,13 +157,54 @@ export default function AdminAnnouncementsPage() {
             </div>
           </div>
 
-          <button
-            onClick={handleOpenAddModal}
-            className="bg-red-600 text-white px-6 py-3 text-xs font-bold uppercase tracking-wider hover:bg-red-700 transition-all flex items-center gap-2 shadow-md hover:scale-105"
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin/promocodes"
+              className="bg-[#1ab0bc] text-white px-5 py-3 text-xs font-bold uppercase tracking-wider hover:bg-teal-700 transition-all flex items-center gap-2 shadow-md hover:scale-105"
+            >
+              <Tag size={15} />
+              <span>Checkout Promo Codes</span>
+              <ArrowRight size={14} />
+            </Link>
+
+            <button
+              onClick={handleOpenAddModal}
+              className="bg-red-600 text-white px-6 py-3 text-xs font-bold uppercase tracking-wider hover:bg-red-700 transition-all flex items-center gap-2 shadow-md hover:scale-105"
+            >
+              <Plus size={16} />
+              <span>Add Announcement Label</span>
+            </button>
+          </div>
+        </div>
+      </FadeUp>
+
+      {/* DEDICATED PROMO CODES QUICK SECTION */}
+      <FadeUp delay={0.05}>
+        <div className="bg-gradient-to-r from-teal-900 to-[#1B1C1C] text-white p-5 border border-teal-500/30 rounded-xs flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 bg-[#1ab0bc] text-white rounded-full flex items-center justify-center font-bold shrink-0">
+              <Tag size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm uppercase tracking-wide flex items-center gap-2">
+                <span>Manage Customer Checkout Promo Codes</span>
+                <span className="text-[9px] bg-teal-400/20 text-teal-300 border border-teal-400/40 px-2 py-0.5 font-mono">
+                  LIVE DISCOUNTS
+                </span>
+              </h3>
+              <p className="text-xs text-teal-200/80 mt-0.5">
+                Create % or flat ₹ discounts, set minimum booking limits, relax total checkout amounts, and toggle active/inactive codes.
+              </p>
+            </div>
+          </div>
+
+          <Link
+            href="/admin/promocodes"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-teal-50 text-teal-900 font-bold text-xs uppercase tracking-wider transition-all rounded-xs shadow-md shrink-0 self-start md:self-auto"
           >
-            <Plus size={16} />
-            <span>Add Announcement Label</span>
-          </button>
+            <span>Open Promo Codes Dashboard</span>
+            <ArrowRight size={13} />
+          </Link>
         </div>
       </FadeUp>
 

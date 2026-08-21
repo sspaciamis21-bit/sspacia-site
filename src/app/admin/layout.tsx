@@ -24,6 +24,7 @@ import {
   FileSpreadsheet,
   Menu,
   X,
+  Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -49,6 +50,7 @@ const sidebarItems = [
   { name: 'Client Master', href: '/admin/client-master', icon: FileText },
   { name: 'Invoices', href: '/admin/Invoices', icon: FileText },
   { name: 'Announcements', href: '/admin/announcements', icon: Sparkles },
+  { name: 'Promo Codes', href: '/admin/promocodes', icon: Tag },
 ];
 
 export default function AdminLayout({

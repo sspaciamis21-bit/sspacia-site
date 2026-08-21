@@ -1201,6 +1201,28 @@ model AnnouncementLabel {
   updatedAt DateTime @updatedAt
 }
 
+model PromoCode {
+  id                Int       @id @default(autoincrement())
+  code              String    @unique
+  title             String?
+  discountType      String    @default("PERCENTAGE") // "PERCENTAGE" or "FIXED"
+  discountValue     Decimal   @db.Decimal(10, 2)
+  minOrderAmount    Decimal?  @db.Decimal(10, 2)
+  maxDiscountAmount Decimal?  @db.Decimal(10, 2)
+  isActive          Boolean   @default(true)
+  usageLimit        Int?
+  usedCount         Int       @default(0)
+  validFrom         DateTime?
+  validUntil        DateTime?
+  createdById       Int?
+  createdByName     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+}
+
 model VisitorLog {
   id             Int      @id @default(autoincrement())
   sessionToken   String?

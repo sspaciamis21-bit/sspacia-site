@@ -6,6 +6,9 @@ import Image from "next/image";
 import {
   ShieldCheck,
   ChevronLeft,
+  ChevronRight,
+  Eye,
+  X,
   Calendar,
   Clock,
   MapPin,
@@ -63,6 +66,49 @@ export default function CheckoutClient() {
   const slotsFromUri = searchParams?.get("slots")?.split(",") || [];
   const slots = slotsFromUri.filter(Boolean);
 
+  // Extract all valid image URLs for the product
+  const productImages: string[] = useMemo(() => {
+    if (!product) return ["/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"];
+    const list: string[] = [];
+    if (Array.isArray(product.images) && product.images.length > 0) {
+      product.images.forEach((img: any) => {
+        const url = typeof img === "string" ? img : img?.url;
+        if (url && typeof url === "string" && url.trim()) list.push(url.trim());
+      });
+    }
+    return list.length > 0 ? list : ["/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"];
+  }, [product]);
+
+  const [currentImageIdx, setCurrentImageIdx] = useState(0);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isHoveredImg, setIsHoveredImg] = useState(false);
+
+  // Auto-swipe images every 3 seconds if multiple images exist
+  useEffect(() => {
+    if (productImages.length <= 1 || isHoveredImg || isImageModalOpen) return;
+    const interval = setInterval(() => {
+      setCurrentImageIdx((prev) => (prev + 1) % productImages.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [productImages.length, isHoveredImg, isImageModalOpen]);
+
+  // Format Duration string e.g. "15:00 - 16:00 (1 hr)" instead of "15:00 - 15:00 (1hrs)"
+  const formatDuration = (slotList: string[]) => {
+    if (!slotList || slotList.length === 0) return "Not Selected";
+    const startSlot = slotList[0];
+    const lastSlot = slotList[slotList.length - 1];
+
+    const [lastHourStr, lastMinStr] = lastSlot.split(":");
+    const lastHour = parseInt(lastHourStr, 10);
+    const lastMin = lastMinStr || "00";
+
+    const endHour = (lastHour + 1) % 24;
+    const formattedEnd = `${String(endHour).padStart(2, "0")}:${lastMin}`;
+
+    const hrsText = slotList.length === 1 ? "1 hr" : `${slotList.length} hrs`;
+    return `${startSlot} - ${formattedEnd} (${hrsText})`;
+  };
+
   useEffect(() => {
     if (productId) {
       fetch(`/api/public/products/${productId}`)
@@ -100,13 +146,33 @@ export default function CheckoutClient() {
     };
   }, []);
 
-  const handleApplyDiscount = () => {
-    if (discountCode.toUpperCase() === 'WELCOME10') {
-      setDiscountAmount(subTotal * 0.1);
-      toast.success("Discount code applied!");
-    } else {
-      setDiscountAmount(0);
-      toast.error("Invalid discount code");
+  const handleApplyDiscount = async () => {
+    if (!discountCode.trim()) {
+      toast.error("Please enter a promo code");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/public/promocodes/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: discountCode.trim().toUpperCase(),
+          subTotal,
+        }),
+      });
+
+      const json = await res.json();
+      if (res.ok && json.valid) {
+        setDiscountAmount(json.discountAmount || 0);
+        toast.success(json.message || `Promo code "${json.code}" applied!`);
+      } else {
+        setDiscountAmount(0);
+        toast.error(json.error || "Invalid promo code");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error checking promo code");
     }
   };
 
@@ -205,7 +271,7 @@ export default function CheckoutClient() {
   const sgst = subTotal * 0.09;
   const cgst = subTotal * 0.09;
   const igst = 0;
-  const total = subTotal + sgst + cgst + igst - discountAmount;
+  const total = Math.max(0, subTotal + sgst + cgst + igst - discountAmount);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   if (!product) return <div className="min-h-screen flex flex-col items-center justify-center">Product not found.</div>;
@@ -213,11 +279,11 @@ export default function CheckoutClient() {
   const productImage = product.images?.[0]?.url || "/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg";
 
   return (
-    <div className="min-h-screen bg-surface py-12 md:py-20 px-4 sm:px-6">
+    <div className="min-h-screen bg-surface pt-4 sm:pt-6 pb-12 sm:pb-16 px-4 sm:px-6">
       <div className="max-w-7xl mx-auto">
         <Link
           href={`/products/${productId}`}
-          className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-tertiary hover:text-primary transition-colors mb-8 sm:mb-12"
+          className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-tertiary hover:text-primary transition-colors mb-3 sm:mb-4"
         >
           <ChevronLeft className="h-4 w-4" /> Return to Space
         </Link>
@@ -230,41 +296,80 @@ export default function CheckoutClient() {
         >
 
           <div className="lg:col-span-8 space-y-8">
-            <section className="bg-white border border-outline-variant/10 p-6 sm:p-10 shadow-sm transition-shadow">
-              <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tighter text-[#1b1c1c] mb-8">
+            <section className="bg-white border border-outline-variant/10 p-6 sm:p-8 shadow-xs transition-shadow">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tighter text-[#1b1c1c] mb-5">
                 Confirm your Booking
               </h1>
 
-              <div className="flex flex-col md:flex-row gap-6 md:gap-8 pb-8 border-b border-outline-variant/10 mb-8">
-                <div className="relative w-full md:w-56 aspect-[4/3] overflow-hidden border border-outline-variant/10 shrink-0">
-                  <Image src={productImage} alt={product.name} fill className="object-cover" />
+              <div className="flex flex-col md:flex-row gap-6 md:gap-8 pb-6 border-b border-outline-variant/10 mb-6">
+                {/* ── AUTO-SLIDING MULTI-IMAGE CAROUSEL + EYE PREVIEW ── */}
+                <div 
+                  onMouseEnter={() => setIsHoveredImg(true)}
+                  onMouseLeave={() => setIsHoveredImg(false)}
+                  className="relative w-full md:w-60 aspect-[4/3] overflow-hidden border border-outline-variant/15 rounded-xs shrink-0 group bg-gray-100"
+                >
+                  <Image
+                    src={productImages[currentImageIdx] || "/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"}
+                    alt={`${product.name} photo ${currentImageIdx + 1}`}
+                    fill
+                    className="object-cover transition-all duration-700 ease-in-out"
+                    priority
+                  />
+
+                  {/* Indicator Dots if multiple photos */}
+                  {productImages.length > 1 && (
+                    <div className="absolute bottom-2 left-2 flex items-center gap-1 z-10 bg-black/45 px-2 py-0.5 rounded-full backdrop-blur-xs">
+                      {productImages.map((_, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setCurrentImageIdx(idx)}
+                          className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                            idx === currentImageIdx ? "w-3 bg-[#1ab0bc]" : "w-1.5 bg-white/60 hover:bg-white"
+                          }`}
+                          title={`Image ${idx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Small Eye Icon to View Full Image */}
+                  <button
+                    type="button"
+                    onClick={() => setIsImageModalOpen(true)}
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-[#1ab0bc] text-white p-1.5 rounded-full shadow-md backdrop-blur-xs transition-all hover:scale-110 flex items-center justify-center cursor-pointer z-10 opacity-90 group-hover:opacity-100"
+                    title="View High-Resolution Image"
+                  >
+                    <Eye size={13} />
+                  </button>
                 </div>
-                <div className="flex-1 space-y-4 md:space-y-6">
+
+                <div className="flex-1 space-y-4 md:space-y-5">
                   <div>
                     <h2 className="text-xl sm:text-2xl font-display font-bold text-[#1b1c1c] tracking-tighter">{product.name}</h2>
-                    <p className="text-xs sm:text-sm text-tertiary flex items-center gap-2 mt-2">
+                    <p className="text-xs sm:text-sm text-tertiary flex items-center gap-2 mt-1.5">
                       <MapPin className="h-4 w-4 text-primary shrink-0" /> {product.location.name}
                     </p>
                   </div>
 
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="bg-surface-low/50 p-4 border border-outline-variant/10 flex items-center gap-3">
-                      <div className="h-10 w-10 bg-white flex items-center justify-center shadow-sm shrink-0">
-                        <Calendar className="h-5 w-5 text-primary" />
+                  <div className="grid sm:grid-cols-2 gap-3.5">
+                    <div className="bg-surface-low/50 p-3.5 border border-outline-variant/10 flex items-center gap-3">
+                      <div className="h-9 w-9 bg-white flex items-center justify-center shadow-xs shrink-0 rounded-xs">
+                        <Calendar className="h-4 w-4 text-primary" />
                       </div>
                       <div>
                         <p className="text-[9px] uppercase font-bold text-tertiary tracking-widest">Date</p>
-                        <p className="text-xs font-bold text-[#1b1c1c]">{date}</p>
+                        <p className="text-xs font-bold text-[#1b1c1c]">{date || "Not Selected"}</p>
                       </div>
                     </div>
-                    <div className="bg-surface-low/50 p-4 border border-outline-variant/10 flex items-center gap-3">
-                      <div className="h-10 w-10 bg-white flex items-center justify-center shadow-sm shrink-0">
-                        <Clock className="h-5 w-5 text-primary" />
+                    <div className="bg-surface-low/50 p-3.5 border border-outline-variant/10 flex items-center gap-3">
+                      <div className="h-9 w-9 bg-white flex items-center justify-center shadow-xs shrink-0 rounded-xs">
+                        <Clock className="h-4 w-4 text-primary" />
                       </div>
                       <div>
                         <p className="text-[9px] uppercase font-bold text-tertiary tracking-widest">Duration</p>
                         <p className="text-xs font-bold text-[#1b1c1c]">
-                          {slots.length > 0 ? `${slots[0]} - ${slots[slots.length - 1]} (${slots.length}hrs)` : "Not Selected"}
+                          {formatDuration(slots)}
                         </p>
                       </div>
                     </div>
@@ -517,48 +622,51 @@ export default function CheckoutClient() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={discountCode}
-                      onChange={(e) => setDiscountCode(e.target.value)}
-                      className="flex-1 bg-surface-low/30 border border-outline-variant/10 px-4 py-2.5 text-xs outline-none focus:bg-white uppercase font-mono"
-                      placeholder="PROMOCODE"
-                    />
-                    <button
-                      onClick={handleApplyDiscount}
-                      className="bg-surface-low border border-outline-variant/10 text-tertiary px-4 text-[9px] font-bold uppercase tracking-widest hover:bg-primary hover:text-white transition-all cursor-pointer"
-                    >
-                      Apply
-                    </button>
-                  </div>
-                </div>
-
-                {/* Summary Amenities Perks */}
-                <div className="bg-[#E0F7FA]/40 p-3.5 border border-[#006064]/10 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#006064] flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-[#1ab0bc]" />
-                      <span>Workspace Perks Included</span>
-                    </span>
-                    <span className="text-[9px] font-bold uppercase text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-xs">
-                      Free
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5 text-[11px] text-gray-700 font-medium pt-1">
-                    <span className="flex items-center gap-1">
-                      <Check className="w-3 h-3 text-emerald-600 shrink-0" /> High-Speed Wi-Fi
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Check className="w-3 h-3 text-emerald-600 shrink-0" /> Full AC
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Check className="w-3 h-3 text-emerald-600 shrink-0" /> Power Backup
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Check className="w-3 h-3 text-emerald-600 shrink-0" /> Reception Desk
-                    </span>
-                  </div>
+                  {discountAmount > 0 ? (
+                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-300 p-2.5 rounded-xs text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-emerald-800 uppercase tracking-wider">{discountCode}</span>
+                        <span className="text-emerald-700 font-bold text-[10px] bg-emerald-100/90 px-2 py-0.5 rounded-xs">
+                          -₹{discountAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} Applied
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiscountAmount(0);
+                          setDiscountCode("");
+                          toast.info("Promo code removed");
+                        }}
+                        className="text-gray-400 hover:text-rose-600 font-bold text-xs p-1 cursor-pointer transition-colors"
+                        title="Remove promo code"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={discountCode}
+                        onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+                        className="flex-1 bg-surface-low/30 border border-outline-variant/10 px-4 py-2.5 text-xs outline-none focus:bg-white uppercase font-mono"
+                        placeholder="PROMOCODE"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleApplyDiscount();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyDiscount}
+                        className="bg-surface-low border border-outline-variant/10 text-tertiary px-4 text-[9px] font-bold uppercase tracking-widest hover:bg-primary hover:text-white transition-all cursor-pointer"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 bg-surface-low/30 p-3.5 border border-outline-variant/5">
@@ -584,6 +692,64 @@ export default function CheckoutClient() {
           </div>
         </motion.div>
       </div>
+
+      {/* ── HIGH-RESOLUTION IMAGE LIGHTBOX PREVIEW MODAL ── */}
+      {isImageModalOpen && (
+        <div 
+          onClick={() => setIsImageModalOpen(false)}
+          className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl w-full max-h-[85vh] aspect-[16/10] bg-black rounded-lg overflow-hidden flex items-center justify-center shadow-2xl border border-white/10"
+          >
+            <Image 
+              src={productImages[currentImageIdx] || "/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"} 
+              alt={product.name} 
+              fill 
+              className="object-contain" 
+              priority
+            />
+
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setIsImageModalOpen(false)}
+              className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full backdrop-blur-md transition-colors cursor-pointer z-20"
+              title="Close Preview"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Prev / Next controls */}
+            {productImages.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCurrentImageIdx((prev) => (prev - 1 + productImages.length) % productImages.length)}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-2.5 rounded-full backdrop-blur-md transition-transform hover:scale-110 cursor-pointer z-20"
+                  title="Previous Image"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentImageIdx((prev) => (prev + 1) % productImages.length)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 text-white p-2.5 rounded-full backdrop-blur-md transition-transform hover:scale-110 cursor-pointer z-20"
+                  title="Next Image"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </>
+            )}
+
+            {/* Counter */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1 rounded-full font-mono">
+              {currentImageIdx + 1} / {productImages.length}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* QUICK AUTH POPUP MODAL */}
       <AuthModal
