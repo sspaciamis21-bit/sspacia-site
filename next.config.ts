@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
   },
   output: 'standalone', // ✅ Critical for VPS deployment
   poweredByHeader: false,
-  serverExternalPackages: ["@prisma/client"],
+  serverExternalPackages: ["@prisma/client", "node-cron"],
   env: {
     APPS_SCRIPT_URL: process.env.APPS_SCRIPT_URL,
     APPS_SCRIPT_TOKEN: process.env.APPS_SCRIPT_TOKEN,
