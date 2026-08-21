@@ -405,18 +405,44 @@ export function OldInvoicesArchive({
     }
   };
 
-  // Open Upload Modal
+  // Open Upload Modal with Smart Next Month detection
   const handleOpenUploadModal = (prefillCompany?: string) => {
     setModalMode('upload');
     setEditingRecordId(null);
     setFormCompany(prefillCompany || '');
     setFormLocationId(currentUserLocationId ? String(currentUserLocationId) : (locations[0]?.id ? String(locations[0].id) : ''));
     setFormLocationName(currentUserLocationName || locations[0]?.name || '');
+
+    // Smart default: If company already has April, suggest May; otherwise use current month
+    let defaultMonth = MONTH_NAMES[new Date().getMonth()] || 'April';
+    let defaultYear = new Date().getFullYear();
+
+    if (prefillCompany) {
+      const existingInvoices = invoices.filter(
+        (inv) => inv.companyName.toLowerCase().trim() === prefillCompany.toLowerCase().trim()
+      );
+      if (existingInvoices.length > 0) {
+        const lastInv = existingInvoices[0];
+        const parts = (lastInv.month || '').split(' ');
+        if (parts.length === 2 && MONTH_NAMES.includes(parts[0])) {
+          const idx = MONTH_NAMES.indexOf(parts[0]);
+          const yr = parseInt(parts[1], 10) || defaultYear;
+          if (idx < 11) {
+            defaultMonth = MONTH_NAMES[idx + 1];
+            defaultYear = yr;
+          } else {
+            defaultMonth = MONTH_NAMES[0];
+            defaultYear = yr + 1;
+          }
+        }
+      }
+    }
+
     setUploadItems([
       {
         id: `item_${Date.now()}`,
-        monthName: 'April',
-        year: new Date().getFullYear(),
+        monthName: defaultMonth,
+        year: defaultYear,
         invoiceNo: '',
         amount: '',
         remarks: '',

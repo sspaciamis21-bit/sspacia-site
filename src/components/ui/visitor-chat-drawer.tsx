@@ -30,10 +30,49 @@ export function VisitorChatDrawer({ isOpen, onClose }: { isOpen: boolean; onClos
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const markLeadAsRead = async (leadId: number) => {
+    try {
+      await fetch("/api/admin/visitor-chats", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unregisteredCustomerId: leadId }),
+      });
+    } catch (e) {}
+  };
+
+  const fetchLeads = async (isInitial = false) => {
+    try {
+      if (isInitial) setLoading(true);
+      const res = await fetch("/api/admin/visitor-chats");
+      if (res.ok) {
+        const json = await res.json();
+        const data: VisitorLead[] = json.data || [];
+        setLeads(data);
+        
+        // Preserve active selected lead if already chosen by the user
+        setSelectedLeadId((prev) => {
+          if (prev !== null && data.some((l) => l.id === prev)) {
+            return prev;
+          }
+          if (data.length > 0) {
+            const firstId = data[0].id;
+            markLeadAsRead(firstId);
+            return firstId;
+          }
+          return null;
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (isInitial) setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
-      fetchLeads();
-      const interval = setInterval(fetchLeads, 4000);
+      fetchLeads(true);
+      const interval = setInterval(() => fetchLeads(false), 4000);
       return () => clearInterval(interval);
     }
   }, [isOpen]);
@@ -42,22 +81,21 @@ export function VisitorChatDrawer({ isOpen, onClose }: { isOpen: boolean; onClos
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selectedLeadId, leads]);
 
-  const fetchLeads = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/admin/visitor-chats");
-      if (res.ok) {
-        const json = await res.json();
-        setLeads(json.data || []);
-        if (json.data?.length > 0 && !selectedLeadId) {
-          setSelectedLeadId(json.data[0].id);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  const handleSelectLead = (leadId: number) => {
+    setSelectedLeadId(leadId);
+    markLeadAsRead(leadId);
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.id === leadId
+          ? {
+              ...l,
+              chatMessages: l.chatMessages.map((m) =>
+                m.senderType === "VISITOR" ? { ...m, isRead: true } : m
+              ),
+            }
+          : l
+      )
+    );
   };
 
   const handleSendReply = async (e: React.FormEvent) => {
@@ -77,7 +115,7 @@ export function VisitorChatDrawer({ isOpen, onClose }: { isOpen: boolean; onClos
 
       if (!res.ok) throw new Error("Failed to send reply");
 
-      fetchLeads();
+      fetchLeads(false);
       toast.success("Reply sent to visitor!");
     } catch (err) {
       console.error(err);
@@ -139,7 +177,7 @@ export function VisitorChatDrawer({ isOpen, onClose }: { isOpen: boolean; onClos
                 return (
                   <button
                     key={lead.id}
-                    onClick={() => setSelectedLeadId(lead.id)}
+                    onClick={() => handleSelectLead(lead.id)}
                     className={`w-full text-left p-3.5 transition-all flex items-start gap-3 relative group ${
                       isSelected ? "bg-white border-l-4 border-[#1ab0bc] shadow-sm" : "hover:bg-white/80"
                     }`}

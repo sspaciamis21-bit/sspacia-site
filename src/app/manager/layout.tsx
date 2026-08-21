@@ -30,6 +30,7 @@ import { useSidebar } from '@/context/SidebarContext';
 import { ManageProfileModal } from '@/components/profile/ManageProfileModal';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { VisitorChatDrawer } from '@/components/ui/visitor-chat-drawer';
+import { VisitorChatButton } from '@/components/ui/visitor-chat-button';
 
 export default function ManagerLayout({
   children,
@@ -317,15 +318,7 @@ export default function ManagerLayout({
           </div>
 
           <div className="flex items-center gap-2.5 sm:gap-4">
-            <button
-              onClick={() => setIsVisitorChatOpen(true)}
-              className="bg-[#1ab0bc]/10 hover:bg-[#1ab0bc] text-[#1ab0bc] hover:text-white px-2.5 sm:px-3 py-1.5 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 border border-[#1ab0bc]/30 cursor-pointer"
-              title="Open Visitor Live Chat Drawer"
-            >
-              <MessageSquare size={14} />
-              <span className="hidden sm:inline">Visitor Live Chat</span>
-              <span className="sm:hidden">Chat</span>
-            </button>
+            <VisitorChatButton onClick={() => setIsVisitorChatOpen(true)} />
             <NotificationBell />
           </div>
         </header>

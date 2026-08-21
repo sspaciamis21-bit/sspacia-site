@@ -91,3 +91,35 @@ export const POST = withPermission('tickets', 'update', async (
     return NextResponse.json({ error: 'Failed to send reply' }, { status: 500 });
   }
 });
+
+// PATCH /api/admin/visitor-chats
+// Mark all visitor messages as read for a lead
+export const PATCH = withPermission('tickets', 'read', async (
+  req: NextRequest,
+  _ctx: PermissionContext
+) => {
+  try {
+    const body = await req.json();
+    const { unregisteredCustomerId } = body;
+
+    if (!unregisteredCustomerId) {
+      return NextResponse.json({ error: 'unregisteredCustomerId is required' }, { status: 400 });
+    }
+
+    const leadId = Number(unregisteredCustomerId);
+    await (prisma as any).visitorChatMessage.updateMany({
+      where: {
+        unregisteredCustomerId: leadId,
+        senderType: 'VISITOR',
+        isRead: false
+      },
+      data: { isRead: true }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('[ADMIN_VISITOR_CHATS_PATCH]', error);
+    return NextResponse.json({ error: 'Failed to mark read' }, { status: 500 });
+  }
+});
+

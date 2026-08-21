@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../context/AuthContext";
 import { BookTourModal } from "./ui/book-tour-modal";
 import { LocationsDropdown } from "./locations-dropdown";
+import { ProductsDropdown } from "./products-dropdown";
 import { locationsNavData } from "@/config/locations-nav";
 
 export function Header() {
@@ -70,15 +71,22 @@ export function Header() {
                 
                 {/* 1. LOCATIONS MULTI-TIER CASCADING FLYOUT MENU */}
                 {item.isLocationsMenu && (
-                  <div className="absolute top-full left-0 pt-1.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left scale-95 group-hover:scale-100 z-[120]">
+                  <div className="absolute top-full -left-36 pt-1.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left scale-95 group-hover:scale-100 z-[120]">
                     <LocationsDropdown 
                       onLinkClick={() => {}} 
                     />
                   </div>
                 )}
 
-                {/* 2. STANDARD SUB-ITEMS DROPDOWN (e.g. Products) */}
-                {item.subItems && !item.isLocationsMenu && (
+                {/* 2. PRODUCTS DYNAMIC HIERARCHY MEGA-DROPDOWN */}
+                {item.label === "Products" && !item.isLocationsMenu && (
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 pt-1.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top scale-95 group-hover:scale-100 z-[130]">
+                    <ProductsDropdown onLinkClick={() => {}} />
+                  </div>
+                )}
+
+                {/* 3. STANDARD SUB-ITEMS DROPDOWN (Other items) */}
+                {item.subItems && !item.isLocationsMenu && item.label !== "Products" && item.href !== "/products" && (
                   <div className="absolute top-full left-0 mt-1.5 w-48 bg-white shadow-xl rounded-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left scale-95 group-hover:scale-100 border border-outline-variant/10 z-[120]">
                     <div className="py-2 flex flex-col">
                       {item.subItems.map((subItem: any) => (

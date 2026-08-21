@@ -163,9 +163,9 @@ export function BookTourModal({ isOpen, onClose }: BookTourModalProps) {
                   onChange={(e) => setLocationName(e.target.value)}
                   className="w-full px-4 py-2.5 border border-gray-300 focus:border-[#1ab0bc] outline-none text-xs font-bold bg-white"
                 >
-                  <option value="Premier House (SG Highway)">Premier House - SG Highway, Bodakdev</option>
-                  <option value="Mercado (Sindhu Bhavan Marg)">Mercado - Sindhu Bhavan Marg</option>
-                  <option value="Agarwal Complex (C.G. Road)">Agarwal Complex - C.G. Road, Navrangpura</option>
+                  <option value="Agarwal Complex (CG Road)">CG Road – Agarwal Complex</option>
+                  <option value="Mercado (CG Road)">CG Road – Mercado</option>
+                  <option value="Premier House (SG Highway)">SG Highway – Premier House</option>
                 </select>
               </div>
 
