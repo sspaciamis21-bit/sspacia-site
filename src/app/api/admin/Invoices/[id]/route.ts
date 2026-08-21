@@ -18,8 +18,8 @@ export async function PUT(
       const payload = await verifyToken(token);
       if (payload?.id) {
         userId = Number(payload.id);
-        const role = (payload.role as string || '').toUpperCase();
-        isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'SUPER-ADMIN';
+        const role = (payload.role as string || '').toUpperCase().replace(/[\s_-]/g, '');
+        isAdmin = role === 'ADMIN' || role === 'SUPERADMIN';
       }
     }
 
@@ -42,7 +42,7 @@ export async function PUT(
           select: { createdById: true },
         });
 
-        if (!existingRecord || !scopedUserIds.includes(existingRecord.createdById)) {
+        if (!existingRecord || (existingRecord.createdById && !scopedUserIds.includes(existingRecord.createdById))) {
           return NextResponse.json({ error: 'Forbidden: You cannot edit invoices from another center' }, { status: 403 });
         }
       }
@@ -65,41 +65,78 @@ export async function PUT(
       lateFeePerDay,
       lateDays,
       lateFeeAmount,
+      waivedLateDays,
+      waivedLateFee,
       digitallySignedPdfUrl,
       digitallySignedPdfName,
       signedAt,
       signedByName,
     } = body;
 
-    const updated = await (prisma as any).invoiceRecord.update({
+    const updateData: any = {};
+    if (companyName !== undefined) updateData.companyName = companyName;
+    if (cabinName !== undefined) updateData.cabinName = cabinName;
+    if (noOfSeats !== undefined) updateData.noOfSeats = noOfSeats !== '' ? Number(noOfSeats) : null;
+    if (ratePerAgreement !== undefined) updateData.ratePerAgreement = ratePerAgreement !== '' ? Number(ratePerAgreement) : null;
+    if (amount !== undefined) updateData.amount = amount !== '' ? Number(amount) : null;
+    if (gstPercent !== undefined) updateData.gstPercent = gstPercent !== '' ? Number(gstPercent) : null;
+    if (totalAmount !== undefined && waivedLateDays === undefined && waivedLateFee === undefined) updateData.totalAmount = totalAmount !== '' ? Number(totalAmount) : null;
+    if (gstNo !== undefined) updateData.gstNo = gstNo;
+    if (billingMonth !== undefined) updateData.billingMonth = billingMonth;
+    if (status !== undefined) updateData.status = status;
+    if (itemsJson !== undefined) updateData.itemsJson = itemsJson;
+    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+    if (lateFeePerDay !== undefined) updateData.lateFeePerDay = Number(lateFeePerDay);
+    if (lateDays !== undefined && waivedLateDays === undefined && waivedLateFee === undefined) updateData.lateDays = Number(lateDays);
+    if (lateFeeAmount !== undefined && waivedLateDays === undefined && waivedLateFee === undefined) updateData.lateFeeAmount = Number(lateFeeAmount);
+    if (digitallySignedPdfUrl !== undefined) updateData.digitallySignedPdfUrl = digitallySignedPdfUrl;
+    if (digitallySignedPdfName !== undefined) updateData.digitallySignedPdfName = digitallySignedPdfName;
+    if (signedAt !== undefined) updateData.signedAt = signedAt ? new Date(signedAt) : null;
+    if (signedByName !== undefined) updateData.signedByName = signedByName;
+
+    if (Object.keys(updateData).length > 0) {
+      await (prisma as any).invoiceRecord.update({
+        where: { id },
+        data: updateData,
+      });
+    }
+
+    if (waivedLateDays !== undefined || waivedLateFee !== undefined) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE InvoiceRecord SET 
+          waivedLateDays = ?, 
+          waivedLateFee = ?,
+          lateDays = COALESCE(?, lateDays),
+          lateFeeAmount = COALESCE(?, lateFeeAmount),
+          totalAmount = COALESCE(?, totalAmount),
+          updatedAt = NOW()
+        WHERE id = ?`,
+        Number(waivedLateDays || 0),
+        Number(waivedLateFee || 0),
+        lateDays !== undefined ? Number(lateDays) : null,
+        lateFeeAmount !== undefined ? Number(lateFeeAmount) : null,
+        totalAmount !== undefined ? Number(totalAmount) : null,
+        id
+      );
+    }
+
+    const updated = await (prisma as any).invoiceRecord.findUnique({
       where: { id },
-      data: {
-        ...(companyName !== undefined ? { companyName } : {}),
-        ...(cabinName !== undefined ? { cabinName } : {}),
-        ...(noOfSeats !== undefined ? { noOfSeats: noOfSeats !== '' ? Number(noOfSeats) : null } : {}),
-        ...(ratePerAgreement !== undefined ? { ratePerAgreement: ratePerAgreement !== '' ? Number(ratePerAgreement) : null } : {}),
-        ...(amount !== undefined ? { amount: amount !== '' ? Number(amount) : null } : {}),
-        ...(gstPercent !== undefined ? { gstPercent: gstPercent !== '' ? Number(gstPercent) : null } : {}),
-        ...(totalAmount !== undefined ? { totalAmount: totalAmount !== '' ? Number(totalAmount) : null } : {}),
-        ...(gstNo !== undefined ? { gstNo } : {}),
-        ...(billingMonth !== undefined ? { billingMonth } : {}),
-        ...(status !== undefined ? { status } : {}),
-        ...(itemsJson !== undefined ? { itemsJson } : {}),
-        ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
-        ...(lateFeePerDay !== undefined ? { lateFeePerDay: Number(lateFeePerDay) } : {}),
-        ...(lateDays !== undefined ? { lateDays: Number(lateDays) } : {}),
-        ...(lateFeeAmount !== undefined ? { lateFeeAmount: Number(lateFeeAmount) } : {}),
-        ...(digitallySignedPdfUrl !== undefined ? { digitallySignedPdfUrl } : {}),
-        ...(digitallySignedPdfName !== undefined ? { digitallySignedPdfName } : {}),
-        ...(signedAt !== undefined ? { signedAt: signedAt ? new Date(signedAt) : null } : {}),
-        ...(signedByName !== undefined ? { signedByName } : {}),
+      include: {
+        clientMaster: {
+          include: {
+            contactPersons: { orderBy: { sortOrder: 'asc' } },
+            products: { orderBy: { sortOrder: 'asc' } },
+          },
+        },
+        attachedInvoice: true,
       },
     });
 
     return NextResponse.json({ success: true, data: updated });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update invoice record error:', error);
-    return NextResponse.json({ error: 'Failed to update invoice record' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || 'Failed to update invoice record' }, { status: 500 });
   }
 }
 
@@ -117,8 +154,8 @@ export async function DELETE(
       const payload = await verifyToken(token);
       if (payload?.id) {
         userId = Number(payload.id);
-        const role = (payload.role as string || '').toUpperCase();
-        isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'SUPER-ADMIN';
+        const role = (payload.role as string || '').toUpperCase().replace(/[\s_-]/g, '');
+        isAdmin = role === 'ADMIN' || role === 'SUPERADMIN';
       }
     }
 
@@ -141,7 +178,7 @@ export async function DELETE(
           select: { createdById: true },
         });
 
-        if (!existingRecord || !scopedUserIds.includes(existingRecord.createdById)) {
+        if (!existingRecord || (existingRecord.createdById && !scopedUserIds.includes(existingRecord.createdById))) {
           return NextResponse.json({ error: 'Forbidden: You cannot delete invoices from another center' }, { status: 403 });
         }
       }

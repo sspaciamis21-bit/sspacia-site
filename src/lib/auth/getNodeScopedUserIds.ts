@@ -26,10 +26,10 @@ export async function getNodeScopedUserIds(userId: number): Promise<number[] | n
 
   if (!user) return [userId]; // Fallback: only see own entries
 
-  const roleName = user.role.name.toUpperCase();
+  const roleName = (user.role?.name || '').toUpperCase().replace(/[\s_-]/g, '');
 
-  // Admins see everything
-  if (roleName === 'ADMIN' || roleName === 'SUPER_ADMIN' || roleName === 'SUPER-ADMIN') {
+  // Admins & Super Admins see everything
+  if (roleName === 'ADMIN' || roleName === 'SUPERADMIN') {
     return null;
   }
 

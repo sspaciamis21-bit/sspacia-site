@@ -105,26 +105,32 @@ export async function GET(request: Request) {
       ],
     });
 
-    // Auto-calculate overdue days & late fee for display
+    // Auto-calculate overdue days & late fee for display considering waived days
     const today = new Date();
     const enrichedInvoices = invoices.map((inv: any) => {
-      let lateDays = inv.lateDays || 0;
-      let lateFeeAmount = Number(inv.lateFeeAmount || 0);
+      let totalOverdueDays = 0;
+      const ratePerDay = Number(inv.lateFeePerDay || 100);
+      const waivedDays = Number(inv.waivedLateDays || 0);
 
       if (inv.dueDate && inv.status !== 'APPROVED') {
         const due = new Date(inv.dueDate);
         if (today > due) {
           const diffMs = today.getTime() - due.getTime();
-          lateDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-          const ratePerDay = Number(inv.lateFeePerDay || 100);
-          lateFeeAmount = Math.max(0, lateDays * ratePerDay);
+          totalOverdueDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
         }
       }
 
+      const chargeableDays = Math.max(0, totalOverdueDays - waivedDays);
+      const calculatedLateFee = chargeableDays * ratePerDay;
+      const waivedFee = Math.min(totalOverdueDays, waivedDays) * ratePerDay;
+
       return {
         ...inv,
-        calculatedLateDays: lateDays,
-        calculatedLateFee: lateFeeAmount,
+        totalOverdueDays,
+        calculatedLateDays: chargeableDays,
+        calculatedLateFee,
+        effectiveWaivedDays: waivedDays,
+        effectiveWaivedFee: waivedFee,
       };
     });
 

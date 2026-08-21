@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   MapPin,
@@ -38,7 +39,8 @@ import {
   Sparkles,
   FolderArchive,
   Package,
-  Plus
+  Plus,
+  Sliders
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -87,6 +89,11 @@ interface InvoiceRecord {
   lateFeePerDay?: number | null;
   lateDays?: number | null;
   lateFeeAmount?: number | null;
+  waivedLateDays?: number | null;
+  waivedLateFee?: number | null;
+  totalOverdueDays?: number;
+  effectiveWaivedDays?: number;
+  effectiveWaivedFee?: number;
   calculatedLateDays?: number;
   calculatedLateFee?: number;
   digitallySignedPdfUrl?: string | null;
@@ -223,6 +230,15 @@ export default function AdminInvoicesWorkflowPage() {
 
   // View Full Record Details Modal
   const [entryToViewDetails, setEntryToViewDetails] = useState<InvoiceRecord | null>(null);
+
+  // Flexible Late Fee Surcharge & Waive Days Modal
+  const [waiveModalInvoice, setWaiveModalInvoice] = useState<InvoiceRecord | null>(null);
+  const [waiveDaysInput, setWaiveDaysInput] = useState<string>('0');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Edit Invoice Record Modal State
   interface EditInvoiceItem {
@@ -436,64 +452,93 @@ export default function AdminInvoicesWorkflowPage() {
     }
   };
 
-  // Late Fee Surcharge Action
-  const handleApplyLateFee = async (inv: InvoiceRecord) => {
-    const lateFee = inv.calculatedLateFee || 0;
-    const lateDays = inv.calculatedLateDays || 0;
-    if (lateFee <= 0) {
-      toast.info('Invoice is not overdue yet.');
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      const newTotal = (Number(inv.totalAmount) || 0) + lateFee;
-      const res = await fetch(`/api/admin/Invoices/${inv.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lateFeeAmount: lateFee,
-          lateDays,
-          totalAmount: newTotal,
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        toast.success(`Late Fee Surcharge of ₹${lateFee.toLocaleString('en-IN')} (+₹100/day for ${lateDays} days) applied!`);
-        fetchData();
-      } else {
-        toast.error(json.error || 'Failed to apply late fee');
-      }
-    } catch {
-      toast.error('Error applying late fee');
-    } finally {
-      setActionLoading(false);
-    }
+  // Late Fee Surcharge & Flexible Waive-Off Handlers
+  const handleOpenWaiveModal = (inv: InvoiceRecord) => {
+    setWaiveModalInvoice(inv);
+    const initialWaived = inv.waivedLateDays ?? inv.effectiveWaivedDays ?? 0;
+    setWaiveDaysInput(String(initialWaived));
   };
 
-  const handleWaiveLateFee = async (inv: InvoiceRecord) => {
+  const handleQuickWaiveAll = async (inv: InvoiceRecord) => {
+    const totalOverdue = inv.totalOverdueDays || inv.calculatedLateDays || 0;
+    const ratePerDay = Number(inv.lateFeePerDay || 100);
+    const totalLateFee = totalOverdue * ratePerDay;
+    const prevLateFee = Number(inv.lateFeeAmount || 0);
+    const baseTotal = Math.max(0, (Number(inv.totalAmount) || 0) - prevLateFee);
+
     setActionLoading(true);
     try {
-      const currentLateFee = Number(inv.lateFeeAmount) || 0;
-      const newTotal = Math.max(0, (Number(inv.totalAmount) || 0) - currentLateFee);
       const res = await fetch(`/api/admin/Invoices/${inv.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lateFeeAmount: 0,
           lateDays: 0,
-          totalAmount: newTotal,
+          lateFeeAmount: 0,
+          waivedLateDays: totalOverdue,
+          waivedLateFee: totalLateFee,
+          totalAmount: baseTotal,
         }),
       });
       const json = await res.json();
       if (json.success) {
-        toast.success('Late payment fee waived successfully.');
+        toast.success(`100% Late Surcharge waived (${totalOverdue} days) for ${inv.companyName}! 🎉`);
         fetchData();
       } else {
         toast.error(json.error || 'Failed to waive late fee');
       }
     } catch {
       toast.error('Error waiving late fee');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSaveWaiveModal = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!waiveModalInvoice) return;
+
+    const totalOverdue = waiveModalInvoice.totalOverdueDays || waiveModalInvoice.calculatedLateDays || 0;
+    const ratePerDay = Number(waiveModalInvoice.lateFeePerDay || 100);
+    const parsedWaived = parseInt(waiveDaysInput, 10);
+    const waivedDays = isNaN(parsedWaived) ? 0 : Math.max(0, Math.min(totalOverdue, parsedWaived));
+    const chargeableDays = Math.max(0, totalOverdue - waivedDays);
+    const newLateFee = chargeableDays * ratePerDay;
+    const waivedFee = waivedDays * ratePerDay;
+
+    // Base total without previously applied late fee
+    const prevLateFee = Number(waiveModalInvoice.lateFeeAmount || 0);
+    const baseTotal = Math.max(0, (Number(waiveModalInvoice.totalAmount) || 0) - prevLateFee);
+    const newTotal = baseTotal + newLateFee;
+
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/admin/Invoices/${waiveModalInvoice.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lateDays: chargeableDays,
+          lateFeeAmount: newLateFee,
+          waivedLateDays: waivedDays,
+          waivedLateFee: waivedFee,
+          totalAmount: newTotal,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        if (waivedDays >= totalOverdue) {
+          toast.success(`100% Late Surcharge waived (${totalOverdue} days)!`);
+        } else if (waivedDays > 0) {
+          toast.success(`Waived ${waivedDays} days (₹${waivedFee.toLocaleString('en-IN')}). Remaining ${chargeableDays} days (₹${newLateFee.toLocaleString('en-IN')}) applied.`);
+        } else {
+          toast.success(`Full Late Fee Surcharge of ₹${newLateFee.toLocaleString('en-IN')} (${chargeableDays} days) applied.`);
+        }
+        setWaiveModalInvoice(null);
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to update late fee');
+      }
+    } catch {
+      toast.error('Error updating late fee');
     } finally {
       setActionLoading(false);
     }
@@ -1322,33 +1367,42 @@ export default function AdminInvoicesWorkflowPage() {
                               Due: {invoice.paymentDueDay}th of month
                             </span>
                           )}
-                          {invoice.calculatedLateDays && invoice.calculatedLateDays > 0 ? (
-                            <div className="space-y-1 mt-1">
+                          {((invoice.totalOverdueDays && invoice.totalOverdueDays > 0) || (invoice.calculatedLateDays && invoice.calculatedLateDays > 0) || Number(invoice.lateFeeAmount || 0) > 0 || Number(invoice.waivedLateDays || 0) > 0) ? (
+                            <div className="space-y-1 mt-1 font-sans">
+                              {/* Overdue Badge */}
                               <span className="text-[9px] font-extrabold text-red-700 bg-red-50 px-1.5 py-0.5 border border-red-200 flex items-center gap-1 w-fit">
-                                <AlertOctagon size={10} /> Overdue {invoice.calculatedLateDays} days
+                                <AlertOctagon size={10} /> Overdue {invoice.totalOverdueDays || invoice.calculatedLateDays || invoice.lateDays || 0} days
                               </span>
-                              <div className="text-[9px] font-bold text-red-900">
-                                Late Fee: ₹{invoice.calculatedLateFee?.toLocaleString('en-IN')}
-                              </div>
-                              {Number(invoice.lateFeeAmount || 0) > 0 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleWaiveLateFee(invoice)}
-                                  disabled={actionLoading}
-                                  className="text-[8px] text-neutral-600 hover:text-red-700 underline font-bold uppercase"
-                                >
-                                  Waive Late Surcharge
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleApplyLateFee(invoice)}
-                                  disabled={actionLoading}
-                                  className="text-[8px] bg-red-600 hover:bg-red-700 text-white px-1.5 py-0.5 rounded font-bold uppercase tracking-wider"
-                                >
-                                  + Apply Late Fee
-                                </button>
+
+                              {/* Waived Days Note */}
+                              {Number(invoice.waivedLateDays || invoice.effectiveWaivedDays || 0) > 0 && (
+                                <span className="text-[8.5px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 border border-emerald-200 flex items-center gap-1 w-fit">
+                                  ✓ {invoice.waivedLateDays || invoice.effectiveWaivedDays} days waived (-₹{Number(invoice.waivedLateFee || invoice.effectiveWaivedFee || (Number(invoice.waivedLateDays || 0) * 100)).toLocaleString('en-IN')})
+                                </span>
                               )}
+
+                              {/* Late Fee Charged Line */}
+                              <div className="text-[9px] font-bold">
+                                {Number(invoice.calculatedLateFee || invoice.lateFeeAmount || 0) > 0 ? (
+                                  <span className="text-red-900">
+                                    Late Fee: ₹{Number(invoice.calculatedLateFee || invoice.lateFeeAmount || 0).toLocaleString('en-IN')}
+                                  </span>
+                                ) : (
+                                  <span className="text-emerald-700 font-bold">Late Fee: ₹0 (Waived)</span>
+                                )}
+                              </div>
+
+                              {/* Manage / Waive Days Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenWaiveModal(invoice)}
+                                disabled={actionLoading}
+                                className="text-[8.5px] bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1 mt-0.5"
+                                title="Click to waive full or specific number of days"
+                              >
+                                <Sliders size={9} />
+                                <span>Waive / Adjust Days</span>
+                              </button>
                             </div>
                           ) : null}
                         </div>
@@ -1411,11 +1465,15 @@ export default function AdminInvoicesWorkflowPage() {
                         <div className="font-black text-sm text-[var(--primary)]">
                           ₹{Number(invoice.totalAmount || 0).toLocaleString('en-IN')}
                         </div>
-                        {Number(invoice.lateFeeAmount || 0) > 0 && (
+                        {Number(invoice.lateFeeAmount || 0) > 0 ? (
                           <div className="text-[9px] text-red-600 font-bold">
                             Includes ₹{Number(invoice.lateFeeAmount).toLocaleString('en-IN')} Late Fee
                           </div>
-                        )}
+                        ) : Number(invoice.waivedLateDays || 0) > 0 ? (
+                          <div className="text-[9px] text-emerald-700 font-bold">
+                            Late Fee Waived (₹0)
+                          </div>
+                        ) : null}
                       </td>
 
                       <td className="p-3">
@@ -1551,10 +1609,13 @@ export default function AdminInvoicesWorkflowPage() {
         </div>
       </FadeUp>
 
-      {/* MODAL 1: Accountant Attach Tally Invoice PDF */}
-      <AnimatePresence>
+      {/* RENDER ALL INVOICE WORKFLOW MODALS IN A CLEAN PORTAL OVERLAY */}
+      {mounted && typeof document !== 'undefined' && createPortal(
+        <>
+          {/* MODAL 1: Accountant Attach Tally Invoice PDF */}
+          <AnimatePresence>
         {entryToAttachInvoice && (
-          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-4 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1655,7 +1716,7 @@ export default function AdminInvoicesWorkflowPage() {
       {/* MODAL 2: CM Review Attached Tally Invoice PDF */}
       <AnimatePresence>
         {entryToReviewInvoice && entryToReviewInvoice.attachedInvoice && (
-          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-4 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1731,7 +1792,7 @@ export default function AdminInvoicesWorkflowPage() {
       {/* MODAL 3: CM Reject Remarks Modal */}
       <AnimatePresence>
         {showRejectModal && entryToReviewInvoice && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs font-sans">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1795,7 +1856,7 @@ export default function AdminInvoicesWorkflowPage() {
       {/* MODAL 3.5: USB DSC & Digital Signing Modal */}
       <AnimatePresence>
         {showApplySignatureModal && targetInvoiceToSign && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs font-sans">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1951,7 +2012,7 @@ export default function AdminInvoicesWorkflowPage() {
       {/* MODAL 4: Full Invoice Record Viewer */}
       <AnimatePresence>
         {entryToViewDetails && (
-          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -2120,6 +2181,59 @@ export default function AdminInvoicesWorkflowPage() {
                   }
                 })()}
               </div>
+
+              {/* SECTION 1.5: Overdue Surcharge & Waive-Off Breakdown */}
+              {((entryToViewDetails.totalOverdueDays && entryToViewDetails.totalOverdueDays > 0) || Number(entryToViewDetails.lateFeeAmount || 0) > 0 || Number(entryToViewDetails.waivedLateDays || 0) > 0) && (
+                <div className="p-4 bg-red-50/70 border border-red-200 space-y-3 rounded-xs">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-red-900 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <AlertOctagon size={14} className="text-red-600" />
+                      <span>Late Payment Surcharge &amp; Overdue Status</span>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold bg-red-100 text-red-800 px-2 py-0.5 border border-red-300">
+                      Due Date: {entryToViewDetails.dueDate ? new Date(entryToViewDetails.dueDate).toLocaleDateString('en-IN') : `Day ${entryToViewDetails.paymentDueDay || 7} of Month`}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 border border-red-200/60 text-xs">
+                    <div>
+                      <div className="font-bold uppercase text-gray-500 text-[9px]">Total Overdue Days</div>
+                      <div className="font-bold text-red-700 mt-0.5 font-mono text-sm">
+                        {entryToViewDetails.totalOverdueDays || entryToViewDetails.lateDays || 0} Days
+                      </div>
+                      <div className="text-[9px] text-gray-500 mt-0.5">Rate: ₹{Number(entryToViewDetails.lateFeePerDay || 100)}/day</div>
+                    </div>
+
+                    <div>
+                      <div className="font-bold uppercase text-gray-500 text-[9px]">Waived Late Days</div>
+                      <div className="font-bold text-emerald-700 mt-0.5 font-mono text-sm">
+                        {entryToViewDetails.waivedLateDays || 0} Days
+                      </div>
+                      <div className="text-[9px] text-emerald-600 font-bold mt-0.5">
+                        -₹{Number(entryToViewDetails.waivedLateFee || (Number(entryToViewDetails.waivedLateDays || 0) * 100)).toLocaleString('en-IN')} Relaxed
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="font-bold uppercase text-gray-500 text-[9px]">Billed Late Days</div>
+                      <div className="font-bold text-gray-900 mt-0.5 font-mono text-sm">
+                        {entryToViewDetails.lateDays || 0} Days
+                      </div>
+                      <div className="text-[9px] text-gray-500 mt-0.5">Chargeable Surcharge</div>
+                    </div>
+
+                    <div>
+                      <div className="font-bold uppercase text-gray-500 text-[9px]">Effective Late Surcharge</div>
+                      <div className="font-black text-sm text-red-700 mt-0.5 font-mono">
+                        +₹{Number(entryToViewDetails.lateFeeAmount || 0).toLocaleString('en-IN')}
+                      </div>
+                      <div className="text-[9px] font-bold text-teal-800 mt-0.5">
+                        Invoice Total: ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* SECTION 2: Head Office & GST Details */}
               <div className="space-y-2">
@@ -2305,10 +2419,10 @@ export default function AdminInvoicesWorkflowPage() {
         )}
       </AnimatePresence>
 
-      {/* MODAL 4: EDIT INVOICE RECORD MODAL */}
+      {/* MODAL 5: EDIT INVOICE RECORD MODAL */}
       <AnimatePresence>
         {entryToEditInvoice && (
-          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -2603,10 +2717,10 @@ export default function AdminInvoicesWorkflowPage() {
         )}
       </AnimatePresence>
 
-      {/* MODAL 5: DIGITAL SIGNATURE STAMP SETTINGS */}
+      {/* MODAL 6: DIGITAL SIGNATURE STAMP SETTINGS */}
       <AnimatePresence>
         {showSignatureSettingsModal && (
-          <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center p-3 sm:p-6 pt-16 sm:pt-6 bg-black/75 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -2759,6 +2873,200 @@ export default function AdminInvoicesWorkflowPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* MODAL 7: FLEXIBLE LATE FEE SURCHARGE & WAIVE DAYS MANAGER */}
+      <AnimatePresence>
+        {waiveModalInvoice && (
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white border border-gray-300 w-full max-w-lg shadow-2xl overflow-hidden text-xs my-auto max-h-[90vh] flex flex-col rounded-xs"
+            >
+              {/* HEADER */}
+              <div className="p-5 bg-gradient-to-r from-red-900 to-[#1B1C1C] text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-red-600/30 border border-red-400/50 rounded-full flex items-center justify-center font-bold">
+                    <Sliders size={18} className="text-red-300" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold uppercase tracking-tight">
+                      Waive / Adjust Late Fee Surcharge
+                    </h2>
+                    <p className="text-[11px] text-red-200/80">
+                      Choose exactly how many overdue days to waive for this invoice.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWaiveModalInvoice(null)}
+                  className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* CONTENT */}
+              <form onSubmit={handleSaveWaiveModal} className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+                {/* COMPANY & OVERDUE SUMMARY */}
+                <div className="bg-neutral-50 p-4 border border-neutral-200 space-y-2 rounded-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-gray-900 text-sm">{waiveModalInvoice.companyName}</span>
+                    <span className="font-mono text-[10px] font-bold bg-neutral-200 text-neutral-800 px-2 py-0.5">
+                      SR #{waiveModalInvoice.srNo}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-neutral-200/70 text-[11px]">
+                    <div>
+                      <span className="text-gray-500 text-[10px] uppercase font-bold block">Total Overdue</span>
+                      <span className="font-mono font-bold text-red-700">
+                        {waiveModalInvoice.totalOverdueDays || waiveModalInvoice.calculatedLateDays || 0} Days
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-[10px] uppercase font-bold block">Daily Rate</span>
+                      <span className="font-mono font-bold text-gray-800">
+                        ₹{Number(waiveModalInvoice.lateFeePerDay || 100)} / day
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-[10px] uppercase font-bold block">Max Surcharge</span>
+                      <span className="font-mono font-bold text-red-700">
+                        ₹{((waiveModalInvoice.totalOverdueDays || waiveModalInvoice.calculatedLateDays || 0) * Number(waiveModalInvoice.lateFeePerDay || 100)).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* WAIVE DAYS INPUT & CALCULATION PREVIEW */}
+                {(() => {
+                  const totalOverdue = waiveModalInvoice.totalOverdueDays || waiveModalInvoice.calculatedLateDays || 0;
+                  const ratePerDay = Number(waiveModalInvoice.lateFeePerDay || 100);
+                  const parsedWaived = parseInt(waiveDaysInput, 10);
+                  const waivedDays = isNaN(parsedWaived) ? 0 : Math.max(0, Math.min(totalOverdue, parsedWaived));
+                  const chargeableDays = Math.max(0, totalOverdue - waivedDays);
+                  const newLateFee = chargeableDays * ratePerDay;
+                  const waivedFee = waivedDays * ratePerDay;
+                  const prevLateFee = Number(waiveModalInvoice.lateFeeAmount || 0);
+                  const baseTotal = Math.max(0, (Number(waiveModalInvoice.totalAmount) || 0) - prevLateFee);
+                  const newTotal = baseTotal + newLateFee;
+
+                  return (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1.5">
+                          How many days do you want to waive off? (0 to {totalOverdue} days)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            max={totalOverdue}
+                            value={waiveDaysInput}
+                            onChange={(e) => setWaiveDaysInput(e.target.value)}
+                            placeholder="e.g. 5"
+                            className="w-full bg-white border border-gray-300 px-3 py-2 text-sm font-mono font-bold text-gray-900 outline-none focus:border-[#006064] focus:ring-1 focus:ring-[#006064]"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">
+                            / {totalOverdue} days
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* QUICK PRESET SHORTCUTS */}
+                      <div className="flex items-center gap-2 pt-1 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setWaiveDaysInput(String(totalOverdue))}
+                          className="px-2.5 py-1 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 text-[10px] font-bold uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
+                        >
+                          🎉 Waive All ({totalOverdue} Days)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setWaiveDaysInput(String(Math.floor(totalOverdue / 2)))}
+                          className="px-2.5 py-1 bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-300 text-[10px] font-bold uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
+                        >
+                          ⚖️ Waive 50% ({Math.floor(totalOverdue / 2)} Days)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setWaiveDaysInput("0")}
+                          className="px-2.5 py-1 bg-red-50 text-red-800 hover:bg-red-100 border border-red-300 text-[10px] font-bold uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
+                        >
+                          🛑 Charge All (0 Days Waived)
+                        </button>
+                      </div>
+
+                      {/* CALCULATION LIVE PREVIEW CARD */}
+                      <div className="bg-gradient-to-br from-teal-50 to-neutral-50 p-4 border border-teal-200/80 rounded-xs space-y-2 font-sans shadow-2xs">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[#006064] border-b border-teal-200/60 pb-1 flex items-center justify-between">
+                          <span>Live Surcharge Breakdown:</span>
+                          <span className="font-mono">Real-time Calculation</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="bg-white p-2.5 border border-emerald-200">
+                            <span className="text-[10px] text-emerald-800 font-bold uppercase block">Waived Surcharge</span>
+                            <span className="text-base font-black text-emerald-700 font-mono">
+                              -₹{waivedFee.toLocaleString('en-IN')}
+                            </span>
+                            <span className="text-[9px] text-emerald-600 block mt-0.5">({waivedDays} days relaxed)</span>
+                          </div>
+
+                          <div className="bg-white p-2.5 border border-red-200">
+                            <span className="text-[10px] text-red-800 font-bold uppercase block">Chargeable Surcharge</span>
+                            <span className="text-base font-black text-red-700 font-mono">
+                              +₹{newLateFee.toLocaleString('en-IN')}
+                            </span>
+                            <span className="text-[9px] text-red-600 block mt-0.5">({chargeableDays} days billed @ ₹{ratePerDay})</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-teal-200/70 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="text-gray-500 text-[10px] block">Base Invoice Amount:</span>
+                            <span className="font-bold text-gray-800 font-mono">₹{baseTotal.toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[#006064] text-[10px] font-bold uppercase block">New Final Total Amount:</span>
+                            <span className="text-base font-black text-teal-900 font-mono">₹{newTotal.toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ACTIONS */}
+                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-neutral-200">
+                  <button
+                    type="button"
+                    onClick={() => setWaiveModalInvoice(null)}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-gray-700 font-bold text-xs uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionLoading}
+                    className="px-5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider rounded-xs cursor-pointer transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                  >
+                    {actionLoading ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    <span>Confirm &amp; Apply Waive Off</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>,
+    document.body
+  )}
 
         </>
       )}

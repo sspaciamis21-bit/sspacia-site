@@ -1097,6 +1097,8 @@ model InvoiceRecord {
   lateFeePerDay          Decimal?               @default(100.00) @db.Decimal(12, 2)
   lateDays               Int?                   @default(0)
   lateFeeAmount          Decimal?               @default(0) @db.Decimal(12, 2)
+  waivedLateDays         Int?                   @default(0)
+  waivedLateFee          Decimal?               @default(0) @db.Decimal(12, 2)
   digitallySignedPdfUrl  String?                @db.Text
   digitallySignedPdfName String?
   signedAt               DateTime?
