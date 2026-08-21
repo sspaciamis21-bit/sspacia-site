@@ -23,6 +23,7 @@ export async function findOldInvoices(filter: {
   month?: string | null;
   year?: number | null;
   locationId?: number | null;
+  locationIds?: number[] | null;
   uploadedByIds?: number[] | null;
 }) {
   const p = prisma as any;
@@ -41,7 +42,11 @@ export async function findOldInvoices(filter: {
     if (filter.companyName && filter.companyName !== 'ALL') where.companyName = filter.companyName;
     if (filter.month && filter.month !== 'ALL') where.month = filter.month;
     if (filter.year) where.year = filter.year;
-    if (filter.locationId && filter.locationId !== null) where.locationId = filter.locationId;
+    if (filter.locationId && filter.locationId !== null) {
+      where.locationId = filter.locationId;
+    } else if (filter.locationIds && filter.locationIds.length > 0) {
+      where.locationId = { in: filter.locationIds };
+    }
     if (filter.uploadedByIds && filter.uploadedByIds.length > 0) where.uploadedById = { in: filter.uploadedByIds };
 
     return await p.oldInvoiceHistory.findMany({
@@ -74,6 +79,9 @@ export async function findOldInvoices(filter: {
   if (filter.locationId && filter.locationId !== null) {
     query += ' AND `locationId` = ?';
     params.push(filter.locationId);
+  } else if (filter.locationIds && filter.locationIds.length > 0) {
+    query += ` AND \`locationId\` IN (${filter.locationIds.map(() => '?').join(',')})`;
+    params.push(...filter.locationIds);
   }
   if (filter.uploadedByIds && filter.uploadedByIds.length > 0) {
     query += ` AND \`uploadedById\` IN (${filter.uploadedByIds.map(() => '?').join(',')})`;

@@ -94,6 +94,7 @@ export function OldInvoicesArchive({
   const [invoices, setInvoices] = useState<OldInvoiceRecord[]>([]);
   const [companySuggestions, setCompanySuggestions] = useState<string[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [resolvedLocationName, setResolvedLocationName] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
@@ -342,6 +343,7 @@ export function OldInvoicesArchive({
         setInvoices(json.data || []);
         if (json.companySuggestions) setCompanySuggestions(json.companySuggestions);
         if (json.locations) setLocations(json.locations);
+        if (json.userLocationName) setResolvedLocationName(json.userLocationName);
 
         // Auto-expand all companies on initial load
         const uniqueComps = new Set<string>((json.data || []).map((i: OldInvoiceRecord) => i.companyName));
@@ -708,8 +710,8 @@ export function OldInvoicesArchive({
             )}
           </div>
 
-          {/* CENTER / LOCATION FILTER (VISIBLE TO SUPER ADMIN) */}
-          {isSuperAdmin && locations.length > 0 && (
+          {/* CENTER / LOCATION FILTER */}
+          {isSuperAdmin && locations.length > 0 ? (
             <div className="flex items-center gap-1.5">
               <MapPin size={13} className="text-gray-400 shrink-0" />
               <select
@@ -725,6 +727,13 @@ export function OldInvoicesArchive({
                 ))}
               </select>
             </div>
+          ) : (
+            (resolvedLocationName || currentUserLocationName || locations[0]?.name) && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-teal-50 border border-teal-200 text-teal-900 text-xs font-bold">
+                <MapPin size={13} className="text-[#1ab0bc] shrink-0" />
+                <span>Center: {resolvedLocationName || currentUserLocationName || locations[0]?.name}</span>
+              </div>
+            )
           )}
 
           {/* MONTH FILTER */}
@@ -1061,20 +1070,27 @@ export function OldInvoicesArchive({
                   {/* CENTER / LOCATION */}
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                      Center / Location
+                      Center / Location {isSuperAdmin ? '' : <span className="text-gray-400 font-normal">(Assigned)</span>}
                     </label>
-                    <select
-                      value={formLocationId}
-                      onChange={(e) => setFormLocationId(e.target.value)}
-                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] cursor-pointer"
-                    >
-                      <option value="">All / Specific Center...</option>
-                      {locations.map((loc) => (
-                        <option key={loc.id} value={loc.id}>
-                          {loc.name}
-                        </option>
-                      ))}
-                    </select>
+                    {isSuperAdmin ? (
+                      <select
+                        value={formLocationId}
+                        onChange={(e) => setFormLocationId(e.target.value)}
+                        className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] cursor-pointer"
+                      >
+                        <option value="">All / Specific Center...</option>
+                        {locations.map((loc) => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="w-full bg-gray-100 border border-gray-300 px-3 py-2 text-xs text-gray-800 font-bold flex items-center gap-1.5 cursor-not-allowed">
+                        <MapPin size={13} className="text-[#1ab0bc] shrink-0" />
+                        <span>{resolvedLocationName || formLocationName || currentUserLocationName || locations[0]?.name || 'Center'}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

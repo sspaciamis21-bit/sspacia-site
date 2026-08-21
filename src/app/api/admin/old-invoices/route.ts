@@ -13,12 +13,40 @@ export async function GET(request: Request) {
     const token = cookieStore.get('auth-token')?.value;
     let currentUserId: number | null = null;
     let currentUserRole = '';
+    let isSuperAdmin = false;
+    let userAssignedLocationIds: number[] = [];
+    let userAssignedLocations: { id: number; name: string; slug?: string }[] = [];
 
     if (token) {
       const payload = await verifyToken(token);
       if (payload?.id) {
         currentUserId = Number(payload.id);
         currentUserRole = String(payload.role || '').toUpperCase();
+
+        const dbUser = await (prisma as any).user.findUnique({
+          where: { id: currentUserId },
+          select: {
+            name: true,
+            role: { select: { name: true } },
+            assignedLocations: {
+              select: {
+                locationId: true,
+                location: { select: { id: true, name: true, slug: true } }
+              }
+            }
+          }
+        });
+
+        if (dbUser) {
+          const roleName = dbUser.role?.name ? String(dbUser.role.name).toUpperCase() : currentUserRole;
+          currentUserRole = roleName;
+          isSuperAdmin = roleName === 'ADMIN' || roleName === 'SUPER_ADMIN';
+
+          userAssignedLocations = (dbUser.assignedLocations || [])
+            .map((al: any) => al.location)
+            .filter(Boolean);
+          userAssignedLocationIds = userAssignedLocations.map((loc: any) => loc.id);
+        }
       }
     }
 
@@ -32,26 +60,53 @@ export async function GET(request: Request) {
     const year = yearStr && yearStr !== 'ALL' ? parseInt(yearStr, 10) : null;
     let locationId = locationIdStr && locationIdStr !== 'ALL' ? parseInt(locationIdStr, 10) : null;
     let uploadedByIds: number[] | null = null;
+    let targetLocationId: number | null = locationId;
+    let targetLocationIds: number[] | null = null;
 
-    if (!locationId && currentUserId && currentUserRole !== 'SUPER_ADMIN' && currentUserRole !== 'ADMIN') {
-      const scopedUserIds = await getNodeScopedUserIds(currentUserId);
-      if (scopedUserIds !== null) {
-        uploadedByIds = scopedUserIds;
+    // ── ROLE-BASED LOCATION ACCESS CONTROL ──
+    // Community Managers can ONLY view old invoices for their assigned center(s) (e.g. Agarwal Complex)
+    // Super Admins can view and filter any center across the company
+    if (!isSuperAdmin) {
+      if (userAssignedLocationIds.length > 0) {
+        if (locationId && userAssignedLocationIds.includes(locationId)) {
+          targetLocationId = locationId;
+        } else {
+          targetLocationId = null;
+          targetLocationIds = userAssignedLocationIds;
+        }
+      } else if (currentUserId) {
+        const scopedUserIds = await getNodeScopedUserIds(currentUserId);
+        uploadedByIds = scopedUserIds || [currentUserId];
       }
     }
 
-    // Fetch Old Invoice records via robust helper
+    // Fetch Old Invoice records via helper with location scoping
     const oldInvoices = await findOldInvoices({
       search,
       companyName,
       month,
       year,
-      locationId,
+      locationId: targetLocationId,
+      locationIds: targetLocationIds,
       uploadedByIds,
     });
 
     // Fetch existing companies from ClientMaster for auto-suggestions
+    // ClientMaster doesn't have locationId — scope by createdById for non-admin users
+    let clientMasterWhere: any = undefined;
+    if (!isSuperAdmin && userAssignedLocationIds.length > 0) {
+      // Find user IDs assigned to the same locations
+      const scopedUsers = await (prisma as any).userLocation.findMany({
+        where: { locationId: { in: userAssignedLocationIds } },
+        select: { userId: true },
+      });
+      const scopedUserIds = scopedUsers.map((u: any) => u.userId).filter(Boolean);
+      if (scopedUserIds.length > 0) {
+        clientMasterWhere = { createdById: { in: scopedUserIds } };
+      }
+    }
     const clientMasterCompanies = await (prisma as any).clientMaster.findMany({
+      where: clientMasterWhere,
       select: { companyName: true },
       distinct: ['companyName'],
     });
@@ -68,17 +123,24 @@ export async function GET(request: Request) {
 
     const companySuggestions = Array.from(companySet).sort();
 
-    // Fetch locations for filter dropdown
-    const locations = await (prisma as any).location.findMany({
-      select: { id: true, name: true, slug: true },
-      orderBy: { name: 'asc' },
-    });
+    // Fetch locations for filter dropdown (All for Admin, assigned for CM)
+    const locations = isSuperAdmin
+      ? await (prisma as any).location.findMany({
+          select: { id: true, name: true, slug: true },
+          orderBy: { name: 'asc' },
+        })
+      : userAssignedLocations;
+
+    // Determine the user's primary location name for frontend display
+    const userLocationName = userAssignedLocations.length > 0 ? userAssignedLocations[0].name : null;
 
     return NextResponse.json({
       success: true,
       data: oldInvoices || [],
       companySuggestions,
       locations: locations || [],
+      isSuperAdmin,
+      userLocationName,
     });
   } catch (error: any) {
     console.error('Error fetching old invoices:', error);
@@ -96,6 +158,9 @@ export async function POST(request: Request) {
     let currentUserId: number | null = null;
     let currentUserName = 'Community Manager';
     let currentUserRole = 'COMMUNITY_MANAGER';
+    let isSuperAdmin = false;
+    let userPrimaryLocationId: number | null = null;
+    let userPrimaryLocationName: string | null = null;
 
     if (token) {
       const payload = await verifyToken(token);
@@ -103,13 +168,33 @@ export async function POST(request: Request) {
         currentUserId = Number(payload.id);
         currentUserRole = String(payload.role || 'COMMUNITY_MANAGER').toUpperCase();
 
-        const user = await (prisma as any).user.findUnique({
+        const dbUser = await (prisma as any).user.findUnique({
           where: { id: currentUserId },
-          select: { name: true, role: { select: { name: true } } },
+          select: {
+            name: true,
+            role: { select: { name: true } },
+            assignedLocations: {
+              select: {
+                locationId: true,
+                location: { select: { id: true, name: true, slug: true } }
+              }
+            }
+          },
         });
-        if (user) {
-          currentUserName = user.name || currentUserName;
-          if (user.role?.name) currentUserRole = user.role.name;
+
+        if (dbUser) {
+          currentUserName = dbUser.name || currentUserName;
+          const roleName = dbUser.role?.name ? String(dbUser.role.name).toUpperCase() : currentUserRole;
+          currentUserRole = roleName;
+          isSuperAdmin = roleName === 'ADMIN' || roleName === 'SUPER_ADMIN';
+
+          const locs = (dbUser.assignedLocations || [])
+            .map((al: any) => al.location)
+            .filter(Boolean);
+          if (locs.length > 0) {
+            userPrimaryLocationId = locs[0].id;
+            userPrimaryLocationName = locs[0].name;
+          }
         }
       }
     }
@@ -135,6 +220,25 @@ export async function POST(request: Request) {
         { success: false, error: 'Company name is required' },
         { status: 400 }
       );
+    }
+
+    // ── ENFORCE CENTER FOR COMMUNITY MANAGER ──
+    // Community Manager is strictly locked to their assigned center (e.g. Agarwal Complex)
+    // Super Admin can specify any center
+    let finalLocationId = locationId ? parseInt(String(locationId), 10) : null;
+    let finalLocationName = locationName || null;
+
+    if (!isSuperAdmin) {
+      if (userPrimaryLocationId) {
+        finalLocationId = userPrimaryLocationId;
+        finalLocationName = userPrimaryLocationName;
+      }
+    } else if (finalLocationId && !finalLocationName) {
+      const loc = await (prisma as any).location.findUnique({
+        where: { id: finalLocationId },
+        select: { name: true },
+      });
+      if (loc) finalLocationName = loc.name;
     }
 
     // ── BATCH CREATION SUPPORT (MULTIPLE INVOICES FOR SAME COMPANY) ──
@@ -168,8 +272,8 @@ export async function POST(request: Request) {
           fileSize: inv.fileSize ? String(inv.fileSize) : null,
           amount: parsedAmount !== null && !isNaN(parsedAmount) ? parsedAmount : null,
           remarks: inv.remarks ? inv.remarks.trim() : null,
-          locationId: locationId ? parseInt(String(locationId), 10) : null,
-          locationName: locationName || null,
+          locationId: finalLocationId,
+          locationName: finalLocationName,
           uploadedById: currentUserId,
           uploadedByName: currentUserName,
           uploadedByRole: currentUserRole,
@@ -181,18 +285,11 @@ export async function POST(request: Request) {
         success: true,
         data: createdList,
         count: createdList.length,
-        message: `Successfully archived ${createdList.length} invoice(s) for ${companyName}!`,
+        message: `Successfully archived ${createdList.length} invoice(s) for ${companyName.trim()}`,
       });
     }
 
-    // ── SINGLE INVOICE CREATION (BACKWARD COMPATIBILITY) ──
-    if (!month || !month.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'Billing month is required' },
-        { status: 400 }
-      );
-    }
-
+    // ── SINGLE INVOICE CREATION ──
     if (!invoiceUrl || !invoiceUrl.trim()) {
       return NextResponse.json(
         { success: false, error: 'Invoice PDF file is required' },
@@ -200,31 +297,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // Auto-extract year if not explicitly passed
+    const invMonth = (month || 'April 2026').trim();
     let parsedYear = year ? parseInt(String(year), 10) : null;
     if (!parsedYear) {
-      const yearMatch = month.match(/\b(20\d{2})\b/);
-      if (yearMatch) {
-        parsedYear = parseInt(yearMatch[1], 10);
-      } else {
-        parsedYear = new Date().getFullYear();
-      }
+      const yearMatch = invMonth.match(/\b(20\d{2})\b/);
+      parsedYear = yearMatch ? parseInt(yearMatch[1], 10) : new Date().getFullYear();
     }
-
     const parsedAmount = amount ? parseFloat(String(amount).replace(/[^0-9.-]+/g, '')) : null;
 
-    const newRecord = await createOldInvoice({
+    const record = await createOldInvoice({
       companyName: companyName.trim(),
       invoiceNo: invoiceNo ? invoiceNo.trim() : null,
-      month: month.trim(),
+      month: invMonth,
       year: isNaN(parsedYear) ? null : parsedYear,
       invoiceUrl: invoiceUrl.trim(),
       fileName: fileName || 'Invoice.pdf',
       fileSize: fileSize ? String(fileSize) : null,
       amount: parsedAmount !== null && !isNaN(parsedAmount) ? parsedAmount : null,
       remarks: remarks ? remarks.trim() : null,
-      locationId: locationId ? parseInt(String(locationId), 10) : null,
-      locationName: locationName || null,
+      locationId: finalLocationId,
+      locationName: finalLocationName,
       uploadedById: currentUserId,
       uploadedByName: currentUserName,
       uploadedByRole: currentUserRole,
@@ -232,13 +324,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      data: newRecord,
-      message: 'Old invoice uploaded successfully!',
+      data: record,
+      message: 'Old invoice archived successfully',
     });
   } catch (error: any) {
-    console.error('Error creating old invoice record:', error);
+    console.error('Error creating old invoice:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to create old invoice record' },
+      { success: false, error: error.message || 'Failed to archive old invoice' },
       { status: 500 }
     );
   }
