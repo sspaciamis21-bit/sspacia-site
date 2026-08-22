@@ -2838,21 +2838,6 @@ export default function ClientMasterRegistryPage() {
 
                     <div>
                       <label className="block font-bold uppercase text-[#616161] mb-1">
-                        Master Due Day (1-31)
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="31"
-                        placeholder="e.g. 5 or 10"
-                        value={paymentDueDay}
-                        onChange={(e) => setPaymentDueDay(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block font-bold uppercase text-[#616161] mb-1">
                         Client Status
                       </label>
                       <select

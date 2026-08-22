@@ -4,12 +4,11 @@ import React, { useState, useEffect } from "react";
 import {
   Building2,
   Loader2,
-  RefreshCcw
+  RefreshCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FadeUp } from "@/components/ui/fade-up";
 import { ExpenseSpreadsheet } from "@/components/admin/expense-spreadsheet";
-
 import { useAuth } from "@/context/AuthContext";
 
 interface LocationInfo {
@@ -29,12 +28,20 @@ interface ExpenseSheetData {
   updatedAt: string;
 }
 
-export default function CommunityManagerExpensesPage() {
-  const { user } = useAuth();
+const ACCOUNTANT_EMAIL = 'ssinfrazone21@gmail.com';
+
+export default function ManagerExpensesPage() {
+  const { user, isRole } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [locations, setLocations] = useState<LocationInfo[]>([]);
   const [sheets, setSheets] = useState<ExpenseSheetData[]>([]);
+  const [activeLocationId, setActiveLocationId] = useState<number | null>(null);
+
+  const userEmail = user?.email?.toLowerCase() || '';
+  const isAccountant = userEmail === ACCOUNTANT_EMAIL || user?.name?.toLowerCase() === 'accounts';
+  const isAdmin = isRole('ADMIN');
+  const userRoleView: 'CM' | 'ACCOUNTANT' = isAccountant ? 'ACCOUNTANT' : 'CM';
 
   useEffect(() => {
     fetchExpensesData(true);
@@ -52,8 +59,13 @@ export default function CommunityManagerExpensesPage() {
         throw new Error("Failed to load center expenses");
       }
       const data = await res.json();
-      setLocations(data.locations || []);
+      const fetchedLocations = data.locations || [];
+      setLocations(fetchedLocations);
       setSheets(data.sheets || []);
+
+      if (fetchedLocations.length > 0 && !activeLocationId) {
+        setActiveLocationId(fetchedLocations[0].id);
+      }
     } catch (err: any) {
       console.error(err);
       if (isInitial) {
@@ -68,21 +80,21 @@ export default function CommunityManagerExpensesPage() {
     }
   };
 
-  const assignedLocation = locations.length > 0 ? locations[0] : null;
-  const assignedSheet = sheets.length > 0 ? sheets[0] : null;
+  const activeLocation = locations.find((l) => l.id === activeLocationId) || locations[0] || null;
+  const activeSheet = sheets.find((s) => s.locationId === (activeLocation?.id ?? -1)) || sheets[0] || null;
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-[#1ab0bc]" />
         <p className="text-xs font-mono font-bold text-gray-500 uppercase tracking-widest">
-          Loading Center Expense Sheet...
+          Loading Center Expense Spreadsheets...
         </p>
       </div>
     );
   }
 
-  if (!assignedLocation || !assignedSheet) {
+  if (!activeLocation || !activeSheet) {
     return (
       <div className="bg-white p-12 text-center border border-gray-200 shadow-sm max-w-2xl mx-auto my-12 space-y-4">
         <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto border border-amber-200">
@@ -98,19 +110,20 @@ export default function CommunityManagerExpensesPage() {
 
   return (
     <div className="space-y-6 pb-20 font-sans">
-      
       {/* ── HEADER ── */}
       <FadeUp>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-200">
           <div>
             <h1 className="text-2xl md:text-3xl font-display font-black text-[#1B1C1C] uppercase tracking-tight flex items-center gap-3">
-              <span>{assignedLocation.name} Expense Sheet</span>
+              <span>{isAccountant ? 'Center Expense Spreadsheets' : `${activeLocation.name} Expense Sheet`}</span>
               <span className="bg-[#1ab0bc] text-white text-[9px] font-mono px-2.5 py-0.5 uppercase tracking-widest">
-                COMMUNITY MANAGER
+                {isAccountant ? 'ACCOUNTANT PAYMENT VIEW' : 'COMMUNITY MANAGER'}
               </span>
             </h1>
             <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
-              Daily Center Operating Expenses Spreadsheet
+              {isAccountant
+                ? 'Accountant payment details upload & center expense audit. CM columns are read-only.'
+                : 'Daily Center Operating Expenses Spreadsheet'}
             </p>
           </div>
 
@@ -125,18 +138,47 @@ export default function CommunityManagerExpensesPage() {
         </div>
       </FadeUp>
 
+      {/* ── TOP CENTER TABS (For Accountant and Multi-Center Managers) ── */}
+      {(isAccountant || locations.length > 1) && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-gray-200">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#1ab0bc] shrink-0 mr-2 flex items-center gap-1">
+              <Building2 className="w-4 h-4" /> SELECT CENTER:
+            </span>
+
+            {locations.map((loc) => {
+              const isSelected = (activeLocationId ?? activeLocation.id) === loc.id;
+              return (
+                <button
+                  key={loc.id}
+                  onClick={() => setActiveLocationId(loc.id)}
+                  className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 cursor-pointer ${
+                    isSelected
+                      ? "bg-[#1ab0bc] text-white border-[#1ab0bc] shadow-md scale-105"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100 hover:text-gray-900"
+                  }`}
+                >
+                  <Building2 className={`w-4 h-4 ${isSelected ? "text-white" : "text-[#1ab0bc]"}`} />
+                  <span>{loc.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── CLEAN FULL-SCREEN SPREADSHEET ── */}
       <ExpenseSpreadsheet
-        key={assignedLocation.id}
-        locationId={assignedLocation.id}
-        locationName={assignedLocation.name}
-        initialColumns={assignedSheet.columns || []}
-        initialRows={assignedSheet.rows || []}
-        isSuperAdmin={false}
-        currentUserName={user?.name || 'Community Manager'}
-        currentUserId={user?.id ? Number(user.id) : 2}
+        key={`${activeLocation.id}_${userRoleView}`}
+        locationId={activeLocation.id}
+        locationName={activeLocation.name}
+        initialColumns={activeSheet.columns || []}
+        initialRows={activeSheet.rows || []}
+        isSuperAdmin={isAdmin}
+        userRoleView={userRoleView}
+        currentUserName={user?.name || (isAccountant ? 'Accountant' : 'Community Manager')}
+        currentUserId={user?.id ? Number(user.id) : (isAccountant ? 5 : 2)}
       />
-
     </div>
   );
 }

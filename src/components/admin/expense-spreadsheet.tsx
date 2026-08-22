@@ -46,8 +46,10 @@ import { toast } from "sonner";
 export interface ColumnConfig {
   id: string;
   label: string;
-  type?: "text" | "number" | "date";
+  type?: "text" | "number" | "date" | "select" | "file" | "dropdown";
   width?: string;
+  isAccountantCol?: boolean;
+  options?: string[];
 }
 
 export interface RowData {
@@ -70,16 +72,39 @@ interface PresenceUser {
   colId: string;
 }
 
-interface ExpenseSpreadsheetProps {
+export interface ExpenseSpreadsheetProps {
   locationId: number;
   locationName: string;
   initialColumns: ColumnConfig[];
   initialRows: RowData[];
   isSuperAdmin?: boolean;
+  userRoleView?: 'CM' | 'ACCOUNTANT';
   onSaved?: () => void;
   currentUserName?: string;
   currentUserId?: number;
 }
+
+export const DEFAULT_COMMUNITY_MANAGER_COLUMNS: ColumnConfig[] = [
+  { id: 'col_1', label: 'Date', width: '140px', type: 'date', isAccountantCol: false },
+  { id: 'col_2', label: 'Expense Description', width: '220px', type: 'text', isAccountantCol: false },
+  { id: 'col_3', label: 'Expense Section', width: '180px', type: 'text', isAccountantCol: false },
+  { id: 'col_4', label: 'Amount (₹)', width: '140px', type: 'number', isAccountantCol: false },
+  { id: 'col_5', label: 'Payment Mode', width: '140px', type: 'text', isAccountantCol: false },
+  { id: 'col_6', label: 'Receipt / Ref #', width: '140px', type: 'text', isAccountantCol: false },
+  { id: 'col_7', label: 'Remarks / Notes', width: '240px', type: 'text', isAccountantCol: false },
+  { id: 'col_8', label: 'Attached PDF', width: '160px', type: 'file', isAccountantCol: false },
+];
+
+export const DEFAULT_ACCOUNTANT_COLUMNS: ColumnConfig[] = [
+  { id: 'acc_pay_receive_date', label: 'Pay Receive Date', type: 'date', width: '150px', isAccountantCol: true },
+  { id: 'acc_receive_amount', label: 'Receive Amount (₹)', type: 'number', width: '150px', isAccountantCol: true },
+  { id: 'acc_payment_mode', label: 'UTR / Payment Mode', type: 'select', width: '160px', isAccountantCol: true, options: ['NEFT', 'RTGS', 'IMPS', 'UPI', 'Cheque', 'Cash', 'Bank Transfer'] },
+  { id: 'acc_utr_number', label: 'UTR Number', type: 'text', width: '170px', isAccountantCol: true },
+  { id: 'acc_utr_date', label: 'UTR Date', type: 'date', width: '140px', isAccountantCol: true },
+  { id: 'acc_utr_file', label: 'Upload UTR', type: 'file', width: '160px', isAccountantCol: true },
+  { id: 'acc_tds_deducted', label: 'TDS', type: 'dropdown', width: '100px', isAccountantCol: true, options: ['No', 'Yes'] },
+  { id: 'acc_tds_amount', label: 'TDS Amount (₹)', type: 'number', width: '140px', isAccountantCol: true },
+];
 
 // ── DATE UTILITIES ──
 const MONTHS_MAP: Record<string, string> = {
@@ -416,11 +441,23 @@ export function ExpenseSpreadsheet({
   initialColumns,
   initialRows,
   isSuperAdmin = false,
+  userRoleView = 'CM',
   onSaved,
   currentUserName = 'User',
   currentUserId = 0
 }: ExpenseSpreadsheetProps) {
-  const [columns, setColumns] = useState<ColumnConfig[]>(initialColumns);
+  const [columns, setColumns] = useState<ColumnConfig[]>(() => {
+    let baseCols: ColumnConfig[] = initialColumns && initialColumns.length > 0 ? initialColumns : DEFAULT_COMMUNITY_MANAGER_COLUMNS;
+    baseCols = baseCols.map((c) => ({
+      ...c,
+      isAccountantCol: c.isAccountantCol ?? (c.id.startsWith('acc_') ? true : false),
+    }));
+    const hasAccCols = baseCols.some((c) => c.isAccountantCol);
+    if (!hasAccCols) {
+      baseCols = [...baseCols, ...DEFAULT_ACCOUNTANT_COLUMNS];
+    }
+    return baseCols;
+  });
   const [rows, setRows] = useState<RowData[]>([]);
   const [editingCell, setEditingCell] = useState<{ rowId: string; colId: string } | null>(null);
   const [cellValue, setCellValue] = useState<string>("");
@@ -584,9 +621,23 @@ export function ExpenseSpreadsheet({
   // Auto-focus and select active cell input for instant editing without scrolling the page
   useEffect(() => {
     if (editingCell && inputRef.current) {
-      inputRef.current.focus({ preventScroll: true });
-      if (!cellValue.startsWith("=")) {
-        inputRef.current.select();
+      if (typeof inputRef.current.focus === "function") {
+        try {
+          inputRef.current.focus({ preventScroll: true });
+        } catch {
+          // ignore focus error
+        }
+      }
+      if (
+        typeof (inputRef.current as any).select === "function" &&
+        typeof cellValue === "string" &&
+        !cellValue.startsWith("=")
+      ) {
+        try {
+          (inputRef.current as any).select();
+        } catch {
+          // ignore select error on elements that don't support it
+        }
       }
     }
   }, [editingCell?.rowId, editingCell?.colId]);
@@ -644,16 +695,21 @@ export function ExpenseSpreadsheet({
     }
     prevLocationIdRef.current = locationId;
 
-    const defaultCols: ColumnConfig[] = initialColumns.length > 0 ? initialColumns : [
-      { id: 'col_1', label: 'Date', width: '140px', type: 'date' },
-      { id: 'col_2', label: 'Expense Category / Item', width: '220px', type: 'text' },
-      { id: 'col_3', label: 'Vendor / Paid To', width: '180px', type: 'text' },
-      { id: 'col_4', label: 'Amount (₹)', width: '140px', type: 'number' },
-      { id: 'col_5', label: 'Payment Mode', width: '140px', type: 'text' },
-      { id: 'col_6', label: 'Receipt / Ref #', width: '140px', type: 'text' },
-      { id: 'col_7', label: 'Remarks / Notes', width: '240px', type: 'text' },
-    ];
-    setColumns(defaultCols);
+    let baseCols: ColumnConfig[] = initialColumns.length > 0 ? initialColumns : DEFAULT_COMMUNITY_MANAGER_COLUMNS;
+    
+    // Tag columns without explicit isAccountantCol property
+    baseCols = baseCols.map(c => ({
+      ...c,
+      isAccountantCol: c.isAccountantCol ?? (c.id.startsWith('acc_') ? true : false)
+    }));
+
+    // Ensure default accountant columns exist in the pool of columns if missing
+    const hasAccCols = baseCols.some(c => c.isAccountantCol);
+    if (!hasAccCols) {
+      baseCols = [...baseCols, ...DEFAULT_ACCOUNTANT_COLUMNS];
+    }
+
+    setColumns(baseCols);
 
     // Ensure all rows have strictly unique IDs
     const existingIds = new Set<string>();
@@ -679,7 +735,7 @@ export function ExpenseSpreadsheet({
     }
 
     setRows(sanitizedRows);
-    latestDataRef.current = { columns: defaultCols, rows: sanitizedRows };
+    latestDataRef.current = { columns: baseCols, rows: sanitizedRows };
     setHasChanges(false);
     setAutoSaveStatus("saved");
   }, [locationId, initialColumns, initialRows]);
@@ -749,12 +805,22 @@ export function ExpenseSpreadsheet({
       setAutoSaveStatus("saving");
       notifyFmsTyping();
 
+      let colsToSave = latestDataRef.current.columns;
+      colsToSave = colsToSave.map((c) => ({
+        ...c,
+        isAccountantCol: c.isAccountantCol ?? (c.id.startsWith('acc_') ? true : false),
+      }));
+      const hasAccCols = colsToSave.some((c) => c.isAccountantCol);
+      if (!hasAccCols) {
+        colsToSave = [...colsToSave, ...DEFAULT_ACCOUNTANT_COLUMNS];
+      }
+
       const res = await fetch(`/api/admin/expenses/${locationId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: `${locationName} Expense Sheet`,
-          columns: latestDataRef.current.columns,
+          columns: colsToSave,
           rows: latestDataRef.current.rows
         })
       });
@@ -893,12 +959,31 @@ export function ExpenseSpreadsheet({
 
         if (data.sheet) {
           const remoteRows: RowData[] = data.sheet.rows || [];
-          const remoteCols: ColumnConfig[] = data.sheet.columns || [];
+          let remoteCols: ColumnConfig[] = data.sheet.columns || [];
 
-          // Update columns if changed
-          if (JSON.stringify(remoteCols) !== JSON.stringify(latestDataRef.current.columns)) {
-            setColumns(remoteCols);
-          }
+          remoteCols = remoteCols.map((c) => ({
+            ...c,
+            isAccountantCol: c.isAccountantCol ?? (c.id.startsWith('acc_') ? true : false),
+          }));
+
+          const remoteHasAcc = remoteCols.some((c) => c.isAccountantCol);
+
+          setColumns((currentCols) => {
+            let finalCols = remoteCols;
+            if (!remoteHasAcc) {
+              const currentAccCols = currentCols.filter((c) => c.isAccountantCol);
+              finalCols = [
+                ...remoteCols,
+                ...(currentAccCols.length > 0 ? currentAccCols : DEFAULT_ACCOUNTANT_COLUMNS),
+              ];
+            }
+
+            if (JSON.stringify(finalCols) !== JSON.stringify(latestDataRef.current.columns)) {
+              latestDataRef.current.columns = finalCols;
+              return finalCols;
+            }
+            return currentCols;
+          });
 
           // Merge remote rows into local state
           setRows((localRows) => {
@@ -985,10 +1070,13 @@ export function ExpenseSpreadsheet({
     saveToServer(false);
   };
 
-  // Visible columns and rows
+  // Visible columns based on Role View (CM View only sees CM columns; Accountant View sees CM columns + Accountant columns)
   const visibleColumns = useMemo(() => {
+    if (userRoleView === 'CM') {
+      return columns.filter((col) => !col.isAccountantCol && !hiddenColIds.includes(col.id));
+    }
     return columns.filter((col) => !hiddenColIds.includes(col.id));
-  }, [columns, hiddenColIds]);
+  }, [columns, hiddenColIds, userRoleView]);
 
   // Helper to extract unique values and counts for a column
   const getColumnUniqueValues = (colId: string) => {
@@ -1416,6 +1504,14 @@ export function ExpenseSpreadsheet({
   // Double click to enter text edit mode
   const handleCellDoubleClick = (rowId: string, colId: string, currentValue: any) => {
     notifyFmsTyping();
+    const col = columns.find(c => c.id === colId);
+    if (userRoleView === 'ACCOUNTANT' && col && !col.isAccountantCol) {
+      toast.info("Community Manager column is read-only in Accountant view", {
+        description: "You can edit accountant columns (Pay Receive Date, Receive Amount, UTR, TDS, etc.)"
+      });
+      return;
+    }
+
     const colIndex = visibleColumns.findIndex((c) => c.id === colId);
     const rowIndex = visibleRows.findIndex((r) => r.id === rowId);
     if (colIndex !== -1 && rowIndex !== -1) {
@@ -1633,7 +1729,11 @@ export function ExpenseSpreadsheet({
       }
       const targetColIds = new Set<string>();
       for (let c = minCol; c <= maxCol; c++) {
-        if (visibleColumns[c]) targetColIds.add(visibleColumns[c].id);
+        const col = visibleColumns[c];
+        if (col) {
+          if (userRoleView === 'ACCOUNTANT' && !col.isAccountantCol) continue;
+          targetColIds.add(col.id);
+        }
       }
 
       let clearedCount = 0;
@@ -1666,6 +1766,11 @@ export function ExpenseSpreadsheet({
       const rId = rowId || selectedCell?.rowId || editingCell?.rowId;
       const cId = colId || selectedCell?.colId || editingCell?.colId;
       if (rId && cId) {
+        const targetCol = columns.find(c => c.id === cId);
+        if (userRoleView === 'ACCOUNTANT' && targetCol && !targetCol.isAccountantCol) {
+          toast.info("Community Manager column is read-only in Accountant view");
+          return;
+        }
         const row = rows.find((r) => r.id === rId);
         const oldVal = row ? row[cId] : "";
         if (oldVal !== "") {
@@ -2128,6 +2233,11 @@ export function ExpenseSpreadsheet({
 
         // F2 key (Enter edit mode with current value)
         if (e.key === "F2") {
+          const targetCol = columns.find(c => c.id === selectedCell.colId);
+          if (userRoleView === 'ACCOUNTANT' && targetCol && !targetCol.isAccountantCol) {
+            toast.info("Community Manager column is read-only in Accountant view");
+            return;
+          }
           e.preventDefault();
           const targetRow = visibleRows[curRowIdx];
           const val = targetRow ? targetRow[selectedCell.colId] : "";
@@ -2138,6 +2248,11 @@ export function ExpenseSpreadsheet({
 
         // Printable key (Direct typing: enters edit mode with that character!)
         if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          const targetCol = columns.find(c => c.id === selectedCell.colId);
+          if (userRoleView === 'ACCOUNTANT' && targetCol && !targetCol.isAccountantCol) {
+            toast.info("Community Manager column is read-only in Accountant view");
+            return;
+          }
           e.preventDefault();
           setEditingCell({ rowId: selectedCell.rowId, colId: selectedCell.colId });
           setCellValue(e.key);
@@ -2241,13 +2356,20 @@ export function ExpenseSpreadsheet({
     const targetIndex = columns.findIndex((c) => c.id === targetColId);
     if (targetIndex === -1) return;
 
-    const newColId = `col_${Date.now()}`;
-    const newColLabel = `New Column ${columns.length + 1}`;
+    const isAcc = userRoleView === 'ACCOUNTANT';
+    const targetCol = columns[targetIndex];
+    const isAccountantCol = isAcc || Boolean(targetCol?.isAccountantCol);
+    const newColId = isAccountantCol ? `acc_col_${Date.now()}` : `col_${Date.now()}`;
+    const newColLabel = isAccountantCol
+      ? `Acc Col ${columns.filter(c => c.isAccountantCol).length + 1}`
+      : `New Column ${columns.filter(c => !c.isAccountantCol).length + 1}`;
+
     const newCol: ColumnConfig = {
       id: newColId,
       label: newColLabel,
       width: "160px",
-      type: "text"
+      type: "text",
+      isAccountantCol
     };
 
     const newCols = [...columns];
@@ -2261,20 +2383,24 @@ export function ExpenseSpreadsheet({
 
   // Column Management: Add Column
   const handleAddColumn = () => {
-    const newColNum = columns.length + 1;
-    const newColId = `col_${Date.now()}`;
-    const newColLabel = `Column ${newColNum}`;
+    const isAcc = userRoleView === 'ACCOUNTANT';
+    const newColId = isAcc ? `acc_col_${Date.now()}` : `col_${Date.now()}`;
+    const newColLabel = isAcc
+      ? `Accountant Col ${columns.filter(c => c.isAccountantCol).length + 1}`
+      : `Column ${columns.filter(c => !c.isAccountantCol).length + 1}`;
+
     const newCol: ColumnConfig = {
       id: newColId,
       label: newColLabel,
       width: "160px",
-      type: "text"
+      type: "text",
+      isAccountantCol: isAcc
     };
 
     const newCols = [...columns, newCol];
     setColumns(newCols);
     scheduleAutoSave(newCols);
-    toast.success(`Added column: ${newColLabel}`);
+    toast.success(`Added ${isAcc ? 'Accountant' : 'CM'} column: ${newColLabel}`);
   };
 
   // Column Management: Rename Column (Inline & Dedicated Modal)
@@ -2282,6 +2408,11 @@ export function ExpenseSpreadsheet({
     if (e) e.stopPropagation();
     setActiveColMenu(null);
     setColContextMenu(null);
+    const targetCol = columns.find(c => c.id === colId);
+    if (userRoleView === 'ACCOUNTANT' && targetCol && !targetCol.isAccountantCol) {
+      toast.error("Cannot rename Community Manager column in Accountant view!");
+      return;
+    }
     setRenameModalColId(colId);
     setRenameModalLabel(currentLabel);
   };
@@ -2303,6 +2434,11 @@ export function ExpenseSpreadsheet({
     if (e) e.stopPropagation();
     setActiveColMenu(null);
     setColContextMenu(null);
+    const targetCol = columns.find(c => c.id === colId);
+    if (userRoleView === 'ACCOUNTANT' && targetCol && !targetCol.isAccountantCol) {
+      toast.error("Cannot rename Community Manager column in Accountant view!");
+      return;
+    }
     setEditingColId(colId);
     setColLabelInput(currentLabel);
   };
@@ -2462,6 +2598,11 @@ export function ExpenseSpreadsheet({
     if (e) e.stopPropagation();
     setActiveColMenu(null);
     setColContextMenu(null);
+    const targetCol = columns.find(c => c.id === colId);
+    if (userRoleView === 'ACCOUNTANT' && targetCol && !targetCol.isAccountantCol) {
+      toast.error("Cannot delete Community Manager columns in Accountant view!");
+      return;
+    }
     if (columns.length <= 1) {
       toast.error("Spreadsheet must have at least 1 column!");
       return;
@@ -2520,6 +2661,10 @@ export function ExpenseSpreadsheet({
 
   // ── ROW MANAGEMENT ──
   const handleAddRow = () => {
+    if (userRoleView === 'ACCOUNTANT') {
+      toast.error("Accountants cannot create Community Manager expense rows!");
+      return;
+    }
     const newRowNum = rows.length + 1;
     const newRowId = `row_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
     const newRow: RowData = { id: newRowId };
@@ -2532,6 +2677,10 @@ export function ExpenseSpreadsheet({
   const handleInsertRow = (targetRowId: string, position: 'above' | 'below', e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setRowContextMenu(null);
+    if (userRoleView === 'ACCOUNTANT') {
+      toast.error("Accountants cannot insert Community Manager expense rows!");
+      return;
+    }
     const targetIndex = rows.findIndex((r) => r.id === targetRowId);
     if (targetIndex === -1) return;
 
@@ -2550,6 +2699,10 @@ export function ExpenseSpreadsheet({
   const handleDeleteRow = (rowId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setRowContextMenu(null);
+    if (userRoleView === 'ACCOUNTANT') {
+      toast.error("Accountants cannot delete Community Manager expense rows!");
+      return;
+    }
     if (rows.length <= 1) {
       toast.error("Spreadsheet must have at least 1 row!");
       return;
@@ -3273,19 +3426,27 @@ export function ExpenseSpreadsheet({
                 const hiddenBefore = getHiddenColsBefore(col.id);
                 const isDate = isDateCol(col.id);
                 const isColSelected = selectionBounds && colIdx >= selectionBounds.minCol && colIdx <= selectionBounds.maxCol;
+                const isAccountantCol = Boolean(col.isAccountantCol);
+                const isCmLocked = userRoleView === 'ACCOUNTANT' && !isAccountantCol;
 
                 return (
                   <th
                     key={col.id}
-                    draggable={!isRenaming}
-                    onDragStart={(e) => handleDragStartCol(e, col.id)}
-                    onDragOver={(e) => handleDragOverCol(e, col.id)}
-                    onDrop={(e) => handleDropCol(e, col.id)}
+                    draggable={!isRenaming && !isCmLocked}
+                    onDragStart={(e) => !isCmLocked && handleDragStartCol(e, col.id)}
+                    onDragOver={(e) => !isCmLocked && handleDragOverCol(e, col.id)}
+                    onDrop={(e) => !isCmLocked && handleDropCol(e, col.id)}
                     onDragEnd={handleDragEndCol}
                     onContextMenu={(e) => handleColContextMenu(e, col.id, colIdx, col.label)}
                     style={{ width: col.width || "160px", minWidth: "140px" }}
-                    className={`px-2.5 py-1.5 border-r border-gray-300 text-gray-800 text-[11px] group relative select-none transition-all cursor-grab active:cursor-grabbing ${
-                      isColSelected ? "bg-teal-100 text-teal-950 font-black border-b-2 border-b-[#006064]" : "bg-[#f1f5f9]"
+                    className={`px-2.5 py-1.5 border-r border-gray-300 text-gray-800 text-[11px] group relative select-none transition-all ${
+                      isCmLocked
+                        ? "bg-slate-100/90 text-slate-700 cursor-default"
+                        : isAccountantCol
+                        ? "bg-indigo-50/80 text-indigo-950 border-r-indigo-200 cursor-grab active:cursor-grabbing"
+                        : "bg-[#f1f5f9] cursor-grab active:cursor-grabbing"
+                    } ${
+                      isColSelected ? "bg-teal-100 text-teal-950 font-black border-b-2 border-b-[#006064]" : ""
                     } ${isDraggingThis ? "opacity-30 bg-teal-50" : ""} ${
                       isDragOverThis ? "border-l-4 border-l-[#1ab0bc] bg-teal-50/50" : ""
                     }`}
@@ -3328,16 +3489,40 @@ export function ExpenseSpreadsheet({
                           
                           {/* COLUMN LETTER BADGE (A, B, C, D...) */}
                           <span className={`px-1 py-0.2 rounded text-[9px] font-mono font-black shrink-0 border ${
-                            isColSelected ? "bg-[#006064] text-white border-[#006064]" : "bg-gray-200/80 text-gray-700 border-gray-300/70"
+                            isColSelected
+                              ? "bg-[#006064] text-white border-[#006064]"
+                              : isAccountantCol
+                              ? "bg-indigo-200/80 text-indigo-900 border-indigo-300"
+                              : "bg-gray-200/80 text-gray-700 border-gray-300/70"
                           }`}>
                             {getColLetter(colIdx)}
                           </span>
 
-                          <GripVertical className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                          {/* LOCK BADGE FOR CM COLUMNS IN ACCOUNTANT VIEW */}
+                          {isCmLocked && (
+                            <span className="px-1 py-0.2 bg-amber-100/80 text-amber-900 border border-amber-300 rounded text-[9px] font-bold shrink-0 flex items-center gap-0.5" title="Community Manager column (Read-Only)">
+                              <Lock size={9} /> CM
+                            </span>
+                          )}
+
+                          {/* ACCOUNTANT BADGE FOR ACCOUNTANT COLUMNS */}
+                          {isAccountantCol && (
+                            <span className="px-1 py-0.2 bg-indigo-100 text-indigo-900 border border-indigo-300 rounded text-[9px] font-bold shrink-0 flex items-center gap-0.5" title="Accountant Payment Received Column (Editable)">
+                              <Calculator size={9} /> ACC
+                            </span>
+                          )}
+
+                          {!isCmLocked && <GripVertical className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />}
                           <span
-                            onDoubleClick={(e) => handleStartRenameCol(col.id, col.label, e)}
-                            className="cursor-pointer hover:underline truncate font-bold text-gray-900 flex items-center gap-1"
-                            title="Hold & drag left/right to move column. Double click to rename."
+                            onDoubleClick={(e) => !isCmLocked && handleStartRenameCol(col.id, col.label, e)}
+                            className={`truncate font-bold flex items-center gap-1 ${
+                              isCmLocked
+                                ? "text-gray-700"
+                                : isAccountantCol
+                                ? "text-indigo-950 cursor-pointer hover:underline"
+                                : "text-gray-900 cursor-pointer hover:underline"
+                            }`}
+                            title={isCmLocked ? "Community Manager Column (Read-Only in Accountant view)" : "Hold & drag left/right to move column. Double click to rename."}
                           >
                             {isDate && <Calendar size={11} className="text-[#1ab0bc] shrink-0" />}
                             <span>{col.label}</span>
@@ -3524,13 +3709,15 @@ export function ExpenseSpreadsheet({
                               <div className="px-3 py-0.5 text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">
                                 Column Options
                               </div>
-                              <button
-                                onClick={(e) => handleOpenRenameModal(col.id, col.label, e)}
-                                className="w-full px-3 py-1.5 text-left hover:bg-teal-50 flex items-center gap-2 text-gray-800 cursor-pointer font-bold"
-                              >
-                                <Edit2 className="w-3.5 h-3.5 text-[#1ab0bc]" />
-                                <span>Rename Column Header</span>
-                              </button>
+                              {!isCmLocked && (
+                                <button
+                                  onClick={(e) => handleOpenRenameModal(col.id, col.label, e)}
+                                  className="w-full px-3 py-1.5 text-left hover:bg-teal-50 flex items-center gap-2 text-gray-800 cursor-pointer font-bold"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                                  <span>Rename Column Header</span>
+                                </button>
+                              )}
 
                               <button
                                 onClick={(e) => handleCopyEntireColumn(col.id, e)}
@@ -3540,15 +3727,17 @@ export function ExpenseSpreadsheet({
                                 <span>Copy Entire Column</span>
                               </button>
 
-                              <button
-                                onClick={(e) => handlePasteColumnValues(col.id, e)}
-                                className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 text-gray-700 cursor-pointer"
-                              >
-                                <ClipboardPaste className="w-3.5 h-3.5 text-[#1ab0bc]" />
-                                <span>Paste Column Values</span>
-                              </button>
+                              {!isCmLocked && (
+                                <button
+                                  onClick={(e) => handlePasteColumnValues(col.id, e)}
+                                  className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 text-gray-700 cursor-pointer"
+                                >
+                                  <ClipboardPaste className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                                  <span>Paste Column Values</span>
+                                </button>
+                              )}
                               
-                              {colIdx > 0 && (
+                              {!isCmLocked && colIdx > 0 && (
                                 <button
                                   onClick={(e) => handleMoveColumnByStep(col.id, 'left', e)}
                                   className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 text-gray-700 cursor-pointer"
@@ -3558,7 +3747,7 @@ export function ExpenseSpreadsheet({
                                 </button>
                               )}
 
-                              {colIdx < visibleColumns.length - 1 && (
+                              {!isCmLocked && colIdx < visibleColumns.length - 1 && (
                                 <button
                                   onClick={(e) => handleMoveColumnByStep(col.id, 'right', e)}
                                   className="w-full px-3 py-1.5 text-left hover:bg-gray-100 flex items-center gap-2 text-gray-700 cursor-pointer"
@@ -3592,13 +3781,15 @@ export function ExpenseSpreadsheet({
                                 <span>Hide Column</span>
                               </button>
 
-                              <button
-                                onClick={(e) => handleDeleteColumn(col.id, e)}
-                                className="w-full px-3 py-1.5 text-left hover:bg-red-50 flex items-center gap-2 text-red-600 cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                                <span>Delete Column</span>
-                              </button>
+                              {!isCmLocked && (
+                                <button
+                                  onClick={(e) => handleDeleteColumn(col.id, e)}
+                                  className="w-full px-3 py-1.5 text-left hover:bg-red-50 flex items-center gap-2 text-red-600 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                  <span>Delete Column</span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -3650,6 +3841,11 @@ export function ExpenseSpreadsheet({
                     const isUploading = uploadingCell?.rowId === row.id && uploadingCell?.colId === col.id;
                     const val = row[col.id];
                     const isDate = isDateCol(col.id);
+                    const isAccountantCol = Boolean(col.isAccountantCol);
+                    const isCmLocked = userRoleView === 'ACCOUNTANT' && !isAccountantCol;
+                    const isDropdown = col.type === 'dropdown' || col.type === 'select' || Boolean(col.options) || col.id === 'acc_tds_deducted' || col.id === 'acc_payment_mode';
+                    const isFileCol = col.type === 'file' || col.id === 'acc_utr_file' || col.id === 'col_8' || col.label.toLowerCase() === 'attached pdf' || col.label.toLowerCase() === 'upload utr';
+
                     const isAttachment = typeof val === "string" && (
                       val.includes("/api/admin/stored-documents/") ||
                       val.includes("/uploads/") ||
@@ -3710,6 +3906,10 @@ export function ExpenseSpreadsheet({
                             ? "bg-indigo-50 ring-2 ring-indigo-500 ring-dashed z-10 animate-pulse"
                             : isFormula
                             ? "bg-indigo-50/30 hover:bg-indigo-50/60"
+                            : isAccountantCol
+                            ? "bg-indigo-50/20 hover:bg-indigo-50/50"
+                            : isCmLocked
+                            ? "bg-slate-50/40 hover:bg-slate-100/60 text-gray-700"
                             : "hover:bg-sky-50/50"
                         }`}
                       >
@@ -3723,10 +3923,33 @@ export function ExpenseSpreadsheet({
                         {isUploading ? (
                           <div className="flex items-center gap-1.5 text-xs text-teal-700 font-bold px-1 animate-pulse">
                             <Loader2 size={12} className="animate-spin" />
-                            <span>Attaching PDF...</span>
+                            <span>Attaching Document...</span>
                           </div>
                         ) : isEditing ? (
-                          isDate ? (
+                          isDropdown ? (
+                            /* ── DROPDOWN SELECT CELL INPUT ── */
+                            <select
+                              ref={inputRef as any}
+                              autoFocus
+                              value={cellValue}
+                              onChange={(e) => {
+                                const newVal = e.target.value;
+                                setCellValue(newVal);
+                                const updatedRows = rows.map((r) => r.id === row.id ? { ...r, [col.id]: newVal } : r);
+                                setRows(updatedRows);
+                                latestDataRef.current = { ...latestDataRef.current, rows: updatedRows };
+                                saveCellToServer(row.id, col.id, newVal);
+                                setEditingCell(null);
+                              }}
+                              onBlur={handleCellBlur}
+                              className="w-full h-full bg-white border border-[#1ab0bc] px-1 py-0.5 text-xs text-gray-900 outline-none font-mono font-medium"
+                            >
+                              <option value="">-- Select --</option>
+                              {(col.options || (col.id === 'acc_tds_deducted' ? ['No', 'Yes'] : ['NEFT', 'RTGS', 'IMPS', 'UPI', 'Cheque', 'Cash', 'Bank Transfer'])).map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          ) : isDate ? (
                             /* ── NATIVE DEFAULT DATE PICKER CELL INPUT ── */
                             <div className="flex items-center justify-between gap-1 w-full h-full relative">
                               <input
@@ -3795,24 +4018,61 @@ export function ExpenseSpreadsheet({
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[10px] font-bold truncate max-w-[200px] transition-colors"
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 border rounded text-[10px] font-bold truncate max-w-[170px] transition-colors ${
+                                isAccountantCol
+                                  ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-indigo-300"
+                                  : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300"
+                              }`}
                               title="Click to view/download attached document"
                             >
-                              <Paperclip size={10} className="text-emerald-600 shrink-0" />
-                              <span className="truncate">📎 Document</span>
-                              <ExternalLink size={9} className="shrink-0 text-emerald-500" />
+                              <Paperclip size={10} className={isAccountantCol ? "text-indigo-600 shrink-0" : "text-emerald-600 shrink-0"} />
+                              <span className="truncate">{isAccountantCol ? "UTR Proof" : "📎 Document"}</span>
+                              <ExternalLink size={9} className={`shrink-0 ${isAccountantCol ? "text-indigo-500" : "text-emerald-500"}`} />
                             </a>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveAttachment(row.id, col.id);
-                              }}
-                              className="opacity-0 group-hover/doc:opacity-100 p-0.5 text-red-500 hover:bg-red-50 rounded transition-opacity cursor-pointer shrink-0"
-                              title="Remove attachment"
-                            >
-                              <X size={11} />
-                            </button>
+                            {(!isCmLocked || isAccountantCol) && (
+                              <div className="flex items-center gap-0.5 opacity-0 group-hover/doc:opacity-100 transition-opacity">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTriggerAttachPdf(row.id, col.id);
+                                  }}
+                                  className="p-0.5 text-gray-500 hover:text-indigo-700 text-[9px] font-bold cursor-pointer"
+                                  title="Replace document"
+                                >
+                                  Replace
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveAttachment(row.id, col.id);
+                                  }}
+                                  className="p-0.5 text-red-500 hover:bg-red-50 rounded transition-opacity cursor-pointer shrink-0"
+                                  title="Remove attachment"
+                                >
+                                  <X size={11} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : !val && isFileCol ? (
+                          <div className="flex items-center justify-between min-h-[18px] px-1 group/cell">
+                            <span className="text-gray-300 text-[10px]"></span>
+                            {(!isCmLocked || isAccountantCol) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTriggerAttachPdf(row.id, col.id);
+                                }}
+                                className="opacity-0 group-hover/cell:opacity-100 transition-opacity px-1.5 py-0.5 border border-dashed rounded text-[9px] font-bold flex items-center gap-1 cursor-pointer bg-gray-50 hover:bg-gray-100 text-gray-600 border-gray-300 shrink-0"
+                                title="Attach Document / PDF"
+                              >
+                                <Paperclip size={9} />
+                                <span>Attach</span>
+                              </button>
+                            )}
                           </div>
                         ) : isFormula ? (
                           <div className="flex items-center justify-between min-h-[18px] px-1 group/cell">
@@ -3829,13 +4089,25 @@ export function ExpenseSpreadsheet({
                               </span>
                             </span>
                           </div>
+                        ) : col.id === 'acc_tds_deducted' && (val === 'Yes' || val === 'No') ? (
+                          <div className="flex items-center justify-between min-h-[18px] px-1 group/cell">
+                            {val === 'Yes' ? (
+                              <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded border border-emerald-300">
+                                Yes (TDS)
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 bg-gray-100 text-gray-700 text-[10px] font-medium rounded">
+                                No
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <div className="flex items-center justify-between min-h-[18px] px-1 group/cell">
-                            <span className="text-gray-900 truncate max-w-[260px] block">
+                            <span className={`truncate max-w-[260px] block ${isCmLocked ? "text-gray-700" : isAccountantCol ? "text-indigo-950 font-medium" : "text-gray-900"}`}>
                               {val !== "" && val !== undefined && val !== null ? String(val) : ""}
                             </span>
                             {/* DATE CALENDAR ICON ON HOVER */}
-                            {isDate && (
+                            {isDate && !isCmLocked && (
                               <div
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -3845,6 +4117,11 @@ export function ExpenseSpreadsheet({
                                 title="Click to pick a date"
                               >
                                 <Calendar size={12} />
+                              </div>
+                            )}
+                            {isCmLocked && (
+                              <div className="opacity-0 group-hover/cell:opacity-100 transition-opacity shrink-0 text-amber-600/70" title="Read-only Community Manager data">
+                                <Lock size={10} />
                               </div>
                             )}
                           </div>

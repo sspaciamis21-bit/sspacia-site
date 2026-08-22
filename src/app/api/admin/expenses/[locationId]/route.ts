@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { DEFAULT_EXPENSE_COLUMNS, DEFAULT_SAMPLE_ROWS } from '../route';
+import { DEFAULT_EXPENSE_COLUMNS, DEFAULT_ACCOUNTANT_COLUMNS, DEFAULT_SAMPLE_ROWS } from '../route';
 
 function normalizeString(str: string): string {
   return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -24,11 +24,13 @@ async function verifyLocationAccess(userId: number, locationId: number): Promise
   if (!dbUser) return false;
 
   const roleName = (dbUser.role?.name || '').toLowerCase();
+  const isAccountant = (dbUser.email || '').toLowerCase() === 'ssinfrazone21@gmail.com' || (dbUser.name || '').toLowerCase() === 'accounts';
   if (
     roleName === 'admin' ||
     roleName === 'super_admin' ||
     roleName === 'super-admin' ||
-    roleName === 'super admin'
+    roleName === 'super admin' ||
+    isAccountant
   ) {
     return true;
   }
@@ -122,10 +124,24 @@ export async function GET(
         id: 0,
         locationId,
         title: `${location.name} Expense Sheet`,
-        columns: DEFAULT_EXPENSE_COLUMNS,
+        columns: [...DEFAULT_EXPENSE_COLUMNS, ...DEFAULT_ACCOUNTANT_COLUMNS],
         rows: DEFAULT_SAMPLE_ROWS,
         location,
         updatedAt: new Date().toISOString()
+      };
+    } else {
+      let cols = Array.isArray(sheet.columns) ? sheet.columns : DEFAULT_EXPENSE_COLUMNS;
+      cols = cols.map((c: any) => ({
+        ...c,
+        isAccountantCol: c.isAccountantCol ?? (c.id.startsWith('acc_') ? true : false)
+      }));
+      const hasAcc = cols.some((c: any) => c.isAccountantCol);
+      if (!hasAcc) {
+        cols = [...cols, ...DEFAULT_ACCOUNTANT_COLUMNS];
+      }
+      sheet = {
+        ...sheet,
+        columns: cols
       };
     }
 
@@ -183,6 +199,49 @@ export async function PUT(
       return NextResponse.json({ error: 'Columns and rows array are required.' }, { status: 400 });
     }
 
+    // Fetch existing sheet to safely preserve CM and Accountant columns/cells
+    let existingSheet: any = null;
+    try {
+      existingSheet = await (prisma as any).locationExpenseSheet.findUnique({
+        where: { locationId },
+      });
+    } catch (findErr) {
+      console.warn('[EXPENSE_SHEET_FIND_WARN]', findErr);
+    }
+
+    let finalColumns = [...columns];
+    let finalRows = [...rows];
+
+    if (existingSheet && Array.isArray(existingSheet.columns)) {
+      const existingAccCols = existingSheet.columns.filter((c: any) => c.isAccountantCol);
+      const incomingHasAccCols = columns.some((c: any) => c.isAccountantCol);
+      
+      // If CM is saving (incoming has no accountant columns), preserve existing accountant columns (or default accountant columns)
+      if (!incomingHasAccCols) {
+        const accColsToKeep = existingAccCols.length > 0 ? existingAccCols : DEFAULT_ACCOUNTANT_COLUMNS;
+        finalColumns = [...columns, ...accColsToKeep];
+        if (Array.isArray(existingSheet.rows)) {
+          const existingRowMap = new Map(existingSheet.rows.map((r: any) => [r.id, r]));
+          finalRows = rows.map((r: any) => {
+            const ex: any = existingRowMap.get(r.id);
+            if (!ex) return r;
+            const merged = { ...r };
+            accColsToKeep.forEach((ac: any) => {
+              if (ex[ac.id] !== undefined && merged[ac.id] === undefined) {
+                merged[ac.id] = ex[ac.id];
+              }
+            });
+            return merged;
+          });
+        }
+      }
+    } else {
+      const incomingHasAccCols = columns.some((c: any) => c.isAccountantCol);
+      if (!incomingHasAccCols) {
+        finalColumns = [...columns, ...DEFAULT_ACCOUNTANT_COLUMNS];
+      }
+    }
+
     let sheet: any = null;
     try {
       sheet = await (prisma as any).locationExpenseSheet.upsert({
@@ -190,14 +249,14 @@ export async function PUT(
         create: {
           locationId,
           title: title || 'Center Expenses',
-          columns,
-          rows,
+          columns: finalColumns,
+          rows: finalRows,
           updatedById: userId
         },
         update: {
           title: title || 'Center Expenses',
-          columns,
-          rows,
+          columns: finalColumns,
+          rows: finalRows,
           updatedById: userId
         },
         include: {

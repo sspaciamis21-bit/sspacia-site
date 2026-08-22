@@ -17,11 +17,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { entryId, fileUrl, fileName, fileSize } = body;
+    const { entryId, fileUrl, fileName, fileSize, splitsJson } = body;
 
-    if (!entryId || !fileUrl) {
+    if (!entryId) {
       return NextResponse.json(
-        { error: 'entryId and fileUrl are required' },
+        { error: 'entryId is required' },
         { status: 400 }
       );
     }
@@ -36,25 +36,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invoice record not found' }, { status: 404 });
     }
 
-    const attachedInvoice = await (prisma as any).attachedInvoice.upsert({
-      where: { invoiceRecordId: numInvoiceRecordId },
-      create: {
-        invoiceRecordId: numInvoiceRecordId,
-        fileUrl,
-        fileName: fileName || 'Invoice.pdf',
-        fileSize: fileSize ? Number(fileSize) : null,
-        uploadedById: userId,
-      },
-      update: {
-        fileUrl,
-        fileName: fileName || 'Invoice.pdf',
-        fileSize: fileSize ? Number(fileSize) : null,
-        uploadedById: userId,
-        updatedAt: new Date(),
-      },
-    });
+    // If updating split-specific invoices
+    if (splitsJson !== undefined) {
+      await prisma.$executeRawUnsafe(
+        'UPDATE InvoiceRecord SET splitsJson = ?, updatedAt = NOW() WHERE id = ?',
+        splitsJson ? (typeof splitsJson === 'string' ? splitsJson : JSON.stringify(splitsJson)) : null,
+        numInvoiceRecordId
+      );
+    }
 
-    // Automatically update status to INVOICE_ATTACHED
+    let attachedInvoice = null;
+    if (fileUrl) {
+      attachedInvoice = await (prisma as any).attachedInvoice.upsert({
+        where: { invoiceRecordId: numInvoiceRecordId },
+        create: {
+          invoiceRecordId: numInvoiceRecordId,
+          fileUrl,
+          fileName: fileName || 'Invoice.pdf',
+          fileSize: fileSize ? Number(fileSize) : null,
+          uploadedById: userId,
+        },
+        update: {
+          fileUrl,
+          fileName: fileName || 'Invoice.pdf',
+          fileSize: fileSize ? Number(fileSize) : null,
+          uploadedById: userId,
+          updatedAt: new Date(),
+        },
+      });
+    }
+
+    // Update status to INVOICE_ATTACHED
     await (prisma as any).invoiceRecord.update({
       where: { id: numInvoiceRecordId },
       data: {

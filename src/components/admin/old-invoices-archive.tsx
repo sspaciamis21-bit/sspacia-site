@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   FileText,
@@ -30,7 +31,11 @@ import {
   FolderArchive,
   Layers,
   Sparkles,
-  Paperclip
+  Paperclip,
+  CreditCard,
+  Receipt,
+  Lock,
+  Calculator
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -50,8 +55,38 @@ export interface OldInvoiceRecord {
   uploadedById: number | null;
   uploadedByName: string | null;
   uploadedByRole: string | null;
+  payReceiveDate?: string | null;
+  receiveAmount?: number | string | null;
+  paymentMode?: string | null;
+  utrNumber?: string | null;
+  utrDate?: string | null;
+  utrFileUrl?: string | null;
+  utrFileName?: string | null;
+  tdsDeducted?: string | null;
+  tdsAmount?: number | string | null;
+  paymentsJson?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PaymentInstallment {
+  id: string;
+  payReceiveDate: string;
+  receiveAmount: string;
+  paymentMode: string;
+  utrNumber: string;
+  utrDate: string;
+  tdsDeducted: string; // "No" | "Yes"
+  tdsAmount: string;
+  // 3 Unique Attachments:
+  paymentDocUrl?: string;
+  paymentDocName?: string;
+  utrDocUrl?: string;
+  utrDocName?: string;
+  otherDocUrl?: string;
+  otherDocName?: string;
+  remarks?: string;
+  uploadingSlot?: 'paymentDoc' | 'utrDoc' | 'otherDoc' | null;
 }
 
 interface LocationOption {
@@ -82,16 +117,41 @@ export interface MultiInvoiceItem {
 
 interface OldInvoicesArchiveProps {
   isSuperAdmin?: boolean;
+  userRoleView?: 'CM' | 'ACCOUNTANT';
+  canAccessCM?: boolean;
+  canAccessAccountant?: boolean;
   currentUserLocationId?: number | null;
   currentUserLocationName?: string | null;
 }
 
 export function OldInvoicesArchive({
   isSuperAdmin = false,
+  userRoleView: initialRoleView = 'CM',
+  canAccessCM = true,
+  canAccessAccountant = true,
   currentUserLocationId,
   currentUserLocationName,
 }: OldInvoicesArchiveProps) {
+  const [mounted, setMounted] = useState<boolean>(false);
   const [invoices, setInvoices] = useState<OldInvoiceRecord[]>([]);
+  const [roleView, setRoleView] = useState<'CM' | 'ACCOUNTANT'>(
+    canAccessCM === false ? 'ACCOUNTANT' : initialRoleView
+  );
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Sync role view when parent props change or permissions resolve
+  useEffect(() => {
+    if (canAccessCM === false && canAccessAccountant) {
+      setRoleView('ACCOUNTANT');
+    } else if (canAccessAccountant === false && canAccessCM) {
+      setRoleView('CM');
+    } else if (initialRoleView) {
+      setRoleView(initialRoleView);
+    }
+  }, [initialRoleView, canAccessCM, canAccessAccountant]);
   const [companySuggestions, setCompanySuggestions] = useState<string[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [resolvedLocationName, setResolvedLocationName] = useState<string>('');
@@ -103,6 +163,7 @@ export function OldInvoicesArchive({
   const [selectedLocationFilter, setSelectedLocationFilter] = useState<string>('ALL');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('ALL');
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('ALL');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'ALL' | 'PENDING' | 'PAID'>('ALL');
 
   // Expanded Company Cards State (Set of company names)
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
@@ -150,6 +211,15 @@ export function OldInvoicesArchive({
   // PDF Preview Modal
   const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
   const [previewPdfTitle, setPreviewPdfTitle] = useState<string>('');
+
+  // Payment Received Details Modal State (Multi-Part Payments with 3 Attachments each)
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
+  const [paymentTargetInvoice, setPaymentTargetInvoice] = useState<OldInvoiceRecord | null>(null);
+  const [paymentParts, setPaymentParts] = useState<PaymentInstallment[]>([]);
+  const [savingPayment, setSavingPayment] = useState<boolean>(false);
+  const [activeUploadPartId, setActiveUploadPartId] = useState<string | null>(null);
+  const [activeUploadSlot, setActiveUploadSlot] = useState<'paymentDoc' | 'utrDoc' | 'otherDoc' | null>(null);
+  const partFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Multi-Item Management Handlers
   const handleAddUploadItem = () => {
@@ -595,6 +665,290 @@ export function OldInvoicesArchive({
     }
   };
 
+  // Payment Details Handlers (Accountant View - Multi-Part Payments)
+  const handleOpenPaymentModal = (item: OldInvoiceRecord) => {
+    setPaymentTargetInvoice(item);
+
+    if (item.paymentsJson) {
+      try {
+        const parsed = JSON.parse(item.paymentsJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPaymentParts(
+            parsed.map((p, idx) => ({
+              id: p.id || `part_${idx + 1}`,
+              payReceiveDate: p.payReceiveDate
+                ? String(p.payReceiveDate).split('T')[0]
+                : item.payReceiveDate
+                ? String(item.payReceiveDate).split('T')[0]
+                : new Date().toISOString().split('T')[0],
+              receiveAmount:
+                p.receiveAmount !== undefined && p.receiveAmount !== null ? String(p.receiveAmount) : '',
+              paymentMode: p.paymentMode || 'NEFT',
+              utrNumber: p.utrNumber || '',
+              utrDate: p.utrDate
+                ? String(p.utrDate).split('T')[0]
+                : item.utrDate
+                ? String(item.utrDate).split('T')[0]
+                : new Date().toISOString().split('T')[0],
+              tdsDeducted: p.tdsDeducted === 'Yes' ? 'Yes' : 'No',
+              tdsAmount: p.tdsAmount !== undefined && p.tdsAmount !== null ? String(p.tdsAmount) : '',
+              paymentDocUrl: p.paymentDocUrl || '',
+              paymentDocName: p.paymentDocName || '',
+              utrDocUrl: p.utrDocUrl || '',
+              utrDocName: p.utrDocName || '',
+              otherDocUrl: p.otherDocUrl || '',
+              otherDocName: p.otherDocName || '',
+              remarks: p.remarks || '',
+            }))
+          );
+          setIsPaymentModalOpen(true);
+          return;
+        }
+      } catch (e) {
+        console.warn('Failed to parse paymentsJson', e);
+      }
+    }
+
+    // Default 1 payment entry (from legacy or new)
+    const initialAmount =
+      item.receiveAmount !== null && item.receiveAmount !== undefined
+        ? String(item.receiveAmount)
+        : item.amount !== null && item.amount !== undefined
+        ? String(item.amount)
+        : '';
+
+    setPaymentParts([
+      {
+        id: `part_${Date.now()}`,
+        payReceiveDate: item.payReceiveDate
+          ? String(item.payReceiveDate).split('T')[0]
+          : new Date().toISOString().split('T')[0],
+        receiveAmount: initialAmount,
+        paymentMode: item.paymentMode || 'NEFT',
+        utrNumber: item.utrNumber || '',
+        utrDate: item.utrDate
+          ? String(item.utrDate).split('T')[0]
+          : new Date().toISOString().split('T')[0],
+        tdsDeducted: item.tdsDeducted === 'Yes' ? 'Yes' : 'No',
+        tdsAmount: item.tdsAmount !== null && item.tdsAmount !== undefined ? String(item.tdsAmount) : '',
+        paymentDocUrl: '',
+        paymentDocName: '',
+        utrDocUrl: item.utrFileUrl || '',
+        utrDocName: item.utrFileName || '',
+        otherDocUrl: '',
+        otherDocName: '',
+        remarks: '',
+      },
+    ]);
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleAddPaymentPart = () => {
+    const nextIdx = paymentParts.length + 1;
+    setPaymentParts((prev) => [
+      ...prev,
+      {
+        id: `part_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        payReceiveDate: new Date().toISOString().split('T')[0],
+        receiveAmount: '',
+        paymentMode: 'NEFT',
+        utrNumber: '',
+        utrDate: new Date().toISOString().split('T')[0],
+        tdsDeducted: 'No',
+        tdsAmount: '',
+        paymentDocUrl: '',
+        paymentDocName: '',
+        utrDocUrl: '',
+        utrDocName: '',
+        otherDocUrl: '',
+        otherDocName: '',
+        remarks: '',
+      },
+    ]);
+    toast.success(`Added Payment Entry #${nextIdx}`);
+  };
+
+  const handleUpdatePaymentPart = (partId: string, field: keyof PaymentInstallment, value: any) => {
+    setPaymentParts((prev) =>
+      prev.map((p) => (p.id === partId ? { ...p, [field]: value } : p))
+    );
+  };
+
+  const handleRemovePaymentPart = (partId: string) => {
+    if (paymentParts.length <= 1) {
+      toast.error('At least one payment entry is required');
+      return;
+    }
+    setPaymentParts((prev) => prev.filter((p) => p.id !== partId));
+    toast.info('Removed payment entry');
+  };
+
+  const handleTriggerPartUpload = (partId: string, slot: 'paymentDoc' | 'utrDoc' | 'otherDoc') => {
+    setActiveUploadPartId(partId);
+    setActiveUploadSlot(slot);
+    partFileInputRef.current?.click();
+  };
+
+  const handlePartFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeUploadPartId || !activeUploadSlot) return;
+
+    const partId = activeUploadPartId;
+    const slot = activeUploadSlot;
+
+    setPaymentParts((prev) =>
+      prev.map((p) => (p.id === partId ? { ...p, uploadingSlot: slot } : p))
+    );
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/admin/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to upload document');
+      }
+
+      const data = await res.json();
+      const fileUrl = data.data?.fileUrl || data.fileUrl;
+      if (!fileUrl) throw new Error('No file URL returned from upload');
+
+      setPaymentParts((prev) =>
+        prev.map((p) => {
+          if (p.id !== partId) return p;
+          if (slot === 'paymentDoc') {
+            return { ...p, paymentDocUrl: fileUrl, paymentDocName: file.name, uploadingSlot: null };
+          } else if (slot === 'utrDoc') {
+            return { ...p, utrDocUrl: fileUrl, utrDocName: file.name, uploadingSlot: null };
+          } else {
+            return { ...p, otherDocUrl: fileUrl, otherDocName: file.name, uploadingSlot: null };
+          }
+        })
+      );
+      toast.success(`Attached: ${file.name}`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload document');
+      setPaymentParts((prev) =>
+        prev.map((p) => (p.id === partId ? { ...p, uploadingSlot: null } : p))
+      );
+    } finally {
+      if (partFileInputRef.current) partFileInputRef.current.value = '';
+      setActiveUploadPartId(null);
+      setActiveUploadSlot(null);
+    }
+  };
+
+  const handleRemovePartAttachment = (partId: string, slot: 'paymentDoc' | 'utrDoc' | 'otherDoc') => {
+    setPaymentParts((prev) =>
+      prev.map((p) => {
+        if (p.id !== partId) return p;
+        if (slot === 'paymentDoc') return { ...p, paymentDocUrl: '', paymentDocName: '' };
+        if (slot === 'utrDoc') return { ...p, utrDocUrl: '', utrDocName: '' };
+        return { ...p, otherDocUrl: '', otherDocName: '' };
+      })
+    );
+  };
+
+  const handleSavePaymentDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentTargetInvoice) return;
+
+    setSavingPayment(true);
+    try {
+      const totalRec = paymentParts.reduce((sum, p) => sum + (parseFloat(p.receiveAmount) || 0), 0);
+      const totalTds = paymentParts.reduce(
+        (sum, p) => (p.tdsDeducted === 'Yes' ? sum + (parseFloat(p.tdsAmount) || 0) : sum),
+        0
+      );
+      const primaryPart = paymentParts[0] || {};
+      const allUtrs = paymentParts
+        .map((p) => p.utrNumber?.trim())
+        .filter(Boolean)
+        .join(', ');
+
+      const res = await fetch(`/api/admin/old-invoices/${paymentTargetInvoice.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentsJson: JSON.stringify(paymentParts),
+          receiveAmount: totalRec > 0 ? totalRec : null,
+          payReceiveDate: primaryPart.payReceiveDate || null,
+          paymentMode: primaryPart.paymentMode || null,
+          utrNumber: allUtrs || primaryPart.utrNumber || null,
+          utrDate: primaryPart.utrDate || null,
+          utrFileUrl: primaryPart.utrDocUrl || primaryPart.paymentDocUrl || null,
+          utrFileName: primaryPart.utrDocName || primaryPart.paymentDocName || null,
+          tdsDeducted: totalTds > 0 ? 'Yes' : 'No',
+          tdsAmount: totalTds > 0 ? totalTds : null,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast.success(
+          `Recorded payment entries for ${paymentTargetInvoice.companyName} (${paymentTargetInvoice.month})!`
+        );
+        setIsPaymentModalOpen(false);
+        fetchOldInvoices();
+      } else {
+        toast.error(json.error || 'Failed to save payment details');
+      }
+    } catch (err) {
+      toast.error('Error saving payment details');
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  // Clear / remove recorded payment details for an invoice
+  const handleClearPaymentDetails = async (targetId?: number) => {
+    const target = targetId ? invoices.find((i) => i.id === targetId) : paymentTargetInvoice;
+    if (!target) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to clear/delete the recorded payment data for ${target.companyName} (${target.month})? This will revert it back to pending.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setSavingPayment(true);
+      const res = await fetch(`/api/admin/old-invoices/${target.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentsJson: null,
+          receiveAmount: null,
+          payReceiveDate: null,
+          paymentMode: null,
+          utrNumber: null,
+          utrDate: null,
+          utrFileUrl: null,
+          utrFileName: null,
+          tdsDeducted: null,
+          tdsAmount: null,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Payment details removed for ${target.companyName} (${target.month})!`);
+        setIsPaymentModalOpen(false);
+        fetchOldInvoices();
+      } else {
+        toast.error(json.error || 'Failed to clear payment details');
+      }
+    } catch (err) {
+      toast.error('Error clearing payment details');
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
   // Toggle company card expansion
   const toggleCompanyExpand = (compName: string) => {
     setExpandedCompanies((prev) => {
@@ -625,6 +979,12 @@ export function OldInvoicesArchive({
       );
     }
 
+    if (paymentStatusFilter === 'PENDING') {
+      filtered = filtered.filter((i) => !i.payReceiveDate && !i.utrNumber && !i.receiveAmount);
+    } else if (paymentStatusFilter === 'PAID') {
+      filtered = filtered.filter((i) => Boolean(i.payReceiveDate || i.utrNumber || i.receiveAmount));
+    }
+
     const map = new Map<string, OldInvoiceRecord[]>();
     for (const inv of filtered) {
       const compKey = inv.companyName.trim() || 'Unknown Company';
@@ -648,7 +1008,7 @@ export function OldInvoicesArchive({
         invoiceCount: sortedItems.length,
       };
     });
-  }, [invoices, searchQuery]);
+  }, [invoices, searchQuery, paymentStatusFilter]);
 
   // Distinct Months for dropdown filter
   const uniqueMonths = useMemo(() => {
@@ -687,8 +1047,38 @@ export function OldInvoicesArchive({
           </div>
         </div>
 
-        {/* TOP STATS & UPLOAD BUTTON */}
+        {/* TOP STATS & ACTIONS */}
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
+          {/* ROLE VIEW TOGGLE (Only for Admin who can access both) */}
+          {(isSuperAdmin || (canAccessCM && canAccessAccountant)) && (
+            <div className="flex items-center bg-gray-100 p-0.5 rounded border border-gray-300">
+              <button
+                type="button"
+                onClick={() => setRoleView('CM')}
+                className={`px-3 py-1 text-xs font-bold rounded-xs transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  roleView === 'CM'
+                    ? 'bg-white text-teal-900 shadow-xs border border-gray-200'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <User size={13} />
+                <span>CM View</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoleView('ACCOUNTANT')}
+                className={`px-3 py-1 text-xs font-bold rounded-xs transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  roleView === 'ACCOUNTANT'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-indigo-900'
+                }`}
+              >
+                <Calculator size={13} />
+                <span>Accountant Payment View</span>
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 text-xs font-mono text-gray-700">
             <span className="text-gray-400 font-bold uppercase text-[10px]">Total Archived:</span>
             <strong className="text-gray-900 font-bold">{totalArchivedInvoices} Invoices</strong>
@@ -702,14 +1092,16 @@ export function OldInvoicesArchive({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => handleOpenUploadModal()}
-            className="px-4 py-2 bg-[#1ab0bc] hover:bg-teal-600 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs cursor-pointer"
-          >
-            <Upload size={14} />
-            <span>Upload Old Invoice</span>
-          </button>
+          {roleView === 'CM' && (
+            <button
+              type="button"
+              onClick={() => handleOpenUploadModal()}
+              className="px-4 py-2 bg-[#1ab0bc] hover:bg-teal-600 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+            >
+              <Upload size={14} />
+              <span>Upload Old Invoice</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -737,13 +1129,13 @@ export function OldInvoicesArchive({
           </div>
 
           {/* CENTER / LOCATION FILTER */}
-          {isSuperAdmin && locations.length > 0 ? (
+          {locations.length > 0 && (isSuperAdmin || roleView === 'ACCOUNTANT' || canAccessAccountant || locations.length > 1) ? (
             <div className="flex items-center gap-1.5">
               <MapPin size={13} className="text-gray-400 shrink-0" />
               <select
                 value={selectedLocationFilter}
                 onChange={(e) => setSelectedLocationFilter(e.target.value)}
-                className="bg-gray-50 border border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 font-medium outline-none focus:border-[#1ab0bc] cursor-pointer"
+                className="bg-gray-50 border border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 font-bold outline-none focus:border-[#1ab0bc] cursor-pointer"
               >
                 <option value="ALL">All Centers (Consolidated)</option>
                 {locations.map((loc) => (
@@ -769,7 +1161,7 @@ export function OldInvoicesArchive({
               <select
                 value={selectedMonthFilter}
                 onChange={(e) => setSelectedMonthFilter(e.target.value)}
-                className="bg-gray-50 border border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 font-medium outline-none focus:border-[#1ab0bc] cursor-pointer"
+                className="bg-gray-50 border border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 font-bold outline-none focus:border-[#1ab0bc] cursor-pointer"
               >
                 <option value="ALL">All Months ({uniqueMonths.length})</option>
                 {uniqueMonths.map((m) => (
@@ -777,6 +1169,22 @@ export function OldInvoicesArchive({
                     {m}
                   </option>
                 ))}
+              </select>
+            </div>
+          )}
+
+          {/* PAYMENT STATUS FILTER (FOR ACCOUNTANT VIEW & ADMIN) */}
+          {(roleView === 'ACCOUNTANT' || isSuperAdmin) && (
+            <div className="flex items-center gap-1.5">
+              <CreditCard size={13} className="text-gray-400 shrink-0" />
+              <select
+                value={paymentStatusFilter}
+                onChange={(e) => setPaymentStatusFilter(e.target.value as any)}
+                className="bg-gray-50 border border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 font-bold outline-none focus:border-[#1ab0bc] cursor-pointer"
+              >
+                <option value="ALL">All Payment Statuses</option>
+                <option value="PENDING">⏳ Pending Payment Entry</option>
+                <option value="PAID">✅ Payment Recorded / UTR</option>
               </select>
             </div>
           )}
@@ -813,14 +1221,16 @@ export function OldInvoicesArchive({
               ? 'No archived invoices match your active search and filter criteria.'
               : 'Start archiving past client invoices by clicking "Upload Old Invoice" above.'}
           </p>
-          <button
-            type="button"
-            onClick={() => handleOpenUploadModal()}
-            className="mt-2 px-4 py-2 bg-[#1ab0bc] hover:bg-teal-600 text-white font-bold text-xs uppercase tracking-wider inline-flex items-center gap-2 cursor-pointer shadow-xs"
-          >
-            <Upload size={14} />
-            <span>Upload First Old Invoice</span>
-          </button>
+          {roleView === 'CM' && (
+            <button
+              type="button"
+              onClick={() => handleOpenUploadModal()}
+              className="mt-2 px-4 py-2 bg-[#1ab0bc] hover:bg-teal-600 text-white font-bold text-xs uppercase tracking-wider inline-flex items-center gap-2 cursor-pointer shadow-xs"
+            >
+              <Upload size={14} />
+              <span>Upload First Old Invoice</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -875,18 +1285,20 @@ export function OldInvoicesArchive({
                       </div>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenUploadModal(group.companyName);
-                      }}
-                      className="px-2.5 py-1 bg-white hover:bg-teal-50 border border-teal-300 text-[#1ab0bc] hover:text-teal-800 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
-                      title="Upload another monthly invoice for this company"
-                    >
-                      <Plus size={13} />
-                      <span>Add Month Invoice</span>
-                    </button>
+                    {roleView === 'CM' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenUploadModal(group.companyName);
+                        }}
+                        className="px-2.5 py-1 bg-white hover:bg-teal-50 border border-teal-300 text-[#1ab0bc] hover:text-teal-800 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
+                        title="Upload another monthly invoice for this company"
+                      >
+                        <Plus size={13} />
+                        <span>Add Month Invoice</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -897,12 +1309,20 @@ export function OldInvoicesArchive({
                       <table className="w-full text-left text-xs">
                         <thead className="bg-gray-100/60 text-gray-600 font-bold uppercase tracking-wider text-[10px] border-b border-gray-200">
                           <tr>
-                            <th className="px-4 py-2.5 w-44">Billing Month</th>
-                            <th className="px-4 py-2.5 w-36">Invoice #</th>
-                            <th className="px-4 py-2.5 w-32">Amount (₹)</th>
-                            <th className="px-4 py-2.5 min-w-[200px]">Remarks / Notes</th>
-                            <th className="px-4 py-2.5 w-48">Uploaded By</th>
-                            <th className="px-4 py-2.5 w-44 text-right">Actions</th>
+                            <th className="px-4 py-2.5 w-40">Billing Month</th>
+                            <th className="px-4 py-2.5 w-32">Invoice #</th>
+                            <th className="px-4 py-2.5 w-28">Invoice ₹</th>
+                            {/* PAYMENT RECEIVED & UTR (VISIBLE TO BOTH ACCOUNTANT & CM; EDITABLE ONLY BY ACCOUNTANT) */}
+                            <th className="px-4 py-2.5 min-w-[220px] bg-indigo-50/60 text-indigo-950">
+                              <div className="flex items-center gap-1">
+                                <Calculator size={11} className="text-indigo-600" />
+                                <span>Payment Received & UTR {roleView === 'CM' && <span className="text-[9px] text-gray-500 font-normal lowercase">(read-only)</span>}</span>
+                              </div>
+                            </th>
+                            <th className="px-4 py-2.5 w-24 bg-indigo-50/60 text-indigo-950">TDS</th>
+                            <th className="px-4 py-2.5 min-w-[180px]">Remarks / Notes</th>
+                            <th className="px-4 py-2.5 w-40">Uploaded By</th>
+                            <th className="px-4 py-2.5 w-52 text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 bg-white font-sans">
@@ -936,6 +1356,210 @@ export function OldInvoicesArchive({
                                 )}
                               </td>
 
+                              {/* ACCOUNTANT PAYMENT RECEIVED & UTR DETAILS (VISIBLE TO BOTH; EDITABLE BY ACCOUNTANT) */}
+                              <td className="px-4 py-3 bg-indigo-50/20">
+                                {(() => {
+                                  let parts: PaymentInstallment[] = [];
+                                  if (item.paymentsJson) {
+                                    try {
+                                      const p = JSON.parse(item.paymentsJson);
+                                      if (Array.isArray(p)) parts = p;
+                                    } catch {}
+                                  }
+
+                                  if (parts.length > 0) {
+                                    const totalRec = parts.reduce((sum, p) => sum + (parseFloat(p.receiveAmount) || 0), 0);
+                                    const hasMultipleParts = parts.length > 1;
+
+                                    return (
+                                      <div className="space-y-1.5">
+                                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 font-mono">
+                                          <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                                          <span>₹{totalRec.toLocaleString('en-IN')}</span>
+                                          {hasMultipleParts && (
+                                            <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-800 text-[9px] font-bold rounded">
+                                              {parts.length} Parts
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* LIST OF PAYMENT PARTS */}
+                                        <div className="space-y-1">
+                                          {parts.map((p, pIdx) => (
+                                            <div key={p.id || pIdx} className="text-[10px] bg-white p-1.5 border border-indigo-100 rounded space-y-1 font-mono">
+                                              <div className="flex items-center justify-between gap-1 text-gray-700">
+                                                <span className="font-bold text-indigo-950">
+                                                  {hasMultipleParts ? `Part ${pIdx + 1}: ` : ''}₹{parseFloat(p.receiveAmount || '0').toLocaleString('en-IN')}
+                                                </span>
+                                                <span className="text-gray-400 font-sans">{p.payReceiveDate}</span>
+                                              </div>
+                                              <div className="flex items-center gap-1 text-gray-600 flex-wrap">
+                                                <span className="px-1 bg-gray-100 rounded text-[9px]">{p.paymentMode || 'UTR'}</span>
+                                                {p.utrNumber && <span className="font-bold truncate max-w-[120px]">{p.utrNumber}</span>}
+                                              </div>
+
+                                              {/* ATTACHED DOCUMENTS */}
+                                              <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                                {p.paymentDocUrl && (
+                                                  <a
+                                                    href={p.paymentDocUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded text-[8px] font-bold"
+                                                    title="View Payment Received Document"
+                                                  >
+                                                    <Paperclip size={8} />
+                                                    <span>Bank Advice</span>
+                                                  </a>
+                                                )}
+                                                {p.utrDocUrl && (
+                                                  <a
+                                                    href={p.utrDocUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded text-[8px] font-bold"
+                                                    title="View UTR Proof Document"
+                                                  >
+                                                    <Paperclip size={8} />
+                                                    <span>UTR Proof</span>
+                                                  </a>
+                                                )}
+                                                {p.otherDocUrl && (
+                                                  <a
+                                                    href={p.otherDocUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[8px] font-bold"
+                                                    title="View Other Supporting Document"
+                                                  >
+                                                    <Paperclip size={8} />
+                                                    <span>Supporting Doc</span>
+                                                  </a>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+
+                                        {/* QUICK ACTION BUTTONS (ONLY FOR ACCOUNTANT VIEW OR SUPER ADMIN) */}
+                                        {(roleView === 'ACCOUNTANT' || isSuperAdmin) && (
+                                          <div className="flex items-center gap-2 pt-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenPaymentModal(item)}
+                                              className="text-[9px] font-bold text-indigo-600 hover:text-indigo-900 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            >
+                                              <Edit3 size={9} />
+                                              <span>Edit Payment</span>
+                                            </button>
+                                            <span className="text-gray-300">|</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleClearPaymentDetails(item.id)}
+                                              className="text-[9px] font-bold text-red-500 hover:text-red-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                              title="Clear payment data and reset to pending"
+                                            >
+                                              <Trash2 size={9} />
+                                              <span>Clear</span>
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+
+                                  // Legacy single payment display
+                                  if (item.payReceiveDate || item.receiveAmount || item.utrNumber || item.utrFileUrl) {
+                                    return (
+                                      <div className="space-y-1">
+                                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 font-mono">
+                                          <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                                          <span>₹{Number(item.receiveAmount || item.amount || 0).toLocaleString('en-IN')}</span>
+                                          {item.payReceiveDate && (
+                                            <span className="text-[10px] text-gray-500 font-normal font-sans">
+                                              on {item.payReceiveDate}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-[10px] text-indigo-950 font-mono flex-wrap">
+                                          <span className="px-1.5 py-0.2 bg-indigo-100/70 border border-indigo-200 rounded font-bold">
+                                            {item.paymentMode || 'UTR'}
+                                          </span>
+                                          <span className="font-bold">{item.utrNumber || 'No Ref #'}</span>
+                                          {item.utrDate && (
+                                            <span className="text-gray-400">({item.utrDate})</span>
+                                          )}
+                                        </div>
+                                        {item.utrFileUrl && (
+                                          <a
+                                            href={item.utrFileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100/80 hover:bg-indigo-200 text-indigo-900 border border-indigo-300 rounded text-[9px] font-bold mt-0.5"
+                                          >
+                                            <Paperclip size={9} />
+                                            <span>UTR Proof Document</span>
+                                            <ExternalLink size={8} />
+                                          </a>
+                                        )}
+
+                                        {/* QUICK ACTION BUTTONS (ONLY FOR ACCOUNTANT VIEW OR SUPER ADMIN) */}
+                                        {(roleView === 'ACCOUNTANT' || isSuperAdmin) && (
+                                          <div className="flex items-center gap-2 pt-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenPaymentModal(item)}
+                                              className="text-[9px] font-bold text-indigo-600 hover:text-indigo-900 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            >
+                                              <Edit3 size={9} />
+                                              <span>Edit Payment</span>
+                                            </button>
+                                            <span className="text-gray-300">|</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleClearPaymentDetails(item.id)}
+                                              className="text-[9px] font-bold text-red-500 hover:text-red-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                              title="Clear payment data and reset to pending"
+                                            >
+                                              <Trash2 size={9} />
+                                              <span>Clear</span>
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[10px] font-bold">
+                                        <Clock size={10} /> Pending Entry
+                                      </span>
+                                      {(roleView === 'ACCOUNTANT' || isSuperAdmin) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenPaymentModal(item)}
+                                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                                        >
+                                          + Add
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+
+                              {/* TDS */}
+                              <td className="px-4 py-3 bg-indigo-50/20">
+                                {item.tdsDeducted === 'Yes' ? (
+                                  <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded text-[10px] font-mono font-bold">
+                                    Yes {item.tdsAmount ? `(₹${Number(item.tdsAmount).toLocaleString('en-IN')})` : ''}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-[10px]">No</span>
+                                )}
+                              </td>
+
                               {/* REMARKS */}
                               <td className="px-4 py-3 text-gray-700">
                                 {item.remarks ? (
@@ -964,7 +1588,20 @@ export function OldInvoicesArchive({
 
                               {/* ACTIONS */}
                               <td className="px-4 py-3 text-right">
-                                <div className="flex items-center justify-end gap-1.5">
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  {/* RECORD PAYMENT DETAILS BUTTON (ONLY FOR ACCOUNTANT VIEW) */}
+                                  {roleView === 'ACCOUNTANT' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenPaymentModal(item)}
+                                      className="px-2 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-300 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                                      title="Record / Edit Multi-Part Payment & UTR Proofs"
+                                    >
+                                      <CreditCard size={11} />
+                                      <span>Payment</span>
+                                    </button>
+                                  )}
+
                                   {/* VIEW PDF */}
                                   <button
                                     type="button"
@@ -990,25 +1627,29 @@ export function OldInvoicesArchive({
                                     <Download size={13} />
                                   </a>
 
-                                  {/* EDIT */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenEditModal(item)}
-                                    className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded transition-colors cursor-pointer"
-                                    title="Edit Invoice Details"
-                                  >
-                                    <Edit3 size={13} />
-                                  </button>
+                                  {/* EDIT (CM OR SUPER ADMIN) */}
+                                  {(roleView === 'CM' || isSuperAdmin) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditModal(item)}
+                                      className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded transition-colors cursor-pointer"
+                                      title="Edit Invoice Details"
+                                    >
+                                      <Edit3 size={13} />
+                                    </button>
+                                  )}
 
-                                  {/* DELETE */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteInvoice(item.id, item.companyName, item.month)}
-                                    className="p-1.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 rounded transition-colors cursor-pointer"
-                                    title="Delete from Archive"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
+                                  {/* DELETE INVOICE (CM OR SUPER ADMIN) */}
+                                  {(roleView === 'CM' || isSuperAdmin) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteInvoice(item.id, item.companyName, item.month)}
+                                      className="p-1.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 rounded transition-colors cursor-pointer"
+                                      title="Delete from Archive"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -1025,100 +1666,104 @@ export function OldInvoicesArchive({
       )}
 
       {/* ── UPLOAD / EDIT MODAL ── */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div
-            onClick={() => !submitting && setIsModalOpen(false)}
-            className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              onClick={(e) => e.stopPropagation()}
-              className={`bg-white border border-gray-200 shadow-2xl rounded-lg w-full ${
-                modalMode === 'upload' ? 'max-w-3xl max-h-[90vh]' : 'max-w-xl'
-              } overflow-hidden font-sans flex flex-col`}
-            >
-              {/* MODAL HEADER */}
-              <div className="px-6 py-4 bg-[#f8fafc] border-b border-gray-200 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 bg-teal-50 text-[#1ab0bc] border border-teal-200 flex items-center justify-center rounded">
-                    <FolderArchive size={18} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-tight">
-                      {modalMode === 'upload' ? 'Archive Historical Old Invoices' : 'Edit Old Invoice Record'}
-                    </h3>
-                    <p className="text-[11px] text-gray-500">
-                      {modalMode === 'upload'
-                        ? 'Attach single or multiple monthly invoices for this company in one submission.'
-                        : 'Update past monthly client invoice details.'}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  disabled={submitting}
-                  className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded cursor-pointer"
+      {mounted &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {isModalOpen && (
+              <div
+                onClick={() => !submitting && setIsModalOpen(false)}
+                className="fixed inset-0 z-[999999] bg-black/60 backdrop-blur-xs overflow-y-auto p-3 sm:p-6 flex justify-center items-start sm:items-center"
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 0 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className={`bg-white border border-gray-200 shadow-2xl rounded-xl w-full ${
+                    modalMode === 'upload' ? 'max-w-3xl' : 'max-w-xl'
+                  } my-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] overflow-hidden font-sans flex flex-col`}
                 >
-                  <X size={16} />
-                </button>
-              </div>
-
-              {/* FORM BODY */}
-              <form onSubmit={handleSubmitForm} className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
-                {/* 1. COMPANY & CENTER HEADER */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-gray-50 p-3.5 border border-gray-200 rounded">
-                  {/* COMPANY NAME */}
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                      Company / Client Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      list="company-suggestions-list"
-                      value={formCompany}
-                      onChange={(e) => setFormCompany(e.target.value)}
-                      placeholder="e.g. Acme Technologies Private Limited"
-                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] font-medium"
-                    />
-                    <datalist id="company-suggestions-list">
-                      {companySuggestions.map((comp) => (
-                        <option key={comp} value={comp} />
-                      ))}
-                    </datalist>
-                  </div>
-
-                  {/* CENTER / LOCATION */}
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                      Center / Location {isSuperAdmin ? '' : <span className="text-gray-400 font-normal">(Assigned)</span>}
-                    </label>
-                    {isSuperAdmin ? (
-                      <select
-                        value={formLocationId}
-                        onChange={(e) => setFormLocationId(e.target.value)}
-                        className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] cursor-pointer"
-                      >
-                        <option value="">All / Specific Center...</option>
-                        {locations.map((loc) => (
-                          <option key={loc.id} value={loc.id}>
-                            {loc.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="w-full bg-gray-100 border border-gray-300 px-3 py-2 text-xs text-gray-800 font-bold flex items-center gap-1.5 cursor-not-allowed">
-                        <MapPin size={13} className="text-[#1ab0bc] shrink-0" />
-                        <span>{resolvedLocationName || formLocationName || currentUserLocationName || locations[0]?.name || 'Center'}</span>
+                  {/* MODAL HEADER */}
+                  <div className="px-6 py-4 bg-[#f8fafc] border-b border-gray-200 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 bg-teal-50 text-[#1ab0bc] border border-teal-200 flex items-center justify-center rounded">
+                        <FolderArchive size={18} />
                       </div>
-                    )}
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-tight">
+                          {modalMode === 'upload' ? 'Archive Historical Old Invoices' : 'Edit Old Invoice Record'}
+                        </h3>
+                        <p className="text-[11px] text-gray-500">
+                          {modalMode === 'upload'
+                            ? 'Attach single or multiple monthly invoices for this company in one submission.'
+                            : 'Update past monthly client invoice details.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      disabled={submitting}
+                      className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded cursor-pointer"
+                    >
+                      <X size={16} />
+                    </button>
                   </div>
-                </div>
+
+                  {/* FORM BODY */}
+                  <form onSubmit={handleSubmitForm} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div className="p-6 space-y-4 text-xs overflow-y-auto flex-1 overscroll-contain">
+                      {/* 1. COMPANY & CENTER HEADER */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-gray-50 p-3.5 border border-gray-200 rounded">
+                        {/* COMPANY NAME */}
+                        <div>
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Company / Client Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            list="company-suggestions-list"
+                            value={formCompany}
+                            onChange={(e) => setFormCompany(e.target.value)}
+                            placeholder="e.g. Acme Technologies Private Limited"
+                            className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] font-medium"
+                          />
+                          <datalist id="company-suggestions-list">
+                            {companySuggestions.map((comp) => (
+                              <option key={comp} value={comp} />
+                            ))}
+                          </datalist>
+                        </div>
+
+                        {/* CENTER / LOCATION */}
+                        <div>
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                            Center / Location {isSuperAdmin ? '' : <span className="text-gray-400 font-normal">(Assigned)</span>}
+                          </label>
+                          {isSuperAdmin ? (
+                            <select
+                              value={formLocationId}
+                              onChange={(e) => setFormLocationId(e.target.value)}
+                              className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] cursor-pointer"
+                            >
+                              <option value="">All / Specific Center...</option>
+                              {locations.map((loc) => (
+                                <option key={loc.id} value={loc.id}>
+                                  {loc.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="w-full bg-gray-100 border border-gray-300 px-3 py-2 text-xs text-gray-800 font-bold flex items-center gap-1.5 cursor-not-allowed">
+                              <MapPin size={13} className="text-[#1ab0bc] shrink-0" />
+                              <span>{resolvedLocationName || formLocationName || currentUserLocationName || locations[0]?.name || 'Center'}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
 
                 {/* ── MODE: UPLOAD MULTIPLE INVOICES ── */}
                 {modalMode === 'upload' ? (
@@ -1514,9 +2159,10 @@ export function OldInvoicesArchive({
                     </div>
                   </div>
                 )}
+                    </div>
 
                 {/* MODAL FOOTER BUTTONS */}
-                <div className="pt-3 border-t border-gray-200 flex items-center justify-between shrink-0">
+                <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex items-center justify-between shrink-0">
                   <div className="text-[11px] text-gray-500">
                     {modalMode === 'upload' && formCompany.trim() && (
                       <span>
@@ -1564,71 +2210,565 @@ export function OldInvoicesArchive({
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )}
 
       {/* ── PDF DOCUMENT PREVIEW MODAL ── */}
-      <AnimatePresence>
-        {previewPdfUrl && (
-          <div
-            onClick={() => setPreviewPdfUrl(null)}
-            className="fixed inset-0 z-[999999] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white border border-gray-200 shadow-2xl rounded-lg w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden"
-            >
-              {/* PREVIEW HEADER */}
-              <div className="px-5 py-3 bg-gray-900 text-white flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <FileText size={16} className="text-[#1ab0bc]" />
-                  <h3 className="font-bold text-xs uppercase tracking-tight truncate">
-                    {previewPdfTitle || 'Archived Invoice PDF'}
-                  </h3>
-                </div>
+      {mounted &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {previewPdfUrl && (
+              <div
+                onClick={() => setPreviewPdfUrl(null)}
+                className="fixed inset-0 z-[999999] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4"
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-white border border-gray-200 shadow-2xl rounded-lg w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden"
+                >
+                  {/* PREVIEW HEADER */}
+                  <div className="px-5 py-3 bg-gray-900 text-white flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={16} className="text-[#1ab0bc]" />
+                      <h3 className="font-bold text-xs uppercase tracking-tight truncate">
+                        {previewPdfTitle || 'Archived Invoice PDF'}
+                      </h3>
+                    </div>
 
-                <div className="flex items-center gap-2">
-                  <a
-                    href={previewPdfUrl}
-                    download
-                    className="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold rounded flex items-center gap-1.5 transition-colors"
-                  >
-                    <Download size={12} />
-                    <span>Download</span>
-                  </a>
-                  <a
-                    href={previewPdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-1.5 hover:bg-gray-800 text-gray-300 hover:text-white rounded"
-                    title="Open in new tab"
-                  >
-                    <ExternalLink size={14} />
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewPdfUrl(null)}
-                    className="p-1.5 hover:bg-gray-800 text-gray-300 hover:text-white rounded cursor-pointer"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={previewPdfUrl}
+                        download
+                        className="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold rounded flex items-center gap-1.5 transition-colors"
+                      >
+                        <Download size={12} />
+                        <span>Download</span>
+                      </a>
+                      <a
+                        href={previewPdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 hover:bg-gray-800 text-gray-300 hover:text-white rounded"
+                        title="Open in new tab"
+                      >
+                        <ExternalLink size={14} />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPdfUrl(null)}
+                        className="p-1.5 hover:bg-gray-800 text-gray-300 hover:text-white rounded cursor-pointer"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </div>
 
-              {/* EMBEDDED VIEWER */}
-              <div className="flex-1 bg-gray-100 relative">
-                <iframe
-                  src={`${previewPdfUrl}#toolbar=1`}
-                  className="w-full h-full border-none"
-                  title="PDF Viewer"
-                />
+                  {/* EMBEDDED VIEWER */}
+                  <div className="flex-1 bg-gray-100 relative">
+                    <iframe
+                      src={`${previewPdfUrl}#toolbar=1`}
+                      className="w-full h-full border-none"
+                      title="PDF Viewer"
+                    />
+                  </div>
+                </motion.div>
               </div>
-            </motion.div>
-          </div>
+            )}
+          </AnimatePresence>,
+          document.body
         )}
-      </AnimatePresence>
+
+      {/* ── PAYMENT RECEIVED & UTR DETAILS MODAL (FOR ACCOUNTANT VIEW - MULTI-PART PAYMENTS) ── */}
+      {mounted &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {isPaymentModalOpen &&
+              paymentTargetInvoice &&
+              (() => {
+                const totalInvAmount = Number(paymentTargetInvoice.amount || 0);
+                const totalRecAmount = paymentParts.reduce(
+                  (sum, p) => sum + (parseFloat(p.receiveAmount) || 0),
+                  0
+                );
+                const totalTdsDeducted = paymentParts.reduce(
+                  (sum, p) => (p.tdsDeducted === 'Yes' ? sum + (parseFloat(p.tdsAmount) || 0) : sum),
+                  0
+                );
+                const pendingBalance = Math.max(0, totalInvAmount - totalRecAmount - totalTdsDeducted);
+
+                return (
+                  <div
+                    onClick={() => !savingPayment && setIsPaymentModalOpen(false)}
+                    className="fixed inset-0 z-[999999] bg-black/60 backdrop-blur-xs overflow-y-auto p-3 sm:p-6 flex justify-center items-start sm:items-center"
+                  >
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 0 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 0 }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-white border border-gray-200 shadow-2xl rounded-xl w-full max-w-3xl my-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] overflow-hidden font-sans flex flex-col"
+                    >
+                      {/* MODAL HEADER */}
+                      <div className="px-6 py-3.5 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 bg-indigo-600 text-white flex items-center justify-center rounded">
+                            <CreditCard size={18} />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-sm text-indigo-950 uppercase tracking-tight">
+                              Record Payment Received & UTR
+                            </h3>
+                            <p className="text-[11px] text-indigo-700/80">
+                              {paymentTargetInvoice.companyName} • {paymentTargetInvoice.month}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsPaymentModalOpen(false)}
+                          className="p-1 hover:bg-indigo-100 text-gray-500 hover:text-gray-800 rounded cursor-pointer"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      {/* INVOICE SUMMARY BANNER & CALCULATIONS */}
+                      <div className="px-6 py-2.5 bg-gray-50 border-b border-gray-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono shrink-0">
+                        <div>
+                          <span className="text-gray-500 text-[10px] block uppercase">Invoice #</span>
+                          <strong className="text-gray-900">{paymentTargetInvoice.invoiceNo || 'N/A'}</strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 text-[10px] block uppercase">Invoice Amount</span>
+                          <strong className="text-gray-900 font-bold">
+                            ₹{totalInvAmount.toLocaleString('en-IN')}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 text-[10px] block uppercase">Total Received</span>
+                          <strong className="text-emerald-700 font-bold">
+                            ₹{totalRecAmount.toLocaleString('en-IN')}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 text-[10px] block uppercase">Balance Pending</span>
+                          <strong
+                            className={
+                              pendingBalance === 0 ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'
+                            }
+                          >
+                            ₹{pendingBalance.toLocaleString('en-IN')}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {/* FORM CONTAINER */}
+                      <form onSubmit={handleSavePaymentDetails} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 overscroll-contain">
+                          {/* MULTI-PART INSTALLMENTS */}
+                          <div className="space-y-4">
+                            {paymentParts.map((part, index) => (
+                              <div
+                                key={part.id}
+                                className="bg-white border-2 border-indigo-100 rounded-lg p-4 space-y-4 shadow-2xs relative"
+                              >
+                                {/* PART HEADER */}
+                                <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 bg-indigo-600 text-white font-mono font-bold text-xs rounded">
+                                      Part #{index + 1}
+                                    </span>
+                                    <span className="text-xs text-gray-500 font-medium">
+                                      Payment Entry {index + 1} of {paymentParts.length}
+                                    </span>
+                                  </div>
+
+                                  {paymentParts.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemovePaymentPart(part.id)}
+                                      className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                      title="Delete this payment part"
+                                    >
+                                      <Trash2 size={12} />
+                                      <span>Remove Part</span>
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* PART ROW 1: DATE & AMOUNT */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                      Payment Receive Date
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={part.payReceiveDate}
+                                      onChange={(e) =>
+                                        handleUpdatePaymentPart(part.id, 'payReceiveDate', e.target.value)
+                                      }
+                                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-indigo-600 font-mono"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                      Received Amount (₹)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={part.receiveAmount}
+                                      onChange={(e) =>
+                                        handleUpdatePaymentPart(part.id, 'receiveAmount', e.target.value)
+                                      }
+                                      placeholder="e.g. 25000"
+                                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-indigo-600 font-mono font-bold"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* PART ROW 2: MODE & UTR NUMBER */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                      UTR / Payment Mode
+                                    </label>
+                                    <select
+                                      value={part.paymentMode}
+                                      onChange={(e) =>
+                                        handleUpdatePaymentPart(part.id, 'paymentMode', e.target.value)
+                                      }
+                                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-indigo-600 font-medium cursor-pointer"
+                                    >
+                                      <option value="NEFT">NEFT</option>
+                                      <option value="RTGS">RTGS</option>
+                                      <option value="IMPS">IMPS</option>
+                                      <option value="UPI">UPI</option>
+                                      <option value="Cheque">Cheque</option>
+                                      <option value="Cash">Cash</option>
+                                      <option value="Bank Transfer">Bank Transfer</option>
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                      UTR / Reference Number
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={part.utrNumber}
+                                      onChange={(e) =>
+                                        handleUpdatePaymentPart(part.id, 'utrNumber', e.target.value)
+                                      }
+                                      placeholder="e.g. HDFC0001234567"
+                                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-indigo-600 font-mono"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* PART ROW 3: UTR DATE & TDS TOGGLE */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                      UTR Date
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={part.utrDate}
+                                      onChange={(e) =>
+                                        handleUpdatePaymentPart(part.id, 'utrDate', e.target.value)
+                                      }
+                                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-indigo-600 font-mono"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                      TDS Deducted?
+                                    </label>
+                                    <select
+                                      value={part.tdsDeducted}
+                                      onChange={(e) =>
+                                        handleUpdatePaymentPart(part.id, 'tdsDeducted', e.target.value)
+                                      }
+                                      className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-indigo-600 font-medium cursor-pointer"
+                                    >
+                                      <option value="No">No</option>
+                                      <option value="Yes">Yes</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                {/* TDS AMOUNT (IF YES) */}
+                                {part.tdsDeducted === 'Yes' && (
+                                  <div className="p-3 bg-amber-50 border border-amber-200 rounded">
+                                    <label className="block text-[11px] font-bold uppercase tracking-wider text-amber-900 mb-1">
+                                      TDS Amount Deducted (₹)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={part.tdsAmount}
+                                      onChange={(e) =>
+                                        handleUpdatePaymentPart(part.id, 'tdsAmount', e.target.value)
+                                      }
+                                      placeholder="e.g. 500"
+                                      className="w-full bg-white border border-amber-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-indigo-600 font-mono font-bold"
+                                    />
+                                  </div>
+                                )}
+
+                                {/* 3 UNIQUE ATTACHMENT SLOTS */}
+                                <div className="space-y-2 pt-2 border-t border-gray-100">
+                                  <label className="block text-[11px] font-bold uppercase tracking-wider text-indigo-950">
+                                    📎 Attached Documents for Part #{index + 1} (3 Attachment Options)
+                                  </label>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    {/* SLOT 1: Payment Received Document / Bank Advice */}
+                                    <div className="p-2.5 bg-gray-50 border border-gray-200 rounded text-xs space-y-1.5">
+                                      <div className="text-[10px] font-bold text-gray-700 uppercase">
+                                        1. Payment Received Doc / Advice
+                                      </div>
+                                      {part.paymentDocUrl ? (
+                                        <div className="space-y-1">
+                                          <div
+                                            className="text-[10px] font-mono text-indigo-900 font-bold truncate"
+                                            title={part.paymentDocName || 'Payment_Doc.pdf'}
+                                          >
+                                            {part.paymentDocName || 'Payment_Doc.pdf'}
+                                          </div>
+                                          <div className="flex items-center gap-1.5">
+                                            <a
+                                              href={part.paymentDocUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="px-2 py-0.5 bg-white hover:bg-teal-50 text-teal-800 border border-teal-300 rounded text-[9px] font-bold cursor-pointer"
+                                            >
+                                              View
+                                            </a>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemovePartAttachment(part.id, 'paymentDoc')}
+                                              className="p-0.5 text-red-500 hover:bg-red-50 rounded cursor-pointer"
+                                              title="Remove"
+                                            >
+                                              <X size={12} />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleTriggerPartUpload(part.id, 'paymentDoc')}
+                                          disabled={part.uploadingSlot === 'paymentDoc'}
+                                          className="w-full py-2 px-2 border border-dashed border-gray-300 hover:border-teal-600 bg-white hover:bg-teal-50/50 rounded text-[10px] font-bold text-gray-600 hover:text-teal-900 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                                        >
+                                          {part.uploadingSlot === 'paymentDoc' ? (
+                                            <Loader2 size={12} className="animate-spin text-teal-600" />
+                                          ) : (
+                                            <Upload size={11} className="text-gray-400" />
+                                          )}
+                                          <span>+ Upload Advice</span>
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {/* SLOT 2: UTR Proof / Bank Statement Entry */}
+                                    <div className="p-2.5 bg-gray-50 border border-gray-200 rounded text-xs space-y-1.5">
+                                      <div className="text-[10px] font-bold text-gray-700 uppercase">
+                                        2. UTR Proof / Statement
+                                      </div>
+                                      {part.utrDocUrl ? (
+                                        <div className="space-y-1">
+                                          <div
+                                            className="text-[10px] font-mono text-indigo-900 font-bold truncate"
+                                            title={part.utrDocName || 'UTR_Proof.pdf'}
+                                          >
+                                            {part.utrDocName || 'UTR_Proof.pdf'}
+                                          </div>
+                                          <div className="flex items-center gap-1.5">
+                                            <a
+                                              href={part.utrDocUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="px-2 py-0.5 bg-white hover:bg-indigo-50 text-indigo-800 border border-indigo-300 rounded text-[9px] font-bold cursor-pointer"
+                                            >
+                                              View
+                                            </a>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemovePartAttachment(part.id, 'utrDoc')}
+                                              className="p-0.5 text-red-500 hover:bg-red-50 rounded cursor-pointer"
+                                              title="Remove"
+                                            >
+                                              <X size={12} />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleTriggerPartUpload(part.id, 'utrDoc')}
+                                          disabled={part.uploadingSlot === 'utrDoc'}
+                                          className="w-full py-2 px-2 border border-dashed border-gray-300 hover:border-indigo-600 bg-white hover:bg-indigo-50/50 rounded text-[10px] font-bold text-gray-600 hover:text-indigo-900 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                                        >
+                                          {part.uploadingSlot === 'utrDoc' ? (
+                                            <Loader2 size={12} className="animate-spin text-indigo-600" />
+                                          ) : (
+                                            <Upload size={11} className="text-gray-400" />
+                                          )}
+                                          <span>+ Upload UTR</span>
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {/* SLOT 3: Other Supporting Document / TDS Certificate */}
+                                    <div className="p-2.5 bg-gray-50 border border-gray-200 rounded text-xs space-y-1.5">
+                                      <div className="text-[10px] font-bold text-gray-700 uppercase">
+                                        3. Other Doc / TDS Cert
+                                      </div>
+                                      {part.otherDocUrl ? (
+                                        <div className="space-y-1">
+                                          <div
+                                            className="text-[10px] font-mono text-indigo-900 font-bold truncate"
+                                            title={part.otherDocName || 'Supporting_Doc.pdf'}
+                                          >
+                                            {part.otherDocName || 'Supporting_Doc.pdf'}
+                                          </div>
+                                          <div className="flex items-center gap-1.5">
+                                            <a
+                                              href={part.otherDocUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="px-2 py-0.5 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 rounded text-[9px] font-bold cursor-pointer"
+                                            >
+                                              View
+                                            </a>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemovePartAttachment(part.id, 'otherDoc')}
+                                              className="p-0.5 text-red-500 hover:bg-red-50 rounded cursor-pointer"
+                                              title="Remove"
+                                            >
+                                              <X size={12} />
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleTriggerPartUpload(part.id, 'otherDoc')}
+                                          disabled={part.uploadingSlot === 'otherDoc'}
+                                          className="w-full py-2 px-2 border border-dashed border-gray-300 hover:border-amber-600 bg-white hover:bg-amber-50/50 rounded text-[10px] font-bold text-gray-600 hover:text-amber-900 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                                        >
+                                          {part.uploadingSlot === 'otherDoc' ? (
+                                            <Loader2 size={12} className="animate-spin text-amber-600" />
+                                          ) : (
+                                            <Upload size={11} className="text-gray-400" />
+                                          )}
+                                          <span>+ Upload Doc</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* ADD ANOTHER PAYMENT PART BUTTON */}
+                          <div className="text-center pt-2">
+                            <button
+                              type="button"
+                              onClick={handleAddPaymentPart}
+                              className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 font-bold text-xs rounded inline-flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                            >
+                              <Plus size={14} />
+                              <span>+ Add Another Payment Entry / Part</span>
+                            </button>
+                          </div>
+
+                          {/* HIDDEN GLOBAL FILE INPUT FOR PART UPLOADS */}
+                          <input
+                            ref={partFileInputRef}
+                            type="file"
+                            accept="application/pdf,image/*"
+                            onChange={handlePartFileChange}
+                            className="hidden"
+                          />
+                        </div>
+
+                        {/* MODAL ACTIONS FOOTER */}
+                        <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+                          <div className="flex items-center gap-3">
+                            <div className="text-xs font-mono text-gray-500">
+                              Total Entries: <strong className="text-gray-900">{paymentParts.length}</strong>
+                            </div>
+
+                            {paymentTargetInvoice &&
+                              (paymentTargetInvoice.receiveAmount !== null ||
+                                paymentTargetInvoice.paymentsJson ||
+                                paymentTargetInvoice.payReceiveDate ||
+                                paymentTargetInvoice.utrNumber) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleClearPaymentDetails()}
+                                  disabled={savingPayment}
+                                  className="px-2.5 py-1 text-red-600 hover:bg-red-50 border border-red-200 rounded text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                  title="Clear / delete all recorded payment data and reset to pending"
+                                >
+                                  <Trash2 size={12} />
+                                  <span>Clear / Delete Payment</span>
+                                </button>
+                              )}
+                          </div>
+
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => setIsPaymentModalOpen(false)}
+                              disabled={savingPayment}
+                              className="px-4 py-2 border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold text-xs cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={savingPayment}
+                              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                            >
+                              {savingPayment ? (
+                                <>
+                                  <Loader2 size={13} className="animate-spin" />
+                                  <span>Saving Payments...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 size={13} />
+                                  <span>Save Payment Details</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </form>
+                    </motion.div>
+                  </div>
+                );
+              })()}
+          </AnimatePresence>,
+          document.body
+        )}
     </div>
   );
 }

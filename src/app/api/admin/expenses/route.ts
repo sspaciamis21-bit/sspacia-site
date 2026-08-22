@@ -5,13 +5,25 @@ import prisma from '@/lib/prisma';
 
 // Default clean starter columns
 export const DEFAULT_EXPENSE_COLUMNS = [
-  { id: 'col_1', label: 'Date', type: 'text', width: '140px' },
-  { id: 'col_2', label: 'Expense Category / Item', type: 'text', width: '220px' },
-  { id: 'col_3', label: 'Vendor / Paid To', type: 'text', width: '180px' },
-  { id: 'col_4', label: 'Amount (₹)', type: 'number', width: '140px' },
-  { id: 'col_5', label: 'Payment Mode', type: 'text', width: '140px' },
-  { id: 'col_6', label: 'Receipt / Ref #', type: 'text', width: '140px' },
-  { id: 'col_7', label: 'Remarks / Notes', type: 'text', width: '240px' },
+  { id: 'col_1', label: 'Date', type: 'date', width: '140px', isAccountantCol: false },
+  { id: 'col_2', label: 'Expense Description', type: 'text', width: '220px', isAccountantCol: false },
+  { id: 'col_3', label: 'Expense Section', type: 'text', width: '180px', isAccountantCol: false },
+  { id: 'col_4', label: 'Amount (₹)', type: 'number', width: '140px', isAccountantCol: false },
+  { id: 'col_5', label: 'Payment Mode', type: 'text', width: '140px', isAccountantCol: false },
+  { id: 'col_6', label: 'Receipt / Ref #', type: 'text', width: '140px', isAccountantCol: false },
+  { id: 'col_7', label: 'Remarks / Notes', type: 'text', width: '240px', isAccountantCol: false },
+  { id: 'col_8', label: 'Attached PDF', type: 'file', width: '160px', isAccountantCol: false },
+];
+
+export const DEFAULT_ACCOUNTANT_COLUMNS = [
+  { id: 'acc_pay_receive_date', label: 'Pay Receive Date', type: 'date', width: '150px', isAccountantCol: true },
+  { id: 'acc_receive_amount', label: 'Receive Amount (₹)', type: 'number', width: '150px', isAccountantCol: true },
+  { id: 'acc_payment_mode', label: 'UTR / Payment Mode', type: 'select', width: '160px', isAccountantCol: true, options: ['NEFT', 'RTGS', 'IMPS', 'UPI', 'Cheque', 'Cash', 'Bank Transfer'] },
+  { id: 'acc_utr_number', label: 'UTR Number', type: 'text', width: '170px', isAccountantCol: true },
+  { id: 'acc_utr_date', label: 'UTR Date', type: 'date', width: '140px', isAccountantCol: true },
+  { id: 'acc_utr_file', label: 'Upload UTR', type: 'file', width: '160px', isAccountantCol: true },
+  { id: 'acc_tds_deducted', label: 'TDS', type: 'dropdown', width: '100px', isAccountantCol: true, options: ['No', 'Yes'] },
+  { id: 'acc_tds_amount', label: 'TDS Amount (₹)', type: 'number', width: '140px', isAccountantCol: true },
 ];
 
 // Generate 100 clean empty pre-built rows for instant data entry
@@ -24,6 +36,7 @@ export const DEFAULT_SAMPLE_ROWS = Array.from({ length: 100 }, (_, i) => ({
   col_5: '',
   col_6: '',
   col_7: '',
+  col_8: '',
 }));
 
 function normalizeString(str: string): string {
@@ -66,6 +79,7 @@ export async function GET(req: NextRequest) {
       roleName === 'super_admin' ||
       roleName === 'super-admin' ||
       roleName === 'super admin';
+    const isAccountant = (dbUser.email || '').toLowerCase() === 'ssinfrazone21@gmail.com' || (dbUser.name || '').toLowerCase() === 'accounts';
 
     let accessibleLocations: any[] = [];
 
@@ -75,8 +89,8 @@ export async function GET(req: NextRequest) {
       orderBy: { id: 'asc' }
     });
 
-    if (isSuperAdmin) {
-      // Super Admin can access all active location centers
+    if (isSuperAdmin || isAccountant) {
+      // Super Admin and Accountant can access all active location centers
       accessibleLocations = allLocations;
     } else {
       // Community Manager: check assigned locations first
@@ -143,13 +157,25 @@ export async function GET(req: NextRequest) {
     const sheets = accessibleLocations.map((loc) => {
       const existing = sheetsMap.get(loc.id);
       if (existing) {
-        return existing;
+        let cols = Array.isArray(existing.columns) ? existing.columns : DEFAULT_EXPENSE_COLUMNS;
+        cols = cols.map((c: any) => ({
+          ...c,
+          isAccountantCol: c.isAccountantCol ?? (c.id.startsWith('acc_') ? true : false)
+        }));
+        const hasAcc = cols.some((c: any) => c.isAccountantCol);
+        if (!hasAcc) {
+          cols = [...cols, ...DEFAULT_ACCOUNTANT_COLUMNS];
+        }
+        return {
+          ...existing,
+          columns: cols
+        };
       }
       return {
         id: 0,
         locationId: loc.id,
         title: `${loc.name} Expense Sheet`,
-        columns: DEFAULT_EXPENSE_COLUMNS,
+        columns: [...DEFAULT_EXPENSE_COLUMNS, ...DEFAULT_ACCOUNTANT_COLUMNS],
         rows: DEFAULT_SAMPLE_ROWS,
         location: loc,
         updatedAt: new Date().toISOString()

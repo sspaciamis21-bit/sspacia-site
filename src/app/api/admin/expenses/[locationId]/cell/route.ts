@@ -23,11 +23,13 @@ async function verifyLocationAccess(userId: number, locationId: number): Promise
   if (!dbUser) return false;
 
   const roleName = (dbUser.role?.name || '').toLowerCase();
+  const isAccountant = (dbUser.email || '').toLowerCase() === 'ssinfrazone21@gmail.com' || (dbUser.name || '').toLowerCase() === 'accounts';
   if (
     roleName === 'admin' ||
     roleName === 'super_admin' ||
     roleName === 'super-admin' ||
-    roleName === 'super admin'
+    roleName === 'super admin' ||
+    isAccountant
   ) {
     return true;
   }

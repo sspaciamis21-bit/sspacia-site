@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/jwt';
 import { findOldInvoiceById, updateOldInvoice, deleteOldInvoice } from '@/lib/old-invoices-db';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +52,15 @@ export async function PUT(
       fileSize,
       locationId,
       locationName,
+      payReceiveDate,
+      receiveAmount,
+      paymentMode,
+      utrNumber,
+      utrDate,
+      utrFileUrl,
+      utrFileName,
+      tdsDeducted,
+      tdsAmount,
     } = body;
 
     const data: any = {};
@@ -62,11 +73,31 @@ export async function PUT(
       data.amount = parsedAmount !== null && !isNaN(parsedAmount) ? parsedAmount : null;
     }
     if (remarks !== undefined) data.remarks = remarks ? remarks.trim() : null;
-    if (invoiceUrl !== undefined) data.invoiceUrl = invoiceUrl.trim();
+    if (invoiceUrl !== undefined) data.invoiceUrl = invoiceUrl ? invoiceUrl.trim() : '';
     if (fileName !== undefined) data.fileName = fileName;
     if (fileSize !== undefined) data.fileSize = fileSize ? String(fileSize) : null;
     if (locationId !== undefined) data.locationId = locationId ? parseInt(String(locationId), 10) : null;
     if (locationName !== undefined) data.locationName = locationName;
+
+    // Payment Received Details
+    if (payReceiveDate !== undefined) data.payReceiveDate = payReceiveDate ? new Date(payReceiveDate) : null;
+    if (receiveAmount !== undefined) {
+      const parsedRec = receiveAmount ? parseFloat(String(receiveAmount).replace(/[^0-9.-]+/g, '')) : null;
+      data.receiveAmount = parsedRec !== null && !isNaN(parsedRec) ? parsedRec : null;
+    }
+    if (paymentMode !== undefined) data.paymentMode = paymentMode ? paymentMode.trim() : null;
+    if (utrNumber !== undefined) data.utrNumber = utrNumber ? utrNumber.trim() : null;
+    if (utrDate !== undefined) data.utrDate = utrDate ? new Date(utrDate) : null;
+    if (utrFileUrl !== undefined) data.utrFileUrl = utrFileUrl ? utrFileUrl.trim() : null;
+    if (utrFileName !== undefined) data.utrFileName = utrFileName ? utrFileName.trim() : null;
+    if (tdsDeducted !== undefined) data.tdsDeducted = tdsDeducted ? tdsDeducted.trim() : null;
+    if (tdsAmount !== undefined) {
+      const parsedTds = tdsAmount ? parseFloat(String(tdsAmount).replace(/[^0-9.-]+/g, '')) : null;
+      data.tdsAmount = parsedTds !== null && !isNaN(parsedTds) ? parsedTds : null;
+    }
+    if (body.paymentsJson !== undefined) {
+      data.paymentsJson = typeof body.paymentsJson === 'string' ? body.paymentsJson : JSON.stringify(body.paymentsJson);
+    }
 
     const updated = await updateOldInvoice(id, data);
 
@@ -86,6 +117,15 @@ export async function DELETE(
   props: { params: Promise<{ id: string }> }
 ) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth-token')?.value;
+    if (token) {
+      const payload = await verifyToken(token);
+      if (String(payload?.role || '').toUpperCase() === 'ACCOUNTANT') {
+        return NextResponse.json({ success: false, error: 'Accountants cannot delete invoices' }, { status: 403 });
+      }
+    }
+
     const params = await props.params;
     const id = parseInt(params.id, 10);
     if (isNaN(id)) {

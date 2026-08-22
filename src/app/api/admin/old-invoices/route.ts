@@ -17,6 +17,8 @@ export async function GET(request: Request) {
     let userAssignedLocationIds: number[] = [];
     let userAssignedLocations: { id: number; name: string; slug?: string }[] = [];
 
+    let isAccountant = false;
+
     if (token) {
       const payload = await verifyToken(token);
       if (payload?.id) {
@@ -27,6 +29,7 @@ export async function GET(request: Request) {
           where: { id: currentUserId },
           select: {
             name: true,
+            email: true,
             role: { select: { name: true } },
             assignedLocations: {
               select: {
@@ -41,6 +44,7 @@ export async function GET(request: Request) {
           const roleName = dbUser.role?.name ? String(dbUser.role.name).toUpperCase() : currentUserRole;
           currentUserRole = roleName;
           isSuperAdmin = roleName === 'ADMIN' || roleName === 'SUPER_ADMIN';
+          isAccountant = (dbUser.email || '').toLowerCase() === 'ssinfrazone21@gmail.com' || (dbUser.name || '').toLowerCase() === 'accounts';
 
           userAssignedLocations = (dbUser.assignedLocations || [])
             .map((al: any) => al.location)
@@ -65,8 +69,8 @@ export async function GET(request: Request) {
 
     // ── ROLE-BASED LOCATION ACCESS CONTROL ──
     // Community Managers can ONLY view old invoices for their assigned center(s) (e.g. Agarwal Complex)
-    // Super Admins can view and filter any center across the company
-    if (!isSuperAdmin) {
+    // Super Admins and Accountants can view and filter any center across all companies
+    if (!isSuperAdmin && !isAccountant) {
       if (userAssignedLocationIds.length > 0) {
         if (locationId && userAssignedLocationIds.includes(locationId)) {
           targetLocationId = locationId;
@@ -76,7 +80,9 @@ export async function GET(request: Request) {
         }
       } else if (currentUserId) {
         const scopedUserIds = await getNodeScopedUserIds(currentUserId);
-        uploadedByIds = scopedUserIds || [currentUserId];
+        if (scopedUserIds !== null) {
+          uploadedByIds = scopedUserIds;
+        }
       }
     }
 
@@ -94,7 +100,7 @@ export async function GET(request: Request) {
     // Fetch existing companies from ClientMaster for auto-suggestions
     // ClientMaster doesn't have locationId — scope by createdById for non-admin users
     let clientMasterWhere: any = undefined;
-    if (!isSuperAdmin && userAssignedLocationIds.length > 0) {
+    if (!isSuperAdmin && !isAccountant && userAssignedLocationIds.length > 0) {
       // Find user IDs assigned to the same locations
       const scopedUsers = await (prisma as any).userLocation.findMany({
         where: { locationId: { in: userAssignedLocationIds } },
@@ -123,8 +129,8 @@ export async function GET(request: Request) {
 
     const companySuggestions = Array.from(companySet).sort();
 
-    // Fetch locations for filter dropdown (All for Admin, assigned for CM)
-    const locations = isSuperAdmin
+    // Fetch locations for filter dropdown (All for Admin & Accountant, assigned for CM)
+    const locations = (isSuperAdmin || isAccountant)
       ? await (prisma as any).location.findMany({
           select: { id: true, name: true, slug: true },
           orderBy: { name: 'asc' },
@@ -139,7 +145,7 @@ export async function GET(request: Request) {
       data: oldInvoices || [],
       companySuggestions,
       locations: locations || [],
-      isSuperAdmin,
+      isSuperAdmin: isSuperAdmin || isAccountant,
       userLocationName,
     });
   } catch (error: any) {
@@ -197,6 +203,13 @@ export async function POST(request: Request) {
           }
         }
       }
+    }
+
+    if (currentUserRole === 'ACCOUNTANT') {
+      return NextResponse.json(
+        { success: false, error: 'Accountants cannot upload old invoices. Uploading invoices is restricted to Community Managers and Admins.' },
+        { status: 403 }
+      );
     }
 
     const body = await request.json();

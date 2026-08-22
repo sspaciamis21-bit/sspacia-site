@@ -40,7 +40,8 @@ import {
   FolderArchive,
   Package,
   Plus,
-  Sliders
+  Sliders,
+  Scissors
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -64,6 +65,22 @@ interface ContactPerson {
   email: string;
 }
 
+interface InvoiceSplitGroup {
+  id: string;
+  name: string;
+  productIndices: number[];
+  noOfSeats: number;
+  amount: number;
+  gstAmount: number;
+  totalAmount: number;
+  attachedInvoice?: {
+    fileName: string;
+    fileUrl: string;
+    fileSize?: number | null;
+    uploadedAt?: string;
+  } | null;
+}
+
 interface LocationOption {
   id: number;
   name: string;
@@ -85,6 +102,7 @@ interface InvoiceRecord {
   firstPaymentDate?: string | null;
   productGroupKey?: string | null;
   itemsJson?: string | null;
+  splitsJson?: string | null;
   dueDate?: string | null;
   lateFeePerDay?: number | null;
   lateDays?: number | null;
@@ -234,6 +252,12 @@ export default function AdminInvoicesWorkflowPage() {
   // Flexible Late Fee Surcharge & Waive Days Modal
   const [waiveModalInvoice, setWaiveModalInvoice] = useState<InvoiceRecord | null>(null);
   const [waiveDaysInput, setWaiveDaysInput] = useState<string>('0');
+
+  // Split Invoice (Product-Wise) Modal State
+  const [splitModalInvoice, setSplitModalInvoice] = useState<InvoiceRecord | null>(null);
+  const [splitGroups, setSplitGroups] = useState<InvoiceSplitGroup[]>([]);
+  const [splitUploadingGroupIndex, setSplitUploadingGroupIndex] = useState<number | null>(null);
+
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -541,6 +565,293 @@ export default function AdminInvoicesWorkflowPage() {
       toast.error('Error updating late fee');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // ── SPLIT INVOICE (PRODUCT-WISE) HANDLERS ──
+  const handleOpenSplitModal = (inv: InvoiceRecord) => {
+    setSplitModalInvoice(inv);
+    let items: any[] = [];
+    if (inv.itemsJson) {
+      try {
+        const raw = JSON.parse(inv.itemsJson);
+        if (Array.isArray(raw) && raw.length > 0) items = raw;
+      } catch {}
+    }
+    if (items.length === 0) {
+      items = [{
+        cabinName: inv.cabinName || 'Workspace',
+        noOfSeats: inv.noOfSeats || 1,
+        amount: inv.amount || 0,
+        gstPercent: inv.gstPercent || 18,
+        totalAmount: inv.totalAmount || 0,
+      }];
+    }
+
+    if (inv.splitsJson) {
+      try {
+        const existingSplits = JSON.parse(inv.splitsJson);
+        if (Array.isArray(existingSplits) && existingSplits.length > 0) {
+          setSplitGroups(existingSplits);
+          return;
+        }
+      } catch {}
+    }
+
+    // Default initialization: If >= 2 items, create 2 initial groups, else 1 group
+    if (items.length >= 2) {
+      const half = Math.ceil(items.length / 2);
+      const group1Indices = items.slice(0, half).map((_, i) => i);
+      const group2Indices = items.slice(half).map((_, i) => i + half);
+
+      const calcGroup = (id: string, name: string, indices: number[]): InvoiceSplitGroup => {
+        const selectedItems = indices.map(i => items[i]).filter(Boolean);
+        const seats = selectedItems.reduce((s, it) => s + (Number(it.noOfSeats) || 0), 0);
+        const amt = selectedItems.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+        const tot = selectedItems.reduce((s, it) => s + (Number(it.totalAmount) || 0), 0);
+        return {
+          id,
+          name,
+          productIndices: indices,
+          noOfSeats: seats,
+          amount: amt,
+          gstAmount: Math.max(0, tot - amt),
+          totalAmount: tot,
+          attachedInvoice: null,
+        };
+      };
+
+      setSplitGroups([
+        calcGroup('split_1', 'Sub-Invoice #1 (Primary)', group1Indices),
+        calcGroup('split_2', 'Sub-Invoice #2 (Additional)', group2Indices),
+      ]);
+    } else {
+      setSplitGroups([
+        {
+          id: 'split_1',
+          name: 'Sub-Invoice #1 (Full)',
+          productIndices: [0],
+          noOfSeats: Number(items[0]?.noOfSeats || inv.noOfSeats || 0),
+          amount: Number(items[0]?.amount || inv.amount || 0),
+          gstAmount: Math.max(0, (Number(items[0]?.totalAmount || inv.totalAmount || 0) - Number(items[0]?.amount || inv.amount || 0))),
+          totalAmount: Number(items[0]?.totalAmount || inv.totalAmount || 0),
+          attachedInvoice: null,
+        }
+      ]);
+    }
+  };
+
+  const handleUpdateProductGroupAssignment = (productIndex: number, targetGroupId: string) => {
+    if (!splitModalInvoice) return;
+    let items: any[] = [];
+    try {
+      items = JSON.parse(splitModalInvoice.itemsJson || '[]');
+    } catch {}
+
+    const updatedGroups = splitGroups.map(group => {
+      let nextIndices = group.productIndices.filter(i => i !== productIndex);
+      if (group.id === targetGroupId) {
+        if (!nextIndices.includes(productIndex)) {
+          nextIndices.push(productIndex);
+        }
+      }
+      nextIndices.sort((a, b) => a - b);
+      const selectedItems = nextIndices.map(i => items[i]).filter(Boolean);
+      const seats = selectedItems.reduce((s, it) => s + (Number(it.noOfSeats) || 0), 0);
+      const amt = selectedItems.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+      const tot = selectedItems.reduce((s, it) => s + (Number(it.totalAmount) || 0), 0);
+      return {
+        ...group,
+        productIndices: nextIndices,
+        noOfSeats: seats,
+        amount: amt,
+        gstAmount: Math.max(0, tot - amt),
+        totalAmount: tot,
+      };
+    });
+
+    setSplitGroups(updatedGroups);
+  };
+
+  const handleAddSplitGroup = () => {
+    const newId = `split_${Date.now()}`;
+    const newGroupNumber = splitGroups.length + 1;
+    setSplitGroups([
+      ...splitGroups,
+      {
+        id: newId,
+        name: `Sub-Invoice #${newGroupNumber}`,
+        productIndices: [],
+        noOfSeats: 0,
+        amount: 0,
+        gstAmount: 0,
+        totalAmount: 0,
+        attachedInvoice: null,
+      }
+    ]);
+  };
+
+  const handleRemoveSplitGroup = (groupId: string) => {
+    if (splitGroups.length <= 1) {
+      toast.error('You must keep at least 1 group');
+      return;
+    }
+    const groupToRemove = splitGroups.find(g => g.id === groupId);
+    const remainingGroups = splitGroups.filter(g => g.id !== groupId);
+    if (groupToRemove && groupToRemove.productIndices.length > 0 && remainingGroups[0]) {
+      groupToRemove.productIndices.forEach(pIdx => {
+        if (!remainingGroups[0].productIndices.includes(pIdx)) {
+          remainingGroups[0].productIndices.push(pIdx);
+        }
+      });
+      let items: any[] = [];
+      try {
+        items = JSON.parse(splitModalInvoice?.itemsJson || '[]');
+      } catch {}
+      const selectedItems = remainingGroups[0].productIndices.map(i => items[i]).filter(Boolean);
+      remainingGroups[0].noOfSeats = selectedItems.reduce((s, it) => s + (Number(it.noOfSeats) || 0), 0);
+      remainingGroups[0].amount = selectedItems.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+      const tot = selectedItems.reduce((s, it) => s + (Number(it.totalAmount) || 0), 0);
+      remainingGroups[0].gstAmount = Math.max(0, tot - remainingGroups[0].amount);
+      remainingGroups[0].totalAmount = tot;
+    }
+    setSplitGroups(remainingGroups);
+  };
+
+  const handleUpdateSplitGroupName = (groupId: string, newName: string) => {
+    setSplitGroups(splitGroups.map(g => g.id === groupId ? { ...g, name: newName } : g));
+  };
+
+  const handleSaveSplitInvoice = async () => {
+    if (!splitModalInvoice) return;
+    let items: any[] = [];
+    try {
+      items = JSON.parse(splitModalInvoice.itemsJson || '[]');
+    } catch {}
+
+    const assignedIndices = new Set(splitGroups.flatMap(g => g.productIndices));
+    if (items.length > 0 && assignedIndices.size < items.length) {
+      toast.error(`Please assign all ${items.length} products to a Sub-Invoice group before saving.`);
+      return;
+    }
+
+    const validGroups = splitGroups.filter(g => g.productIndices.length > 0);
+    if (validGroups.length === 0) {
+      toast.error('At least one group must have assigned products.');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/admin/Invoices/${splitModalInvoice.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          splitsJson: validGroups.length > 1 ? JSON.stringify(validGroups) : null,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        if (validGroups.length > 1) {
+          toast.success(`Invoice split into ${validGroups.length} Sub-Invoices successfully!`);
+        } else {
+          toast.success('Unified single invoice saved.');
+        }
+        setSplitModalInvoice(null);
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to save invoice split');
+      }
+    } catch {
+      toast.error('Error saving split invoice');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResetSplitToSingle = async () => {
+    if (!splitModalInvoice) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/admin/Invoices/${splitModalInvoice.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          splitsJson: null,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success('Reset back to single unified invoice.');
+        setSplitModalInvoice(null);
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to reset invoice');
+      }
+    } catch {
+      toast.error('Error resetting split invoice');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUploadSplitPdf = async (groupIndex: number, file: File) => {
+    if (!entryToAttachInvoice) return;
+    let splits: InvoiceSplitGroup[] = [];
+    try {
+      splits = JSON.parse(entryToAttachInvoice.splitsJson || '[]');
+    } catch {}
+
+    if (!splits[groupIndex]) return;
+
+    setSplitUploadingGroupIndex(groupIndex);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadRes = await fetch('/api/admin/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+      const uploadJson = await uploadRes.json();
+      if (!uploadJson.success) throw new Error(uploadJson.error || 'PDF upload failed');
+
+      const { fileUrl, fileName, fileSize } = uploadJson.data;
+
+      splits[groupIndex].attachedInvoice = {
+        fileName,
+        fileUrl,
+        fileSize,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      const attachRes = await fetch('/api/admin/attached-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entryId: entryToAttachInvoice.id,
+          fileUrl: splits[0]?.attachedInvoice?.fileUrl || fileUrl,
+          fileName: splits[0]?.attachedInvoice?.fileName || fileName,
+          fileSize: splits[0]?.attachedInvoice?.fileSize || fileSize,
+          splitsJson: JSON.stringify(splits),
+        }),
+      });
+      const attachJson = await attachRes.json();
+      if (attachJson.success) {
+        toast.success(`PDF attached for ${splits[groupIndex].name}!`);
+        setEntryToAttachInvoice({
+          ...entryToAttachInvoice,
+          splitsJson: JSON.stringify(splits),
+          status: 'INVOICE_ATTACHED',
+        });
+        fetchData();
+      } else {
+        toast.error(attachJson.error || 'Failed to update invoice split attachment');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error uploading split PDF');
+    } finally {
+      setSplitUploadingGroupIndex(null);
     }
   };
 
@@ -1084,6 +1395,9 @@ export default function AdminInvoicesWorkflowPage() {
       {activeSection === 'OLD_INVOICES' ? (
         <OldInvoicesArchive
           isSuperAdmin={isAdmin}
+          userRoleView={userRoleView}
+          canAccessCM={canAccessCM}
+          canAccessAccountant={canAccessAccountant}
           currentUserLocationId={(user as any)?.locationId || (user as any)?.assignedLocations?.[0]?.locationId}
           currentUserLocationName={(user as any)?.location?.name || (user as any)?.assignedLocations?.[0]?.location?.name}
         />
@@ -1480,6 +1794,24 @@ export default function AdminInvoicesWorkflowPage() {
                         <div className="space-y-1.5">
                           {renderStatusBadge(invoice.status)}
 
+                          {invoice.splitsJson && (() => {
+                            let spCount = 0;
+                            try { spCount = JSON.parse(invoice.splitsJson || '[]').length; } catch {}
+                            if (spCount > 1) {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenSplitModal(invoice)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded cursor-pointer hover:bg-purple-100 transition-colors"
+                                  title="Click to view or adjust sub-invoice splits"
+                                >
+                                  <Scissors size={9} /> Split: {spCount} Sub-Invoices
+                                </button>
+                              );
+                            }
+                            return null;
+                          })()}
+
                           {invoice.digitallySignedPdfUrl && (
                             <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-bold uppercase rounded">
                               <Award size={10} className="text-emerald-700" /> Digitally Signed
@@ -1513,7 +1845,18 @@ export default function AdminInvoicesWorkflowPage() {
                                 </button>
                               )}
 
-                              {invoice.status === 'INVOICE_ATTACHED' && invoice.attachedInvoice && (
+                              {/* Split Invoice Action for CM */}
+                              {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenSplitModal(invoice)}
+                                  className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors"
+                                >
+                                  <Scissors size={10} /> {invoice.splitsJson ? 'Adjust Sub-Invoices' : 'Split Invoice'}
+                                </button>
+                              )}
+
+                              {invoice.status === 'INVOICE_ATTACHED' && (invoice.attachedInvoice || invoice.splitsJson) && (
                                 <>
                                   <button
                                     onClick={() => setEntryToReviewInvoice(invoice)}
@@ -1620,9 +1963,9 @@ export default function AdminInvoicesWorkflowPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-lg space-y-4 shadow-2xl text-xs my-auto"
+              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
             >
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
+              <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
                 <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
                   <Paperclip size={18} className="text-[var(--primary)]" /> Attach Tally PDF Invoice
                 </h3>
@@ -1637,7 +1980,7 @@ export default function AdminInvoicesWorkflowPage() {
                 </button>
               </div>
 
-              <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 space-y-1">
+              <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 space-y-1 shrink-0">
                 <div className="font-bold text-[#1B1C1C] text-sm">Company: {entryToAttachInvoice.companyName}</div>
                 <div className="text-[#616161]">
                   SR No: #{entryToAttachInvoice.srNo} | Billing Month: {entryToAttachInvoice.billingMonth}
@@ -1648,7 +1991,7 @@ export default function AdminInvoicesWorkflowPage() {
               </div>
 
               {entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS' && entryToAttachInvoice.remarks && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-800 space-y-1">
+                <div className="p-3 bg-red-50 border border-red-200 text-red-800 space-y-1 shrink-0">
                   <div className="font-bold flex items-center gap-1.5">
                     <AlertTriangle size={14} /> Community Manager Revision Remarks:
                   </div>
@@ -1656,31 +1999,127 @@ export default function AdminInvoicesWorkflowPage() {
                 </div>
               )}
 
-              {/* Upload Input */}
-              <div className="space-y-2">
-                <label className="block font-bold uppercase text-[#616161]">
-                  Select Tally Invoice PDF File *
-                </label>
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setSelectedInvoiceFile(e.target.files[0]);
-                    }
-                  }}
-                  className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs"
-                />
-                {selectedInvoiceFile && (
-                  <div className="text-emerald-700 font-bold flex items-center gap-1">
-                    <Check size={14} /> Selected: {selectedInvoiceFile.name} (
-                    {(selectedInvoiceFile.size / 1024).toFixed(1)} KB)
+              {/* CHECK IF SPLIT INVOICES EXIST */}
+              <div className="overflow-y-auto flex-1 pr-1 space-y-3">
+                {entryToAttachInvoice.splitsJson && (() => {
+                  let splits: InvoiceSplitGroup[] = [];
+                  try {
+                    splits = JSON.parse(entryToAttachInvoice.splitsJson || '[]');
+                  } catch {}
+
+                  if (splits.length > 1) {
+                    return (
+                      <div className="space-y-3">
+                        <div className="p-2.5 bg-purple-50 border border-purple-200 text-purple-900 text-[11px] font-bold flex items-center gap-1.5">
+                          <Scissors size={14} className="text-purple-700" />
+                          <span>This invoice is split into {splits.length} Sub-Invoices. Please attach a Tally PDF for each:</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {splits.map((grp, idx) => (
+                            <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1">
+                                  <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span> {grp.name}
+                                </span>
+                                <span className="font-mono font-bold text-teal-800 text-xs">
+                                  ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-neutral-500">
+                                {grp.noOfSeats} seats | Subtotal: ₹{Number(grp.amount || 0).toLocaleString('en-IN')} + GST: ₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}
+                              </div>
+
+                              {grp.attachedInvoice?.fileUrl ? (
+                                <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-2 rounded text-emerald-900">
+                                  <div className="flex items-center gap-2">
+                                    <CheckCircle2 size={14} className="text-emerald-700" />
+                                    <div>
+                                      <div className="font-bold text-[11px]">{grp.attachedInvoice.fileName}</div>
+                                      <div className="text-[9px] text-emerald-700">PDF Attached</div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <a
+                                      href={grp.attachedInvoice.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-2 py-1 bg-white border border-emerald-300 text-emerald-800 font-bold text-[10px] rounded hover:bg-emerald-100"
+                                    >
+                                      View
+                                    </a>
+                                    <label className="px-2 py-1 bg-emerald-700 text-white font-bold text-[10px] rounded hover:bg-emerald-800 cursor-pointer">
+                                      Replace
+                                      <input
+                                        type="file"
+                                        accept="application/pdf,.pdf"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          if (e.target.files && e.target.files[0]) {
+                                            handleUploadSplitPdf(idx, e.target.files[0]);
+                                          }
+                                        }}
+                                      />
+                                    </label>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="file"
+                                    accept="application/pdf,.pdf"
+                                    onChange={(e) => {
+                                      if (e.target.files && e.target.files[0]) {
+                                        handleUploadSplitPdf(idx, e.target.files[0]);
+                                      }
+                                    }}
+                                    disabled={splitUploadingGroupIndex === idx}
+                                    className="w-full bg-white border border-neutral-300 px-2 py-1.5 text-xs text-neutral-700"
+                                  />
+                                  {splitUploadingGroupIndex === idx && (
+                                    <Loader2 size={16} className="animate-spin text-teal-800" />
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Single Invoice PDF Upload (if not split) */}
+                {(!entryToAttachInvoice.splitsJson || (() => {
+                  try { return JSON.parse(entryToAttachInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
+                })()) && (
+                  <div className="space-y-2">
+                    <label className="block font-bold uppercase text-[#616161]">
+                      Select Tally Invoice PDF File *
+                    </label>
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setSelectedInvoiceFile(e.target.files[0]);
+                        }
+                      }}
+                      className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs"
+                    />
+                    {selectedInvoiceFile && (
+                      <div className="text-emerald-700 font-bold flex items-center gap-1">
+                        <Check size={14} /> Selected: {selectedInvoiceFile.name} (
+                        {(selectedInvoiceFile.size / 1024).toFixed(1)} KB)
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -1691,22 +2130,38 @@ export default function AdminInvoicesWorkflowPage() {
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  onClick={handleUploadInvoicePdf}
-                  disabled={uploadingPdf || !selectedInvoiceFile}
-                  className="px-6 py-2.5 bg-[var(--primary)] text-white font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {uploadingPdf ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" /> Uploading PDF...
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={14} /> Attach & Send to CM
-                    </>
-                  )}
-                </button>
+                {(!entryToAttachInvoice.splitsJson || (() => {
+                  try { return JSON.parse(entryToAttachInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
+                })()) ? (
+                  <button
+                    type="button"
+                    onClick={handleUploadInvoicePdf}
+                    disabled={uploadingPdf || !selectedInvoiceFile}
+                    className="px-6 py-2.5 bg-[var(--primary)] text-white font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {uploadingPdf ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" /> Uploading PDF...
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={14} /> Attach & Send to CM
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEntryToAttachInvoice(null);
+                      setSelectedInvoiceFile(null);
+                      fetchData();
+                    }}
+                    className="px-6 py-2.5 bg-emerald-700 text-white font-bold uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-2"
+                  >
+                    <CheckCircle2 size={14} /> Done / Send to CM
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>
@@ -1715,15 +2170,15 @@ export default function AdminInvoicesWorkflowPage() {
 
       {/* MODAL 2: CM Review Attached Tally Invoice PDF */}
       <AnimatePresence>
-        {entryToReviewInvoice && entryToReviewInvoice.attachedInvoice && (
+        {entryToReviewInvoice && (entryToReviewInvoice.attachedInvoice || entryToReviewInvoice.splitsJson) && (
           <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto"
+              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
             >
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
+              <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
                 <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
                   <Eye size={18} className="text-[var(--primary)]" /> Review Attached Tally Invoice PDF
                 </h3>
@@ -1735,7 +2190,7 @@ export default function AdminInvoicesWorkflowPage() {
                 </button>
               </div>
 
-              <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 space-y-1">
+              <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 space-y-1 shrink-0">
                 <div className="font-bold text-[#1B1C1C] text-sm">Company: {entryToReviewInvoice.companyName}</div>
                 <div className="text-[#616161]">
                   SR No: #{entryToReviewInvoice.srNo} | Billing Month: {entryToReviewInvoice.billingMonth}
@@ -1745,28 +2200,91 @@ export default function AdminInvoicesWorkflowPage() {
                 </div>
               </div>
 
-              <div className="p-4 border border-dashed border-neutral-300 bg-neutral-50 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <FileText className="h-8 w-8 text-red-600" />
-                  <div>
-                    <div className="font-bold text-[#1B1C1C]">
-                      {entryToReviewInvoice.attachedInvoice.fileName}
-                    </div>
-                    <div className="text-[10px] text-[#616161]">Attached Tally PDF Invoice</div>
-                  </div>
-                </div>
+              <div className="overflow-y-auto flex-1 pr-1 space-y-3">
+                {/* IF SPLIT INVOICES EXIST */}
+                {entryToReviewInvoice.splitsJson && (() => {
+                  let splits: InvoiceSplitGroup[] = [];
+                  try {
+                    splits = JSON.parse(entryToReviewInvoice.splitsJson || '[]');
+                  } catch {}
 
-                <a
-                  href={entryToReviewInvoice.attachedInvoice.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 bg-[#1B1C1C] text-white font-bold uppercase tracking-wider hover:bg-neutral-800 transition-colors flex items-center gap-1.5"
-                >
-                  <Eye size={14} /> View / Download PDF
-                </a>
+                  if (splits.length > 1) {
+                    return (
+                      <div className="space-y-3">
+                        <div className="p-2.5 bg-purple-50 border border-purple-200 text-purple-900 text-[11px] font-bold flex items-center gap-1.5">
+                          <Scissors size={14} className="text-purple-700" />
+                          <span>This invoice is split into {splits.length} Sub-Invoices with attached Tally PDFs:</span>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          {splits.map((grp, idx) => (
+                            <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm flex items-center justify-between gap-3">
+                              <div>
+                                <div className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span>
+                                  {grp.name}
+                                </div>
+                                <div className="text-[10px] text-neutral-500 mt-0.5">
+                                  {grp.noOfSeats} seats | Total: <strong className="text-teal-900 font-mono">₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}</strong>
+                                </div>
+                                {grp.attachedInvoice?.fileName && (
+                                  <div className="text-[9.5px] text-emerald-800 font-bold flex items-center gap-1 mt-1">
+                                    <FileCheck size={11} /> {grp.attachedInvoice.fileName}
+                                  </div>
+                                )}
+                              </div>
+
+                              {grp.attachedInvoice?.fileUrl ? (
+                                <a
+                                  href={grp.attachedInvoice.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1.5 bg-[#1B1C1C] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-neutral-800 flex items-center gap-1 rounded shrink-0"
+                                >
+                                  <Eye size={12} /> View PDF
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-1 border border-amber-200 rounded shrink-0">
+                                  Pending PDF
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* SINGLE INVOICE PDF REVIEW (if not split) */}
+                {entryToReviewInvoice.attachedInvoice && (!entryToReviewInvoice.splitsJson || (() => {
+                  try { return JSON.parse(entryToReviewInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
+                })()) && (
+                  <div className="p-4 border border-dashed border-neutral-300 bg-neutral-50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-8 w-8 text-red-600" />
+                      <div>
+                        <div className="font-bold text-[#1B1C1C]">
+                          {entryToReviewInvoice.attachedInvoice.fileName}
+                        </div>
+                        <div className="text-[10px] text-[#616161]">Attached Tally PDF Invoice</div>
+                      </div>
+                    </div>
+
+                    <a
+                      href={entryToReviewInvoice.attachedInvoice.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-[#1B1C1C] text-white font-bold uppercase tracking-wider hover:bg-neutral-800 transition-colors flex items-center gap-1.5"
+                    >
+                      <Eye size={14} /> View / Download PDF
+                    </a>
+                  </div>
+                )}
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-neutral-200">
+              <div className="flex items-center justify-between pt-4 border-t border-neutral-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowRejectModal(true)}
@@ -2234,6 +2752,65 @@ export default function AdminInvoicesWorkflowPage() {
                   </div>
                 </div>
               )}
+
+              {/* SECTION 1.8: Sub-Invoice Splits Breakdown (if split) */}
+              {entryToViewDetails.splitsJson && (() => {
+                let splits: InvoiceSplitGroup[] = [];
+                try { splits = JSON.parse(entryToViewDetails.splitsJson || '[]'); } catch {}
+                if (splits.length > 1) {
+                  return (
+                    <div className="p-4 bg-purple-50/60 border border-purple-200 space-y-3 rounded-xs">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-purple-900 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Scissors size={14} className="text-purple-700" />
+                          <span>Sub-Invoice Splits Breakdown ({splits.length} Groups)</span>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold bg-purple-100 text-purple-800 px-2 py-0.5 border border-purple-300">
+                          Product-Wise Split Active
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {splits.map((grp, gIdx) => (
+                          <div key={grp.id} className="bg-white p-3 border border-purple-200 rounded-sm space-y-2">
+                            <div className="flex items-center justify-between border-b border-purple-100 pb-1.5">
+                              <span className="font-extrabold text-xs text-[#1B1C1C] flex items-center gap-1">
+                                <span className="px-1.5 py-0.2 bg-purple-700 text-white text-[9px] rounded">#{gIdx + 1}</span> {grp.name}
+                              </span>
+                              <span className="font-mono font-bold text-teal-800 text-xs">
+                                ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1 text-[10px] text-neutral-600">
+                              <div><span className="text-neutral-400 block">Seats:</span> <strong>{grp.noOfSeats}</strong></div>
+                              <div><span className="text-neutral-400 block">Subtotal:</span> <strong>₹{Number(grp.amount || 0).toLocaleString('en-IN')}</strong></div>
+                              <div><span className="text-neutral-400 block">GST:</span> <strong>₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}</strong></div>
+                            </div>
+                            {grp.attachedInvoice?.fileName && (
+                              <div className="pt-1 border-t border-neutral-100 flex items-center justify-between text-[9px]">
+                                <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                  <FileCheck size={10} /> {grp.attachedInvoice.fileName}
+                                </span>
+                                {grp.attachedInvoice?.fileUrl && (
+                                  <a
+                                    href={grp.attachedInvoice.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-purple-800 font-bold underline"
+                                  >
+                                    View PDF
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               {/* SECTION 2: Head Office & GST Details */}
               <div className="space-y-2">
@@ -3060,6 +3637,215 @@ export default function AdminInvoicesWorkflowPage() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL 8: CM SPLIT INVOICE (PRODUCT-WISE) MODAL */}
+      <AnimatePresence>
+        {splitModalInvoice && (
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-3xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
+                <div>
+                  <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
+                    <Scissors size={18} className="text-purple-700" />
+                    <span>Split Invoice (Product-Wise)</span>
+                  </h3>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    Group products into separate sub-invoices for the accountant to attach distinct Tally PDFs. The parent company record stays unified.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSplitModalInvoice(null)}
+                  className="text-neutral-400 hover:text-neutral-700 p-1"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Invoice Info Bar */}
+              <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div>
+                  <span className="font-bold text-[#1B1C1C] text-xs">{splitModalInvoice.companyName}</span>
+                  <span className="text-neutral-500 text-[10px] ml-2">SR #{splitModalInvoice.srNo} | {splitModalInvoice.billingMonth}</span>
+                </div>
+                <div className="font-bold text-xs text-[#006064]">
+                  Parent Invoice Total: ₹{Number(splitModalInvoice.totalAmount || 0).toLocaleString('en-IN')}
+                </div>
+              </div>
+
+              {/* Split Groups List & Allocation */}
+              <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+                {/* Sub-Invoice Groups Configuration */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                      <Package size={14} className="text-purple-700" /> Sub-Invoice Groups ({splitGroups.length})
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={handleAddSplitGroup}
+                      className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 rounded cursor-pointer transition-colors"
+                    >
+                      <Plus size={12} /> Add Another Sub-Invoice
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {splitGroups.map((group, gIdx) => (
+                      <div key={group.id} className="p-3 bg-purple-50/40 border border-purple-200 rounded-sm space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <input
+                            type="text"
+                            value={group.name}
+                            onChange={(e) => handleUpdateSplitGroupName(group.id, e.target.value)}
+                            className="font-extrabold text-xs text-purple-950 bg-white border border-purple-300 px-2 py-1 rounded w-full focus:outline-none focus:border-purple-600"
+                            placeholder={`Sub-Invoice #${gIdx + 1}`}
+                          />
+                          {splitGroups.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSplitGroup(group.id)}
+                              className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
+                              title="Remove group"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between bg-white p-2 border border-purple-100 rounded text-[11px]">
+                          <div>
+                            <span className="text-neutral-500">Seats:</span> <strong className="text-neutral-800">{group.noOfSeats}</strong>
+                            <span className="mx-1.5 text-neutral-300">|</span>
+                            <span className="text-neutral-500">Items:</span> <strong className="text-neutral-800">{group.productIndices.length}</strong>
+                          </div>
+                          <div className="font-mono font-bold text-teal-800">
+                            ₹{Number(group.totalAmount || 0).toLocaleString('en-IN')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Product Items Assignment Table */}
+                <div className="space-y-2 pt-2 border-t border-neutral-200">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-700">
+                    Assign Each Product to a Sub-Invoice:
+                  </h4>
+
+                  {(() => {
+                    let items: any[] = [];
+                    try {
+                      items = JSON.parse(splitModalInvoice.itemsJson || '[]');
+                    } catch {}
+                    if (items.length === 0) {
+                      items = [{
+                        cabinName: splitModalInvoice.cabinName || 'Workspace',
+                        noOfSeats: splitModalInvoice.noOfSeats || 1,
+                        amount: splitModalInvoice.amount || 0,
+                        gstPercent: splitModalInvoice.gstPercent || 18,
+                        totalAmount: splitModalInvoice.totalAmount || 0,
+                      }];
+                    }
+
+                    return (
+                      <div className="border border-neutral-200 rounded-sm overflow-hidden">
+                        <table className="w-full text-left border-collapse text-[11px]">
+                          <thead>
+                            <tr className="bg-neutral-100 border-b border-neutral-200 font-bold uppercase text-[#616161]">
+                              <th className="p-2.5">#</th>
+                              <th className="p-2.5">Product / Cabin</th>
+                              <th className="p-2.5 text-center">Seats</th>
+                              <th className="p-2.5 text-right">Subtotal</th>
+                              <th className="p-2.5 text-right">Total (Incl GST)</th>
+                              <th className="p-2.5 text-center">Assigned Sub-Invoice</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-neutral-200">
+                            {items.map((item, pIdx) => {
+                              const currentGroup = splitGroups.find(g => g.productIndices.includes(pIdx));
+                              return (
+                                <tr key={pIdx} className="hover:bg-neutral-50/70">
+                                  <td className="p-2.5 font-mono text-neutral-500 font-bold">{pIdx + 1}</td>
+                                  <td className="p-2.5 font-bold text-[#1B1C1C]">
+                                    {item.cabinName || 'Workspace item'}
+                                    {item.billingType === 'PRORATED' && (
+                                      <span className="ml-1 text-[9px] bg-amber-100 text-amber-900 px-1 py-0.2 rounded font-bold">
+                                        Prorated
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-2.5 text-center font-semibold">{item.noOfSeats || 0}</td>
+                                  <td className="p-2.5 text-right font-mono">₹{Number(item.amount || 0).toLocaleString('en-IN')}</td>
+                                  <td className="p-2.5 text-right font-mono font-bold text-teal-800">₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                  <td className="p-2.5 text-center">
+                                    <select
+                                      value={currentGroup?.id || ''}
+                                      onChange={(e) => handleUpdateProductGroupAssignment(pIdx, e.target.value)}
+                                      className="bg-white border border-purple-300 text-purple-950 font-bold px-2 py-1 text-[11px] rounded focus:outline-none focus:border-purple-600"
+                                    >
+                                      {splitGroups.map((g) => (
+                                        <option key={g.id} value={g.id}>
+                                          {g.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex items-center justify-between pt-3 border-t border-neutral-200 shrink-0">
+                <div>
+                  {splitModalInvoice.splitsJson && (
+                    <button
+                      type="button"
+                      onClick={handleResetSplitToSingle}
+                      disabled={actionLoading}
+                      className="px-3 py-2 bg-neutral-100 text-neutral-700 hover:bg-neutral-200 text-[11px] font-bold uppercase tracking-wider rounded transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <RotateCcw size={12} /> Reset to Single Invoice
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSplitModalInvoice(null)}
+                    className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100 rounded cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveSplitInvoice}
+                    disabled={actionLoading}
+                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                    <span>Save Split Invoices</span>
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

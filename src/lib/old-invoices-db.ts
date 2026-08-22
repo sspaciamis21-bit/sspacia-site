@@ -15,6 +15,17 @@ export interface OldInvoiceInput {
   uploadedById?: number | null;
   uploadedByName?: string | null;
   uploadedByRole?: string | null;
+  // Payment Received Details (Accountant View)
+  payReceiveDate?: string | Date | null;
+  receiveAmount?: number | null;
+  paymentMode?: string | null;
+  utrNumber?: string | null;
+  utrDate?: string | Date | null;
+  utrFileUrl?: string | null;
+  utrFileName?: string | null;
+  tdsDeducted?: string | null;
+  tdsAmount?: number | null;
+  paymentsJson?: string | null;
 }
 
 export async function findOldInvoices(filter: {
@@ -26,43 +37,14 @@ export async function findOldInvoices(filter: {
   locationIds?: number[] | null;
   uploadedByIds?: number[] | null;
 }) {
-  const p = prisma as any;
-  if (p.oldInvoiceHistory && typeof p.oldInvoiceHistory.findMany === 'function') {
-    const where: any = {};
-    if (filter.search) {
-      where.OR = [
-        { companyName: { contains: filter.search } },
-        { invoiceNo: { contains: filter.search } },
-        { remarks: { contains: filter.search } },
-        { month: { contains: filter.search } },
-        { locationName: { contains: filter.search } },
-        { uploadedByName: { contains: filter.search } },
-      ];
-    }
-    if (filter.companyName && filter.companyName !== 'ALL') where.companyName = filter.companyName;
-    if (filter.month && filter.month !== 'ALL') where.month = filter.month;
-    if (filter.year) where.year = filter.year;
-    if (filter.locationId && filter.locationId !== null) {
-      where.locationId = filter.locationId;
-    } else if (filter.locationIds && filter.locationIds.length > 0) {
-      where.locationId = { in: filter.locationIds };
-    }
-    if (filter.uploadedByIds && filter.uploadedByIds.length > 0) where.uploadedById = { in: filter.uploadedByIds };
-
-    return await p.oldInvoiceHistory.findMany({
-      where,
-      orderBy: [{ companyName: 'asc' }, { createdAt: 'desc' }],
-    });
-  }
-
-  // Fallback to raw SQL
   let query = 'SELECT * FROM `OldInvoiceHistory` WHERE 1=1';
   const params: any[] = [];
 
   if (filter.search) {
     const s = `%${filter.search}%`;
-    query += ' AND (`companyName` LIKE ? OR `invoiceNo` LIKE ? OR `remarks` LIKE ? OR `month` LIKE ? OR `locationName` LIKE ? OR `uploadedByName` LIKE ?)';
-    params.push(s, s, s, s, s, s);
+    query +=
+      ' AND (`companyName` LIKE ? OR `invoiceNo` LIKE ? OR `remarks` LIKE ? OR `month` LIKE ? OR `locationName` LIKE ? OR `uploadedByName` LIKE ? OR `utrNumber` LIKE ? OR `paymentMode` LIKE ?)';
+    params.push(s, s, s, s, s, s, s, s);
   }
   if (filter.companyName && filter.companyName !== 'ALL') {
     query += ' AND `companyName` = ?';
@@ -93,11 +75,6 @@ export async function findOldInvoices(filter: {
 }
 
 export async function findOldInvoiceById(id: number) {
-  const p = prisma as any;
-  if (p.oldInvoiceHistory && typeof p.oldInvoiceHistory.findUnique === 'function') {
-    return await p.oldInvoiceHistory.findUnique({ where: { id } });
-  }
-
   const rows = await (prisma.$queryRawUnsafe(
     'SELECT * FROM `OldInvoiceHistory` WHERE `id` = ? LIMIT 1',
     id
@@ -106,15 +83,10 @@ export async function findOldInvoiceById(id: number) {
 }
 
 export async function createOldInvoice(data: OldInvoiceInput) {
-  const p = prisma as any;
-  if (p.oldInvoiceHistory && typeof p.oldInvoiceHistory.create === 'function') {
-    return await p.oldInvoiceHistory.create({ data });
-  }
-
   await prisma.$executeRawUnsafe(
     `INSERT INTO \`OldInvoiceHistory\` 
-      (\`companyName\`, \`invoiceNo\`, \`month\`, \`year\`, \`invoiceUrl\`, \`fileName\`, \`fileSize\`, \`amount\`, \`remarks\`, \`locationId\`, \`locationName\`, \`uploadedById\`, \`uploadedByName\`, \`uploadedByRole\`, \`createdAt\`, \`updatedAt\`) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      (\`companyName\`, \`invoiceNo\`, \`month\`, \`year\`, \`invoiceUrl\`, \`fileName\`, \`fileSize\`, \`amount\`, \`remarks\`, \`locationId\`, \`locationName\`, \`uploadedById\`, \`uploadedByName\`, \`uploadedByRole\`, \`payReceiveDate\`, \`receiveAmount\`, \`paymentMode\`, \`utrNumber\`, \`utrDate\`, \`utrFileUrl\`, \`utrFileName\`, \`tdsDeducted\`, \`tdsAmount\`, \`paymentsJson\`, \`createdAt\`, \`updatedAt\`) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
     data.companyName,
     data.invoiceNo || null,
     data.month,
@@ -128,7 +100,17 @@ export async function createOldInvoice(data: OldInvoiceInput) {
     data.locationName || null,
     data.uploadedById || null,
     data.uploadedByName || null,
-    data.uploadedByRole || null
+    data.uploadedByRole || null,
+    data.payReceiveDate ? new Date(data.payReceiveDate) : null,
+    data.receiveAmount !== null && data.receiveAmount !== undefined ? data.receiveAmount : null,
+    data.paymentMode || null,
+    data.utrNumber || null,
+    data.utrDate ? new Date(data.utrDate) : null,
+    data.utrFileUrl || null,
+    data.utrFileName || null,
+    data.tdsDeducted || null,
+    data.tdsAmount !== null && data.tdsAmount !== undefined ? data.tdsAmount : null,
+    data.paymentsJson || null
   );
 
   const lastInserted = await (prisma.$queryRawUnsafe(
@@ -138,18 +120,17 @@ export async function createOldInvoice(data: OldInvoiceInput) {
 }
 
 export async function updateOldInvoice(id: number, data: Partial<OldInvoiceInput>) {
-  const p = prisma as any;
-  if (p.oldInvoiceHistory && typeof p.oldInvoiceHistory.update === 'function') {
-    return await p.oldInvoiceHistory.update({ where: { id }, data });
-  }
-
   const setClauses: string[] = [];
   const params: any[] = [];
 
-  for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined) {
+  for (const [key, rawValue] of Object.entries(data)) {
+    if (rawValue !== undefined) {
       setClauses.push(`\`${key}\` = ?`);
-      params.push(value);
+      let val = rawValue;
+      if ((key === 'payReceiveDate' || key === 'utrDate') && val) {
+        val = new Date(val);
+      }
+      params.push(val);
     }
   }
 
@@ -166,27 +147,13 @@ export async function updateOldInvoice(id: number, data: Partial<OldInvoiceInput
 }
 
 export async function deleteOldInvoice(id: number) {
-  const p = prisma as any;
-  if (p.oldInvoiceHistory && typeof p.oldInvoiceHistory.delete === 'function') {
-    return await p.oldInvoiceHistory.delete({ where: { id } });
-  }
-
   await prisma.$executeRawUnsafe('DELETE FROM `OldInvoiceHistory` WHERE `id` = ?', id);
   return true;
 }
 
 export async function getArchivedCompanyNames(): Promise<string[]> {
-  const p = prisma as any;
-  if (p.oldInvoiceHistory && typeof p.oldInvoiceHistory.findMany === 'function') {
-    const list = await p.oldInvoiceHistory.findMany({
-      select: { companyName: true },
-      distinct: ['companyName'],
-    });
-    return list.map((item: any) => item.companyName);
-  }
-
   const rows = await (prisma.$queryRawUnsafe(
-    'SELECT DISTINCT `companyName` FROM `OldInvoiceHistory` WHERE `companyName` IS NOT NULL'
+    'SELECT DISTINCT `companyName` FROM `OldInvoiceHistory` WHERE `companyName` IS NOT NULL ORDER BY `companyName` ASC'
   ) as Promise<any[]>);
   return (rows || []).map((r) => r.companyName);
 }

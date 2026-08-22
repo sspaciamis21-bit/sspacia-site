@@ -4,7 +4,10 @@ import React, { useState, useEffect } from "react";
 import {
   Building2,
   Loader2,
-  RefreshCcw
+  RefreshCcw,
+  UserCheck,
+  Calculator,
+  ShieldAlert
 } from "lucide-react";
 import { toast } from "sonner";
 import { FadeUp } from "@/components/ui/fade-up";
@@ -36,6 +39,16 @@ export default function SuperAdminExpensesPage() {
   const [locations, setLocations] = useState<LocationInfo[]>([]);
   const [sheets, setSheets] = useState<ExpenseSheetData[]>([]);
   const [activeLocationId, setActiveLocationId] = useState<number | null>(null);
+
+  // Role View State: CM View vs Accountant View
+  const isAccountantRole = (user?.role as any)?.name === 'ACCOUNTANT' || (user as any)?.roleName === 'ACCOUNTANT';
+  const [userRoleView, setUserRoleView] = useState<'CM' | 'ACCOUNTANT'>('ACCOUNTANT');
+
+  useEffect(() => {
+    if (isAccountantRole) {
+      setUserRoleView('ACCOUNTANT');
+    }
+  }, [isAccountantRole]);
 
   useEffect(() => {
     fetchExpensesData(true);
@@ -97,22 +110,52 @@ export default function SuperAdminExpensesPage() {
             <h1 className="text-2xl md:text-3xl font-display font-black text-[#1B1C1C] uppercase tracking-tight flex items-center gap-3">
               <span>Center Expense Spreadsheets</span>
               <span className="bg-[#1ab0bc] text-white text-[9px] font-mono px-2.5 py-0.5 uppercase tracking-widest">
-                SUPER ADMIN MASTER
+                {userRoleView === 'ACCOUNTANT' ? 'ACCOUNTANT VIEW' : 'SUPER ADMIN MASTER'}
               </span>
             </h1>
             <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
-              Center-wise Community Manager Expense Spreadsheets & Financial Audit
+              {userRoleView === 'ACCOUNTANT'
+                ? 'Accountant payment details upload & center expense audit. CM columns are read-only.'
+                : 'Center-wise Community Manager Expense Spreadsheets & Financial Audit.'}
             </p>
           </div>
 
-          <button
-            onClick={() => fetchExpensesData(false)}
-            disabled={refreshing}
-            className="bg-white hover:bg-gray-100 text-gray-800 px-4 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-2 shadow-xs cursor-pointer self-start md:self-auto"
-          >
-            <RefreshCcw className={`w-4 h-4 text-[#1ab0bc] ${refreshing ? "animate-spin" : ""}`} />
-            <span>{refreshing ? "Refreshing..." : "Refresh Sheets"}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* ROLE VIEW SWITCHER (CM VIEW vs ACCOUNTANT VIEW) */}
+            <div className="flex items-center gap-1 bg-[#F5F5F5] p-1 border border-gray-300">
+              <button
+                type="button"
+                onClick={() => setUserRoleView('CM')}
+                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                  userRoleView === 'CM'
+                    ? 'bg-[#1ab0bc] text-white shadow-xs'
+                    : 'text-[#616161] hover:text-[#1B1C1C]'
+                }`}
+              >
+                <UserCheck size={14} /> CM View
+              </button>
+              <button
+                type="button"
+                onClick={() => setUserRoleView('ACCOUNTANT')}
+                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
+                  userRoleView === 'ACCOUNTANT'
+                    ? 'bg-[#1ab0bc] text-white shadow-xs'
+                    : 'text-[#616161] hover:text-[#1B1C1C]'
+                }`}
+              >
+                <Calculator size={14} /> Accountant View
+              </button>
+            </div>
+
+            <button
+              onClick={() => fetchExpensesData(false)}
+              disabled={refreshing}
+              className="bg-white hover:bg-gray-100 text-gray-800 px-4 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+            >
+              <RefreshCcw className={`w-4 h-4 text-[#1ab0bc] ${refreshing ? "animate-spin" : ""}`} />
+              <span>{refreshing ? "Refreshing..." : "Refresh"}</span>
+            </button>
+          </div>
         </div>
       </FadeUp>
 
@@ -146,13 +189,14 @@ export default function SuperAdminExpensesPage() {
       {/* ── LIVE INTERACTIVE EXPENSE SPREADSHEET FOR SELECTED CENTER ── */}
       {activeLocationId && activeLocation ? (
         <ExpenseSpreadsheet
-          key={activeLocationId}
+          key={`${activeLocationId}_${userRoleView}`}
           locationId={activeLocationId}
           locationName={activeLocation.name}
           initialColumns={activeSheet?.columns || []}
           initialRows={activeSheet?.rows || []}
           isSuperAdmin={true}
-          currentUserName={user?.name || 'Super Admin'}
+          userRoleView={userRoleView}
+          currentUserName={user?.name || (userRoleView === 'ACCOUNTANT' ? 'Accountant' : 'Super Admin')}
           currentUserId={user?.id ? Number(user.id) : 1}
         />
       ) : (
