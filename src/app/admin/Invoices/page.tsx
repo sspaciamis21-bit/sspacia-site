@@ -73,6 +73,10 @@ interface InvoiceSplitGroup {
   amount: number;
   gstAmount: number;
   totalAmount: number;
+  startDate?: string;
+  endDate?: string;
+  paymentDueDay?: number | string;
+  dueDate?: string;
   attachedInvoice?: {
     fileName: string;
     fileUrl: string;
@@ -168,17 +172,19 @@ export default function AdminInvoicesWorkflowPage() {
   const userRole = (user?.role || '').toUpperCase();
   const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'SUPER-ADMIN' || isRole('ADMIN');
   const isCommunityManager = isRole('COMMUNITY_MANAGER');
+  const isAccountsRole = userRole === 'ACCOUNTS' || userRole === 'ACCOUNTANT' || isRole('ACCOUNTS') || isRole('ACCOUNTANT');
   const userEmail = user?.email?.toLowerCase() || '';
 
   // Determine strict access permission
-  // CM with ssinfrazone21@gmail.com: Accountant ONLY
+  // CM with ssinfrazone21@gmail.com or role ACCOUNTS: Accountant ONLY
   // CM with any other email: CM ONLY
   // Admin: Both
-  const canAccessCM = isAdmin || (isCommunityManager && userEmail !== ACCOUNTANT_CM_EMAIL);
-  const canAccessAccountant = isAdmin || (isCommunityManager && userEmail === ACCOUNTANT_CM_EMAIL);
+  const isAccountantUser = isAccountsRole || userEmail === ACCOUNTANT_CM_EMAIL || user?.name?.toLowerCase() === 'accounts';
+  const canAccessCM = isAdmin || (isCommunityManager && !isAccountantUser);
+  const canAccessAccountant = isAdmin || isAccountantUser;
 
   const [userRoleView, setUserRoleView] = useState<'CM' | 'ACCOUNTANT'>(
-    canAccessCM ? 'CM' : 'ACCOUNTANT'
+    canAccessAccountant && !canAccessCM ? 'ACCOUNTANT' : 'CM'
   );
 
   useEffect(() => {
@@ -609,6 +615,9 @@ export default function AdminInvoicesWorkflowPage() {
         const seats = selectedItems.reduce((s, it) => s + (Number(it.noOfSeats) || 0), 0);
         const amt = selectedItems.reduce((s, it) => s + (Number(it.amount) || 0), 0);
         const tot = selectedItems.reduce((s, it) => s + (Number(it.totalAmount) || 0), 0);
+        const firstDue = selectedItems[0]?.paymentDueDay || inv.paymentDueDay || 5;
+        const start = selectedItems[0]?.startDate || selectedItems[0]?.agreementStartDate || '';
+        const end = selectedItems[0]?.endDate || selectedItems[0]?.agreementEndDate || '';
         return {
           id,
           name,
@@ -617,6 +626,10 @@ export default function AdminInvoicesWorkflowPage() {
           amount: amt,
           gstAmount: Math.max(0, tot - amt),
           totalAmount: tot,
+          startDate: start,
+          endDate: end,
+          paymentDueDay: firstDue,
+          dueDate: inv.dueDate ? new Date(inv.dueDate).toISOString().split('T')[0] : '',
           attachedInvoice: null,
         };
       };
@@ -635,6 +648,10 @@ export default function AdminInvoicesWorkflowPage() {
           amount: Number(items[0]?.amount || inv.amount || 0),
           gstAmount: Math.max(0, (Number(items[0]?.totalAmount || inv.totalAmount || 0) - Number(items[0]?.amount || inv.amount || 0))),
           totalAmount: Number(items[0]?.totalAmount || inv.totalAmount || 0),
+          startDate: items[0]?.startDate || items[0]?.agreementStartDate || '',
+          endDate: items[0]?.endDate || items[0]?.agreementEndDate || '',
+          paymentDueDay: items[0]?.paymentDueDay || inv.paymentDueDay || 5,
+          dueDate: inv.dueDate ? new Date(inv.dueDate).toISOString().split('T')[0] : '',
           attachedInvoice: null,
         }
       ]);
@@ -686,6 +703,10 @@ export default function AdminInvoicesWorkflowPage() {
         amount: 0,
         gstAmount: 0,
         totalAmount: 0,
+        startDate: '',
+        endDate: '',
+        dueDate: splitModalInvoice?.dueDate ? new Date(splitModalInvoice.dueDate).toISOString().split('T')[0] : '',
+        paymentDueDay: splitModalInvoice?.paymentDueDay || 5,
         attachedInvoice: null,
       }
     ]);
@@ -718,8 +739,8 @@ export default function AdminInvoicesWorkflowPage() {
     setSplitGroups(remainingGroups);
   };
 
-  const handleUpdateSplitGroupName = (groupId: string, newName: string) => {
-    setSplitGroups(splitGroups.map(g => g.id === groupId ? { ...g, name: newName } : g));
+  const handleUpdateSplitGroupField = (groupId: string, field: 'name' | 'startDate' | 'endDate' | 'dueDate' | 'paymentDueDay', value: any) => {
+    setSplitGroups(splitGroups.map(g => g.id === groupId ? { ...g, [field]: value } : g));
   };
 
   const handleSaveSplitInvoice = async () => {
@@ -2026,6 +2047,20 @@ export default function AdminInvoicesWorkflowPage() {
                                   ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
                                 </span>
                               </div>
+
+                              {/* DATES BADGES FOR ACCOUNTANT */}
+                              <div className="flex flex-wrap items-center gap-2 text-[10px] bg-purple-50/80 p-1.5 border border-purple-200 rounded text-purple-950 font-medium">
+                                <div className="flex items-center gap-1">
+                                  <Calendar size={11} className="text-purple-700 shrink-0" />
+                                  <span><strong>Invoice Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} to {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
+                                </div>
+                                <span className="text-purple-300">|</span>
+                                <div className="flex items-center gap-1 text-red-800 font-bold">
+                                  <Clock size={11} className="text-red-600 shrink-0" />
+                                  <span>Due Date: {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
+                                </div>
+                              </div>
+
                               <div className="text-[10px] text-neutral-500">
                                 {grp.noOfSeats} seats | Subtotal: ₹{Number(grp.amount || 0).toLocaleString('en-IN')} + GST: ₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}
                               </div>
@@ -2223,6 +2258,11 @@ export default function AdminInvoicesWorkflowPage() {
                                 <div className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1.5">
                                   <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span>
                                   {grp.name}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-purple-900 mt-1">
+                                  <span>📅 <strong>Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} → {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
+                                  <span>•</span>
+                                  <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
                                 </div>
                                 <div className="text-[10px] text-neutral-500 mt-0.5">
                                   {grp.noOfSeats} seats | Total: <strong className="text-teal-900 font-mono">₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}</strong>
@@ -2781,6 +2821,13 @@ export default function AdminInvoicesWorkflowPage() {
                                 ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
                               </span>
                             </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-purple-900 bg-purple-50 p-1.5 border border-purple-100 rounded">
+                              <span>📅 <strong>Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} → {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
+                              <span>•</span>
+                              <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
+                            </div>
+
                             <div className="grid grid-cols-3 gap-1 text-[10px] text-neutral-600">
                               <div><span className="text-neutral-400 block">Seats:</span> <strong>{grp.noOfSeats}</strong></div>
                               <div><span className="text-neutral-400 block">Subtotal:</span> <strong>₹{Number(grp.amount || 0).toLocaleString('en-IN')}</strong></div>
@@ -3701,13 +3748,13 @@ export default function AdminInvoicesWorkflowPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {splitGroups.map((group, gIdx) => (
-                      <div key={group.id} className="p-3 bg-purple-50/40 border border-purple-200 rounded-sm space-y-2">
+                      <div key={group.id} className="p-3.5 bg-purple-50/50 border border-purple-200 rounded-sm space-y-2.5 shadow-2xs">
                         <div className="flex items-center justify-between gap-2">
                           <input
                             type="text"
                             value={group.name}
-                            onChange={(e) => handleUpdateSplitGroupName(group.id, e.target.value)}
-                            className="font-extrabold text-xs text-purple-950 bg-white border border-purple-300 px-2 py-1 rounded w-full focus:outline-none focus:border-purple-600"
+                            onChange={(e) => handleUpdateSplitGroupField(group.id, 'name', e.target.value)}
+                            className="font-extrabold text-xs text-purple-950 bg-white border border-purple-300 px-2 py-1 rounded w-full focus:outline-none focus:border-purple-600 shadow-2xs"
                             placeholder={`Sub-Invoice #${gIdx + 1}`}
                           />
                           {splitGroups.length > 1 && (
@@ -3720,6 +3767,46 @@ export default function AdminInvoicesWorkflowPage() {
                               <Trash2 size={13} />
                             </button>
                           )}
+                        </div>
+
+                        {/* INVOICE BILLING PERIOD & DUE DATE INPUTS */}
+                        <div className="grid grid-cols-3 gap-2 bg-white p-2.5 border border-purple-100 rounded text-[10px]">
+                          <div>
+                            <label className="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">
+                              Invoice Start
+                            </label>
+                            <input
+                              type="date"
+                              value={group.startDate || ''}
+                              onChange={(e) => handleUpdateSplitGroupField(group.id, 'startDate', e.target.value)}
+                              className="w-full bg-neutral-50 border border-gray-200 px-1.5 py-1 text-[10px] font-mono rounded focus:bg-white focus:border-purple-600"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">
+                              Invoice End
+                            </label>
+                            <input
+                              type="date"
+                              value={group.endDate || ''}
+                              onChange={(e) => handleUpdateSplitGroupField(group.id, 'endDate', e.target.value)}
+                              className="w-full bg-neutral-50 border border-gray-200 px-1.5 py-1 text-[10px] font-mono rounded focus:bg-white focus:border-purple-600"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] font-bold uppercase text-red-600 mb-0.5">
+                              Payment Due Date
+                            </label>
+                            <input
+                              type="date"
+                              value={group.dueDate || ''}
+                              onChange={(e) => handleUpdateSplitGroupField(group.id, 'dueDate', e.target.value)}
+                              className="w-full bg-neutral-50 border border-red-200 px-1.5 py-1 text-[10px] font-mono font-bold text-red-700 rounded focus:bg-white focus:border-red-600"
+                              title="Last date for client to pay this sub-invoice"
+                            />
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between bg-white p-2 border border-purple-100 rounded text-[11px]">
@@ -3766,6 +3853,7 @@ export default function AdminInvoicesWorkflowPage() {
                               <th className="p-2.5">#</th>
                               <th className="p-2.5">Product / Cabin</th>
                               <th className="p-2.5 text-center">Seats</th>
+                              <th className="p-2.5 text-center">Product Due Day</th>
                               <th className="p-2.5 text-right">Subtotal</th>
                               <th className="p-2.5 text-right">Total (Incl GST)</th>
                               <th className="p-2.5 text-center">Assigned Sub-Invoice</th>
@@ -3786,13 +3874,18 @@ export default function AdminInvoicesWorkflowPage() {
                                     )}
                                   </td>
                                   <td className="p-2.5 text-center font-semibold">{item.noOfSeats || 0}</td>
+                                  <td className="p-2.5 text-center font-mono text-[10px] text-gray-600">
+                                    <span className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">
+                                      Due: Day {item.paymentDueDay || splitModalInvoice.paymentDueDay || 5}
+                                    </span>
+                                  </td>
                                   <td className="p-2.5 text-right font-mono">₹{Number(item.amount || 0).toLocaleString('en-IN')}</td>
                                   <td className="p-2.5 text-right font-mono font-bold text-teal-800">₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}</td>
                                   <td className="p-2.5 text-center">
                                     <select
                                       value={currentGroup?.id || ''}
                                       onChange={(e) => handleUpdateProductGroupAssignment(pIdx, e.target.value)}
-                                      className="bg-white border border-purple-300 text-purple-950 font-bold px-2 py-1 text-[11px] rounded focus:outline-none focus:border-purple-600"
+                                      className="bg-white border border-purple-300 text-purple-950 font-bold px-2 py-1 text-[11px] rounded focus:outline-none focus:border-purple-600 shadow-2xs"
                                     >
                                       {splitGroups.map((g) => (
                                         <option key={g.id} value={g.id}>

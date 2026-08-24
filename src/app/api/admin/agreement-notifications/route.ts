@@ -25,6 +25,25 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const currentUser = await prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { email: true, role: { select: { name: true } } },
+    });
+
+    if (
+      currentUser?.email?.toLowerCase() === 'ssinfrazone21@gmail.com' ||
+      currentUser?.role?.name?.toUpperCase() === 'ACCOUNTS' ||
+      currentUser?.role?.name?.toUpperCase() === 'ACCOUNTANT'
+    ) {
+      return NextResponse.json({
+        success: true,
+        summary: { agreementCount: 0, lockinCount: 0, ticketCount: 0, totalCount: 0 },
+        agreements: [],
+        lockins: [],
+        escalatedTickets: [],
+      });
+    }
+
     // Node-scoped user IDs filter for Community Managers / Admins
     const scopedUserIds = await getNodeScopedUserIds(currentUserId);
     const where: any = {

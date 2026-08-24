@@ -2,15 +2,24 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { MessageSquare } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 interface VisitorChatButtonProps {
   onClick: () => void;
 }
 
 export function VisitorChatButton({ onClick }: VisitorChatButtonProps) {
+  const { user } = useAuth();
+  const isAccountant =
+    user?.email?.toLowerCase() === "ssinfrazone21@gmail.com" ||
+    user?.role?.toUpperCase() === "ACCOUNTS" ||
+    user?.role?.toUpperCase() === "ACCOUNTANT" ||
+    user?.name?.toLowerCase() === "accounts";
+
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
   const fetchUnreadCount = useCallback(async () => {
+    if (isAccountant) return;
     try {
       const res = await fetch("/api/admin/visitor-chats");
       if (res.ok) {
@@ -34,10 +43,15 @@ export function VisitorChatButton({ onClick }: VisitorChatButtonProps) {
   }, []);
 
   useEffect(() => {
+    if (isAccountant) return;
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 8000);
     return () => clearInterval(interval);
-  }, [fetchUnreadCount]);
+  }, [fetchUnreadCount, isAccountant]);
+
+  if (isAccountant) {
+    return null;
+  }
 
   return (
     <button

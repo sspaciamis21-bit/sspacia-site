@@ -45,6 +45,13 @@ export default function ManagerLayout({
   const [isVisitorChatOpen, setIsVisitorChatOpen] = useState(false);
   const router = useRouter();
 
+  const isAccountant =
+    user?.email?.toLowerCase() === 'ssinfrazone21@gmail.com' ||
+    user?.role?.toUpperCase() === 'ACCOUNTS' ||
+    user?.role?.toUpperCase() === 'ACCOUNTANT' ||
+    user?.name?.toLowerCase() === 'accounts';
+
+  // 1. Core Auth Check
   useEffect(() => {
     if (!isLoading) {
       if (!user) {
@@ -52,21 +59,40 @@ export default function ManagerLayout({
         return;
       }
 
-      // Allow any role that is not USER (or explicitly ADMIN/MANAGER/COMMUNITY_MANAGER)
-      // The dashboard items are driven strictly by permissions.
+      // Allow any role that is not USER (or explicitly ADMIN/MANAGER/COMMUNITY_MANAGER/ACCOUNTS)
       if (isRole('USER')) {
         toast.error('Unauthorized access.');
         router.push('/dashboard');
         return;
       }
 
-      // Ensure they have assigned locations if they aren't admin/community manager and just a basic staff
-      if (!isRole('ADMIN') && !isRole('COMMUNITY_MANAGER') && (!user.assignedLocations || user.assignedLocations.length === 0)) {
+      // Ensure they have assigned locations if they aren't admin/community manager/accounts and just a basic staff
+      if (
+        !isRole('ADMIN') &&
+        !isRole('COMMUNITY_MANAGER') &&
+        !isRole('ACCOUNTS') &&
+        !isRole('ACCOUNTANT') &&
+        !isAccountant &&
+        (!user.assignedLocations || user.assignedLocations.length === 0)
+      ) {
         toast.error('No assigned locations. Contact admin.');
         router.push('/dashboard');
       }
     }
-  }, [user, isLoading, router, isRole]);
+  }, [user, isLoading, router, isRole, isAccountant]);
+
+  // 2. Restrict Accountant URL access
+  useEffect(() => {
+    if (!isLoading && user && isAccountant && !isRole('ADMIN')) {
+      const allowedPaths = ['/manager/dashboard', '/manager/invoices', '/manager/expenses'];
+      const currentLower = pathname.toLowerCase();
+      const isAllowed = allowedPaths.some((p) => currentLower.startsWith(p));
+      if (!isAllowed) {
+        toast.error('This section is not accessible to Accounts.');
+        router.push('/manager/Invoices');
+      }
+    }
+  }, [pathname, isAccountant, isRole, isLoading, user, router]);
 
   const handleLogout = async () => {
     try {
@@ -81,10 +107,10 @@ export default function ManagerLayout({
   const [pendingQrCount, setPendingQrCount] = useState(0);
 
   useEffect(() => {
-    if (user) {
+    if (user && !isAccountant) {
       fetchCounts();
     }
-  }, [user, pathname]);
+  }, [user, pathname, isAccountant]);
 
   const fetchCounts = async () => {
     try {
@@ -103,6 +129,20 @@ export default function ManagerLayout({
   };
 
   const sidebarItems = useMemo(() => {
+    const isAcc =
+      user?.email?.toLowerCase() === 'ssinfrazone21@gmail.com' ||
+      user?.role?.toUpperCase() === 'ACCOUNTS' ||
+      user?.role?.toUpperCase() === 'ACCOUNTANT' ||
+      user?.name?.toLowerCase() === 'accounts';
+
+    if (isAcc && !isRole('ADMIN')) {
+      return [
+        { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
+        { name: 'Invoices', href: '/manager/Invoices', icon: Receipt },
+        { name: 'Expenses', href: '/manager/expenses', icon: FileSpreadsheet },
+      ];
+    }
+
     const items: Array<{ name: string; href: string; icon: any; badge?: number }> = [
       { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard }
     ];
@@ -126,13 +166,7 @@ export default function ManagerLayout({
     items.push({ name: 'Documents', href: '/manager/documents', icon: FileText });
     items.push({ name: 'Agreements', href: '/manager/agreements', icon: FileText });
     items.push({ name: 'Users', href: '/manager/users', icon: Users });
-    const userEmail = user?.email?.toLowerCase() || '';
-    const isAccountant = userEmail === 'ssinfrazone21@gmail.com';
-
-    // Only non-accountants (Admin & Community Manager) see Client Master
-    if (!isAccountant || isRole('ADMIN')) {
-      items.push({ name: 'Client Master', href: '/manager/client-master', icon: FileText });
-    }
+    items.push({ name: 'Client Master', href: '/manager/client-master', icon: FileText });
     items.push({ name: 'Invoices', href: '/manager/Invoices', icon: Receipt });
 
     // Optional/Permission based routes (Keeping Locations if managed by some)
@@ -317,10 +351,12 @@ export default function ManagerLayout({
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-4">
-            <VisitorChatButton onClick={() => setIsVisitorChatOpen(true)} />
-            <NotificationBell />
-          </div>
+          {!isAccountant && (
+            <div className="flex items-center gap-2.5 sm:gap-4">
+              <VisitorChatButton onClick={() => setIsVisitorChatOpen(true)} />
+              <NotificationBell />
+            </div>
+          )}
         </header>
 
         <div className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto relative z-0">
@@ -333,10 +369,12 @@ export default function ManagerLayout({
         onClose={() => setIsProfileModalOpen(false)}
       />
 
-      <VisitorChatDrawer
-        isOpen={isVisitorChatOpen}
-        onClose={() => setIsVisitorChatOpen(false)}
-      />
+      {!isAccountant && (
+        <VisitorChatDrawer
+          isOpen={isVisitorChatOpen}
+          onClose={() => setIsVisitorChatOpen(false)}
+        />
+      )}
     </div>
   );
 }

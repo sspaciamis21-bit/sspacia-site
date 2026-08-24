@@ -105,8 +105,8 @@ export async function POST(request: Request) {
 
       if (products.length > 0) {
         totalSeats = products.reduce((sum: number, p: any) => sum + (Number(p.noOfSeats) || 0), 0);
-        subAmount = products.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-        totalAmt = products.reduce((sum: number, p: any) => sum + (Number(p.totalAmount) || 0), 0);
+        subAmount = Number(cm.amount) > 0 ? Number(cm.amount) : products.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+        totalAmt = Number(cm.totalAmount) > 0 ? Number(cm.totalAmount) : products.reduce((sum: number, p: any) => sum + (Number(p.totalAmount) || 0), 0);
         primaryDueDay = products[0].paymentDueDay ?? cm.paymentDueDay ?? 5;
 
         const cleanNames = Array.from(new Set(products.map((p: any) => (p.cabinName || '').trim()).filter(Boolean)));

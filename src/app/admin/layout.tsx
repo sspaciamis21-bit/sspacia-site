@@ -66,6 +66,12 @@ export default function AdminLayout({
   const pathname = usePathname();
   const router = useRouter();
 
+  const isAccountant =
+    user?.email?.toLowerCase() === 'ssinfrazone21@gmail.com' ||
+    user?.role?.toUpperCase() === 'ACCOUNTS' ||
+    user?.role?.toUpperCase() === 'ACCOUNTANT' ||
+    user?.name?.toLowerCase() === 'accounts';
+
   useEffect(() => {
     if (!isLoading) {
       if (!user) {
@@ -253,10 +259,12 @@ export default function AdminLayout({
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-4">
-            <VisitorChatButton onClick={() => setIsVisitorChatOpen(true)} />
-            <NotificationBell />
-          </div>
+          {!isAccountant && (
+            <div className="flex items-center gap-2.5 sm:gap-4">
+              <VisitorChatButton onClick={() => setIsVisitorChatOpen(true)} />
+              <NotificationBell />
+            </div>
+          )}
         </header>
 
         {/* Dynamic Route Content */}
@@ -270,10 +278,12 @@ export default function AdminLayout({
         onClose={() => setIsProfileModalOpen(false)}
       />
 
-      <VisitorChatDrawer
-        isOpen={isVisitorChatOpen}
-        onClose={() => setIsVisitorChatOpen(false)}
-      />
+      {!isAccountant && (
+        <VisitorChatDrawer
+          isOpen={isVisitorChatOpen}
+          onClose={() => setIsVisitorChatOpen(false)}
+        />
+      )}
     </div>
   );
 }

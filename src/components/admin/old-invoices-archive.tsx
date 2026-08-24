@@ -1265,7 +1265,7 @@ export function OldInvoicesArchive({
                           {group.companyName}
                         </h3>
                         <span className="px-2 py-0.5 bg-teal-100 text-teal-800 text-[10px] font-bold rounded">
-                          {group.invoiceCount} {group.invoiceCount === 1 ? 'Month' : 'Months'}
+                          {group.invoiceCount} {group.invoiceCount === 1 ? 'Invoice' : 'Invoices'}
                         </span>
                         {group.primaryLocation && (
                           <span className="text-[11px] text-gray-500 flex items-center gap-1">
@@ -1296,7 +1296,7 @@ export function OldInvoicesArchive({
                         title="Upload another monthly invoice for this company"
                       >
                         <Plus size={13} />
-                        <span>Add Month Invoice</span>
+                        <span>Add Invoice</span>
                       </button>
                     )}
                   </div>

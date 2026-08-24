@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MessageSquare, X, Send, User, Phone, Mail, Loader2, Sparkles, Circle } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 interface VisitorLead {
   id: number;
@@ -22,6 +23,13 @@ interface VisitorLead {
 }
 
 export function VisitorChatDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const { user } = useAuth();
+  const isAccountant =
+    user?.email?.toLowerCase() === "ssinfrazone21@gmail.com" ||
+    user?.role?.toUpperCase() === "ACCOUNTS" ||
+    user?.role?.toUpperCase() === "ACCOUNTANT" ||
+    user?.name?.toLowerCase() === "accounts";
+
   const [leads, setLeads] = useState<VisitorLead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,12 +78,12 @@ export function VisitorChatDrawer({ isOpen, onClose }: { isOpen: boolean; onClos
   };
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !isAccountant) {
       fetchLeads(true);
       const interval = setInterval(() => fetchLeads(false), 4000);
       return () => clearInterval(interval);
     }
-  }, [isOpen]);
+  }, [isOpen, isAccountant]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -125,7 +133,7 @@ export function VisitorChatDrawer({ isOpen, onClose }: { isOpen: boolean; onClos
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || isAccountant) return null;
 
   const selectedLead = leads.find((l) => l.id === selectedLeadId);
 

@@ -74,8 +74,14 @@ interface NotificationSummary {
 }
 
 export function NotificationBell() {
-  const { isRole } = useAuth();
+  const { user, isRole } = useAuth();
   const router = useRouter();
+
+  const isAccountant =
+    user?.email?.toLowerCase() === 'ssinfrazone21@gmail.com' ||
+    user?.role?.toUpperCase() === 'ACCOUNTS' ||
+    user?.role?.toUpperCase() === 'ACCOUNTANT' ||
+    user?.name?.toLowerCase() === 'accounts';
   
   const [isOpen, setIsOpen] = useState(false);
   const [isHoveredBell, setIsHoveredBell] = useState(false);
@@ -92,6 +98,7 @@ export function NotificationBell() {
 
   // Fetch agreement, lock-in, and 48h ticket notifications
   const fetchNotifications = useCallback(async () => {
+    if (isAccountant) return;
     setLoading(true);
     try {
       const res = await fetch('/api/admin/agreement-notifications');
@@ -117,13 +124,18 @@ export function NotificationBell() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAccountant]);
 
   useEffect(() => {
+    if (isAccountant) return;
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  }, [fetchNotifications, isAccountant]);
+
+  if (isAccountant) {
+    return null;
+  }
 
   // Close popover on outside click
   useEffect(() => {

@@ -10,6 +10,20 @@ export const GET = withPermission('tickets', 'read', async (
   { payload }: PermissionContext
 ) => {
   try {
+    const p = payload as any;
+    const isAccountant =
+      String(p.email || '').toLowerCase() === 'ssinfrazone21@gmail.com' ||
+      String(p.role || '').toUpperCase() === 'ACCOUNTS' ||
+      String(p.role || '').toUpperCase() === 'ACCOUNTANT' ||
+      String(p.name || '').toLowerCase() === 'accounts';
+
+    if (isAccountant) {
+      return NextResponse.json({
+        success: true,
+        data: []
+      });
+    }
+
     const leads = await (prisma as any).unregisteredCustomer.findMany({
       orderBy: { updatedAt: 'desc' },
       include: {
@@ -36,6 +50,16 @@ export const POST = withPermission('tickets', 'update', async (
   { payload }: PermissionContext
 ) => {
   try {
+    const p = payload as any;
+    const isAccountant =
+      String(p.email || '').toLowerCase() === 'ssinfrazone21@gmail.com' ||
+      String(p.role || '').toUpperCase() === 'ACCOUNTS' ||
+      String(p.role || '').toUpperCase() === 'ACCOUNTANT' ||
+      String(p.name || '').toLowerCase() === 'accounts';
+
+    if (isAccountant) {
+      return NextResponse.json({ error: 'Accountants cannot participate in visitor live chat.' }, { status: 403 });
+    }
     const body = await req.json();
     const { unregisteredCustomerId, message } = body;
 

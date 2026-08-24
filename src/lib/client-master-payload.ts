@@ -73,17 +73,21 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     ? (firstProduct.ratePerAgreement ? Number(firstProduct.ratePerAgreement) : null)
     : (ratePerAgreement ? Number(ratePerAgreement) : null);
 
-  const resolvedAmount = productList.length > 0
-    ? productList.reduce((sum, p) => sum + (p.amount ? Number(p.amount) : 0), 0)
-    : (amount ? Number(amount) : null);
+  const resolvedAmount = amount !== undefined && amount !== null && amount !== ''
+    ? Number(amount)
+    : (productList.length > 0
+        ? productList.reduce((sum, p) => sum + (p.amount ? Number(p.amount) : 0), 0)
+        : null);
 
   const resolvedGstPercent = productList.length > 0
     ? (firstProduct.gstPercent ? Number(firstProduct.gstPercent) : 18)
     : (gstPercent ? Number(gstPercent) : 18);
 
-  const resolvedTotalAmount = productList.length > 0
-    ? productList.reduce((sum, p) => sum + (p.totalAmount ? Number(p.totalAmount) : 0), 0)
-    : (totalAmount ? Number(totalAmount) : null);
+  const resolvedTotalAmount = totalAmount !== undefined && totalAmount !== null && totalAmount !== ''
+    ? Number(totalAmount)
+    : (productList.length > 0
+        ? productList.reduce((sum, p) => sum + (p.totalAmount ? Number(p.totalAmount) : 0), 0)
+        : null);
 
   const structuredAddress = buildHoAddress({
     line1: hoAddressLine1 as string | undefined,

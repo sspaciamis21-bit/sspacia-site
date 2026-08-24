@@ -28,7 +28,8 @@ import {
   Shield,
   FileText,
   Paperclip,
-  Sparkles
+  Sparkles,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -153,7 +154,11 @@ export default function ClientMasterRegistryPage() {
   const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'SUPER-ADMIN' || isRole('ADMIN');
   const isCommunityManager = isRole('COMMUNITY_MANAGER');
   const userEmail = user?.email?.toLowerCase() || '';
-  const isAccountant = isCommunityManager && userEmail === 'ssinfrazone21@gmail.com';
+  const isAccountant =
+    userEmail === 'ssinfrazone21@gmail.com' ||
+    userRole === 'ACCOUNTS' ||
+    userRole === 'ACCOUNTANT' ||
+    user?.name?.toLowerCase() === 'accounts';
 
   if (isAccountant && !isAdmin) {
     return (
@@ -242,6 +247,8 @@ export default function ClientMasterRegistryPage() {
   const [escalationPercent, setEscalationPercent] = useState<number | ''>('');
   const [escalationApplicable, setEscalationApplicable] = useState('');
   const [documentationCharges, setDocumentationCharges] = useState<number | ''>('');
+  const [applyEscalationToTotal, setApplyEscalationToTotal] = useState<boolean>(true);
+  const [showExistingEscalationPrompt, setShowExistingEscalationPrompt] = useState<boolean>(false);
 
   // Multi-Product Row State
   const [productRows, setProductRows] = useState<ProductRow[]>([createEmptyProductRow()]);
@@ -746,6 +753,8 @@ export default function ClientMasterRegistryPage() {
     setProrateCustomAmount('');
     setPaymentDueDay('');
     setClientStatus('Active');
+    setApplyEscalationToTotal(true);
+    setShowExistingEscalationPrompt(false);
 
     const maxSr = entries.length > 0 ? Math.max(...entries.map((e) => e.srNo || 0)) : 0;
     setSrNoDisplay(maxSr + 1);
@@ -797,6 +806,15 @@ export default function ClientMasterRegistryPage() {
     setEscalationPercent(entry.escalationPercent ?? '');
     setEscalationApplicable(entry.escalationApplicable ? new Date(entry.escalationApplicable).toISOString().split('T')[0] : '');
     setDocumentationCharges(entry.documentationCharges ?? '');
+
+    // For existing entries, keep original amounts unaltered by default and show the prompt if escalation exists
+    if (entry.escalationPercent && Number(entry.escalationPercent) > 0) {
+      setApplyEscalationToTotal(false);
+      setShowExistingEscalationPrompt(true);
+    } else {
+      setApplyEscalationToTotal(true);
+      setShowExistingEscalationPrompt(false);
+    }
 
     if (entry.products && entry.products.length > 0) {
       setProductRows(
@@ -897,6 +915,24 @@ export default function ClientMasterRegistryPage() {
 
     setSubmitting(true);
 
+    const rawAmount = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    const effectiveEscPct = (applyEscalationToTotal && escalationPercent !== '' && Number(escalationPercent) > 0)
+      ? Number(escalationPercent)
+      : 0;
+
+    const escalationAmount = effectiveEscPct > 0 ? roundCurrency((rawAmount * effectiveEscPct) / 100) : 0;
+    const escalatedSubtotal = roundCurrency(rawAmount + escalationAmount);
+
+    const grandGst = productRows.reduce((sum, r) => {
+      const rowAmt = Number(r.amount) || 0;
+      const rowEscAmt = effectiveEscPct > 0 ? (rowAmt * effectiveEscPct) / 100 : 0;
+      const rowEscSubtotal = rowAmt + rowEscAmt;
+      const gstPct = r.gstPercent !== '' ? Number(r.gstPercent) : 18;
+      return sum + ((rowEscSubtotal * gstPct) / 100);
+    }, 0);
+
+    const finalGrandTotal = Math.round(escalatedSubtotal + grandGst);
+
     const payload = {
       clientId: clientId.trim() || DEFAULT_CLIENT_ID_PREFIX,
       hasBrokerCommission,
@@ -937,6 +973,9 @@ export default function ClientMasterRegistryPage() {
       escalationPercent: escalationPercent !== '' ? Number(escalationPercent) : null,
       escalationApplicable: escalationApplicable || null,
       documentationCharges: documentationCharges !== '' ? Number(documentationCharges) : null,
+
+      amount: effectiveEscPct > 0 ? escalatedSubtotal : rawAmount,
+      totalAmount: effectiveEscPct > 0 ? finalGrandTotal : productRows.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0),
 
       products: productRows.map((p) => ({
         cabinName: p.cabinName.trim() || null,
@@ -2608,30 +2647,75 @@ export default function ClientMasterRegistryPage() {
                     })}
                   </div>
 
-                  {/* Grand Total Summary Row */}
+                  {/* Grand Total Summary Row with Real-Time Escalation Breakdown */}
                   {(() => {
-                    const grandAmount = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                    const rawAmount = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                    const effectiveEscPct = (applyEscalationToTotal && escalationPercent !== '' && Number(escalationPercent) > 0)
+                      ? Number(escalationPercent)
+                      : 0;
+
+                    const escalationAmount = effectiveEscPct > 0 ? roundCurrency((rawAmount * effectiveEscPct) / 100) : 0;
+                    const escalatedSubtotal = roundCurrency(rawAmount + escalationAmount);
+
                     const grandGst = productRows.reduce((sum, r) => {
-                      const amt = Number(r.amount) || 0;
-                      const gst = Number(r.gstPercent) || 0;
-                      return sum + (amt * gst / 100);
+                      const rowAmt = Number(r.amount) || 0;
+                      const rowEscAmt = effectiveEscPct > 0 ? (rowAmt * effectiveEscPct) / 100 : 0;
+                      const rowEscSubtotal = rowAmt + rowEscAmt;
+                      const gstPct = r.gstPercent !== '' ? Number(r.gstPercent) : 18;
+                      return sum + ((rowEscSubtotal * gstPct) / 100);
                     }, 0);
-                    const grandTotal = productRows.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0);
+
+                    const finalGrandTotal = Math.round(escalatedSubtotal + grandGst);
+
                     return (
-                      <div className="bg-emerald-900 text-white p-4 border border-emerald-700 flex flex-wrap items-center justify-between gap-4">
-                        <span className="font-black text-xs uppercase tracking-widest">Grand Total (All Items)</span>
-                        <div className="flex items-center gap-6">
-                          <div className="text-center">
-                            <div className="text-[9px] uppercase tracking-wider text-emerald-300 mb-0.5">Total Amount</div>
-                            <div className="font-black text-sm">₹{roundCurrency(grandAmount).toLocaleString('en-IN')}</div>
+                      <div className="bg-emerald-900 text-white p-4 border border-emerald-700 space-y-3 rounded-xs shadow-md">
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-black text-xs uppercase tracking-widest">Grand Total (All Items)</span>
+                            {effectiveEscPct > 0 ? (
+                              <span className="px-2 py-0.5 bg-amber-400 text-amber-950 text-[10px] font-black uppercase rounded shadow-2xs">
+                                +{effectiveEscPct}% Escalation Applied Pre-GST
+                              </span>
+                            ) : (
+                              (escalationPercent !== '' && Number(escalationPercent) > 0) && (
+                                <span className="px-2 py-0.5 bg-neutral-700 text-neutral-300 text-[10px] font-bold uppercase rounded">
+                                  Escalation ({escalationPercent}%) Unapplied (Original Data Kept)
+                                </span>
+                              )
+                            )}
                           </div>
-                          <div className="text-center">
-                            <div className="text-[9px] uppercase tracking-wider text-emerald-300 mb-0.5">Total GST</div>
-                            <div className="font-black text-sm">₹{roundCurrency(grandGst).toLocaleString('en-IN')}</div>
-                          </div>
-                          <div className="text-center bg-white/10 px-4 py-1.5 rounded">
-                            <div className="text-[9px] uppercase tracking-wider text-emerald-200 mb-0.5">Grand Total</div>
-                            <div className="font-black text-lg">₹{roundCurrency(grandTotal).toLocaleString('en-IN')}</div>
+
+                          <div className="flex flex-wrap items-center gap-3 sm:gap-5">
+                            <div className="text-center">
+                              <div className="text-[9px] uppercase tracking-wider text-emerald-300 mb-0.5">
+                                {effectiveEscPct > 0 ? 'Base Amount' : 'Total Amount'}
+                              </div>
+                              <div className="font-bold text-xs sm:text-sm font-mono">₹{roundCurrency(rawAmount).toLocaleString('en-IN')}</div>
+                            </div>
+
+                            {effectiveEscPct > 0 && (
+                              <div className="text-center bg-emerald-800/80 px-2.5 py-1 rounded border border-emerald-600/60">
+                                <div className="text-[9px] uppercase tracking-wider text-amber-300 mb-0.5">+{effectiveEscPct}% Escalation</div>
+                                <div className="font-black text-xs sm:text-sm text-amber-200 font-mono">+₹{roundCurrency(escalationAmount).toLocaleString('en-IN')}</div>
+                              </div>
+                            )}
+
+                            {effectiveEscPct > 0 && (
+                              <div className="text-center">
+                                <div className="text-[9px] uppercase tracking-wider text-emerald-300 mb-0.5">Escalated Subtotal</div>
+                                <div className="font-bold text-xs sm:text-sm font-mono">₹{roundCurrency(escalatedSubtotal).toLocaleString('en-IN')}</div>
+                              </div>
+                            )}
+
+                            <div className="text-center">
+                              <div className="text-[9px] uppercase tracking-wider text-emerald-300 mb-0.5">Total GST (18%)</div>
+                              <div className="font-bold text-xs sm:text-sm font-mono">₹{roundCurrency(grandGst).toLocaleString('en-IN')}</div>
+                            </div>
+
+                            <div className="text-center bg-white/15 px-3.5 py-1.5 rounded border border-white/30 shadow-inner">
+                              <div className="text-[9px] uppercase tracking-wider text-emerald-200 mb-0.5">Grand Total</div>
+                              <div className="font-black text-base sm:text-lg font-mono">₹{roundCurrency(finalGrandTotal).toLocaleString('en-IN')}</div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2639,34 +2723,91 @@ export default function ClientMasterRegistryPage() {
                   })()}
 
                   {/* Escalation % & Escalation Applicable Date (Distinct Row) */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 border border-slate-200">
-                    <div>
-                      <label className="block font-bold uppercase text-[#616161] mb-1">
-                        Escalation %
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="e.g. 5.0"
-                        value={escalationPercent}
-                        onChange={(e) => setEscalationPercent(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2.5 text-xs focus:outline-none focus:border-[#006064] font-bold"
-                      />
-                    </div>
+                  {(() => {
+                    const rawAmount = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                    const parsedEscPct = escalationPercent !== '' ? Number(escalationPercent) : 0;
+                    const previewEscAmount = parsedEscPct > 0 ? roundCurrency((rawAmount * parsedEscPct) / 100) : 0;
 
-                    <div>
-                      <label className="block font-bold uppercase text-[#616161] mb-1">
-                        Escalation Applicable Date
-                      </label>
-                      <input
-                        type="date"
-                        value={escalationApplicable}
-                        onChange={(e) => setEscalationApplicable(e.target.value)}
-                        className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2.5 text-xs focus:outline-none focus:border-[#006064] font-bold"
-                      />
-                    </div>
-                  </div>
+                    return (
+                      <div className="space-y-3 bg-slate-50 p-4 border border-slate-200 rounded-xs">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-xs font-bold uppercase text-[#616161]">
+                                Global Escalation % (Applies Pre-GST)
+                              </label>
+                              {parsedEscPct > 0 && (
+                                <span className="text-[10px] font-bold text-purple-800 bg-purple-100 px-2 py-0.2 rounded border border-purple-200">
+                                  +₹{previewEscAmount.toLocaleString('en-IN')} on Subtotal
+                                </span>
+                              )}
+                            </div>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="e.g. 5.0"
+                              value={escalationPercent}
+                              onChange={(e) => {
+                                setEscalationPercent(e.target.value === '' ? '' : Number(e.target.value));
+                                if (!editingId) {
+                                  setApplyEscalationToTotal(true);
+                                }
+                              }}
+                              className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2.5 text-xs focus:outline-none focus:border-[#006064] font-bold"
+                            />
+                            <p className="text-[10px] text-gray-500 mt-1">
+                              Applied once across all items before GST calculation.
+                            </p>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold uppercase text-[#616161] mb-1">
+                              Escalation Applicable Date
+                            </label>
+                            <input
+                              type="date"
+                              value={escalationApplicable}
+                              onChange={(e) => setEscalationApplicable(e.target.value)}
+                              className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2.5 text-xs focus:outline-none focus:border-[#006064] font-bold"
+                            />
+                          </div>
+                        </div>
+
+                        {/* EXISTING ENTRY NOTIFICATION PROMPT / BANNER */}
+                        {showExistingEscalationPrompt && editingId && escalationPercent !== '' && Number(escalationPercent) > 0 && (
+                          <div className="p-3 bg-amber-50 border border-amber-300 rounded text-xs text-amber-950 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                              <div>
+                                <div className="font-bold">Apply {escalationPercent}% Escalation to Final Amount?</div>
+                                <div className="text-[10px] text-amber-800">
+                                  This existing client master record has an escalation of {escalationPercent}%. {applyEscalationToTotal ? 'Escalation is currently active and applied to the final grand total.' : 'Existing saved totals are currently kept unaltered.'}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setApplyEscalationToTotal(!applyEscalationToTotal);
+                                  toast.success(applyEscalationToTotal ? 'Kept original amounts unaltered' : `Applied ${escalationPercent}% escalation to final amount!`);
+                                }}
+                                className={`px-3 py-1.5 font-bold text-[11px] uppercase tracking-wider rounded transition-all cursor-pointer shadow-xs ${
+                                  applyEscalationToTotal
+                                    ? 'bg-emerald-700 text-white hover:bg-emerald-800'
+                                    : 'bg-amber-600 text-white hover:bg-amber-700'
+                                }`}
+                              >
+                                {applyEscalationToTotal ? '✓ Escalation Applied (Click to Revert)' : '⚡ Apply Escalation % to Final Amount'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* SECTION 7: TDS Deduction Options */}
