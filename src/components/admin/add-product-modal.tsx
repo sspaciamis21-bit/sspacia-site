@@ -300,6 +300,18 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
     }
   }, [isOpen, product]);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   const handleNameChange = (val: string) => {
     setName(val);
     if (!slugManuallyEdited) setSlug(toSlug(val));
@@ -450,36 +462,56 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-10">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} onClick={onClose} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 md:p-6 lg:p-8 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+          />
 
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 350 }} className="relative flex flex-col w-full max-w-5xl bg-white rounded-none border border-white/10 shadow-2xl overflow-hidden max-h-[90vh]">
-             <div className="absolute top-0 left-0 w-full h-1 bg-[var(--primary)]" />
+          <motion.div
+            initial={{ scale: 0.96, opacity: 0, y: 8 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.96, opacity: 0, y: 8 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 360 }}
+            className="relative flex flex-col w-full max-w-6xl bg-white border border-gray-200 shadow-2xl overflow-hidden my-auto max-h-[92vh] z-10"
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-[var(--primary)]" />
              
-            <div className="flex items-center justify-between px-10 py-8 border-b border-[var(--outline-variant)]/20 flex-shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-white text-[var(--primary)] border border-[var(--outline-variant)]/40 shadow-xl">
-                  <Package size={24} />
+            <div className="flex items-center justify-between px-6 sm:px-10 py-5 sm:py-6 border-b border-gray-200 bg-white flex-shrink-0">
+              <div className="flex items-center gap-3.5 sm:gap-4">
+                <div className="p-2.5 sm:p-3 bg-[#006064]/5 text-[#006064] border border-[#006064]/20 shadow-xs">
+                  <Package size={22} />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-sans font-bold text-[#1B1C1C] uppercase tracking-tight">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-lg sm:text-xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight">
                       {product ? `Edit Product Details: ${product.name}` : 'Register New Workspace Product'}
                     </h2>
                     <span className="text-[9px] font-black uppercase tracking-wider bg-[#1ab0bc]/10 text-[#006064] px-2.5 py-0.5 border border-[#1ab0bc]/20">
                       Super Admin
                     </span>
                   </div>
-                  <p className="text-[10px] text-[#616161] font-medium uppercase tracking-widest mt-1 opacity-60">
+                  <p className="text-[10px] sm:text-[11px] text-gray-500 font-medium uppercase tracking-widest mt-0.5">
                     Modify centre specifications, pricing plans, amenities, and image gallery
                   </p>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 text-[#9E9E9E] hover:text-[#1B1B1B] hover:bg-neutral-100 transition-colors cursor-pointer"><X size={20} /></button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors cursor-pointer"
+                title="Close Modal"
+              >
+                <X size={20} />
+              </button>
             </div>
 
-            <div ref={bodyRef} className="flex-1 overflow-y-auto px-10 py-10 space-y-10 custom-scrollbar font-sans">
-              <form id="add-product-form" onSubmit={handleSubmit} className="space-y-10">
+            <div ref={bodyRef} className="flex-1 overflow-y-auto px-6 sm:px-10 py-6 sm:py-8 space-y-8 custom-scrollbar font-sans bg-white">
+              <form id="add-product-form" onSubmit={handleSubmit} className="space-y-8">
                 
                 {/* ── 1. Basic & Center Info ── */}
                 <section className="space-y-6">
@@ -652,8 +684,8 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                   {/* Active Gallery Thumbnails Grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4">
                     {/* Existing Saved Images */}
-                    {existingImages.map((img) => (
-                      <div key={img.id} className={`relative aspect-square border-2 overflow-hidden group ${img.isPrimary ? 'border-[#1ab0bc] shadow-md' : 'border-gray-200'}`}>
+                    {existingImages.map((img, idx) => (
+                      <div key={img.id ?? `existing-${img.url || 'img'}-${idx}`} className={`relative aspect-square border-2 overflow-hidden group ${img.isPrimary ? 'border-[#1ab0bc] shadow-md' : 'border-gray-200'}`}>
                         <img src={img.url} className="w-full h-full object-cover" alt="space photo" />
                         
                         {/* Primary Badge / Action */}
@@ -747,7 +779,7 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                       </div>
                     ) : (
                       pricingPlans.map((plan, i) => (
-                        <div key={i} className="grid md:grid-cols-4 gap-4 items-end bg-neutral-50/50 p-4 border border-[var(--outline-variant)]/20">
+                        <div key={plan.id ?? `plan-${plan.durationType || 'dur'}-${i}`} className="grid md:grid-cols-4 gap-4 items-end bg-neutral-50/50 p-4 border border-[var(--outline-variant)]/20">
                            <div className="space-y-1.5">
                               <Label htmlFor={`dur-${i}`}>Duration</Label>
                               <div className="relative">
@@ -867,12 +899,12 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
               </form>
             </div>
 
-            <div className="flex items-center justify-end gap-0 px-0 py-0 border-t border-[var(--outline-variant)]/20 bg-neutral-50 flex-shrink-0">
+            <div className="flex items-center justify-end gap-3 px-6 sm:px-10 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="flex-1 py-5 text-[10px] font-bold text-[#616161] uppercase tracking-[0.3em] hover:bg-neutral-100 transition-all border-r border-[var(--outline-variant)]/20 disabled:opacity-50 cursor-pointer"
+                className="px-6 py-3 border border-gray-300 text-gray-700 font-bold text-xs uppercase tracking-widest hover:bg-gray-100 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 Cancel
               </button>
@@ -880,7 +912,7 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
                 type="submit"
                 form="add-product-form"
                 disabled={isSubmitting}
-                className="flex-[2] py-5 bg-[#006064] text-white font-bold text-[10px] uppercase tracking-[0.3em] hover:bg-[#004D40] transition-all disabled:opacity-60 cursor-pointer flex items-center justify-center gap-2"
+                className="px-8 py-3 bg-[#006064] text-white font-bold text-xs uppercase tracking-widest hover:bg-[#004D40] transition-colors disabled:opacity-60 cursor-pointer flex items-center justify-center gap-2 shadow-md"
               >
                 {isSubmitting ? (
                   <>

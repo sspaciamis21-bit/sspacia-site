@@ -20,6 +20,7 @@ import {
   Tag
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSidebar } from '@/context/SidebarContext';
 import { AddProductModal } from '@/components/admin/add-product-modal';
 
 interface LocationItem {
@@ -66,6 +67,7 @@ interface RecentProduct {
 }
 
 export default function AdminProductsPage() {
+  const { setIsSidebarOpen } = useSidebar();
   const [products, setProducts] = useState<RecentProduct[]>([]);
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [productTypes, setProductTypes] = useState<ProductTypeItem[]>([]);
@@ -76,6 +78,13 @@ export default function AdminProductsPage() {
   const [editingProduct, setEditingProduct] = useState<RecentProduct | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<RecentProduct | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Auto-shrink left sidebar whenever modal is opened
+  useEffect(() => {
+    if (isModalOpen) {
+      setIsSidebarOpen(false);
+    }
+  }, [isModalOpen, setIsSidebarOpen]);
 
   // Filter States (Centre-wise, Product Type-wise, Category, Status, Search)
   const [selectedLocationId, setSelectedLocationId] = useState<string>('ALL');
@@ -121,6 +130,7 @@ export default function AdminProductsPage() {
 
   const handleEditProduct = (product: RecentProduct) => {
     setEditingProduct(product);
+    setIsSidebarOpen(false);
     setIsModalOpen(true);
   };
 
