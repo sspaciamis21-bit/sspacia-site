@@ -45,16 +45,53 @@ try {
     $sha256 = [System.Security.Cryptography.SHA256]::Create()
     $hash = $sha256.ComputeHash($pdfBytes)
 
-    # 4. Sign Hash using USB Hardware Token Private Key (Triggers ProxKey PIN Prompt)
-    $content = New-Object System.Security.Cryptography.Pkcs.ContentInfo -ArgumentList (,$hash)
-    $signedCms = New-Object System.Security.Cryptography.Pkcs.SignedCms -ArgumentList $content, $true
-    $cmsSigner = New-Object System.Security.Cryptography.Pkcs.CmsSigner -ArgumentList $selectedCert
-    $cmsSigner.IncludeOption = [System.Security.Cryptography.X509Certificates.X509IncludeOption]::WholeChain
-    $cmsSigner.DigestAlgorithm = New-Object System.Security.Cryptography.Oid("2.16.840.1.101.3.4.2.1") # SHA-256
+    # 4. Sign Hash using USB Hardware Token Private Key
+    $signatureBytes = $null
+    $signatureBase64 = ""
 
-    # This triggers the ProxKey Token PIN dialog if not already cached
-    $signedCms.ComputeSignature($cmsSigner, $false)
-    $signatureBytes = $signedCms.Encode()
+    # Strategy A: Use .NET RSACertificateExtensions (Best for Smart Cards / ProxKey / CNG / CAPI)
+    try {
+        $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($selectedCert)
+        if ($null -ne $rsa) {
+            Write-Host "[USB_DSC] Signing hash via RSACertificateExtensions..."
+            $sigBytes = $rsa.SignHash($hash, [System.Security.Cryptography.HashAlgorithmName]::SHA256, [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
+            $signatureBase64 = [Convert]::ToBase64String($sigBytes)
+            $signatureBytes = $sigBytes
+        }
+    } catch {
+        Write-Host "[USB_DSC] Strategy A failed: $_. Trying Strategy B (SignedCms EndCertOnly)..."
+    }
+
+    # Strategy B: Use SignedCms with EndCertOnly (avoids WholeChain untrusted root error)
+    if (-not $signatureBytes) {
+        try {
+            $content = New-Object System.Security.Cryptography.Pkcs.ContentInfo -ArgumentList (,$hash)
+            $signedCms = New-Object System.Security.Cryptography.Pkcs.SignedCms -ArgumentList $content, $true
+            $cmsSigner = New-Object System.Security.Cryptography.Pkcs.CmsSigner -ArgumentList $selectedCert
+            $cmsSigner.IncludeOption = [System.Security.Cryptography.X509Certificates.X509IncludeOption]::EndCertOnly
+            $signedCms.ComputeSignature($cmsSigner, $false)
+            $signatureBytes = $signedCms.Encode()
+            $signatureBase64 = [Convert]::ToBase64String($signatureBytes)
+        } catch {
+            Write-Host "[USB_DSC] Strategy B failed: $_. Trying Strategy C (RSACryptoServiceProvider)..."
+        }
+    }
+
+    # Strategy C: Use legacy PrivateKey RSACryptoServiceProvider
+    if (-not $signatureBytes) {
+        try {
+            $csp = [System.Security.Cryptography.RSACryptoServiceProvider]$selectedCert.PrivateKey
+            $sigBytes = $csp.SignHash($hash, [System.Security.Cryptography.CryptoConfig]::MapNameToOID("SHA256"))
+            $signatureBase64 = [Convert]::ToBase64String($sigBytes)
+            $signatureBytes = $sigBytes
+        } catch {
+            throw "Failed to sign with USB token: $_"
+        }
+    }
+
+    if (-not $signatureBytes) {
+        throw "Could not generate signature from USB token."
+    }
 
     # 5. Output signature metadata JSON
     $result = @{
@@ -63,7 +100,7 @@ try {
         issuer = $selectedCert.Issuer
         serialNumber = $selectedCert.SerialNumber
         thumbprint = $selectedCert.Thumbprint
-        signatureBase64 = [Convert]::ToBase64String($signatureBytes)
+        signatureBase64 = $signatureBase64
         certificateBase64 = [Convert]::ToBase64String($selectedCert.RawData)
         timestamp = (Get-Date).ToString("yyyy-MM-ddTHH:mm:sszzz")
     }

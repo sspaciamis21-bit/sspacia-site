@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
+import { stampPdfWithDigitalSignature } from '@/lib/digital-signature';
 
 export async function POST(
   request: Request,
@@ -26,9 +27,20 @@ export async function POST(
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
+    const inputBuffer = Buffer.from(signedPdfBase64, 'base64');
+    
+    // Stamp the official Adobe Digital Signature Box and PKCS#7 cryptographic seal
+    const finalSignedPdf = await stampPdfWithDigitalSignature(inputBuffer, {
+      signerName: signerName || 'PRAVEEN DILIPKUMAR AGARWAL',
+      signerTitle: 'Director',
+      companyName: 'SSPACIA INDIA PVT LTD',
+      date: new Date(),
+      location: 'Ahmedabad, India'
+    });
+
     const fileName = `usb_signed_invoice_${invoiceRecordId}_${Date.now()}.pdf`;
     const filePath = path.join(uploadDir, fileName);
-    fs.writeFileSync(filePath, Buffer.from(signedPdfBase64, 'base64'));
+    fs.writeFileSync(filePath, finalSignedPdf);
     const signedPdfUrl = `/uploads/signed-invoices/${fileName}`;
 
     const updated = await (prisma as any).invoiceRecord.update({

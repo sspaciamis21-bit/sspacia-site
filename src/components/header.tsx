@@ -201,22 +201,38 @@ export function Header() {
             )}
           </div>
 
-          {/* Mobile menu button */}
-          <div className="flex md:hidden items-center gap-2">
-            {!isLoggedIn && (
-              <button
-                onClick={() => setIsTourModalOpen(true)}
-                className="text-[10px] font-bold uppercase tracking-wider text-red-600 bg-red-50 px-2.5 py-1.5 border border-red-200"
+          {/* Mobile header action buttons */}
+          <div className="flex md:hidden items-center gap-1.5">
+            {!isLoggedIn ? (
+              <>
+                <Link
+                  href="/login"
+                  className="text-[11px] font-bold uppercase tracking-wider text-[#006064] bg-white border border-[#006064]/30 hover:bg-[#006064] hover:text-white px-2.5 py-1.5 rounded-sm transition-all shadow-xs"
+                >
+                  Log In
+                </Link>
+                <button
+                  onClick={() => setIsTourModalOpen(true)}
+                  className="text-[10px] font-bold uppercase tracking-wider text-white bg-[#006064] hover:bg-[#004D40] px-2.5 py-1.5 rounded-sm transition-all shadow-xs"
+                >
+                  Book Tour
+                </button>
+              </>
+            ) : (
+              <Link
+                href={user?.role === 'ADMIN' ? '/admin/dashboard' : (user?.role === 'MANAGER' || user?.role === 'COMMUNITY_MANAGER') ? '/manager/dashboard' : '/dashboard'}
+                className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white bg-[#006064] px-2.5 py-1.5 rounded-sm"
               >
-                Book Tour
-              </button>
+                <LayoutDashboard size={12} />
+                <span>Portal</span>
+              </Link>
             )}
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="text-on-surface hover:text-primary p-2 transition-colors"
+              className="text-on-surface hover:text-primary p-1.5 transition-colors"
               aria-label="Toggle Navigation Menu"
             >
-              {isOpen ? <X size={24} /> : <Menu size={24} />}
+              {isOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
         </div>
@@ -229,9 +245,65 @@ export function Header() {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.25, ease: "easeInOut" }}
-              className="md:hidden border-t border-outline-variant/10 bg-surface/95 backdrop-blur-2xl overflow-hidden max-h-[85vh] overflow-y-auto"
+              className="md:hidden border-t border-outline-variant/10 bg-white shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto"
             >
               <div className="px-4 pt-3 pb-6 space-y-4">
+                {/* 1. Quick Auth Action Card at TOP of Mobile Drawer */}
+                <div className="p-3 bg-[#E0F7FA]/40 border border-[#006064]/15 rounded-sm">
+                  {isLoggedIn ? (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-sm bg-[#006064] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                          {user?.name?.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-gray-900 truncate">{user?.name}</p>
+                          <p className="text-[10px] text-gray-500 font-mono truncate">{user?.email}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[#006064]/10">
+                        <Link
+                          href={user?.role === 'ADMIN' ? '/admin/dashboard' : (user?.role === 'MANAGER' || user?.role === 'COMMUNITY_MANAGER') ? '/manager/dashboard' : '/dashboard'}
+                          onClick={() => setIsOpen(false)}
+                          className="flex items-center justify-center gap-1.5 py-2 text-[10px] font-bold uppercase tracking-wider text-white bg-[#006064] hover:bg-[#004D40] rounded-sm transition-colors text-center"
+                        >
+                          <LayoutDashboard size={13} />
+                          <span>Dashboard</span>
+                        </Link>
+                        <button 
+                          onClick={() => { setIsOpen(false); logout(); }}
+                          className="flex items-center justify-center gap-1.5 py-2 text-[10px] font-bold uppercase tracking-wider text-red-600 bg-red-50 hover:bg-red-100 rounded-sm transition-colors text-center border border-red-200"
+                        >
+                          <LogOut size={13} />
+                          <span>Logout</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest text-center">
+                        Member &amp; Client Access
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Link
+                          href="/login"
+                          onClick={() => setIsOpen(false)}
+                          className="text-center py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm bg-[#006064] text-white shadow-xs transition-all hover:bg-[#004D40]"
+                        >
+                          Log In
+                        </Link>
+                        <Link
+                          href="/signup"
+                          onClick={() => setIsOpen(false)}
+                          className="text-center py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm bg-white text-[#006064] border border-[#006064]/30 shadow-xs transition-all hover:bg-neutral-50"
+                        >
+                          Sign Up
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Main Nav Items */}
                 <div className="flex flex-col space-y-1">
                   {siteConfig.navigation.map((item: any) => {

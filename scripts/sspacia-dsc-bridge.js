@@ -87,7 +87,7 @@ const server = http.createServer(async (req, res) => {
         const psScript = path.join(__dirname, 'sign-with-usb-dsc.ps1');
         const psCommand = `powershell -NoProfile -ExecutionPolicy Bypass -File "${psScript}" -PdfPath "${tempInput}" -SignerCN "${signerName}"`;
 
-        const psOutput = execSync(psCommand, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+        const psOutput = execSync(psCommand, { encoding: 'utf8', windowsHide: false });
 
         // Clean up temp file
         try { fs.unlinkSync(tempInput); } catch {}

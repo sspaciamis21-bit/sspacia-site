@@ -76,10 +76,10 @@ function Hero() {
                 animate="show"
                 custom={0.1}
               >
-                <h1 className="text-5xl md:text-7xl lg:text-8xl max-w-lg tracking-tighter leading-[0.9] font-bold text-[#004D40]">
+                <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl max-w-lg tracking-tighter leading-[0.95] font-bold text-[#004D40]">
                   Top Coworking Spaces
                 </h1>
-                <p className="text-base sm:text-lg leading-relaxed tracking-tight text-[#616161] max-w-md mx-auto md:mx-0">
+                <p className="text-sm sm:text-base md:text-lg leading-relaxed tracking-tight text-[#616161] max-w-md mx-auto md:mx-0">
                   SSPACIA offers modern coworking spaces in Ahmedabad, designed to
                   foster creativity and collaboration in a professional
                   environment. Join our vibrant community today.
@@ -87,20 +87,21 @@ function Hero() {
               </motion.div>
 
               {/* Buttons */}
-              <div className="flex flex-row gap-4 flex-wrap justify-center md:justify-start">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto justify-center md:justify-start">
                 <motion.div
                   variants={fadeIn}
                   initial="hidden"
                   animate="show"
                   custom={0.22}
-                  whileHover={{ scale: 1.04 }}
+                  whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
+                  className="w-full sm:w-auto"
                 >
                   <button
                     onClick={() => setIsTourModalOpen(true)}
-                    className="inline-flex items-center gap-3 rounded-full h-14 px-8 text-base font-bold shadow-xl shadow-[#006064]/20 border-2 border-[#006064] text-[#006064] bg-white hover:bg-[#E0F7FA]/50 transition-all cursor-pointer"
+                    className="inline-flex items-center justify-center gap-2.5 rounded-full h-12 sm:h-14 px-6 sm:px-8 text-sm sm:text-base font-bold shadow-lg shadow-[#006064]/15 border-2 border-[#006064] text-[#006064] bg-white hover:bg-[#E0F7FA]/50 transition-all cursor-pointer w-full sm:w-auto"
                   >
-                    Book a tour <PhoneCall className="w-4 h-4" />
+                    <span>Book a tour</span> <PhoneCall className="w-4 h-4" />
                   </button>
                 </motion.div>
 
@@ -109,14 +110,15 @@ function Hero() {
                   initial="hidden"
                   animate="show"
                   custom={0.32}
-                  whileHover={{ scale: 1.04 }}
+                  whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
+                  className="w-full sm:w-auto"
                 >
                   <Link
                     href="/gallery"
-                    className="inline-flex items-center gap-3 rounded-full h-14 px-8 text-base font-bold text-white bg-[#006064] hover:bg-[#004D40] shadow-xl shadow-[#006064]/20 transition-all cursor-pointer"
+                    className="inline-flex items-center justify-center gap-2.5 rounded-full h-12 sm:h-14 px-6 sm:px-8 text-sm sm:text-base font-bold text-white bg-[#006064] hover:bg-[#004D40] shadow-lg shadow-[#006064]/20 transition-all cursor-pointer w-full sm:w-auto"
                   >
-                    View Spaces <MoveRight className="w-4 h-4" />
+                    <span>View Spaces</span> <MoveRight className="w-4 h-4" />
                   </Link>
                 </motion.div>
               </div>

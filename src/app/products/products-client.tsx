@@ -60,6 +60,8 @@ export default function ProductsClient({
 
   // ─── Slot selections & Lightbox gallery state ─────────────────────────────────────────
   const [selectedSlotsByProduct, setSelectedSlotsByProduct] = useState<Record<number, string[]>>({});
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [lightbox, setLightbox] = useState<{
     isOpen: boolean;
     title: string;
@@ -138,19 +140,46 @@ export default function ProductsClient({
         const hasAll = selectedAmenityIds.every(id => productAmenityIds.includes(id));
         if (!hasAll) return false;
       }
+
       return true;
     });
-  }, [products, selectedCityId, selectedArea, selectedLocationId, selectedCategoryId, selectedTypeId, selectedAmenityIds]);
+  }, [
+    products, 
+    selectedCategoryId, 
+    selectedTypeId, 
+    selectedCityId, 
+    selectedArea, 
+    selectedLocationId, 
+    selectedAmenityIds
+  ]);
+
+  // Active filter count for badge
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (selectedCityId) count++;
+    if (selectedArea) count++;
+    if (selectedLocationId) count++;
+    if (initialCategoryId ? selectedCategoryId !== initialCategoryId : selectedCategoryId !== undefined) count++;
+    if (selectedTypeId) count++;
+    if (selectedAmenityIds.length > 0) count += selectedAmenityIds.length;
+    return count;
+  }, [selectedCityId, selectedArea, selectedLocationId, selectedCategoryId, initialCategoryId, selectedTypeId, selectedAmenityIds]);
+
+  const handleResetFilters = () => {
+    setSelectedCityId(undefined);
+    setSelectedArea(undefined);
+    setSelectedLocationId(undefined);
+    setSelectedCategoryId(initialCategoryId);
+    setSelectedTypeId(undefined);
+    setSelectedAmenityIds([]);
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+  };
 
   const isGuestCategory = (p: Product) => (p.categoryId === 2 || p.category?.slug === 'guest-space' || p.category?.name?.toLowerCase().includes('guest'));
-  const guestSpaces = filteredProducts.filter(isGuestCategory);
-  const workspaces  = filteredProducts.filter((p: Product) => !isGuestCategory(p));
 
-  const formatPrice = (price: number | string) => {
-    const num = typeof price === "number" ? price : parseFloat(price);
-    if (isNaN(num)) return "₹0/-";
-    return `₹${num.toLocaleString("en-IN")}/-`;
-  };
+  // Group into Guest Spaces vs Other Workspaces
+  const guestSpaces = useMemo(() => filteredProducts.filter(isGuestCategory), [filteredProducts]);
+  const workspaces = useMemo(() => filteredProducts.filter(p => !isGuestCategory(p)), [filteredProducts]);
 
   const toggleAmenity = (id: number) => {
     setSelectedAmenityIds(prev => 
@@ -168,12 +197,109 @@ export default function ProductsClient({
     }
   };
 
-  // FAQ Accordion State
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const formatPrice = (price: string | number) => {
+    const num = typeof price === "number" ? price : parseFloat(price);
+    if (isNaN(num)) return "₹0/-";
+    return `₹${num.toLocaleString("en-IN")}/-`;
+  };
+
+  // Filter Form Content Renderer (used in both Desktop Sidebar and Mobile Sheet)
+  const renderFilterContent = () => (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <FilterDropdown
+          label="CITY"
+          options={cities}
+          selectedId={selectedCityId}
+          onSelect={(val: any) => {
+            setSelectedCityId(val ? Number(val) : undefined);
+            setSelectedArea(undefined);
+            setSelectedLocationId(undefined);
+          }}
+          placeholder="Select City"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <FilterDropdown
+          label="AREA"
+          options={availableAreas}
+          selectedId={selectedArea}
+          onSelect={(val: any) => {
+            setSelectedArea(val ? String(val) : undefined);
+            setSelectedLocationId(undefined);
+          }}
+          placeholder="Select Area"
+          disabled={availableAreas.length === 0}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <FilterDropdown
+          label="CENTRE"
+          options={availableLocations}
+          selectedId={selectedLocationId}
+          onSelect={(val: any) => setSelectedLocationId(val ? Number(val) : undefined)}
+          placeholder="Select Centre"
+          disabled={availableLocations.length === 0}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <FilterDropdown
+          label="SPACE CATEGORY"
+          options={categories}
+          selectedId={selectedCategoryId}
+          onSelect={(val: any) => setSelectedCategoryId(val ? Number(val) : undefined)}
+          placeholder="All Categories"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <FilterDropdown
+          label="SPACE TYPE"
+          options={productTypes}
+          selectedId={selectedTypeId}
+          onSelect={(val: any) => setSelectedTypeId(val ? Number(val) : undefined)}
+          placeholder="All Space Types"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-[10px] font-sans font-bold text-primary uppercase tracking-[0.4em] ml-1">DATE</label>
+        <input 
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="w-full h-14 bg-surface-lowest px-4 text-sm border-b-2 border-outline-variant/20 focus:border-primary outline-none transition-all font-mono"
+        />
+      </div>
+
+      <div className="space-y-3">
+        <label className="text-[10px] font-sans font-bold text-primary uppercase tracking-[0.4em] ml-1">AMENITIES</label>
+        <div className="flex flex-wrap gap-2 pb-2 border-b border-outline-variant/30">
+          {amenities.slice(0, 4).map(amenity => (
+            <button
+              key={amenity.id}
+              onClick={() => toggleAmenity(amenity.id)}
+              className={`p-2 rounded-lg transition-all cursor-pointer ${
+                selectedAmenityIds.includes(amenity.id)
+                ? "text-[#1ab0bc] scale-110 bg-[#1ab0bc]/10"
+                : "text-tertiary/20 hover:text-tertiary/60"
+              }`}
+              title={amenity.name}
+            >
+              {getAmenityIcon(amenity.slug)}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-surface font-sans text-on-surface antialiased">
-      <div className="space-y-8 py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="space-y-6 sm:space-y-8 py-6 sm:py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* ── Compact Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pb-4 border-b border-[#CFD8DC]/60">
         <div>
@@ -189,152 +315,100 @@ export default function ProductsClient({
         </p>
       </div>
 
+      {/* ── Mobile Filter Bar ── */}
+      <div className="lg:hidden flex items-center justify-between p-3 bg-white border border-[#CFD8DC] shadow-xs rounded-sm">
+        <button
+          onClick={() => setIsMobileFilterOpen(true)}
+          className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#006064] bg-[#E0F7FA] px-3.5 py-2 rounded-sm border border-[#006064]/20 active:scale-95 transition-all cursor-pointer"
+        >
+          <Filter size={14} className="text-[#006064]" />
+          <span>Filters {activeFilterCount > 0 && `(${activeFilterCount})`}</span>
+        </button>
+
+        <div className="flex items-center gap-2.5">
+          <span className="text-[11px] font-bold text-gray-600 font-mono">
+            {filteredProducts.length} {filteredProducts.length === 1 ? 'space' : 'spaces'}
+          </span>
+          {activeFilterCount > 0 && (
+            <button
+              onClick={handleResetFilters}
+              className="text-[10px] font-bold text-rose-600 uppercase tracking-wider hover:underline cursor-pointer"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Mobile Filter Slide-up Drawer ── */}
+      {isMobileFilterOpen && (
+        <div className="lg:hidden fixed inset-0 z-[150] flex flex-col justify-end bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-t-2xl max-h-[88vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div className="flex items-center gap-2">
+                <Filter size={16} className="text-[#006064]" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-[#004D40]">Filter Workspaces</h3>
+              </div>
+              <button
+                onClick={() => setIsMobileFilterOpen(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-700 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-6 flex-1">
+              {renderFilterContent()}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center gap-3">
+              <button
+                onClick={() => setIsMobileFilterOpen(false)}
+                className="flex-1 py-3 bg-[#006064] text-white text-xs font-bold uppercase tracking-wider rounded-sm shadow-md hover:bg-[#004D40] transition-colors text-center cursor-pointer"
+              >
+                Show {filteredProducts.length} Results
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Main Layout: Sidebar Filter + Catalog ── */}
-      <div className="flex flex-col lg:flex-row items-start gap-12">
-        {/* ── STICKY SIDEBAR FILTER ── */}
-        <aside className="w-full lg:w-72 shrink-0 space-y-6 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain bg-surface-lowest p-6 border border-outline-variant/10 shadow-[0_20px_50px_rgba(27,28,28,0.02)] sidebar-scrollbar">
+      <div className="flex flex-col lg:flex-row items-start gap-8 lg:gap-12">
+        {/* ── STICKY SIDEBAR FILTER (DESKTOP) ── */}
+        <aside className="hidden lg:block w-72 shrink-0 space-y-6 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain bg-surface-lowest p-6 border border-outline-variant/10 shadow-[0_20px_50px_rgba(27,28,28,0.02)] sidebar-scrollbar">
           <div className="flex items-center justify-between border-b border-outline-variant/20 pb-4">
              <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-[#1ab0bc]" />
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-secondary">FILTER SPACES</span>
              </div>
-             {(selectedCityId || selectedArea || selectedLocationId || selectedAmenityIds.length > 0 || (initialCategoryId ? selectedCategoryId !== initialCategoryId : selectedCategoryId !== undefined) || selectedTypeId) && (
+             {activeFilterCount > 0 && (
                <button 
-                onClick={() => {
-                    setSelectedCityId(undefined);
-                    setSelectedArea(undefined);
-                    setSelectedLocationId(undefined);
-                    setSelectedCategoryId(initialCategoryId);
-                    setSelectedTypeId(undefined);
-                    setSelectedAmenityIds([]);
-                    setSelectedDate(new Date().toISOString().split('T')[0]);
-                }}
+                onClick={handleResetFilters}
                 className="text-[9px] font-bold text-rose-500 uppercase tracking-widest hover:underline cursor-pointer"
                >
                  Reset
                </button>
              )}
           </div>
-
-          <div className="space-y-6">
-             {/* 1. City Filter */}
-             <div className="space-y-2">
-                <FilterDropdown
-                  label="CITY"
-                  options={cities}
-                  selectedId={selectedCityId}
-                  onSelect={(val: any) => {
-                    setSelectedCityId(val ? Number(val) : undefined);
-                    setSelectedArea(undefined);
-                    setSelectedLocationId(undefined);
-                  }}
-                  placeholder="Select City"
-                />
-             </div>
-
-             {/* 2. Area Filter */}
-             <div className="space-y-2">
-                <FilterDropdown
-                  label="AREA"
-                  options={availableAreas}
-                  selectedId={selectedArea}
-                  onSelect={(val: any) => {
-                    setSelectedArea(val ? String(val) : undefined);
-                    setSelectedLocationId(undefined);
-                  }}
-                  placeholder="Select Area"
-                  disabled={availableAreas.length === 0}
-                />
-             </div>
-
-             {/* 3. Centre Filter */}
-             <div className="space-y-2">
-                <FilterDropdown
-                  label="CENTRE"
-                  options={availableLocations}
-                  selectedId={selectedLocationId}
-                  onSelect={(val: any) => setSelectedLocationId(val ? Number(val) : undefined)}
-                  placeholder="Select Centre"
-                  disabled={availableLocations.length === 0}
-                />
-             </div>
-
-             {/* 4. Space Category Filter */}
-             <div className="space-y-2">
-                <FilterDropdown
-                  label="SPACE CATEGORY"
-                  options={categories}
-                  selectedId={selectedCategoryId}
-                  onSelect={(val: any) => setSelectedCategoryId(val ? Number(val) : undefined)}
-                  placeholder="All Categories"
-                />
-             </div>
-
-             {/* 5. Space Type Filter */}
-             <div className="space-y-2">
-                <FilterDropdown
-                  label="SPACE TYPE"
-                  options={productTypes}
-                  selectedId={selectedTypeId}
-                  onSelect={(val: any) => setSelectedTypeId(val ? Number(val) : undefined)}
-                  placeholder="All Space Types"
-                />
-             </div>
-
-             {/* 6. Date Picker */}
-             <div className="space-y-2">
-                <label className="text-[10px] font-sans font-bold text-primary uppercase tracking-[0.4em] ml-1">DATE</label>
-                <input 
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full h-14 bg-surface-lowest px-4 text-sm border-b-2 border-outline-variant/20 focus:border-primary outline-none transition-all font-mono"
-                />
-             </div>
-
-             {/* 7. Amenities Stack */}
-             <div className="space-y-3">
-                <label className="text-[10px] font-sans font-bold text-primary uppercase tracking-[0.4em] ml-1">AMENITIES</label>
-                <div className="flex flex-wrap gap-2 pb-2 border-b border-outline-variant/30">
-                  {amenities.slice(0, 4).map(amenity => (
-                      <button
-                        key={amenity.id}
-                        onClick={() => toggleAmenity(amenity.id)}
-                        className={`p-2 rounded-lg transition-all cursor-pointer ${
-                            selectedAmenityIds.includes(amenity.id)
-                            ? "text-[#1ab0bc] scale-110 bg-[#1ab0bc]/10"
-                            : "text-tertiary/20 hover:text-tertiary/60"
-                        }`}
-                        title={amenity.name}
-                      >
-                        {getAmenityIcon(amenity.slug)}
-                      </button>
-                  ))}
-                </div>
-             </div>
-          </div>
+          {renderFilterContent()}
         </aside>
 
         {/* ── MAIN CATALOG ── */}
-        <main className="flex-1 space-y-24 w-full">
+        <main className="flex-1 space-y-16 sm:space-y-24 w-full">
           {filteredProducts.length === 0 ? (
-            <div className="py-32 text-center space-y-6 bg-surface-container-low/5 rounded-none border border-dashed border-outline-variant/20">
-               <div className="w-16 h-16 bg-surface-container-low mx-auto rounded-full flex items-center justify-center text-primary/5">
-                  <Filter className="w-8 h-8" />
-               </div>
-               <p className="text-xl font-medium text-tertiary/40 italic">No matches for your current system filters.</p>
+            <div className="py-20 sm:py-32 text-center space-y-6 bg-surface-container-low/5 rounded-none border border-dashed border-outline-variant/20 px-4">
+               <p className="text-base sm:text-lg font-medium text-gray-500 italic">No workspaces match your selected filters.</p>
             </div>
           ) : (
-            <section className="space-y-20">
-              {/* Collaborative Nodes (Guest Spaces) */}
+            <section className="space-y-16 sm:space-y-20">
               {guestSpaces.length > 0 && (
-                <div className="space-y-12">
-                  <div className="flex items-center gap-6">
-                    <span className="text-[9px] font-bold uppercase tracking-[0.5em] text-secondary/40">COLLABORATION_NODES</span>
-                    <div className="h-[1px] flex-1 bg-outline-variant/10"></div>
+                <div className="space-y-8 sm:space-y-12">
+                  <div className="flex items-center gap-4 sm:gap-6">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.5em] text-secondary/60">GUEST_SPACES</span>
+                    <div className="h-[1px] flex-1 bg-outline-variant/20"></div>
                   </div>
-                  
-                  <div className="grid grid-cols-1 gap-12">
+                  <div className="grid grid-cols-1 gap-8 sm:gap-12">
                     {guestSpaces.map((gs: Product) => {
                       const allImgs = (gs.images && gs.images.length > 0)
                         ? gs.images.map((i: any) => i.url)
@@ -350,19 +424,21 @@ export default function ProductsClient({
                              productName={gs.name}
                              images={allImgs}
                              onOpenLightbox={(imgs, idx) => setLightbox({ isOpen: true, title: gs.name, images: imgs, activeIndex: idx })}
-                             className="w-full lg:w-80 xl:w-96 h-64 sm:h-72 lg:h-auto min-h-[240px] lg:min-h-full shrink-0"
+                             className="w-full lg:w-80 xl:w-96 h-56 sm:h-64 lg:h-auto min-h-[220px] lg:min-h-full shrink-0"
                            />
 
-                           <div className="p-6 md:p-8 flex-1 min-w-0 flex flex-col justify-between gap-6">
-                              <div className="space-y-6">
-                                  <div className="flex justify-between items-start gap-4">
-                                      <h3 className="font-display text-xl md:text-2xl font-bold tracking-tight text-on-surface leading-tight">{gs.name} @ {gs.location.name}</h3>
-                                      <div className="bg-surface-container-low px-3 py-1 rounded-none border border-outline-variant/10 whitespace-nowrap">
+                           <div className="p-4 sm:p-6 lg:p-8 flex-1 min-w-0 flex flex-col justify-between gap-4 sm:gap-6">
+                              <div className="space-y-4 sm:space-y-6">
+                                  <div className="flex flex-wrap sm:flex-nowrap justify-between items-start gap-2 sm:gap-4">
+                                      <h3 className="font-display text-base sm:text-lg md:text-xl font-bold tracking-tight text-on-surface leading-tight">
+                                        {gs.name} @ {gs.location.name}
+                                      </h3>
+                                      <div className="bg-surface-container-low px-2.5 py-1 rounded-none border border-outline-variant/10 whitespace-nowrap shrink-0">
                                           <span className="text-[8px] font-bold uppercase tracking-widest text-primary">{gs.capacity} SEATER</span>
                                       </div>
                                   </div>
                                   
-                                  <div className="space-y-4">
+                                  <div className="space-y-3">
                                       <AvailabilityTimeline 
                                           productId={gs.id} 
                                           selectedDate={selectedDate} 
@@ -372,10 +448,10 @@ export default function ProductsClient({
                                   </div>
                               </div>
 
-                              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 pt-6 border-t border-outline-variant/5">
+                              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-4 sm:pt-6 border-t border-outline-variant/10">
                                    <div className="space-y-1">
                                       <span className="text-[9px] font-bold text-tertiary/40 uppercase tracking-widest block">Total Price</span>
-                                      <div className="text-2xl font-display font-black text-secondary leading-none">
+                                      <div className="text-xl sm:text-2xl font-display font-black text-secondary leading-none">
                                           {(() => {
                                               const numSelected = selectedSlotsByProduct[gs.id]?.length || 0;
                                               const basePrice = parseFloat(gs.pricingPlans.find((p: any) => p.type?.toLowerCase().includes("hour"))?.price || gs.pricingPlans[0]?.price || "0");
@@ -393,7 +469,7 @@ export default function ProductsClient({
                                           ? `/checkout?productId=${gs.id}&slots=${selectedSlotsByProduct[gs.id].join(',')}&date=${selectedDate}`
                                           : `/products/${gs.id}`
                                        }
-                                       className="bg-[#1ab0bc] text-white px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(26,176,188,0.2)] hover:shadow-[0_25px_50px_rgba(26,176,188,0.3)] transition-all transform hover:-translate-y-1 active:scale-95 text-center"
+                                       className="bg-[#006064] hover:bg-[#004D40] text-white px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] shadow-md hover:shadow-lg transition-all text-center block w-full sm:w-auto rounded-xs"
                                    >
                                        BOOK NOW
                                    </Link>
@@ -408,13 +484,13 @@ export default function ProductsClient({
 
               {/* Work Systems (Owned Spaces) */}
               {workspaces.length > 0 && (
-                <div className="space-y-12 pt-12">
-                  <div className="flex items-center gap-6">
-                    <span className="text-[9px] font-bold uppercase tracking-[0.5em] text-primary/40">WORK_SYSTEMS</span>
-                    <div className="h-[1px] flex-1 bg-outline-variant/10"></div>
+                <div className="space-y-8 sm:space-y-12 pt-8 sm:pt-12">
+                  <div className="flex items-center gap-4 sm:gap-6">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.5em] text-primary/60">WORK_SYSTEMS</span>
+                    <div className="h-[1px] flex-1 bg-outline-variant/20"></div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 lg:gap-12">
                     {workspaces.map((ws: Product) => {
                       const allImgs = (ws.images && ws.images.length > 0)
                         ? ws.images.map((i: any) => i.url)
@@ -423,7 +499,7 @@ export default function ProductsClient({
                       return (
                         <div
                           key={ws.id}
-                          className="group bg-white rounded-none overflow-hidden border border-outline-variant/5 shadow-[0_20px_50px_rgba(27,28,28,0.03)] hover:shadow-[0_40px_80px_rgba(0,105,111,0.08)] transition-all duration-700 flex flex-col justify-between"
+                          className="group bg-white rounded-none overflow-hidden border border-outline-variant/10 shadow-[0_20px_50px_rgba(27,28,28,0.03)] hover:shadow-[0_40px_80px_rgba(0,105,111,0.08)] transition-all duration-500 flex flex-col justify-between"
                         >
                            <ProductCardCarousel
                              productName={ws.name}
@@ -431,23 +507,23 @@ export default function ProductsClient({
                              onOpenLightbox={(imgs, idx) => setLightbox({ isOpen: true, title: ws.name, images: imgs, activeIndex: idx })}
                            />
                            
-                           <div className="p-8 space-y-6 flex-1 flex flex-col justify-between">
-                              <div className="space-y-4">
-                                  <div className="flex justify-between items-start">
-                                      <h3 className="font-display text-xl font-bold tracking-tight text-on-surface">{ws.name}</h3>
-                                      <span className="text-[8px] font-bold uppercase tracking-widest text-primary bg-primary/5 px-2 py-1">{ws.capacity} SEATS</span>
+                           <div className="p-5 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 flex-1 flex flex-col justify-between">
+                              <div className="space-y-3">
+                                  <div className="flex justify-between items-start gap-2">
+                                      <h3 className="font-display text-lg sm:text-xl font-bold tracking-tight text-on-surface">{ws.name}</h3>
+                                      <span className="text-[8px] font-bold uppercase tracking-widest text-primary bg-primary/5 px-2 py-1 shrink-0">{ws.capacity} SEATS</span>
                                   </div>
-                                  <p className="text-xs text-tertiary/60 line-clamp-2">{ws.description || "Premium dedicated office workspace with enterprise features."}</p>
+                                  <p className="text-xs text-gray-500 line-clamp-2">{ws.description || "Premium dedicated office workspace with enterprise features."}</p>
                               </div>
 
-                              <div className="flex items-center justify-between pt-6 border-t border-outline-variant/5">
+                              <div className="flex items-center justify-between pt-4 sm:pt-6 border-t border-outline-variant/10">
                                   <div>
-                                      <span className="text-[8px] font-bold text-tertiary/40 uppercase tracking-widest block">Monthly Rent</span>
-                                      <span className="text-xl font-display font-black text-secondary">{formatPrice(ws.pricingPlans[0]?.price || 0)}</span>
+                                      <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block">Monthly Rent</span>
+                                      <span className="text-lg sm:text-xl font-display font-black text-[#006064]">{formatPrice(ws.pricingPlans[0]?.price || 0)}</span>
                                   </div>
                                   <Link
                                       href={`/products/${ws.id}`}
-                                      className="bg-[#1ab0bc] text-white px-5 py-2.5 text-[9px] font-black uppercase tracking-[0.2em] shadow-md hover:bg-teal-600 transition-all"
+                                      className="bg-[#006064] hover:bg-[#004D40] text-white px-5 py-2.5 text-[9px] font-black uppercase tracking-[0.2em] shadow-md hover:shadow-lg transition-all rounded-xs"
                                   >
                                       VIEW DETAILS
                                   </Link>

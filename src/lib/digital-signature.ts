@@ -165,9 +165,12 @@ export async function stampPdfWithDigitalSignature(
     color: rgb(0, 0, 0),
   });
 
-  // 6. Draw "Authorised Signatory" label below box
-  lastPage.drawText('Authorised Signatory', {
-    x: x + 38,
+  // 6. Draw "Authorised Signatory" label below box (centered)
+  const authText = 'Authorised Signatory';
+  const authWidth = fontBold.widthOfTextAtSize(authText, 9.5);
+  const authX = x + (boxWidth - authWidth) / 2;
+  lastPage.drawText(authText, {
+    x: authX,
     y: y - 13,
     size: 9.5,
     font: fontBold,
