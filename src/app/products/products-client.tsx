@@ -350,7 +350,7 @@ export default function ProductsClient({
                              productName={gs.name}
                              images={allImgs}
                              onOpenLightbox={(imgs, idx) => setLightbox({ isOpen: true, title: gs.name, images: imgs, activeIndex: idx })}
-                             className="w-full lg:w-80 xl:w-96 h-64 sm:h-72 lg:h-auto shrink-0"
+                             className="w-full lg:w-80 xl:w-96 h-64 sm:h-72 lg:h-auto min-h-[240px] lg:min-h-full shrink-0"
                            />
 
                            <div className="p-6 md:p-8 flex-1 min-w-0 flex flex-col justify-between gap-6">
@@ -716,7 +716,7 @@ function ProductCardCarousel({
   productName,
   images,
   onOpenLightbox,
-  className = "w-full h-56 sm:h-64"
+  className = "w-full h-56 sm:h-64 aspect-[16/10]"
 }: {
   productName: string;
   images: string[];
@@ -742,7 +742,7 @@ function ProductCardCarousel({
       <img
         src={images[currentIdx] || images[0]}
         alt={`${productName} image ${currentIdx + 1}`}
-        className="w-full h-full object-cover transition-all duration-500 transform group-hover:scale-105"
+        className="absolute inset-0 w-full h-full object-cover transition-all duration-500 transform group-hover:scale-105"
       />
 
       {/* Top Left Badge */}
