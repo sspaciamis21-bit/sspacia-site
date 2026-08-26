@@ -1,7 +1,9 @@
 import { Metadata } from 'next';
 import { Suspense } from 'react';
-import { cookies } from 'next/headers';
 import LocationsClient from './locations-client';
+import prisma from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth';
+import { MapPin } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Manage Locations | Admin',
@@ -11,27 +13,47 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic';
 
 async function fetchLocations() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('auth-token')?.value;
+  try {
+    const payload = await requireAuth().catch(() => null);
+    const userId = payload?.id ? Number(payload.id) : null;
 
-  // Use absolute URL for server-side fetch in Next.js
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const res = await fetch(`${baseUrl}/api/admin/locations`, {
-    headers: {
-      Cookie: `auth-token=${token}`,
-    },
-    cache: 'no-store',
-  });
+    let scopeWhere = {};
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId, isActive: true },
+        select: {
+          assignedLocations: { select: { locationId: true } },
+        },
+      }).catch(() => null);
 
-  if (!res.ok) {
+      const assignedIds = user?.assignedLocations?.map((al) => al.locationId) || [];
+      if (assignedIds.length > 0) {
+        scopeWhere = { id: { in: assignedIds } };
+      }
+    }
+
+    const locations = await prisma.location.findMany({
+      where: scopeWhere,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        address: true,
+        phone: true,
+        email: true,
+        isActive: true,
+        sortOrder: true,
+        city: { select: { id: true, name: true } },
+      },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+
+    return locations || [];
+  } catch (error) {
+    console.error('[LOCATIONS_PAGE_FETCH]', error);
     return [];
   }
-
-  const json = await res.json();
-  return json.data || [];
 }
-
-import { MapPin } from 'lucide-react';
 
 export default async function AdminLocationsPage() {
   const locations = await fetchLocations();
@@ -46,15 +68,17 @@ export default async function AdminLocationsPage() {
           </div>
           <div>
             <h1 className="text-4xl font-display font-black text-[#1B1C1C] tracking-tighter uppercase">Locations</h1>
-            <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60 italic">Manage geographic locations and sites</p>
+            <p className="text-[#616161] font-bold text-[11px] uppercase tracking-widest mt-1 opacity-60 italic">
+              Manage geographic locations and business centres
+            </p>
           </div>
         </div>
       </div>
 
       <Suspense fallback={
         <div className="h-96 rounded-none border border-[var(--outline-variant)]/20 bg-white shadow-2xl animate-pulse flex flex-col items-center justify-center">
-           <div className="h-8 w-8 bg-neutral-100 animate-bounce" />
-           <p className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-widest mt-4">Loading Locations...</p>
+          <div className="h-8 w-8 bg-neutral-100 animate-bounce" />
+          <p className="text-[10px] font-black text-[#9E9E9E] uppercase tracking-widest mt-4">Loading Locations...</p>
         </div>
       }>
         <LocationsClient initialLocations={locations} />
