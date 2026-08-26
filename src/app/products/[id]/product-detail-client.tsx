@@ -57,7 +57,18 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const [isFetchingSlots, setIsFetchingSlots] = useState(false);
   const [isSubmittingInquiry, setIsSubmittingInquiry] = useState(false);
 
-  const isGuestSpace = product.categoryId === 1;
+  const [isGalleryHovered, setIsGalleryHovered] = useState(false);
+
+  // Auto-advance detail hero images every 3 seconds if multiple images exist
+  useEffect(() => {
+    if (images.length <= 1 || isGalleryHovered) return;
+    const timer = setInterval(() => {
+      setCurrentImageIndex(prev => (prev === images.length - 1 ? 0 : prev + 1));
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [images.length, isGalleryHovered]);
+
+  const isGuestSpace = product.categoryId === 2 || product.category?.slug === 'guest-space' || product.category?.name?.toLowerCase().includes('guest');
 
   // Assuming lowest price is hourly for guest spaces
   const hourlyRate = isGuestSpace && product.pricingPlans?.length > 0
@@ -99,21 +110,23 @@ export default function ProductDetailClient({ product }: { product: any }) {
       // Can only remove from edges (min or max) to maintain continuity
       if (slotIndex === minIndex) {
         setSelectedTimeSlots(selectedTimeSlots.filter((s) => s !== slot));
-      } else if (slotIndex === maxIndex) {
-        setSelectedTimeSlots(selectedTimeSlots.filter((s) => s !== slot));
-      } else {
-        // If clicked in middle, restart selection from this slot
-        setSelectedTimeSlots([slot]);
+        return;
       }
+      if (slotIndex === maxIndex) {
+        setSelectedTimeSlots(selectedTimeSlots.filter((s) => s !== slot));
+        return;
+      }
+
+      // If clicked inside the range, reset to just this slot
+      setSelectedTimeSlots([slot]);
       return;
     }
 
-    // 3. Selection / Expansion logic
-    // Allow expanding if adjacent to either end
+    // 3. Selection logic (must be adjacent to min or max)
     if (slotIndex === minIndex - 1 || slotIndex === maxIndex + 1) {
-      setSelectedTimeSlots([...selectedTimeSlots, slot]);
+      setSelectedTimeSlots([...selectedTimeSlots, slot].sort((a, b) => TIME_SLOTS.indexOf(a) - TIME_SLOTS.indexOf(b)));
     } else {
-      // Reset if trying to select a non-adjacent slot
+      // Non-adjacent click resets selection to single slot
       setSelectedTimeSlots([slot]);
     }
   };
@@ -173,7 +186,10 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const totalPrice = selectedTimeSlots.length * hourlyRate;
 
   const handleBooking = () => {
-    if (!selectedDate || selectedTimeSlots.length === 0) return;
+    if (!selectedDate || selectedTimeSlots.length === 0) {
+      toast.error("Please select at least one time slot to book");
+      return;
+    }
 
     const params = new URLSearchParams({
       productId: product.id.toString(),
@@ -181,7 +197,15 @@ export default function ProductDetailClient({ product }: { product: any }) {
       slots: selectedTimeSlots.join(','),
       basePrice: totalPrice.toString()
     });
-    router.push(`/checkout?${params.toString()}`);
+    const targetUrl = `/checkout?${params.toString()}`;
+
+    if (!isLoggedIn) {
+      setPendingAction(targetUrl);
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    router.push(targetUrl);
   };
 
   const handleInquiryRequest = async () => {
@@ -486,10 +510,13 @@ export default function ProductDetailClient({ product }: { product: any }) {
           setPendingAction(null);
         }}
         title="Sign In to Continue"
-        message="Log in or register to submit your workspace request."
+        message="Log in or register to complete your workspace booking."
         onSuccess={() => {
+          setIsAuthModalOpen(false);
           if (pendingAction === "inquiry") {
             handleInquiryRequest();
+          } else if (pendingAction) {
+            router.push(pendingAction);
           }
           setPendingAction(null);
         }}

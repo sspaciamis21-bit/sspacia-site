@@ -1,15 +1,18 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { motion } from "motion/react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { AuthModal } from "@/components/ui/auth-modal";
 import { FilterDropdown } from "@/components/ui/filter-dropdown";
 import { 
   Filter, 
   ChevronLeft, 
   ChevronRight, 
   Eye, 
-  X,
+  X, 
   Zap, 
   Coffee, 
   Wifi, 
@@ -49,14 +52,99 @@ export default function ProductsClient({
   productTypes = [],
   initialCategoryId
 }: ProductsClientProps) {
-  // ─── Filter States ─────────────────────────────────────────
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(initialCategoryId);
-  const [selectedTypeId, setSelectedTypeId] = useState<number | undefined>(undefined);
-  const [selectedCityId, setSelectedCityId] = useState<number | undefined>(undefined);
-  const [selectedArea, setSelectedArea] = useState<string | undefined>(undefined);
-  const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>(undefined);
-  const [selectedAmenityIds, setSelectedAmenityIds] = useState<number[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const { isLoggedIn } = useAuth();
+
+  // Auth Modal State for Unauthenticated Customers
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [pendingRedirectUrl, setPendingRedirectUrl] = useState<string | null>(null);
+
+  // ─── Filter States (Restores from URL search params on mount) ─────────────────
+  const [selectedCityId, setSelectedCityId] = useState<number | undefined>(() => {
+    const p = searchParams?.get('city');
+    return p ? Number(p) : undefined;
+  });
+  const [selectedArea, setSelectedArea] = useState<string | undefined>(() => {
+    return searchParams?.get('area') || undefined;
+  });
+  const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>(() => {
+    const p = searchParams?.get('centre') || searchParams?.get('location');
+    return p ? Number(p) : undefined;
+  });
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(() => {
+    const p = searchParams?.get('category');
+    if (p) return Number(p);
+    return initialCategoryId;
+  });
+  const [selectedTypeId, setSelectedTypeId] = useState<number | undefined>(() => {
+    const p = searchParams?.get('type');
+    return p ? Number(p) : undefined;
+  });
+  const [selectedAmenityIds, setSelectedAmenityIds] = useState<number[]>(() => {
+    const p = searchParams?.get('amenities');
+    if (p) return p.split(',').map(Number).filter(Boolean);
+    return [];
+  });
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const p = searchParams?.get('date');
+    return p || new Date().toISOString().split('T')[0];
+  });
+
+  // Restore saved filters from sessionStorage if URL has no search params
+  useEffect(() => {
+    const hasParams = searchParams && Array.from(searchParams.keys()).length > 0;
+    if (!hasParams && typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem('sspacia_active_filters');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.cityId) setSelectedCityId(parsed.cityId);
+          if (parsed.area) setSelectedArea(parsed.area);
+          if (parsed.locationId) setSelectedLocationId(parsed.locationId);
+          if (parsed.categoryId && !initialCategoryId) setSelectedCategoryId(parsed.categoryId);
+          if (parsed.typeId) setSelectedTypeId(parsed.typeId);
+          if (parsed.amenityIds?.length) setSelectedAmenityIds(parsed.amenityIds);
+          if (parsed.date) setSelectedDate(parsed.date);
+        }
+      } catch {}
+    }
+  }, []);
+
+  // Synchronize URL and sessionStorage when filters change
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams();
+    if (selectedCityId) params.set('city', selectedCityId.toString());
+    if (selectedArea) params.set('area', selectedArea);
+    if (selectedLocationId) params.set('centre', selectedLocationId.toString());
+    if (selectedCategoryId && selectedCategoryId !== initialCategoryId) {
+      params.set('category', selectedCategoryId.toString());
+    }
+    if (selectedTypeId) params.set('type', selectedTypeId.toString());
+    if (selectedAmenityIds.length > 0) params.set('amenities', selectedAmenityIds.join(','));
+    if (selectedDate && selectedDate !== new Date().toISOString().split('T')[0]) {
+      params.set('date', selectedDate);
+    }
+
+    const queryString = params.toString();
+    const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
+    window.history.replaceState(null, '', newUrl);
+
+    try {
+      sessionStorage.setItem('sspacia_active_filters', JSON.stringify({
+        cityId: selectedCityId,
+        area: selectedArea,
+        locationId: selectedLocationId,
+        categoryId: selectedCategoryId,
+        typeId: selectedTypeId,
+        amenityIds: selectedAmenityIds,
+        date: selectedDate
+      }));
+    } catch {}
+  }, [selectedCityId, selectedArea, selectedLocationId, selectedCategoryId, selectedTypeId, selectedAmenityIds, selectedDate, pathname, initialCategoryId]);
 
   // ─── Slot selections & Lightbox gallery state ─────────────────────────────────────────
   const [selectedSlotsByProduct, setSelectedSlotsByProduct] = useState<Record<number, string[]>>({});
@@ -463,16 +551,22 @@ export default function ProductsClient({
                                           <span className="text-[8px] font-bold text-primary/60 uppercase tracking-widest">{selectedSlotsByProduct[gs.id].length} slots selected</span>
                                       )}
                                    </div>
-                                   <Link 
-                                       href={
-                                          selectedSlotsByProduct[gs.id]?.length > 0 
-                                          ? `/checkout?productId=${gs.id}&slots=${selectedSlotsByProduct[gs.id].join(',')}&date=${selectedDate}`
-                                          : `/products/${gs.id}`
-                                       }
-                                       className="bg-[#006064] hover:bg-[#004D40] text-white px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] shadow-md hover:shadow-lg transition-all text-center block w-full sm:w-auto rounded-xs"
+                                   <button 
+                                       onClick={(e) => {
+                                         const targetUrl = selectedSlotsByProduct[gs.id]?.length > 0 
+                                           ? `/checkout?productId=${gs.id}&slots=${selectedSlotsByProduct[gs.id].join(',')}&date=${selectedDate}`
+                                           : `/products/${gs.id}?date=${selectedDate}`;
+                                         if (!isLoggedIn) {
+                                           setPendingRedirectUrl(targetUrl);
+                                           setIsAuthModalOpen(true);
+                                         } else {
+                                           router.push(targetUrl);
+                                         }
+                                       }}
+                                       className="bg-[#006064] hover:bg-[#004D40] text-white px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] shadow-md hover:shadow-lg transition-all text-center block w-full sm:w-auto rounded-xs cursor-pointer"
                                    >
                                        BOOK NOW
-                                   </Link>
+                                   </button>
                                 </div>
                            </div>
                         </div>
@@ -523,7 +617,7 @@ export default function ProductsClient({
                                   </div>
                                   <Link
                                       href={`/products/${ws.id}`}
-                                      className="bg-[#006064] hover:bg-[#004D40] text-white px-5 py-2.5 text-[9px] font-black uppercase tracking-[0.2em] shadow-md hover:shadow-lg transition-all rounded-xs"
+                                      className="bg-[#006064] hover:bg-[#004D40] text-white px-5 py-2.5 text-[9px] font-black uppercase tracking-[0.2em] shadow-md hover:shadow-lg transition-all rounded-xs cursor-pointer"
                                   >
                                       VIEW DETAILS
                                   </Link>
@@ -549,54 +643,44 @@ export default function ProductsClient({
           {/* Top Bar */}
           <div 
             onClick={(e) => e.stopPropagation()} 
-            className="flex justify-between items-center text-white border-b border-white/10 pb-4 max-w-7xl mx-auto w-full"
+            className="flex items-center justify-between border-b border-white/10 pb-4"
           >
             <div className="space-y-1">
-              <h3 className="font-display font-bold text-xl md:text-2xl uppercase tracking-wider text-teal-400">{lightbox.title}</h3>
-              <p className="text-xs text-white/60 font-mono">Image {lightbox.activeIndex + 1} of {lightbox.images.length}</p>
+              <h3 className="text-white font-display font-black text-lg md:text-2xl tracking-tight">{lightbox.title}</h3>
+              <p className="text-[#1ab0bc] text-xs font-mono font-bold tracking-widest uppercase">
+                IMAGE {lightbox.activeIndex + 1} OF {lightbox.images.length}
+              </p>
             </div>
-            
-            <button
+            <button 
               onClick={() => setLightbox(null)}
-              className="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 text-xs font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2 shadow-2xl hover:scale-105 active:scale-95 border border-rose-400"
-              title="Close Image Preview (ESC)"
+              className="bg-white/10 hover:bg-rose-500 text-white p-3 rounded-full transition-all cursor-pointer"
             >
-              <X className="w-5 h-5" />
-              <span>CLOSE</span>
+              <X className="w-6 h-6" />
             </button>
           </div>
 
-          {/* Center Image Display with Nav Buttons */}
+          {/* Center Image */}
           <div 
             onClick={(e) => e.stopPropagation()} 
-            className="relative flex-1 flex items-center justify-center my-4 overflow-hidden max-w-7xl mx-auto w-full"
+            className="relative flex-1 my-6 flex items-center justify-center min-h-0"
           >
-            <img
-              src={lightbox.images[lightbox.activeIndex]}
-              alt={`Fullscreen ${lightbox.title}`}
-              className="max-h-full max-w-full object-contain shadow-2xl transition-all duration-300"
+            <img 
+              src={lightbox.images[lightbox.activeIndex]} 
+              alt={`${lightbox.title} enlarged`}
+              className="max-h-full max-w-full object-contain rounded-none border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)]"
             />
 
             {lightbox.images.length > 1 && (
               <>
                 <button
-                  onClick={() => setLightbox({
-                    ...lightbox,
-                    activeIndex: lightbox.activeIndex === 0 ? lightbox.images.length - 1 : lightbox.activeIndex - 1
-                  })}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/70 hover:bg-[#1ab0bc] text-white p-4 shadow-2xl transition-all hover:scale-110 active:scale-90 border border-white/20"
-                  title="Previous Image"
+                  onClick={() => setLightbox(prev => prev ? { ...prev, activeIndex: (prev.activeIndex - 1 + prev.images.length) % prev.images.length } : null)}
+                  className="absolute left-2 md:left-6 top-1/2 -translate-y-1/2 bg-black/80 hover:bg-[#1ab0bc] text-white p-4 rounded-full transition-all cursor-pointer shadow-2xl backdrop-blur-md"
                 >
                   <ChevronLeft className="w-8 h-8" />
                 </button>
-
                 <button
-                  onClick={() => setLightbox({
-                    ...lightbox,
-                    activeIndex: lightbox.activeIndex === lightbox.images.length - 1 ? 0 : lightbox.activeIndex + 1
-                  })}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/70 hover:bg-[#1ab0bc] text-white p-4 shadow-2xl transition-all hover:scale-110 active:scale-90 border border-white/20"
-                  title="Next Image"
+                  onClick={() => setLightbox(prev => prev ? { ...prev, activeIndex: (prev.activeIndex + 1) % prev.images.length } : null)}
+                  className="absolute right-2 md:right-6 top-1/2 -translate-y-1/2 bg-black/80 hover:bg-[#1ab0bc] text-white p-4 rounded-full transition-all cursor-pointer shadow-2xl backdrop-blur-md"
                 >
                   <ChevronRight className="w-8 h-8" />
                 </button>
@@ -604,21 +688,21 @@ export default function ProductsClient({
             )}
           </div>
 
-          {/* Bottom Thumbnail Strip */}
+          {/* Bottom Thumbnails */}
           {lightbox.images.length > 1 && (
             <div 
               onClick={(e) => e.stopPropagation()} 
-              className="flex justify-center gap-3 overflow-x-auto pt-4 border-t border-white/10 max-w-4xl mx-auto w-full pb-2"
+              className="flex justify-center gap-3 overflow-x-auto py-2 border-t border-white/10"
             >
-              {lightbox.images.map((imgUrl, i) => (
+              {lightbox.images.map((img, idx) => (
                 <button
-                  key={i}
-                  onClick={() => setLightbox({ ...lightbox, activeIndex: i })}
-                  className={`relative w-20 h-14 border-2 overflow-hidden transition-all shrink-0 ${
-                    i === lightbox.activeIndex ? 'border-[#1ab0bc] scale-110 shadow-lg' : 'border-white/20 opacity-40 hover:opacity-100'
+                  key={idx}
+                  onClick={() => setLightbox(prev => prev ? { ...prev, activeIndex: idx } : null)}
+                  className={`relative w-16 h-12 md:w-20 md:h-14 rounded overflow-hidden border-2 transition-all cursor-pointer shrink-0 ${
+                    lightbox.activeIndex === idx ? "border-[#1ab0bc] scale-110 shadow-lg" : "border-transparent opacity-50 hover:opacity-100"
                   }`}
                 >
-                  <img src={imgUrl} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover" />
+                  <img src={img} alt="thumb" className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>
@@ -780,14 +864,31 @@ export default function ProductsClient({
           </section>
 
         </div>
-
       </div>
+
+      {/* ── AUTH MODAL POPUP (FOR UNAUTHENTICATED USERS) ── */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          setPendingRedirectUrl(null);
+        }}
+        onSuccess={() => {
+          setIsAuthModalOpen(false);
+          if (pendingRedirectUrl) {
+            router.push(pendingRedirectUrl);
+            setPendingRedirectUrl(null);
+          }
+        }}
+        title="Sign In to Reserve Workspace"
+        message="Please sign in or create an account to proceed with your booking and access instant confirmation."
+      />
 
     </div>
   );
 }
 
-// ─── CARD MULTI-IMAGE CAROUSEL SUBCOMPONENT ───
+// ─── CARD MULTI-IMAGE CAROUSEL SUBCOMPONENT (AUTO SWAP EVERY 3S) ───
 function ProductCardCarousel({
   productName,
   images,
@@ -800,6 +901,16 @@ function ProductCardCarousel({
   className?: string;
 }) {
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Auto-advance images every 3 seconds if multiple images exist and not hovered
+  useEffect(() => {
+    if (images.length <= 1 || isHovered) return;
+    const timer = setInterval(() => {
+      setCurrentIdx(prev => (prev === images.length - 1 ? 0 : prev + 1));
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [images.length, isHovered]);
 
   const handlePrev = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -814,16 +925,27 @@ function ProductCardCarousel({
   };
 
   return (
-    <div className={`relative overflow-hidden group bg-neutral-100 border-b lg:border-b-0 lg:border-r border-gray-100 ${className}`}>
-      <img
-        src={images[currentIdx] || images[0]}
-        alt={`${productName} image ${currentIdx + 1}`}
-        className="absolute inset-0 w-full h-full object-cover transition-all duration-500 transform group-hover:scale-105"
-      />
+    <div 
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={`relative overflow-hidden group bg-neutral-100 border-b lg:border-b-0 lg:border-r border-gray-100 ${className}`}
+    >
+      <AnimatePresence mode="wait">
+        <motion.img
+          key={currentIdx}
+          src={images[currentIdx] || images[0]}
+          alt={`${productName} image ${currentIdx + 1}`}
+          initial={{ opacity: 0.35, scale: 1.03 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0.25 }}
+          transition={{ duration: 0.45, ease: "easeInOut" }}
+          className="absolute inset-0 w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
+        />
+      </AnimatePresence>
 
       {/* Top Left Badge */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-        <span className="bg-black/75 text-white text-[8px] font-bold px-3 py-1 uppercase tracking-[0.2em] backdrop-blur-md">
+      <div className="absolute top-3.5 left-3.5 z-10 flex items-center gap-2">
+        <span className="bg-black/75 text-white text-[8px] font-bold px-2.5 py-1 uppercase tracking-[0.2em] backdrop-blur-md shadow-xs">
           IMAGE {currentIdx + 1} / {images.length}
         </span>
       </div>
@@ -835,30 +957,52 @@ function ProductCardCarousel({
           e.stopPropagation();
           onOpenLightbox(images, currentIdx);
         }}
-        className="absolute top-4 right-4 z-10 bg-black/75 hover:bg-[#1ab0bc] text-white p-2.5 transition-all shadow-lg backdrop-blur-md border border-white/20 hover:scale-110 active:scale-95"
+        className="absolute top-3.5 right-3.5 z-10 bg-black/75 hover:bg-[#006064] text-white p-2 transition-all shadow-lg backdrop-blur-md border border-white/20 hover:scale-110 active:scale-95 cursor-pointer"
         title="Click for Fullscreen Big Gallery Preview"
       >
-        <Eye className="w-4 h-4" />
+        <Eye className="w-3.5 h-3.5" />
       </button>
 
       {/* Prev / Next Carousel Navigation Arrows */}
       {images.length > 1 && (
-        <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-10">
-          <button
-            onClick={handlePrev}
-            className="pointer-events-auto bg-black/75 hover:bg-[#1ab0bc] text-white p-2.5 transition-all shadow-lg active:scale-90"
-            title="Previous Image"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleNext}
-            className="pointer-events-auto bg-black/75 hover:bg-[#1ab0bc] text-white p-2.5 transition-all shadow-lg active:scale-90"
-            title="Next Image"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+        <>
+          <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            <button
+              onClick={handlePrev}
+              className="pointer-events-auto bg-black/75 hover:bg-[#006064] text-white p-2 transition-all shadow-lg active:scale-90 cursor-pointer"
+              title="Previous Image"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleNext}
+              className="pointer-events-auto bg-black/75 hover:bg-[#006064] text-white p-2 transition-all shadow-lg active:scale-90 cursor-pointer"
+              title="Next Image"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Bottom Pagination Dots / Auto-Swap Progress */}
+          <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 bg-black/40 backdrop-blur-xs px-2 py-0.5 rounded-full pointer-events-auto">
+            {images.map((_, dotIdx) => (
+              <button
+                key={dotIdx}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setCurrentIdx(dotIdx);
+                }}
+                className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                  dotIdx === currentIdx
+                    ? "w-3.5 bg-[#1ab0bc]"
+                    : "w-1.5 bg-white/60 hover:bg-white"
+                }`}
+                title={`Go to image ${dotIdx + 1}`}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
