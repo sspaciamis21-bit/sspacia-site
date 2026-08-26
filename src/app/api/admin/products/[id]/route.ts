@@ -125,7 +125,7 @@ export const PATCH = withPermission('products', 'update', async (
       ? (body.pricingPlans as PricingPlanInput[])
       : undefined;
 
-    // 3. Update + activity log in transaction
+    // 3. Update + activity log in transaction with extended timeout
     const product = await prisma.$transaction(async (tx) => {
       const updated = await tx.product.update({
         where: { id: productId },
@@ -179,27 +179,30 @@ export const PATCH = withPermission('products', 'update', async (
         }
       }
 
-      // Explicit Pricing Plans Update
+      // Explicit Pricing Plans Update (Bulk optimized)
       if (Array.isArray(pricingPlans) && pricingPlans.length > 0) {
         await tx.pricingPlan.deleteMany({ where: { productId } });
-        for (const p of pricingPlans) {
-          const durationTypeName = p.durationType || 'MONTHLY';
-          const dt = await tx.durationType.findFirst({
-            where: { name: durationTypeName }
-          }) || await tx.durationType.findFirst();
+        const allDurationTypes = await tx.durationType.findMany();
+        const durationTypeMap = new Map(allDurationTypes.map(d => [d.name.toUpperCase(), d.id]));
+        const defaultDurationTypeId = allDurationTypes[0]?.id;
 
-          if (dt) {
-            await tx.pricingPlan.create({
-              data: {
-                productId,
-                durationTypeId: dt.id,
-                price: p.price,
-                oldPrice: p.oldPrice,
-                discount: p.discount,
-                priceType: (p.priceType as any) || 'PER_SEAT',
-              }
-            });
-          }
+        const plansData = pricingPlans.map(p => {
+          const durationTypeName = (p.durationType || 'MONTHLY').toUpperCase();
+          const durationTypeId = durationTypeMap.get(durationTypeName) || defaultDurationTypeId;
+          return {
+            productId,
+            durationTypeId: durationTypeId!,
+            price: p.price,
+            oldPrice: p.oldPrice,
+            discount: p.discount,
+            priceType: (p.priceType as any) || 'PER_SEAT',
+          };
+        }).filter(p => p.durationTypeId !== undefined);
+
+        if (plansData.length > 0) {
+          await tx.pricingPlan.createMany({
+            data: plansData,
+          });
         }
       }
 
@@ -225,7 +228,7 @@ export const PATCH = withPermission('products', 'update', async (
       });
 
       return updated;
-    });
+    }, { timeout: 30000, maxWait: 10000 });
 
     return NextResponse.json({ data: product });
   } catch (error) {
@@ -236,6 +239,8 @@ export const PATCH = withPermission('products', 'update', async (
     );
   }
 });
+
+export const PUT = PATCH;
 
 // ─── DELETE /api/admin/products/[id] ─────────────────────────────────────────
 // Soft delete (isActive: false)
@@ -306,7 +311,7 @@ export const DELETE = withPermission('products', 'delete', async (
           ipAddress: req.headers.get('x-forwarded-for') ?? null,
         },
       });
-    });
+    }, { timeout: 30000, maxWait: 10000 });
 
     return NextResponse.json({ data: { message: 'Product deleted permanently' } });
   } catch (error) {

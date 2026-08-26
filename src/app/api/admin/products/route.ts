@@ -235,7 +235,7 @@ export const POST = withPermission('products', 'create', async (req: NextRequest
       });
 
       return p;
-    });
+    }, { timeout: 30000, maxWait: 10000 });
 
     return NextResponse.json({ data: product, message: 'Created successfully' }, { status: 201 });
   } catch (error) {
