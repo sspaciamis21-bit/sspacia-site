@@ -1,7 +1,10 @@
 import { Metadata } from 'next';
+import { Suspense } from 'react';
 import ProductDetailClient from './product-detail-client';
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({
   params,
@@ -109,5 +112,9 @@ export default async function ProductDetailPage({
     notFound();
   }
 
-  return <ProductDetailClient product={product} />;
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading workspace details...</div>}>
+      <ProductDetailClient product={product} />
+    </Suspense>
+  );
 }

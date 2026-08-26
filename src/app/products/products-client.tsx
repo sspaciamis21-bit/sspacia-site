@@ -211,10 +211,10 @@ export default function ProductsClient({
 
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
-      const catId = product.categoryId ?? product.category?.id;
-      const typeId = product.typeId ?? product.type?.id;
+      const catId = product.categoryId ?? (product as any).category?.id;
+      const typeId = product.typeId ?? (product as any).type?.id;
       const cityId = product.location?.cityId ?? (product.location as any)?.city?.id;
-      const locId = product.locationId ?? product.location?.id;
+      const locId = (product as any).locationId ?? product.location?.id;
       const area = product.location?.area?.trim();
 
       if (selectedCityId && cityId !== selectedCityId) return false;
@@ -263,7 +263,7 @@ export default function ProductsClient({
     setSelectedDate(new Date().toISOString().split('T')[0]);
   };
 
-  const isGuestCategory = (p: Product) => (p.categoryId === 2 || p.category?.slug === 'guest-space' || p.category?.name?.toLowerCase().includes('guest'));
+  const isGuestCategory = (p: Product) => (p.categoryId === 2 || (p as any).category?.slug === 'guest-space' || (p as any).category?.name?.toLowerCase().includes('guest') || (p as any).category?.displayName?.toLowerCase().includes('guest'));
 
   // Group into Guest Spaces vs Other Workspaces
   const guestSpaces = useMemo(() => filteredProducts.filter(isGuestCategory), [filteredProducts]);

@@ -1,7 +1,10 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { seoConfig } from "@/config/seo";
 import ProductsClient from "../products/products-client";
 import prisma from "@/lib/prisma";
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: "Co-working Spaces | SSPACIA Coworking",
@@ -47,6 +50,8 @@ export interface Product {
   isActive: boolean;
   isFeatured: boolean;
   location: ProductLocation;
+  category?: { id?: number; name?: string; slug?: string; displayName?: string } | null;
+  type?: { id?: number; name?: string; displayName?: string } | null;
   images: ProductImage[];
   pricingPlans: PricingPlan[];
   amenities: { amenity: Amenity }[];
@@ -167,13 +172,15 @@ export default async function CoworkingSpacesPage() {
   const workspaceCategory = categories.find(c => c.name === "WORKSPACE" || c.displayName === "Workspace");
 
   return (
-    <ProductsClient 
-      products={products} 
-      cities={cities} 
-      amenities={amenities} 
-      categories={categories.map(c => ({ id: c.id, name: c.displayName }))}
-      productTypes={productTypes.map(t => ({ id: t.id, name: t.displayName }))}
-      initialCategoryId={workspaceCategory?.id}
-    />
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading coworking spaces...</div>}>
+      <ProductsClient 
+        products={products} 
+        cities={cities} 
+        amenities={amenities} 
+        categories={categories.map(c => ({ id: c.id, name: c.displayName }))}
+        productTypes={productTypes.map(t => ({ id: t.id, name: t.displayName }))}
+        initialCategoryId={workspaceCategory?.id}
+      />
+    </Suspense>
   );
 }

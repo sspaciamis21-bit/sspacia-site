@@ -1,15 +1,17 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { seoConfig } from "@/config/seo";
 import ProductsClient from "./products-client";
 import prisma from "@/lib/prisma";
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
-  title: seoConfig.pages.products.title,
-  description: seoConfig.pages.products.description,
+  title: "Workspaces & Desks | SSPACIA Coworking",
+  description: "Find and book private offices, dedicated desks, meeting rooms, and hot desks across prime Ahmedabad locations.",
   alternates: { canonical: `${seoConfig.baseUrl}/products` },
 };
 
-// ─── Types ─────────────────────────────────────────────────
 export interface ProductImage {
   id: number;
   url: string;
@@ -48,12 +50,11 @@ export interface Product {
   isActive: boolean;
   isFeatured: boolean;
   location: ProductLocation;
-  locationId?: number;
+  category?: { id?: number; name?: string; slug?: string; displayName?: string } | null;
+  type?: { id?: number; name?: string; displayName?: string } | null;
   images: ProductImage[];
   pricingPlans: PricingPlan[];
   amenities: { amenity: Amenity }[];
-  category?: { id: number; name: string; slug?: string };
-  type?: { id: number; name: string };
 }
 
 export interface City {
@@ -68,8 +69,6 @@ export interface Amenity {
   slug: string;
   icon: string | null;
 }
-
-// ─── Data Fetching ──────────────────────────────────────────
 
 async function getCities(): Promise<City[]> {
   try {
@@ -171,12 +170,14 @@ export default async function ProductsPage() {
   ]);
 
   return (
-    <ProductsClient 
-      products={products} 
-      cities={cities} 
-      amenities={amenities} 
-      categories={categories.map(c => ({ id: c.id, name: c.displayName }))}
-      productTypes={productTypes.map(t => ({ id: t.id, name: t.displayName }))}
-    />
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading workspaces...</div>}>
+      <ProductsClient 
+        products={products} 
+        cities={cities} 
+        amenities={amenities} 
+        categories={categories.map(c => ({ id: c.id, name: c.displayName }))}
+        productTypes={productTypes.map(t => ({ id: t.id, name: t.displayName }))}
+      />
+    </Suspense>
   );
 }
