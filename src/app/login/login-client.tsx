@@ -19,6 +19,7 @@ export default function LoginClient() {
     username: '',
     password: '',
   });
+  const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
   // Forgot Password Modal State
@@ -44,7 +45,7 @@ export default function LoginClient() {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, rememberMe }),
       });
 
       const data = await response.json();
@@ -210,7 +211,7 @@ export default function LoginClient() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-tertiary hover:text-primary transition-colors outline-none"
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-tertiary hover:text-primary transition-colors outline-none cursor-pointer"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -218,10 +219,23 @@ export default function LoginClient() {
               </div>
             </div>
 
+            {/* Remember Me Checkbox */}
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded-none border border-outline-variant/50 text-primary accent-primary cursor-pointer"
+                />
+                <span className="text-xs text-tertiary font-medium">Remember me on this device</span>
+              </label>
+            </div>
+
             <button
               type="submit"
               disabled={isLoading}
-              className="liquid-hover group flex w-full items-center justify-center gap-4 rounded-none bg-primary px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-white shadow-xl shadow-primary/20 transition-all hover:bg-primary-container disabled:opacity-50 disabled:cursor-not-allowed mt-8"
+              className="liquid-hover group flex w-full items-center justify-center gap-4 rounded-none bg-primary px-8 py-5 text-[10px] font-bold uppercase tracking-[0.2em] text-white shadow-xl shadow-primary/20 transition-all hover:bg-primary-container disabled:opacity-50 disabled:cursor-not-allowed mt-6 cursor-pointer"
             >
               {isLoading ? (
                 <Loader2 className="animate-spin" size={20} />

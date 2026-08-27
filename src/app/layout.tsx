@@ -12,6 +12,7 @@ import { MainWrapper } from "../components/main-wrapper";
 import { VisitorChatWidget } from "../components/ui/visitor-chat-widget";
 import { TopAnnouncementBar } from "../components/ui/top-announcement-bar";
 import { RequestVisitTrigger } from "../components/ui/request-visit-trigger";
+import { ForcePasswordChangeModal } from "../components/auth/force-password-change-modal";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -218,6 +219,7 @@ export default function RootLayout({
             <MainWrapper>{children}</MainWrapper>
             <VisitorChatWidget />
             <RequestVisitTrigger />
+            <ForcePasswordChangeModal />
             <Toaster position="top-right" />
           </SidebarProvider>
         </AuthProvider>

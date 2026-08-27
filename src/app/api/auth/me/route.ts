@@ -27,7 +27,7 @@ export async function GET() {
     }
 
     // ─── Get fresh user data from DB ──────────────────────
-    const user = await prisma.user.findUnique({
+    const user: any = await (prisma as any).user.findUnique({
       where: { id: Number(payload.id) },
       select: {
         id: true,
@@ -42,6 +42,7 @@ export async function GET() {
         contactNumber: true,
         designation: true,
         isActive: true,
+        mustChangePassword: true,
         role: {
           select: {
             name: true,
@@ -74,9 +75,9 @@ export async function GET() {
       )
     }
 
-    const permissions = user.role.permissions.map(
-      (rp) => rp.permission.name
-    )
+    const permissions = (user.role?.permissions || []).map(
+      (rp: any) => rp.permission?.name
+    ).filter(Boolean)
 
     return NextResponse.json({
       user: {
@@ -91,11 +92,12 @@ export async function GET() {
         companyZip: user.companyZip,
         contactNumber: user.contactNumber,
         designation: user.designation,
-        role: user.role.name,
+        mustChangePassword: !!user.mustChangePassword,
+        role: user.role?.name || 'USER',
         permissions,
-        assignedLocations: user.assignedLocations.map((ul) => ({
-          id: ul.location.id,
-          name: ul.location.name,
+        assignedLocations: (user.assignedLocations || []).map((ul: any) => ({
+          id: ul.location?.id,
+          name: ul.location?.name,
         })),
         profileCompleted: !!(user.phone && user.companyName && user.designation),
       }

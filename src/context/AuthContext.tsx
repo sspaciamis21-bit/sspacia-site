@@ -11,6 +11,7 @@ interface User {
   permissions: string[]
   assignedLocations?: { id: number; name: string }[]
   profileCompleted?: boolean
+  mustChangePassword?: boolean
   phone?: string
   designation?: string
   companyName?: string

@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     // ─── Find User by Username (name) OR Email (Flexible lookup) ────────────
     const isAccountantAlias = ['accountant', 'accounts', 'account', 'ssinfrazone21'].includes(identifier.toLowerCase())
 
-    const user = await prisma.user.findFirst({
+    const user: any = await (prisma as any).user.findFirst({
       where: {
         OR: [
           { name: identifier },
@@ -100,21 +100,25 @@ export async function POST(request: Request) {
     }
 
     // ─── Get Permissions ──────────────────────────────────
-    const permissions = user.role.permissions.map(
-      (rp) => rp.permission.name
-    )
+    const permissions = (user.role?.permissions || []).map(
+      (rp: any) => rp.permission?.name
+    ).filter(Boolean);
 
     // ─── Generate JWT Token ───────────────────────────────
+    const rememberMe = Boolean(body.rememberMe);
+    const tokenExp = rememberMe ? '30d' : '7d';
+    const cookieMaxAge = rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 7;
+
     const token = await new SignJWT({
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role.name,
+      role: user.role?.name || 'USER',
       permissions,
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
-      .setExpirationTime('7d')
+      .setExpirationTime(tokenExp)
       .sign(JWT_SECRET)
 
     // ─── Return Response ──────────────────────────────────
@@ -124,11 +128,12 @@ export async function POST(request: Request) {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role.name,
+        role: user.role?.name || 'USER',
+        mustChangePassword: !!user.mustChangePassword,
         permissions,
-        assignedLocations: user.assignedLocations.map((ul) => ({
-          id: ul.location.id,
-          name: ul.location.name,
+        assignedLocations: (user.assignedLocations || []).map((ul: any) => ({
+          id: ul.location?.id,
+          name: ul.location?.name,
         })),
       },
       token,
@@ -139,7 +144,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: cookieMaxAge,
       path: '/',
     })
 
