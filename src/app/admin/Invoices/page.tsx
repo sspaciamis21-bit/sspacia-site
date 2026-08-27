@@ -1241,6 +1241,56 @@ export default function AdminInvoicesWorkflowPage() {
     }));
   }, [invoices, selectedCompanyFilter]);
 
+// Month Normalization Helper
+const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
+  if (!monthStr) return '';
+  const trimmed = monthStr.trim();
+  const parts = trimmed.split(/\s+/);
+  if (parts.length < 2) return trimmed;
+  const m = parts[0].toLowerCase();
+  const year = parts[1];
+  const map: Record<string, string> = {
+    jan: 'January', january: 'January',
+    feb: 'February', february: 'February',
+    mar: 'March', march: 'March',
+    apr: 'April', april: 'April',
+    may: 'May',
+    jun: 'June', june: 'June',
+    jul: 'July', july: 'July',
+    aug: 'August', august: 'August',
+    sep: 'September', sept: 'September', september: 'September',
+    oct: 'October', october: 'October',
+    nov: 'November', november: 'November',
+    dec: 'December', december: 'December',
+  };
+  const standardMonth = map[m] || (parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase());
+  return `${standardMonth} ${year}`;
+};
+
+  const billingMonthOptions = useMemo(() => {
+    const set = new Set<string>();
+    invoices.forEach((inv) => {
+      if (inv.billingMonth) {
+        const norm = normalizeBillingMonth(inv.billingMonth);
+        if (norm) set.add(norm);
+      }
+    });
+    const now = new Date();
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    set.add(`${monthNames[now.getMonth()]} ${now.getFullYear()}`);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    set.add(`${monthNames[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`);
+    
+    return Array.from(set).sort((a, b) => {
+      const da = new Date(`1 ${a}`);
+      const db = new Date(`1 ${b}`);
+      return db.getTime() - da.getTime();
+    });
+  }, [invoices]);
+
   // Filtered entries for CM View vs Accountant View
   const filteredInvoices = useMemo(() => {
     return invoices.filter((e) => {
@@ -1268,7 +1318,8 @@ export default function AdminInvoicesWorkflowPage() {
         selectedDueDayFilter === 'ALL' || String(e.paymentDueDay) === selectedDueDayFilter;
 
       const matchesBillingMonth =
-        selectedBillingMonthFilter === 'ALL' || e.billingMonth === selectedBillingMonthFilter;
+        selectedBillingMonthFilter === 'ALL' ||
+        normalizeBillingMonth(e.billingMonth) === normalizeBillingMonth(selectedBillingMonthFilter);
 
       return matchesSearch && matchesRoleFilter && matchesStatus && matchesCompany && matchesCycle && matchesDueDay && matchesBillingMonth;
     });
@@ -1296,15 +1347,24 @@ export default function AdminInvoicesWorkflowPage() {
 
   // KPIs
   const kpis = useMemo(() => {
-    const totalInvoices = invoices.length;
-    const pendingCM = invoices.filter((e) => e.status === 'PENDING_CM_REVIEW').length;
-    const sentToAccountant = invoices.filter((e) => e.status === 'SENT_TO_ACCOUNTANT').length;
-    const pendingCMApproval = invoices.filter((e) => e.status === 'INVOICE_ATTACHED').length;
-    const approved = invoices.filter((e) => e.status === 'APPROVED').length;
-    const rejected = invoices.filter((e) => e.status === 'REJECTED_WITH_REMARKS').length;
+    const scopeInvoices = invoices.filter((e) => {
+      const matchesBillingMonth =
+        selectedBillingMonthFilter === 'ALL' ||
+        normalizeBillingMonth(e.billingMonth) === normalizeBillingMonth(selectedBillingMonthFilter);
+      const matchesCompany =
+        selectedCompanyFilter === 'ALL' || e.companyName.trim() === selectedCompanyFilter;
+      return matchesBillingMonth && matchesCompany;
+    });
+
+    const totalInvoices = scopeInvoices.length;
+    const pendingCM = scopeInvoices.filter((e) => e.status === 'PENDING_CM_REVIEW').length;
+    const sentToAccountant = scopeInvoices.filter((e) => e.status === 'SENT_TO_ACCOUNTANT').length;
+    const pendingCMApproval = scopeInvoices.filter((e) => e.status === 'INVOICE_ATTACHED').length;
+    const approved = scopeInvoices.filter((e) => e.status === 'APPROVED').length;
+    const rejected = scopeInvoices.filter((e) => e.status === 'REJECTED_WITH_REMARKS').length;
 
     return { totalInvoices, pendingCM, sentToAccountant, pendingCMApproval, approved, rejected };
-  }, [invoices]);
+  }, [invoices, selectedBillingMonthFilter, selectedCompanyFilter]);
 
   // Status Badge Renderer
   const renderStatusBadge = (status: string) => {
@@ -1484,19 +1544,19 @@ export default function AdminInvoicesWorkflowPage() {
           {/* Search & Filter Bar - 2-Tier Structured Layout */}
           <div className="bg-[#F8F9FA] border border-[var(--outline-variant)]/60 p-4 space-y-3.5 shadow-xs">
             {/* Tier 1: Primary Dimensions & Action Button */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 {/* 1. Select Company */}
-                <div className="flex items-center gap-1.5 bg-white border border-[#006064]/30 px-3 py-1.5 shadow-2xs">
-                  <Building2 size={14} className="text-[#006064]" />
-                  <span className="text-[11px] font-bold text-[#006064] uppercase tracking-wider">Company:</span>
+                <div className="flex items-center gap-1.5 bg-white border border-[#006064]/30 px-2.5 py-1.5 shadow-2xs">
+                  <Building2 size={13} className="text-[#006064] shrink-0" />
+                  <span className="text-[10px] font-bold text-[#006064] uppercase tracking-wider">Company:</span>
                   <select
                     value={selectedCompanyFilter}
                     onChange={(e) => {
                       setSelectedCompanyFilter(e.target.value);
                       setSelectedCycleFilter('ALL');
                     }}
-                    className="bg-transparent text-xs font-extrabold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[180px] truncate"
+                    className="bg-transparent text-xs font-extrabold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[140px] truncate"
                   >
                     <option value="ALL">All Companies ({companyOptions.length})</option>
                     {companyOptions.map((cName) => (
@@ -1507,10 +1567,28 @@ export default function AdminInvoicesWorkflowPage() {
                   </select>
                 </div>
 
-                {/* 2. Due Date Filter */}
-                <div className="flex items-center gap-1.5 bg-white border border-teal-300 px-3 py-1.5 shadow-2xs">
-                  <Clock size={14} className="text-teal-700" />
-                  <span className="text-[11px] font-bold text-teal-800 uppercase tracking-wider">Due Day:</span>
+                {/* 2. Billing Month Filter */}
+                <div className="flex items-center gap-1.5 bg-purple-50/80 border border-purple-300 px-2.5 py-1.5 shadow-2xs">
+                  <Calendar size={13} className="text-purple-700 shrink-0" />
+                  <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider">Billing Month:</span>
+                  <select
+                    value={selectedBillingMonthFilter}
+                    onChange={(e) => setSelectedBillingMonthFilter(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-purple-950 focus:outline-none cursor-pointer"
+                  >
+                    <option value="ALL">All Months ({billingMonthOptions.length})</option>
+                    {billingMonthOptions.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 3. Due Date Filter */}
+                <div className="flex items-center gap-1.5 bg-white border border-teal-300 px-2.5 py-1.5 shadow-2xs">
+                  <Clock size={13} className="text-teal-700 shrink-0" />
+                  <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Due Day:</span>
                   <select
                     value={selectedDueDayFilter}
                     onChange={(e) => setSelectedDueDayFilter(e.target.value)}
@@ -1527,14 +1605,14 @@ export default function AdminInvoicesWorkflowPage() {
                   </select>
                 </div>
 
-                {/* 3. Payment Duration */}
-                <div className="flex items-center gap-1.5 bg-white border border-amber-300 px-3 py-1.5 shadow-2xs">
-                  <Calendar size={14} className="text-amber-700" />
-                  <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">Duration:</span>
+                {/* 4. Payment Duration */}
+                <div className="flex items-center gap-1.5 bg-white border border-amber-300 px-2.5 py-1.5 shadow-2xs">
+                  <Calendar size={13} className="text-amber-700 shrink-0" />
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Duration:</span>
                   <select
                     value={selectedCycleFilter}
                     onChange={(e) => setSelectedCycleFilter(e.target.value)}
-                    className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[200px] truncate"
+                    className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[150px] truncate"
                   >
                     <option value="ALL">All Cycles ({availableCycleOptions.length})</option>
                     {availableCycleOptions.map((cyc) => (
@@ -1551,7 +1629,7 @@ export default function AdminInvoicesWorkflowPage() {
                 <button
                   type="button"
                   onClick={() => setShowSignatureSettingsModal(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-colors"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-colors shrink-0 cursor-pointer"
                 >
                   <PenTool size={13} />
                   <span>Digital Signature Stamp</span>
@@ -1620,13 +1698,14 @@ export default function AdminInvoicesWorkflowPage() {
                 </div>
 
                 {/* Reset all filters button if active */}
-                {(selectedCompanyFilter !== 'ALL' || selectedDueDayFilter !== 'ALL' || selectedCycleFilter !== 'ALL' || selectedStatusFilter !== 'ALL' || searchTerm) && (
+                {(selectedCompanyFilter !== 'ALL' || selectedDueDayFilter !== 'ALL' || selectedCycleFilter !== 'ALL' || selectedBillingMonthFilter !== 'ALL' || selectedStatusFilter !== 'ALL' || searchTerm) && (
                   <button
                     type="button"
                     onClick={() => {
                       setSelectedCompanyFilter('ALL');
                       setSelectedDueDayFilter('ALL');
                       setSelectedCycleFilter('ALL');
+                      setSelectedBillingMonthFilter('ALL');
                       setSelectedStatusFilter('ALL');
                       setSearchTerm('');
                     }}
@@ -3008,26 +3087,48 @@ export default function AdminInvoicesWorkflowPage() {
                 </div>
               )}
 
-              {/* SECTION 6: Attached Tally PDF Invoice */}
-              {entryToViewDetails.attachedInvoice && (
-                <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Paperclip className="text-emerald-700 h-5 w-5" />
-                    <div>
-                      <span className="font-bold text-emerald-900">Attached Tally Invoice PDF: </span>
-                      <span className="text-emerald-800">{entryToViewDetails.attachedInvoice.fileName}</span>
+              {/* SECTION 6: Attached Tally PDF Invoice & Digitally Signed PDF */}
+              <div className="space-y-2">
+                {entryToViewDetails.attachedInvoice && (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Paperclip className="text-emerald-700 h-5 w-5" />
+                      <div>
+                        <span className="font-bold text-emerald-900">Attached Tally Invoice PDF: </span>
+                        <span className="text-emerald-800">{entryToViewDetails.attachedInvoice.fileName}</span>
+                      </div>
                     </div>
+                    <a
+                      href={entryToViewDetails.attachedInvoice.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye size={12} /> View Tally PDF
+                    </a>
                   </div>
-                  <a
-                    href={entryToViewDetails.attachedInvoice.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1"
-                  >
-                    <Eye size={12} /> View Tally PDF
-                  </a>
-                </div>
-              )}
+                )}
+
+                {entryToViewDetails.digitallySignedPdfUrl && (
+                  <div className="p-3.5 bg-teal-50 border border-teal-300 text-xs flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Award className="text-teal-700 h-5 w-5" />
+                      <div>
+                        <span className="font-bold text-teal-950">Digitally Signed &amp; Approved PDF: </span>
+                        <span className="text-teal-800 font-medium">Cryptographic Digital Signature Applied</span>
+                      </div>
+                    </div>
+                    <a
+                      href={entryToViewDetails.digitallySignedPdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-1.5 bg-[#006064] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-[#004d40] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download size={12} /> View / Download Signed PDF
+                    </a>
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
                 <button

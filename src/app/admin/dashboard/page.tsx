@@ -39,6 +39,7 @@ import {
   Lock,
   Layers,
   Percent,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -56,6 +57,10 @@ interface DashboardStats {
   pendingTickets: number;
   totalAmenities?: number;
   totalRoles?: number;
+  locations?: Array<{ id: number; name: string; slug: string }>;
+  availableBillingMonths?: string[];
+  selectedBillingMonth?: string;
+  selectedLocationId?: string;
   users?: {
     total: number;
     superAdmins: number;
@@ -76,6 +81,8 @@ interface DashboardStats {
     onNoticeClients: number;
     totalAllocatedSeats: number;
     totalMonthlyAgreementValue: number;
+    dispatchedForSelectedMonth?: number;
+    pendingDispatchForSelectedMonth?: number;
   };
   invoices?: {
     totalInvoices: number;
@@ -127,9 +134,39 @@ export default function AdminDashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGeoMapOpen, setIsGeoMapOpen] = useState(false);
 
-  const fetchDashboardData = () => {
+  // Billing Month & Location Filters
+  const [selectedBillingMonth, setSelectedBillingMonth] = useState<string>(() => {
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const now = new Date();
+    if (now.getDate() >= 20) {
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return `${monthNames[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`;
+    }
+    return `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+  });
+
+  const [selectedLocation, setSelectedLocation] = useState<string>('ALL');
+
+  const monthOptions = [
+    'September 2026',
+    'August 2026',
+    'July 2026',
+    'June 2026',
+    'May 2026',
+    'October 2026',
+  ];
+
+  const fetchDashboardData = (month = selectedBillingMonth, loc = selectedLocation) => {
     setStatsLoading(true);
-    fetch('/api/admin/stats')
+    const params = new URLSearchParams();
+    if (month && month !== 'ALL') params.set('billingMonth', month);
+    if (loc && loc !== 'ALL') params.set('locationId', loc);
+    const url = `/api/admin/stats${params.toString() ? '?' + params.toString() : ''}`;
+
+    fetch(url)
       .then((r) => r.json())
       .then((json) => {
         if (json.data) {
@@ -143,7 +180,7 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchDashboardData(selectedBillingMonth, selectedLocation);
   }, []);
 
   // Safe KPI accessors
@@ -241,6 +278,81 @@ export default function AdminDashboardPage() {
             >
               <MapPin className="w-3.5 h-3.5 text-amber-300" />
               <span>Visitor Geo Map 🗺️</span>
+            </button>
+          </div>
+        </div>
+      </FadeUp>
+
+      {/* ── 1.5. SA Executive Quick Filter Bar (Billing Cycle & Location Scoping) ── */}
+      <FadeUp delay={0.03}>
+        <div className="bg-white p-4 border border-neutral-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Billing Month Selector */}
+            <div className="flex items-center gap-1.5 bg-purple-50 border border-purple-300 px-3 py-1.5 text-xs">
+              <Calendar size={13} className="text-purple-700 shrink-0" />
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-900">
+                Billing Cycle:
+              </span>
+              <select
+                value={selectedBillingMonth}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedBillingMonth(val);
+                  fetchDashboardData(val, selectedLocation);
+                }}
+                className="bg-transparent text-xs font-black text-purple-950 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">All Historical Cycles</option>
+                {monthOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Location / Node Selector */}
+            <div className="flex items-center gap-1.5 bg-neutral-50 border border-neutral-200 px-3 py-1.5 text-xs">
+              <MapPin size={13} className="text-[#006064] shrink-0" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600">
+                Operating Location:
+              </span>
+              <select
+                value={selectedLocation}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedLocation(val);
+                  fetchDashboardData(selectedBillingMonth, val);
+                }}
+                className="bg-transparent text-xs font-bold text-gray-900 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">All 3 Operating Locations</option>
+                {stats?.locations?.map((loc) => (
+                  <option key={loc.id} value={String(loc.id)}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Active Context & Refresh */}
+          <div className="flex items-center gap-2 text-xs w-full sm:w-auto justify-between sm:justify-end">
+            <span className="text-[11px] text-gray-500 font-medium">
+              Live Metrics for: <strong className="text-[#1B1C1C]">{selectedBillingMonth === 'ALL' ? 'All Records' : selectedBillingMonth}</strong>
+            </span>
+            <button
+              onClick={() => fetchDashboardData(selectedBillingMonth, selectedLocation)}
+              disabled={statsLoading}
+              className="px-2.5 py-1.5 border border-neutral-200 hover:bg-neutral-100 text-gray-700 cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+              title="Refresh live metrics"
+            >
+              {statsLoading ? (
+                <Loader2 size={13} className="animate-spin text-[#006064]" />
+              ) : (
+                <RotateCcw size={13} />
+              )}
+              <span>Refresh</span>
             </button>
           </div>
         </div>
@@ -384,17 +496,38 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div className="bg-[#E0F2F1]/50 p-3.5 border border-[#80CBC4]/50">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-gray-700">Contract Revenue Sum</span>
-                  <span className="text-sm font-bold text-[#006064]">
-                    ₹{Number(agreementRevenue).toLocaleString('en-IN')}
-                  </span>
+              {selectedBillingMonth !== 'ALL' ? (
+                <div className="bg-emerald-50/60 p-3 border border-emerald-200">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-emerald-900 text-[10px] uppercase tracking-wider">
+                      {selectedBillingMonth.split(' ')[0]} Dispatch Readiness:
+                    </span>
+                    <span className="font-bold text-emerald-800 font-mono">
+                      {stats?.clientMaster?.dispatchedForSelectedMonth ?? 0} / {activeAgreements} Sent
+                    </span>
+                  </div>
+                  <div className="w-full bg-emerald-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                    <div
+                      className="bg-emerald-600 h-full transition-all"
+                      style={{
+                        width: `${activeAgreements > 0 ? Math.min(100, Math.round(((stats?.clientMaster?.dispatchedForSelectedMonth ?? 0) / activeAgreements) * 100)) : 0}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-                <p className="text-[10px] text-gray-500 mt-1">
-                  Automatic billing verification synced on the last day of each month.
-                </p>
-              </div>
+              ) : (
+                <div className="bg-[#E0F2F1]/50 p-3.5 border border-[#80CBC4]/50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-gray-700">Contract Revenue Sum</span>
+                    <span className="text-sm font-bold text-[#006064]">
+                      ₹{Number(agreementRevenue).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Automatic billing verification synced on the last day of each month.
+                  </p>
+                </div>
+              )}
 
               <Link
                 href="/admin/client-master"
@@ -413,7 +546,7 @@ export default function AdminDashboardPage() {
               <div className="flex items-center gap-2.5">
                 <Receipt size={16} className="text-[#006064]" />
                 <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
-                  Invoices & Billing Pipeline
+                  Invoices &amp; Billing Pipeline {selectedBillingMonth !== 'ALL' && `(${selectedBillingMonth.split(' ')[0]})`}
                 </h3>
               </div>
               <Link
@@ -461,13 +594,24 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center justify-between text-xs p-2 bg-emerald-50 border border-emerald-100">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="font-bold text-emerald-900">4. Verified & Approved</span>
+                    <span className="font-bold text-emerald-900">4. Verified &amp; Approved</span>
                   </div>
                   <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 text-[10px]">
                     {invApproved} Completed
                   </span>
                 </div>
               </div>
+
+              {Number(stats?.invoices?.totalInvoicedAmount || 0) > 0 && (
+                <div className="p-2.5 bg-purple-50/80 border border-purple-200 text-xs flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-purple-900">
+                    {selectedBillingMonth === 'ALL' ? 'Total Invoiced:' : `${selectedBillingMonth.split(' ')[0]} Invoiced Sum:`}
+                  </span>
+                  <span className="font-bold text-purple-950 font-mono">
+                    ₹{Number(stats?.invoices?.totalInvoicedAmount || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              )}
 
               <Link
                 href="/admin/Invoices"
@@ -1065,7 +1209,7 @@ export default function AdminDashboardPage() {
         onSuccess={fetchDashboardData}
       />
 
-      {/* India Geo Map Modal */}
+      {/* India Geo Map Modal v2 */}
       <IndiaGeoMapModal
         isOpen={isGeoMapOpen}
         onClose={() => setIsGeoMapOpen(false)}

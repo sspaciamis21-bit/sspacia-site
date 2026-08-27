@@ -26,6 +26,8 @@ export async function POST(request: Request) {
       sendType = 'MANUAL', 
       clientMasterIds = [], 
       locationId = null,
+      billingMonth = null,
+      forceReDispatch = false,
     } = body;
 
     // ── Node-based Data Isolation & Super Admin Node Filter for Dispatching ──
@@ -69,14 +71,37 @@ export async function POST(request: Request) {
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
-    const currentBillingMonth = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
-    const currentMonthIndex = now.getMonth();
-    const currentYear = now.getFullYear();
 
-    // ── Check existing invoice records for this billing month to prevent duplicates ──
+    // Determine target billing month: from body or calculate based on date
+    // If today is after 20th of the month, default target is next month
+    let targetBillingMonth: string;
+    let targetMonthIndex = now.getMonth();
+    let targetYear = now.getFullYear();
+
+    if (billingMonth && typeof billingMonth === 'string' && billingMonth.trim() !== '') {
+      targetBillingMonth = billingMonth.trim();
+      const parts = targetBillingMonth.split(' ');
+      if (parts.length === 2) {
+        const mIdx = monthNames.findIndex(m => m.toLowerCase() === parts[0].toLowerCase());
+        const y = parseInt(parts[1], 10);
+        if (mIdx !== -1) targetMonthIndex = mIdx;
+        if (!isNaN(y)) targetYear = y;
+      }
+    } else {
+      if (now.getDate() >= 20) {
+        const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        targetBillingMonth = `${monthNames[nextMonthDate.getMonth()]} ${nextMonthDate.getFullYear()}`;
+        targetMonthIndex = nextMonthDate.getMonth();
+        targetYear = nextMonthDate.getFullYear();
+      } else {
+        targetBillingMonth = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+      }
+    }
+
+    // ── Check existing invoice records for this target billing month to prevent unwanted duplicates ──
     const existingInvoices = await (prisma as any).invoiceRecord.findMany({
       where: {
-        billingMonth: currentBillingMonth,
+        billingMonth: targetBillingMonth,
       },
       select: {
         clientMasterId: true,
@@ -89,7 +114,7 @@ export async function POST(request: Request) {
     let skippedDuplicatesCount = 0;
 
     for (const cm of clientsToDispatch) {
-      if (existingSet.has(cm.id)) {
+      if (!forceReDispatch && existingSet.has(cm.id)) {
         skippedDuplicatesCount++;
         continue;
       }
@@ -121,8 +146,8 @@ export async function POST(request: Request) {
         totalAmt = Number(cm.totalAmount) || 0;
       }
 
-      const daysInCurrentMonth = new Date(currentYear, currentMonthIndex + 1, 0).getDate();
-      const calculatedDueDate = new Date(currentYear, currentMonthIndex, Math.min(primaryDueDay, daysInCurrentMonth));
+      const daysInTargetMonth = new Date(targetYear, targetMonthIndex + 1, 0).getDate();
+      const calculatedDueDate = new Date(targetYear, targetMonthIndex, Math.min(primaryDueDay, daysInTargetMonth));
 
       invoiceCreates.push(
         (prisma as any).invoiceRecord.create({
@@ -144,7 +169,7 @@ export async function POST(request: Request) {
             itemsJson: products.length > 0 ? JSON.stringify(products) : null,
             splitsJson: null,
             gstNo: cm.gstNo,
-            billingMonth: currentBillingMonth,
+            billingMonth: targetBillingMonth,
             sendType: sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC_MONTH_END' : 'MANUAL',
             sentAt: now,
             status: 'PENDING_CM_REVIEW',
@@ -157,7 +182,9 @@ export async function POST(request: Request) {
     if (invoiceCreates.length === 0) {
       return NextResponse.json(
         {
-          error: `Selected clients already have invoice records generated for ${currentBillingMonth}.`,
+          error: `Selected clients already have invoice records generated for ${targetBillingMonth}.`,
+          skippedDuplicatesCount,
+          targetBillingMonth,
         },
         { status: 400 }
       );
@@ -167,9 +194,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Successfully dispatched ${createdInvoiceRecords.length} invoice entries to the Invoices section!`,
+      message: `Successfully dispatched ${createdInvoiceRecords.length} invoice entries for ${targetBillingMonth} to the Invoices section!`,
       count: createdInvoiceRecords.length,
       skippedDuplicatesCount,
+      targetBillingMonth,
       batchDate: now.toISOString(),
       sendType,
       data: createdInvoiceRecords,

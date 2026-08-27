@@ -90,26 +90,50 @@ export async function GET(request: Request) {
       orderBy: { srNo: 'asc' },
     });
 
-    // Determine current billing month to mark entries already present in Invoices section
+    // Determine target billing month from searchParams or default based on calendar day
     const now = new Date();
     const monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
-    const currentBillingMonth = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
 
-    const dispatchedInvoices = await (prisma as any).invoiceRecord.findMany({
-      where: { billingMonth: currentBillingMonth },
-      select: { clientMasterId: true },
+    let targetBillingMonth = searchParams.get('billingMonth');
+    if (!targetBillingMonth || targetBillingMonth === 'ALL') {
+      if (now.getDate() >= 20) {
+        const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        targetBillingMonth = `${monthNames[nextMonthDate.getMonth()]} ${nextMonthDate.getFullYear()}`;
+      } else {
+        targetBillingMonth = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+      }
+    }
+
+    const allDispatchedInvoices = await (prisma as any).invoiceRecord.findMany({
+      select: { clientMasterId: true, billingMonth: true, status: true },
     });
-    const dispatchedSet = new Set(dispatchedInvoices.map((inv: any) => inv.clientMasterId));
 
-    const dataWithInvoiceStatus = entries.map((entry: any) => ({
-      ...entry,
-      isDispatchedToInvoices: dispatchedSet.has(entry.id),
-    }));
+    const clientMonthMap = new Map<number, string[]>();
+    allDispatchedInvoices.forEach((inv: any) => {
+      const cmId = Number(inv.clientMasterId);
+      if (!clientMonthMap.has(cmId)) {
+        clientMonthMap.set(cmId, []);
+      }
+      if (inv.billingMonth) {
+        clientMonthMap.get(cmId)!.push(inv.billingMonth);
+      }
+    });
 
-    return NextResponse.json({ success: true, data: dataWithInvoiceStatus });
+    const dataWithInvoiceStatus = entries.map((entry: any) => {
+      const months = clientMonthMap.get(entry.id) || [];
+      const isDispatched = months.includes(targetBillingMonth!);
+      return {
+        ...entry,
+        isDispatchedToInvoices: isDispatched,
+        dispatchedMonths: months,
+        targetBillingMonth,
+      };
+    });
+
+    return NextResponse.json({ success: true, data: dataWithInvoiceStatus, targetBillingMonth });
   } catch (error) {
     console.error('Fetch client master entries error:', error);
     return NextResponse.json({ error: 'Failed to fetch client master entries' }, { status: 500 });

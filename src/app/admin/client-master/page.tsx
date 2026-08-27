@@ -138,6 +138,8 @@ interface ClientMasterEntry {
   paymentDueDay?: number | null;
   clientStatus: string | null;
   isDispatchedToInvoices?: boolean;
+  dispatchedMonths?: string[];
+  targetBillingMonth?: string;
   createdAt: string;
   createdBy: { id: number; name: string; email: string; assignedLocations?: { location: LocationOption }[] };
   contactPersons: ContactPerson[];
@@ -188,6 +190,39 @@ export default function ClientMasterRegistryPage() {
   // Multi-select for manual dispatch
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [dispatching, setDispatching] = useState(false);
+
+  // Target Billing Month for Invoices Dispatch
+  const [selectedTargetMonth, setSelectedTargetMonth] = useState<string>(() => {
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const now = new Date();
+    if (now.getDate() >= 20) {
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return `${monthNames[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`;
+    }
+    return `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+  });
+
+  const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [dispatchModalIds, setDispatchModalIds] = useState<number[]>([]);
+  const [dispatchModalTargetMonth, setDispatchModalTargetMonth] = useState<string>(selectedTargetMonth);
+  const [forceReDispatch, setForceReDispatch] = useState<boolean>(false);
+
+  const monthOptions = useMemo(() => {
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const list: string[] = [];
+    const now = new Date();
+    for (let i = -3; i <= 4; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      list.push(`${monthNames[d.getMonth()]} ${d.getFullYear()}`);
+    }
+    return list;
+  }, []);
 
   // Big Popup Modal for Add Client / Edit Client
   const [showAddClientModal, setShowAddClientModal] = useState(false);
@@ -444,6 +479,9 @@ export default function ClientMasterRegistryPage() {
       if (isAdmin && selectedLocationFilter !== 'ALL') {
         params.set('locationId', selectedLocationFilter);
       }
+      if (selectedTargetMonth) {
+        params.set('billingMonth', selectedTargetMonth);
+      }
       const url = `/api/admin/client-master${params.toString() ? '?' + params.toString() : ''}`;
       const res = await fetch(url);
       const json = await res.json();
@@ -462,7 +500,7 @@ export default function ClientMasterRegistryPage() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, selectedLocationFilter]);
+  }, [isAdmin, selectedLocationFilter, selectedTargetMonth]);
 
   useEffect(() => {
     fetchLocations();
@@ -1044,15 +1082,24 @@ export default function ClientMasterRegistryPage() {
   };
 
   // Dispatch to Invoices Section Handler
-  const handleDispatchToInvoices = async (sendType: 'MANUAL' | 'AUTOMATIC_MONTH_END', ids: number[] = []) => {
+  const handleOpenDispatchModal = (ids: number[] = [], force: boolean = false) => {
+    setDispatchModalIds(ids);
+    setDispatchModalTargetMonth(selectedTargetMonth);
+    setForceReDispatch(force);
+    setShowDispatchModal(true);
+  };
+
+  const handleConfirmDispatch = async () => {
     setDispatching(true);
     try {
       const res = await fetch('/api/admin/client-master/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sendType,
-          clientMasterIds: ids,
+          sendType: dispatchModalIds.length > 0 ? 'MANUAL' : 'AUTOMATIC_MONTH_END',
+          clientMasterIds: dispatchModalIds,
+          billingMonth: dispatchModalTargetMonth,
+          forceReDispatch,
           locationId: selectedLocationFilter !== 'ALL' ? selectedLocationFilter : null,
         }),
       });
@@ -1061,6 +1108,7 @@ export default function ClientMasterRegistryPage() {
       if (json.success) {
         toast.success(`✅ ${json.message}`);
         setSelectedIds([]);
+        setShowDispatchModal(false);
         fetchData();
       } else {
         toast.error(json.error || 'Failed to dispatch to Invoices section');
@@ -1070,6 +1118,10 @@ export default function ClientMasterRegistryPage() {
     } finally {
       setDispatching(false);
     }
+  };
+
+  const handleDispatchToInvoices = async (sendType: 'MANUAL' | 'AUTOMATIC_MONTH_END', ids: number[] = []) => {
+    handleOpenDispatchModal(ids, false);
   };
 
   // Delete Entry
@@ -1134,21 +1186,41 @@ export default function ClientMasterRegistryPage() {
 
   return (
     <div className="p-6 sm:p-10 max-w-[1600px] mx-auto space-y-8 bg-[#F8F9FA] min-h-screen text-[#1B1C1C]">
-      {/* Auto-Dispatch Notice + Manual Button */}
+      {/* Auto-Dispatch Notice + Month Selection & Manual Button */}
       <FadeUp>
-        <div className="bg-white border border-[var(--outline-variant)]/60 px-4 py-2.5 flex items-center justify-between gap-4 shadow-xs">
+        <div className="bg-white border border-[var(--outline-variant)]/60 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
           <div className="flex items-center gap-2 text-xs text-[#616161]">
             <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span>Active client records are <strong className="text-[#1B1C1C]">automatically dispatched to Invoices</strong> on the last day of every month.</span>
+            <span>
+              Active client agreements generate monthly invoices. Auto-dispatched on month-end, or dispatch manually anytime.
+            </span>
           </div>
-          <button
-            type="button"
-            onClick={() => handleDispatchToInvoices('AUTOMATIC_MONTH_END')}
-            disabled={dispatching}
-            className="px-3 py-1.5 bg-[var(--primary)] hover:opacity-90 text-white font-bold text-[10px] uppercase tracking-wider transition-colors shrink-0 flex items-center gap-1.5 shadow-xs"
-          >
-            {dispatching ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Dispatch to Invoices
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 px-2.5 py-1 text-xs">
+              <Calendar size={13} className="text-purple-700" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800">Target Month:</span>
+              <select
+                value={selectedTargetMonth}
+                onChange={(e) => setSelectedTargetMonth(e.target.value)}
+                className="bg-transparent text-xs font-bold text-purple-950 focus:outline-none cursor-pointer"
+              >
+                {monthOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleOpenDispatchModal([], false)}
+              disabled={dispatching}
+              className="px-3.5 py-1.5 bg-[var(--primary)] hover:opacity-90 text-white font-bold text-[10px] uppercase tracking-wider transition-colors shrink-0 flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              {dispatching ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Dispatch All Active to Invoices
+            </button>
+          </div>
         </div>
       </FadeUp>
 
@@ -1170,12 +1242,12 @@ export default function ClientMasterRegistryPage() {
           <div className="flex flex-wrap items-center gap-3">
             {selectedIds.length > 0 && (
               <button
-                onClick={() => handleDispatchToInvoices('MANUAL', selectedIds)}
+                onClick={() => handleOpenDispatchModal(selectedIds, false)}
                 disabled={dispatching}
-                className="px-5 py-3 bg-blue-600 text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md hover:bg-blue-700"
+                className="px-5 py-3 bg-blue-600 text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md hover:bg-blue-700 cursor-pointer"
               >
                 {dispatching ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                Send Selected ({selectedIds.length}) to Invoices
+                Send Selected ({selectedIds.length}) to Invoices ({selectedTargetMonth.split(' ')[0]})
               </button>
             )}
 
@@ -1282,6 +1354,22 @@ export default function ClientMasterRegistryPage() {
                   </option>
                 ))}
               </select>
+
+              <div className="flex items-center gap-1.5 text-xs font-bold text-purple-800 bg-purple-50 px-2.5 py-1.5 border border-purple-200">
+                <Calendar size={14} className="text-purple-700" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Billing Month:</span>
+                <select
+                  value={selectedTargetMonth}
+                  onChange={(e) => setSelectedTargetMonth(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-purple-950 focus:outline-none cursor-pointer"
+                >
+                  {monthOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <button
                 onClick={fetchData}
@@ -1469,18 +1557,26 @@ export default function ClientMasterRegistryPage() {
                             </button>
 
                             {entry.isDispatchedToInvoices ? (
-                              <button
-                                disabled
-                                className="px-2 py-1 bg-emerald-50 text-emerald-800 font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 opacity-90 cursor-not-allowed border border-emerald-300 shadow-xs"
-                                title="This client entry is already present in the Invoices section for this month"
-                              >
-                                <CheckCircle2 size={10} className="text-emerald-600 shrink-0" /> Sent to Invoice
-                              </button>
+                              <div className="w-full flex flex-col gap-1">
+                                <span
+                                  className="px-2 py-1 bg-emerald-50 text-emerald-800 font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 border border-emerald-300 shadow-2xs"
+                                  title={`Invoice for ${entry.companyName} has been generated for ${selectedTargetMonth}`}
+                                >
+                                  <CheckCircle2 size={10} className="text-emerald-600 shrink-0" /> Sent for {selectedTargetMonth.split(' ')[0]}
+                                </span>
+                                <button
+                                  onClick={() => handleOpenDispatchModal([entry.id], true)}
+                                  disabled={dispatching}
+                                  className="text-[9px] text-blue-700 hover:text-blue-900 font-bold uppercase tracking-wider underline text-center cursor-pointer"
+                                >
+                                  + Re-dispatch
+                                </button>
+                              </div>
                             ) : (
                               <button
-                                onClick={() => handleDispatchToInvoices('MANUAL', [entry.id])}
+                                onClick={() => handleOpenDispatchModal([entry.id])}
                                 disabled={dispatching}
-                                className="px-2 py-1 bg-blue-600 text-white font-bold text-[9px] uppercase tracking-wider hover:bg-blue-700 w-full flex items-center justify-center gap-1 shadow-xs"
+                                className="px-2 py-1.5 bg-blue-600 text-white font-bold text-[9px] uppercase tracking-wider hover:bg-blue-700 w-full flex items-center justify-center gap-1 shadow-xs cursor-pointer"
                               >
                                 <Send size={10} /> Send to Invoice
                               </button>
@@ -3378,9 +3474,13 @@ export default function ClientMasterRegistryPage() {
               <div className="flex items-center justify-between pt-4 border-t border-neutral-200">
                 <button
                   type="button"
-                  onClick={() => handleDispatchToInvoices('MANUAL', [entryToViewDetails.id])}
+                  onClick={() => {
+                    const id = entryToViewDetails.id;
+                    setEntryToViewDetails(null);
+                    handleOpenDispatchModal([id], false);
+                  }}
                   disabled={dispatching}
-                  className="px-5 py-2.5 bg-blue-600 text-white font-bold uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-blue-600 text-white font-bold uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Send size={14} /> Send Record to Invoices Section
                 </button>
@@ -3392,6 +3492,98 @@ export default function ClientMasterRegistryPage() {
                 >
                   Close
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* DISPATCH CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {showDispatchModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white border border-[var(--outline-variant)] shadow-2xl w-full max-w-lg overflow-hidden flex flex-col text-[#1B1C1C]"
+            >
+              <div className="px-6 py-4 bg-[#006064] text-white flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Send size={18} className="text-amber-300" />
+                  <h3 className="text-sm font-bold uppercase tracking-wider">
+                    Dispatch Invoices to Billing Pipeline
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setShowDispatchModal(false)}
+                  className="text-white/80 hover:text-white cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="bg-purple-50 p-4 border border-purple-200">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-purple-900 mb-1.5">
+                    Select Target Billing Month:
+                  </label>
+                  <select
+                    value={dispatchModalTargetMonth}
+                    onChange={(e) => setDispatchModalTargetMonth(e.target.value)}
+                    className="w-full bg-white border border-purple-300 p-2 text-sm font-bold text-gray-900 focus:outline-none focus:border-[#006064]"
+                  >
+                    {monthOptions.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-purple-700 mt-1.5 font-medium">
+                    Invoice records will be created in the Invoices section under <span className="font-bold">{dispatchModalTargetMonth}</span>.
+                  </p>
+                </div>
+
+                <div className="bg-neutral-50 p-4 border border-neutral-200 space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 font-medium">Clients to Dispatch:</span>
+                    <span className="font-bold text-gray-900">
+                      {dispatchModalIds.length > 0 ? `${dispatchModalIds.length} Selected Clients` : `${kpis.activeClients} Active Clients`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 font-medium">Agreement Value Sum:</span>
+                    <span className="font-bold text-[#006064]">
+                      ₹{kpis.totalRev.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 font-medium">Mode:</span>
+                    <span className="font-bold text-gray-900">
+                      {forceReDispatch ? 'Force Re-dispatch (Allow duplicate month entry)' : 'Standard (Duplicate-Safe)'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2 border-t border-neutral-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowDispatchModal(false)}
+                    disabled={dispatching}
+                    className="px-4 py-2 border border-neutral-300 text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-neutral-100 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDispatch}
+                    disabled={dispatching}
+                    className="px-5 py-2 bg-[#006064] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#004d40] flex items-center gap-2 shadow-sm cursor-pointer"
+                  >
+                    {dispatching ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                    <span>Confirm & Dispatch Invoices 🚀</span>
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

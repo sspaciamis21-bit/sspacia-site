@@ -1,11 +1,42 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/auth/withPermission';
 import prisma from '@/lib/prisma';
 import { findOldInvoices } from '@/lib/old-invoices-db';
+import { getUserIdsByLocation } from '@/lib/auth/getNodeScopedUserIds';
+
+const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
+  if (!monthStr) return '';
+  const trimmed = monthStr.trim();
+  const parts = trimmed.split(/\s+/);
+  if (parts.length < 2) return trimmed;
+  const m = parts[0].toLowerCase();
+  const year = parts[1];
+  const map: Record<string, string> = {
+    jan: 'January', january: 'January',
+    feb: 'February', february: 'February',
+    mar: 'March', march: 'March',
+    apr: 'April', april: 'April',
+    may: 'May',
+    jun: 'June', june: 'June',
+    jul: 'July', july: 'July',
+    aug: 'August', august: 'August',
+    sep: 'September', sept: 'September', september: 'September',
+    oct: 'October', october: 'October',
+    nov: 'November', november: 'November',
+    dec: 'December', december: 'December',
+  };
+  const standardMonth = map[m] || (parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase());
+  return `${standardMonth} ${year}`;
+};
 
 // GET /api/admin/stats — 100% Real Database Analytics for Super Admin (Owner) Executive Dashboard
-export const GET = withPermission('reports', 'read', async () => {
+export const GET = withPermission('reports', 'read', async (req: NextRequest) => {
   try {
+    const { searchParams } = new URL(req.url);
+    const billingMonthParam = searchParams.get('billingMonth');
+    const locationIdParam = searchParams.get('locationId');
+
     const [
       totalLocations,
       totalProducts,
@@ -99,11 +130,22 @@ export const GET = withPermission('reports', 'read', async () => {
       onNoticeClients: 0,
       totalAllocatedSeats: 0,
       totalMonthlyAgreementValue: 0,
+      dispatchedForSelectedMonth: 0,
+      pendingDispatchForSelectedMonth: 0,
     };
+
+    let availableBillingMonths: string[] = [];
 
     try {
       if ((prisma as any).clientMaster) {
+        let cmWhere: any = {};
+        if (locationIdParam && locationIdParam !== 'ALL') {
+          const locUserIds = await getUserIdsByLocation(parseInt(locationIdParam, 10));
+          if (locUserIds) cmWhere.createdById = { in: locUserIds };
+        }
+
         const clientMasters = await (prisma as any).clientMaster.findMany({
+          where: cmWhere,
           include: {
             products: true,
           },
@@ -150,18 +192,67 @@ export const GET = withPermission('reports', 'read', async () => {
 
     try {
       if ((prisma as any).invoiceRecord) {
-        const invoices = await (prisma as any).invoiceRecord.findMany({
-          select: { status: true, totalAmount: true },
+        const allInvoices = await (prisma as any).invoiceRecord.findMany({
+          select: { status: true, totalAmount: true, billingMonth: true, clientMasterId: true, createdById: true },
         });
 
-        if (invoices.length > 0) {
-          invoiceStats.totalInvoices = invoices.length;
-          invoiceStats.pendingCmReview = invoices.filter((i: any) => i.status === 'PENDING_CM_REVIEW').length;
-          invoiceStats.sentToAccountant = invoices.filter((i: any) => i.status === 'SENT_TO_ACCOUNTANT').length;
-          invoiceStats.invoiceAttached = invoices.filter((i: any) => i.status === 'INVOICE_ATTACHED').length;
-          invoiceStats.approved = invoices.filter((i: any) => i.status === 'APPROVED').length;
-          invoiceStats.rejected = invoices.filter((i: any) => i.status === 'REJECTED_WITH_REMARKS').length;
-          invoiceStats.totalInvoicedAmount = invoices.reduce((sum: number, i: any) => sum + Number(i.totalAmount || 0), 0);
+        // Collect all distinct normalized billing months
+        const monthSet = new Set<string>();
+        allInvoices.forEach((inv: any) => {
+          if (inv.billingMonth) {
+            const norm = normalizeBillingMonth(inv.billingMonth);
+            if (norm) monthSet.add(norm);
+          }
+        });
+        const now = new Date();
+        const monthNames = [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        monthSet.add(`${monthNames[now.getMonth()]} ${now.getFullYear()}`);
+        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        monthSet.add(`${monthNames[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`);
+
+        availableBillingMonths = Array.from(monthSet).sort((a, b) => {
+          const da = new Date(`1 ${a}`);
+          const db = new Date(`1 ${b}`);
+          return db.getTime() - da.getTime();
+        });
+
+        // Apply filters for invoiceStats
+        let filteredInvs = allInvoices;
+        if (locationIdParam && locationIdParam !== 'ALL') {
+          const locUserIds = await getUserIdsByLocation(parseInt(locationIdParam, 10));
+          if (locUserIds) {
+            filteredInvs = filteredInvs.filter((i: any) => locUserIds.includes(i.createdById));
+          }
+        }
+
+        if (billingMonthParam && billingMonthParam !== 'ALL') {
+          const normTarget = normalizeBillingMonth(billingMonthParam);
+          filteredInvs = filteredInvs.filter((i: any) => normalizeBillingMonth(i.billingMonth) === normTarget);
+        }
+
+        if (filteredInvs.length > 0) {
+          invoiceStats.totalInvoices = filteredInvs.length;
+          invoiceStats.pendingCmReview = filteredInvs.filter((i: any) => i.status === 'PENDING_CM_REVIEW').length;
+          invoiceStats.sentToAccountant = filteredInvs.filter((i: any) => i.status === 'SENT_TO_ACCOUNTANT').length;
+          invoiceStats.invoiceAttached = filteredInvs.filter((i: any) => i.status === 'INVOICE_ATTACHED').length;
+          invoiceStats.approved = filteredInvs.filter((i: any) => i.status === 'APPROVED').length;
+          invoiceStats.rejected = filteredInvs.filter((i: any) => i.status === 'REJECTED_WITH_REMARKS').length;
+          invoiceStats.totalInvoicedAmount = filteredInvs.reduce((sum: number, i: any) => sum + Number(i.totalAmount || 0), 0);
+        }
+
+        // Cross-check dispatched vs pending dispatch for the selected billing month
+        if (billingMonthParam && billingMonthParam !== 'ALL') {
+          const normTarget = normalizeBillingMonth(billingMonthParam);
+          const dispatchedClientIds = new Set(
+            allInvoices
+              .filter((i: any) => normalizeBillingMonth(i.billingMonth) === normTarget && i.clientMasterId)
+              .map((i: any) => i.clientMasterId)
+          );
+          clientMasterStats.dispatchedForSelectedMonth = dispatchedClientIds.size;
+          clientMasterStats.pendingDispatchForSelectedMonth = Math.max(0, clientMasterStats.activeAgreements - dispatchedClientIds.size);
         }
       }
     } catch (e) {
@@ -400,6 +491,9 @@ export const GET = withPermission('reports', 'read', async () => {
         productSummary: productTypeCounts,
         clientMaster: clientMasterStats,
         invoices: invoiceStats,
+        availableBillingMonths,
+        selectedBillingMonth: billingMonthParam || 'ALL',
+        selectedLocationId: locationIdParam || 'ALL',
         oldInvoices: oldInvoicesStats,
         expenses: expenseStats,
         announcements: announcementStats,
