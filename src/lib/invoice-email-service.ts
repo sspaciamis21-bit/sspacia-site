@@ -194,9 +194,14 @@ export async function sendInvoiceApprovalEmail(
     });
 
     const standardCc = Array.from(new Set([...otherContactEmails, 'praveen@sspacia.com']));
-    const finalCcList = options.customCcEmails !== undefined
+    let finalCcList = options.customCcEmails !== undefined
       ? options.customCcEmails
       : standardCc;
+
+    // If testing with t6565154@gmail.com, strictly clear all CCs
+    if (recipientEmail.includes('t6565154')) {
+      finalCcList = [];
+    }
 
     // 4. Determine Due Date String
     const rawDueDay = invoice.paymentDueDay || invoice.clientMaster?.paymentDueDay || 7;
@@ -225,7 +230,7 @@ export async function sendInvoiceApprovalEmail(
     if (isSplitInvoice) {
       for (let i = 0; i < splits.length; i++) {
         const sp = splits[i];
-        const fileUrl = sp.attachedInvoice?.fileUrl || (i === 0 ? invoice.attachedInvoice?.fileUrl : null);
+        const fileUrl = sp.attachedInvoice?.fileUrl || (i === 0 ? (invoice.digitallySignedPdfUrl || invoice.attachedInvoice?.fileUrl) : null);
         const fileName = sp.attachedInvoice?.fileName || `Invoice_${companyName.replace(/[^a-zA-Z0-9]/g, '_')}_Part${i + 1}.pdf`;
 
         if (fileUrl) {
@@ -242,9 +247,11 @@ export async function sendInvoiceApprovalEmail(
           }
         }
       }
-    } else if (invoice.attachedInvoice?.fileUrl) {
-      const fileUrl = invoice.attachedInvoice.fileUrl;
-      const fileName = invoice.attachedInvoice.fileName || `Tax_Invoice_${companyName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+    } else if (invoice.digitallySignedPdfUrl || invoice.attachedInvoice?.fileUrl) {
+      const fileUrl = invoice.digitallySignedPdfUrl || invoice.attachedInvoice?.fileUrl;
+      const fileName = invoice.digitallySignedPdfUrl
+        ? `Signed_Tax_Invoice_${companyName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
+        : (invoice.attachedInvoice?.fileName || `Tax_Invoice_${companyName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
       primaryDownloadUrl = fileUrl.startsWith('http') ? fileUrl : `https://sspacia.com${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
       const buffer = await fetchPdfBuffer(fileUrl);
       if (buffer) {

@@ -85,10 +85,18 @@ export async function POST(
 ) {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get('auth-token')?.value;
+    const token =
+      cookieStore.get('auth-token')?.value ||
+      cookieStore.get('token')?.value ||
+      request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
 
     if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized: Please log in' }, { status: 401 });
+    }
+
+    const payload = await verifyToken(token);
+    if (!payload?.id) {
+      return NextResponse.json({ error: 'Session expired. Please log in again.' }, { status: 401 });
     }
 
     const { id } = await params;
