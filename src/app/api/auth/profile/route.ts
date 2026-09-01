@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { verifyToken, signToken } from '@/lib/jwt'
 import prisma from '@/lib/prisma'
 import { cookies } from 'next/headers'
+import { validatePassword } from '@/lib/password-validator'
 
 export async function PATCH(req: Request) {
   try {
@@ -53,8 +54,9 @@ export async function PATCH(req: Request) {
     // ─── Hash Password if provided ──────────────────────────
     let hashedPassword: string | undefined = undefined
     if (password && typeof password === 'string' && password.trim().length > 0) {
-      if (password.trim().length < 6) {
-        return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
+      const validation = validatePassword(password.trim())
+      if (!validation.isValid) {
+        return NextResponse.json({ error: validation.error }, { status: 400 })
       }
       hashedPassword = await bcrypt.hash(password.trim(), 10)
     }

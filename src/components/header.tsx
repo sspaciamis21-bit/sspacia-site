@@ -18,6 +18,7 @@ export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isTourModalOpen, setIsTourModalOpen] = useState(false);
   const [mobileLocationsOpen, setMobileLocationsOpen] = useState(false);
+  const [mobileProductsOpen, setMobileProductsOpen] = useState(false);
   const [mobileAreaOpen, setMobileAreaOpen] = useState<string | null>(null);
   const [mobileCenterOpen, setMobileCenterOpen] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -378,6 +379,65 @@ export function Header() {
                                   )}
                                 </div>
                               ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (item.label === "Products") {
+                      return (
+                        <div key={item.label} className="py-1">
+                          <button
+                            onClick={() => setMobileProductsOpen(!mobileProductsOpen)}
+                            className="flex items-center justify-between w-full px-3 py-2 text-sm font-bold uppercase tracking-widest text-on-surface/80 hover:text-primary hover:bg-surface-low transition-colors rounded-sm cursor-pointer"
+                          >
+                            <span className="flex items-center gap-2">
+                              <Building2 size={15} className="text-primary" />
+                              <span>Products</span>
+                            </span>
+                            <ChevronDown size={15} className={`transition-transform ${mobileProductsOpen ? "rotate-180 text-primary" : ""}`} />
+                          </button>
+
+                          {mobileProductsOpen && (
+                            <div className="ml-3 pl-3 border-l-2 border-primary/20 space-y-2.5 mt-1 py-1">
+                              <Link
+                                href="/products"
+                                onClick={() => setIsOpen(false)}
+                                className="block py-1 text-xs font-bold text-teal-800 hover:text-primary"
+                              >
+                                🏢 All Workspaces Catalog
+                              </Link>
+                              
+                              <div className="bg-teal-50/60 p-2.5 rounded border border-teal-100 space-y-1.5">
+                                <Link
+                                  href="/guest-spaces"
+                                  onClick={() => setIsOpen(false)}
+                                  className="block text-xs font-bold text-[#006064] hover:underline"
+                                >
+                                  🚪 Guest Spaces (Hourly / Daily)
+                                </Link>
+                                <div className="pl-2 space-y-1 text-[11px] text-gray-600">
+                                  <Link href="/products?type=meeting-room" onClick={() => setIsOpen(false)} className="block hover:text-teal-800">• Meeting Rooms (4-6 Seats)</Link>
+                                  <Link href="/products?type=conference-room" onClick={() => setIsOpen(false)} className="block hover:text-teal-800">• Board Rooms (10-14 Seats)</Link>
+                                  <Link href="/guest-spaces" onClick={() => setIsOpen(false)} className="block hover:text-teal-800">• Day Pass &amp; Training Rooms</Link>
+                                </div>
+                              </div>
+
+                              <div className="bg-teal-50/60 p-2.5 rounded border border-teal-100 space-y-1.5">
+                                <Link
+                                  href="/coworking-spaces"
+                                  onClick={() => setIsOpen(false)}
+                                  className="block text-xs font-bold text-[#006064] hover:underline"
+                                >
+                                  🏢 Co-Working Spaces (Monthly)
+                                </Link>
+                                <div className="pl-2 space-y-1 text-[11px] text-gray-600">
+                                  <Link href="/coworking-spaces" onClick={() => setIsOpen(false)} className="block hover:text-teal-800">• Dedicated Desks</Link>
+                                  <Link href="/coworking-spaces" onClick={() => setIsOpen(false)} className="block hover:text-teal-800">• Private Cabins (1-8 Seats)</Link>
+                                  <Link href="/coworking-spaces" onClick={() => setIsOpen(false)} className="block hover:text-teal-800">• Executive VIP Suites</Link>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>

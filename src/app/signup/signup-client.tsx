@@ -5,9 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
-import { User, Mail, Lock, ArrowRight, Loader2, UserPlus, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Lock, ArrowRight, Loader2, UserPlus, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { SectionLabel } from '@/components/ui/section-label';
 import { useAuth } from '@/context/AuthContext';
+import { validatePassword } from '@/lib/password-validator';
 import Image from 'next/image';
 
 export default function SignupClient() {
@@ -25,8 +26,19 @@ export default function SignupClient() {
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
+  const pwdLengthValid = formData.password.trim().length >= 6;
+  const pwdUppercaseValid = /[A-Z]/.test(formData.password);
+  const pwdNumberValid = /[0-9]/.test(formData.password);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const pwdCheck = validatePassword(formData.password);
+    if (!pwdCheck.isValid) {
+      toast.error(pwdCheck.error || 'Password does not meet requirements');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -43,9 +55,9 @@ export default function SignupClient() {
       }
 
       toast.success('Account created! Welcome to SSPACIA.');
-      
+
       await refreshUser();
-      
+
       if (redirect) {
         router.push(decodeURIComponent(redirect));
         return;
@@ -87,7 +99,7 @@ export default function SignupClient() {
       <div className="flex w-full lg:w-1/2 items-center justify-center p-5 sm:p-12 lg:p-16 relative">
         <div className="absolute top-0 left-12 w-[1px] h-full bg-outline-variant/10 hidden md:block"></div>
         <div className="absolute top-12 right-0 w-full h-[1px] bg-outline-variant/10 hidden md:block"></div>
-        
+
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -106,7 +118,7 @@ export default function SignupClient() {
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest text-tertiary ml-2">Full Name</label>
               <div className="relative group">
-                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-tertiary group-focus-within:text-primary transition-colors">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-tertiary group-focus-within:text-primary transition-colors">
                   <User size={18} />
                 </div>
                 <input
@@ -114,7 +126,7 @@ export default function SignupClient() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="John Doe"
+                  placeholder=""
                   className="w-full rounded-none border-b-2 border-outline-variant/30 bg-surface-high pl-12 pr-4 py-4 text-sm outline-none transition-all focus:border-primary focus:bg-white text-on-surface placeholder:text-tertiary/50"
                 />
               </div>
@@ -131,7 +143,7 @@ export default function SignupClient() {
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="name@example.com"
+                  placeholder=""
                   className="w-full rounded-none border-b-2 border-outline-variant/30 bg-surface-high pl-12 pr-4 py-4 text-sm outline-none transition-all focus:border-primary focus:bg-white text-on-surface placeholder:text-tertiary/50"
                 />
               </div>
@@ -140,7 +152,7 @@ export default function SignupClient() {
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest text-tertiary ml-2">Password</label>
               <div className="relative group">
-                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-tertiary group-focus-within:text-primary transition-colors">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-tertiary group-focus-within:text-primary transition-colors">
                   <Lock size={18} />
                 </div>
                 <input
@@ -161,6 +173,39 @@ export default function SignupClient() {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
+
+              {/* Password Requirements Helper */}
+              {formData.password.length > 0 && (
+                <div className="text-[11px] text-tertiary space-y-1 pt-1 bg-surface-high/60 p-2.5 border-l-2 border-primary">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2
+                      size={12}
+                      className={pwdLengthValid ? 'text-emerald-600' : 'text-outline-variant'}
+                    />
+                    <span className={pwdLengthValid ? 'text-emerald-700 font-semibold' : ''}>
+                      At least 6 characters
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2
+                      size={12}
+                      className={pwdUppercaseValid ? 'text-emerald-600' : 'text-outline-variant'}
+                    />
+                    <span className={pwdUppercaseValid ? 'text-emerald-700 font-semibold' : ''}>
+                      At least 1 uppercase letter (A-Z)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2
+                      size={12}
+                      className={pwdNumberValid ? 'text-emerald-600' : 'text-outline-variant'}
+                    />
+                    <span className={pwdNumberValid ? 'text-emerald-700 font-semibold' : ''}>
+                      At least 1 number (0-9)
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Remember Me Checkbox */}

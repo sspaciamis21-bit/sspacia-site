@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { verifyToken, signToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { cookies } from 'next/headers';
+import { validatePassword } from '@/lib/password-validator';
 
 export async function POST(req: Request) {
   try {
@@ -22,9 +23,10 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { newPassword, confirmPassword } = body;
 
-    if (!newPassword || typeof newPassword !== 'string' || newPassword.trim().length < 6) {
+    const validation = validatePassword(newPassword);
+    if (!validation.isValid) {
       return NextResponse.json(
-        { error: 'New password must be at least 6 characters long' },
+        { error: validation.error },
         { status: 400 }
       );
     }

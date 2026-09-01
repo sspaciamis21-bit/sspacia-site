@@ -19,6 +19,12 @@ export function ForcePasswordChangeModal() {
     return null;
   }
 
+  const hasMinLength = newPassword.trim().length >= 6;
+  const hasUppercase = /[A-Z]/.test(newPassword);
+  const hasNumber = /[0-9]/.test(newPassword);
+  const passwordsMatch = Boolean(newPassword && confirmPassword && newPassword === confirmPassword);
+  const isFormValid = hasMinLength && hasUppercase && hasNumber && passwordsMatch;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -27,12 +33,22 @@ export function ForcePasswordChangeModal() {
       return;
     }
 
-    if (newPassword.trim().length < 6) {
+    if (!hasMinLength) {
       toast.error('Password must be at least 6 characters long');
       return;
     }
 
-    if (newPassword !== confirmPassword) {
+    if (!hasUppercase) {
+      toast.error('Password must contain at least one uppercase letter (A-Z)');
+      return;
+    }
+
+    if (!hasNumber) {
+      toast.error('Password must contain at least one number (0-9)');
+      return;
+    }
+
+    if (!passwordsMatch) {
       toast.error('New password and confirm password do not match');
       return;
     }
@@ -170,32 +186,43 @@ export function ForcePasswordChangeModal() {
               </div>
 
               {/* Password Rule Helper */}
-              <div className="text-[11px] text-gray-500 space-y-1 pt-1">
+              <div className="text-[11px] text-gray-500 space-y-1.5 pt-1 bg-neutral-50 p-2.5 border border-neutral-200">
+                <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider block mb-1">
+                  Password Requirements:
+                </span>
                 <div className="flex items-center gap-1.5">
                   <CheckCircle2
                     size={13}
-                    className={newPassword.length >= 6 ? 'text-emerald-600' : 'text-gray-300'}
+                    className={hasMinLength ? 'text-emerald-600' : 'text-gray-300'}
                   />
-                  <span className={newPassword.length >= 6 ? 'text-emerald-700 font-bold' : ''}>
+                  <span className={hasMinLength ? 'text-emerald-700 font-bold' : 'text-gray-500'}>
                     At least 6 characters long
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <CheckCircle2
                     size={13}
-                    className={
-                      newPassword && confirmPassword && newPassword === confirmPassword
-                        ? 'text-emerald-600'
-                        : 'text-gray-300'
-                    }
+                    className={hasUppercase ? 'text-emerald-600' : 'text-gray-300'}
                   />
-                  <span
-                    className={
-                      newPassword && confirmPassword && newPassword === confirmPassword
-                        ? 'text-emerald-700 font-bold'
-                        : ''
-                    }
-                  >
+                  <span className={hasUppercase ? 'text-emerald-700 font-bold' : 'text-gray-500'}>
+                    At least 1 uppercase letter (A-Z)
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2
+                    size={13}
+                    className={hasNumber ? 'text-emerald-600' : 'text-gray-300'}
+                  />
+                  <span className={hasNumber ? 'text-emerald-700 font-bold' : 'text-gray-500'}>
+                    At least 1 number (0-9)
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2
+                    size={13}
+                    className={passwordsMatch ? 'text-emerald-600' : 'text-gray-300'}
+                  />
+                  <span className={passwordsMatch ? 'text-emerald-700 font-bold' : 'text-gray-500'}>
                     Passwords match
                   </span>
                 </div>
@@ -204,7 +231,7 @@ export function ForcePasswordChangeModal() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isSubmitting || newPassword.length < 6 || newPassword !== confirmPassword}
+                disabled={isSubmitting || !isFormValid}
                 className="w-full py-3.5 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md mt-6 cursor-pointer"
               >
                 {isSubmitting ? (

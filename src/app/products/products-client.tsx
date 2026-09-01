@@ -67,11 +67,24 @@ export default function ProductsClient({
     return p ? Number(p) : undefined;
   });
   const [selectedArea, setSelectedArea] = useState<string | undefined>(() => {
-    return searchParams?.get('area') || undefined;
+    const p = searchParams?.get('area');
+    if (!p) return undefined;
+    const norm = p.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const found = products.find(prod => prod.location?.area && prod.location.area.toLowerCase().replace(/[^a-z0-9]/g, '') === norm);
+    return found?.location?.area || p;
   });
   const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>(() => {
     const p = searchParams?.get('centre') || searchParams?.get('location');
-    return p ? Number(p) : undefined;
+    if (!p) return undefined;
+    const num = Number(p);
+    if (!isNaN(num) && num > 0) return num;
+    const norm = p.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const found = products.find(prod => {
+      const slug = prod.location?.slug?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+      const name = prod.location?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+      return slug === norm || name.includes(norm) || norm.includes(slug);
+    });
+    return found?.location?.id;
   });
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(() => {
     const p = searchParams?.get('category');
@@ -91,6 +104,42 @@ export default function ProductsClient({
     const p = searchParams?.get('date');
     return p || new Date().toISOString().split('T')[0];
   });
+
+  // Watch for searchParams changes (e.g. from navbar navigation)
+  useEffect(() => {
+    if (!searchParams) return;
+    const pArea = searchParams.get('area');
+    if (pArea) {
+      const norm = pArea.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const found = products.find(prod => prod.location?.area && prod.location.area.toLowerCase().replace(/[^a-z0-9]/g, '') === norm);
+      setSelectedArea(found?.location?.area || pArea);
+    }
+    const pCentre = searchParams.get('centre') || searchParams.get('location');
+    if (pCentre) {
+      const num = Number(pCentre);
+      if (!isNaN(num) && num > 0) {
+        setSelectedLocationId(num);
+      } else {
+        const norm = pCentre.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const found = products.find(prod => {
+          const slug = prod.location?.slug?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+          const name = prod.location?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+          return slug === norm || name.includes(norm) || norm.includes(slug);
+        });
+        if (found?.location?.id) setSelectedLocationId(found.location.id);
+      }
+    }
+    const pCat = searchParams.get('category');
+    if (pCat) {
+      const num = Number(pCat);
+      if (!isNaN(num)) setSelectedCategoryId(num);
+    }
+    const pType = searchParams.get('type');
+    if (pType) {
+      const num = Number(pType);
+      if (!isNaN(num)) setSelectedTypeId(num);
+    }
+  }, [searchParams, products]);
 
   // Restore saved filters from sessionStorage if URL has no search params
   useEffect(() => {
@@ -198,7 +247,11 @@ export default function ProductsClient({
       targetProducts = targetProducts.filter(p => (p.location?.cityId ?? (p.location as any)?.city?.id) === selectedCityId);
     }
     if (selectedArea) {
-      targetProducts = targetProducts.filter(p => p.location?.area?.trim() === selectedArea.trim());
+      targetProducts = targetProducts.filter(p => {
+        const a = p.location?.area?.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const sa = selectedArea.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        return a === sa;
+      });
     }
     const locMap = new Map<number, { id: number; name: string }>();
     targetProducts.forEach(p => {
@@ -218,7 +271,7 @@ export default function ProductsClient({
       const area = product.location?.area?.trim();
 
       if (selectedCityId && cityId !== selectedCityId) return false;
-      if (selectedArea && area !== selectedArea.trim()) return false;
+      if (selectedArea && area?.toLowerCase().replace(/[^a-z0-9]/g, '') !== selectedArea.toLowerCase().replace(/[^a-z0-9]/g, '')) return false;
       if (selectedLocationId && locId !== selectedLocationId) return false;
       if (selectedCategoryId && catId !== selectedCategoryId) return false;
       if (selectedTypeId && typeId !== selectedTypeId) return false;
@@ -261,9 +314,26 @@ export default function ProductsClient({
     setSelectedTypeId(undefined);
     setSelectedAmenityIds([]);
     setSelectedDate(new Date().toISOString().split('T')[0]);
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem('sspacia_active_filters');
+      } catch {}
+      window.history.replaceState(null, '', pathname);
+    }
   };
 
-  const isGuestCategory = (p: Product) => (p.categoryId === 2 || (p as any).category?.slug === 'guest-space' || (p as any).category?.name?.toLowerCase().includes('guest') || (p as any).category?.displayName?.toLowerCase().includes('guest'));
+  const isGuestCategory = (p: Product) => (
+    p.categoryId === 2 || 
+    (p as any).category?.name === 'GUEST_SPACE' || 
+    (p as any).category?.slug === 'guest-space' || 
+    (p as any).category?.displayName?.toLowerCase().includes('guest') ||
+    p.name.toLowerCase().includes('meeting') ||
+    p.name.toLowerCase().includes('board') ||
+    p.name.toLowerCase().includes('event') ||
+    p.name.toLowerCase().includes('training') ||
+    p.name.toLowerCase().includes('interview') ||
+    p.name.toLowerCase().includes('conference')
+  );
 
   // Group into Guest Spaces vs Other Workspaces
   const guestSpaces = useMemo(() => filteredProducts.filter(isGuestCategory), [filteredProducts]);

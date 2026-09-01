@@ -134,6 +134,8 @@ async function getProducts(): Promise<Product[]> {
       where: { isActive: true },
       include: {
         location: { select: { id: true, name: true, slug: true, cityId: true, area: true, address: true } },
+        category: { select: { id: true, name: true, displayName: true } },
+        type: { select: { id: true, name: true, displayName: true } },
         images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] },
         pricingPlans: { where: { isActive: true }, include: { durationType: true } },
         amenities: {

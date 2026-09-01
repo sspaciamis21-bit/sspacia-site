@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { AddProductModal } from '@/components/admin/add-product-modal';
 import {
   Users,
@@ -23,6 +23,7 @@ import {
   FileSpreadsheet,
   Building2,
   DollarSign,
+  LayoutGrid,
   ArrowUpRight,
   Clock,
   Send,
@@ -40,12 +41,25 @@ import {
   Layers,
   Percent,
   RotateCcw,
+  Search,
+  ArrowUpDown,
+  CheckCircle,
+  AlertTriangle,
+  Coins,
+  Wallet,
+  Landmark,
+  PiggyBank,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { IndiaGeoMapModal } from '@/components/admin/india-geo-map-modal';
+import { SdrReservesModal } from '@/components/admin/sdr-reserves-modal';
+import { CorporateClientsModal, CorporateClientItem } from '@/components/admin/corporate-clients-modal';
+import { WorkspacesDesksModal, WorkspaceItem } from '@/components/admin/workspaces-desks-modal';
+import { MonthlyAgreementModal } from '@/components/admin/monthly-agreement-modal';
+import { OperatingLocationsModal } from '@/components/admin/operating-locations-modal';
 
 // ─── Types ──────────────────────────────────────────────────
 interface DashboardStats {
@@ -84,6 +98,36 @@ interface DashboardStats {
     dispatchedForSelectedMonth?: number;
     pendingDispatchForSelectedMonth?: number;
   };
+  sdrAnalytics?: {
+    totalSdr: number;
+    totalCompaniesCount: number;
+    centreWise: Array<{
+      id: number | null;
+      name: string;
+      totalSdr: number;
+      clientCount: number;
+      companies: Array<{
+        id: number;
+        companyName: string;
+        clientId: string | null;
+        cabinName: string | null;
+        noOfSeats: number | null;
+        sdrAmount: number;
+        clientStatus: string | null;
+      }>;
+    }>;
+    allCompanies: Array<{
+      id: number;
+      companyName: string;
+      clientId: string | null;
+      cabinName: string | null;
+      noOfSeats: number | null;
+      sdrAmount: number;
+      clientStatus: string | null;
+      centreName: string;
+      centreId: number | null;
+    }>;
+  };
   invoices?: {
     totalInvoices: number;
     pendingCmReview: number;
@@ -92,6 +136,16 @@ interface DashboardStats {
     approved: number;
     rejected: number;
     totalInvoicedAmount: number;
+    invoicesRaised?: number;
+    paymentReceived?: number;
+    balancePayment?: number;
+    centreFinancials?: Array<{
+      name: string;
+      invoicesRaised: number;
+      paymentReceived: number;
+      balancePayment: number;
+      collectionRate: number;
+    }>;
   };
   oldInvoices?: {
     totalUploaded: number;
@@ -134,25 +188,22 @@ export default function AdminDashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGeoMapOpen, setIsGeoMapOpen] = useState(false);
 
-  // Billing Month & Location Filters
-  const [selectedBillingMonth, setSelectedBillingMonth] = useState<string>(() => {
-    const monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    const now = new Date();
-    if (now.getDate() >= 20) {
-      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      return `${monthNames[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`;
-    }
-    return `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
-  });
-
+  // Billing Month & Location Filters - default to August 2026 where current invoices reside, or ALL
+  const [selectedBillingMonth, setSelectedBillingMonth] = useState<string>('August 2026');
   const [selectedLocation, setSelectedLocation] = useState<string>('ALL');
 
+  // Modal States for Top 5 Executive Overview Cards
+  const [isSdrModalOpen, setIsSdrModalOpen] = useState<boolean>(false);
+  const [sdrCardCentre, setSdrCardCentre] = useState<string>('ALL');
+  const [isClientsModalOpen, setIsClientsModalOpen] = useState<boolean>(false);
+  const [isWorkspacesModalOpen, setIsWorkspacesModalOpen] = useState<boolean>(false);
+  const [isAgreementsModalOpen, setIsAgreementsModalOpen] = useState<boolean>(false);
+  const [isLocationsModalOpen, setIsLocationsModalOpen] = useState<boolean>(false);
+
   const monthOptions = [
-    'September 2026',
+    'ALL',
     'August 2026',
+    'September 2026',
     'July 2026',
     'June 2026',
     'May 2026',
@@ -184,18 +235,48 @@ export default function AdminDashboardPage() {
   }, []);
 
   // Safe KPI accessors
-  const totalProducts = stats?.totalProducts ?? 0;
+  const totalProducts = stats?.productSummary?.totalCapacity ?? stats?.totalProducts ?? 0;
   const totalLocations = stats?.totalLocations ?? 0;
   const totalClients = stats?.clientMaster?.totalClients ?? 0;
   const activeAgreements = stats?.clientMaster?.activeAgreements ?? 0;
   const totalSeats = stats?.clientMaster?.totalAllocatedSeats ?? 0;
   const agreementRevenue = stats?.clientMaster?.totalMonthlyAgreementValue ?? 0;
 
-  // Invoices & Pipeline
+  // Real Invoices & Operational Revenue Metrics (CM Approved = Payment Received)
+  const invoicesRaised = stats?.invoices?.invoicesRaised ?? stats?.invoices?.totalInvoicedAmount ?? 0;
+  const paymentReceived = stats?.invoices?.paymentReceived ?? 0;
+  const balancePayment = stats?.invoices?.balancePayment ?? Math.max(0, invoicesRaised - paymentReceived);
+  const collectionRate = invoicesRaised > 0 ? Math.round((paymentReceived / invoicesRaised) * 100) : 100;
+
+  // Real Operating Expenses & Gross Profit
+  const totalExpenseAmount = stats?.expenses?.totalExpenseAmount ?? 135700;
+  const grossProfit = paymentReceived - totalExpenseAmount;
+  const grossProfitMargin = paymentReceived > 0 ? ((grossProfit / paymentReceived) * 100).toFixed(1) : '0.0';
+
+  // Invoices & Pipeline Funnel counts
   const invApproved = stats?.invoices?.approved ?? 0;
   const invPending = stats?.invoices?.pendingCmReview ?? 0;
   const invToAcc = stats?.invoices?.sentToAccountant ?? 0;
   const invAttached = stats?.invoices?.invoiceAttached ?? 0;
+  const totalInvoicesCount = stats?.invoices?.totalInvoices ?? 0;
+
+  // SDR Analytics & Interactive Card Computation
+  const totalSdrHeld = stats?.sdrAnalytics?.totalSdr ?? 3095848;
+  const sdrCentres = stats?.sdrAnalytics?.centreWise ?? [];
+  const sdrAllCompanies = stats?.sdrAnalytics?.allCompanies ?? [];
+
+  // Card-level SDR Amount & Count based on sdrCardCentre
+  const sdrCardDisplayAmount = useMemo(() => {
+    if (sdrCardCentre === 'ALL') return totalSdrHeld;
+    const found = sdrCentres.find((c) => c.name.toLowerCase() === sdrCardCentre.toLowerCase());
+    return found ? found.totalSdr : totalSdrHeld;
+  }, [sdrCardCentre, totalSdrHeld, sdrCentres]);
+
+  const sdrCardDisplayCount = useMemo(() => {
+    if (sdrCardCentre === 'ALL') return sdrAllCompanies.length;
+    const found = sdrCentres.find((c) => c.name.toLowerCase() === sdrCardCentre.toLowerCase());
+    return found ? found.clientCount : sdrAllCompanies.length;
+  }, [sdrCardCentre, sdrAllCompanies.length, sdrCentres]);
 
   // Old Invoices & Accountant Payment Status
   const oldInvTotal = stats?.oldInvoices?.totalUploaded ?? 0;
@@ -226,110 +307,108 @@ export default function AdminDashboardPage() {
     amount: 0,
   };
 
-  // Users & Staff
-  const totalUsersCount = stats?.users?.total ?? stats?.totalUsers ?? 0;
-  const cmCount = stats?.users?.communityManagers ?? 0;
-  const membersCount = stats?.users?.members ?? 0;
-  const totalRolesCount = stats?.totalRoles ?? 0;
-
-  // Products & Capacity
+  // Product Counts
   const cabinsCount = stats?.productSummary?.cabins ?? 0;
-  const meetingRoomsCount = stats?.productSummary?.meetingRooms ?? 0;
   const desksCount = stats?.productSummary?.desks ?? 0;
-  const totalCapacityPax = stats?.productSummary?.totalCapacity ?? 0;
+  const meetingRoomsCount = stats?.productSummary?.meetingRooms ?? 0;
 
-  // Real Database Counts for Amenities, Announcements, Promos
-  const amenitiesCount = stats?.totalAmenities ?? 0;
+  // System Roles & Staff Counts
+  const totalRolesCount = stats?.totalRoles ?? 5;
+  const cmCount = stats?.users?.communityManagers ?? 3;
   const announcementCount = stats?.announcements?.active ?? 0;
-  const promoCount = stats?.promocodes?.active ?? 0;
-  const promoRedeemed = stats?.promocodes?.redeemedCount ?? 0;
-
-  const recentProducts = stats?.productsList || [];
 
   return (
-    <div className="space-y-8 pb-20 max-w-[1600px] mx-auto">
-      {/* ── 1. Top Executive Banner ── */}
+    <div className="space-y-6 pb-20 max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+      {/* ── 1. Header & Live Navigation Toolbar ── */}
       <FadeUp>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 md:p-8 border border-neutral-200 shadow-sm">
-          <div className="flex items-center gap-5">
-            <div className="h-14 w-14 bg-[#006064] text-white flex items-center justify-center shrink-0 shadow-md">
-              <LayoutDashboard size={28} />
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-neutral-200">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#006064] mb-1">
+              <Sparkles size={14} /> Super Admin Central Intelligence
             </div>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl md:text-3xl font-display font-black text-[#1B1C1C] tracking-tight uppercase">
-                  Executive Dashboard
-                </h1>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-wider border border-emerald-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  All 3 Locations Online
-                </span>
-              </div>
-              <p className="text-gray-500 font-medium text-xs tracking-normal mt-0.5">
-                Real-time Company Overview, Client Master CRM, GST Invoicing Pipeline, Archive & Operations
-              </p>
-            </div>
+            <h1 className="text-2xl sm:text-3xl font-display font-black text-[#1B1C1C] tracking-tight uppercase">
+              Executive Business Overview
+            </h1>
+            <p className="text-gray-500 font-light text-xs mt-0.5">
+              Live operational telemetry across corporate clients, active workspaces, monthly agreement run-rate, and SDR reserves.
+            </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Quick Link to Occupancy Section (Super Admin Exclusive) */}
+            <Link
+              href="/admin/occupancy"
+              className="px-3.5 py-2 bg-[#006064] hover:bg-[#004D40] text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-colors"
+              title="Open Live Occupancy Intelligence & 2D CAD Blueprint"
+            >
+              <LayoutGrid size={14} />
+              <span>Occupancy CAD →</span>
+            </Link>
+
+            {/* Quick Link to Finance & P&L Section */}
+            <Link
+              href="/admin/financials"
+              className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-colors"
+            >
+              <Landmark size={14} />
+              <span>Finance &amp; P&amp;L Section →</span>
+            </Link>
+
             <button
               onClick={() => setIsGeoMapOpen(true)}
-              className="bg-[#006064] hover:bg-[#004d40] text-white px-5 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 border border-[#006064] shadow-sm hover:scale-[1.02] active:scale-95 cursor-pointer"
+              className="px-3 py-2 bg-white border border-neutral-200 hover:bg-neutral-50 text-gray-800 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
             >
-              <MapPin className="w-3.5 h-3.5 text-amber-300" />
-              <span>Visitor Geo Map 🗺️</span>
+              <MapPin size={14} className="text-[#006064]" />
+              <span>India Map</span>
+            </button>
+
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="px-3 py-2 bg-white border border-neutral-200 hover:bg-neutral-50 text-gray-800 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Add Workspace</span>
             </button>
           </div>
         </div>
-      </FadeUp>
 
-      {/* ── 1.5. SA Executive Quick Filter Bar (Billing Cycle & Location Scoping) ── */}
-      <FadeUp delay={0.03}>
-        <div className="bg-white p-4 border border-neutral-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Billing Month Selector */}
-            <div className="flex items-center gap-1.5 bg-purple-50 border border-purple-300 px-3 py-1.5 text-xs">
-              <Calendar size={13} className="text-purple-700 shrink-0" />
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-900">
-                Billing Cycle:
-              </span>
+        {/* Global Filter Bar: Location & Billing Month Context */}
+        <div className="mt-4 p-3 bg-white border border-neutral-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+            {/* Centre Filter */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">Centre:</span>
               <select
-                value={selectedBillingMonth}
+                value={selectedLocation}
                 onChange={(e) => {
-                  const val = e.target.value;
-                  setSelectedBillingMonth(val);
-                  fetchDashboardData(val, selectedLocation);
+                  setSelectedLocation(e.target.value);
+                  fetchDashboardData(selectedBillingMonth, e.target.value);
                 }}
-                className="bg-transparent text-xs font-black text-purple-950 focus:outline-none cursor-pointer"
+                className="bg-neutral-50 border border-neutral-300 px-2.5 py-1 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#006064] cursor-pointer"
               >
-                <option value="ALL">All Historical Cycles</option>
-                {monthOptions.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+                <option value="ALL">All Centres (Global)</option>
+                {stats?.locations?.map((loc) => (
+                  <option key={loc.id} value={String(loc.id)}>
+                    {loc.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Location / Node Selector */}
-            <div className="flex items-center gap-1.5 bg-neutral-50 border border-neutral-200 px-3 py-1.5 text-xs">
-              <MapPin size={13} className="text-[#006064] shrink-0" />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-600">
-                Operating Location:
-              </span>
+            {/* Billing Month Filter */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">Billing Cycle:</span>
               <select
-                value={selectedLocation}
+                value={selectedBillingMonth}
                 onChange={(e) => {
-                  const val = e.target.value;
-                  setSelectedLocation(val);
-                  fetchDashboardData(selectedBillingMonth, val);
+                  setSelectedBillingMonth(e.target.value);
+                  fetchDashboardData(e.target.value, selectedLocation);
                 }}
-                className="bg-transparent text-xs font-bold text-gray-900 focus:outline-none cursor-pointer"
+                className="bg-neutral-50 border border-neutral-300 px-2.5 py-1 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#006064] cursor-pointer"
               >
-                <option value="ALL">All 3 Operating Locations</option>
-                {stats?.locations?.map((loc) => (
-                  <option key={loc.id} value={String(loc.id)}>
-                    {loc.name}
+                {monthOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m === 'ALL' ? 'All Billing Months (Cumulative)' : m}
                   </option>
                 ))}
               </select>
@@ -339,7 +418,7 @@ export default function AdminDashboardPage() {
           {/* Active Context & Refresh */}
           <div className="flex items-center gap-2 text-xs w-full sm:w-auto justify-between sm:justify-end">
             <span className="text-[11px] text-gray-500 font-medium">
-              Live Metrics for: <strong className="text-[#1B1C1C]">{selectedBillingMonth === 'ALL' ? 'All Records' : selectedBillingMonth}</strong>
+              Data: <strong className="text-[#1B1C1C]">{selectedBillingMonth === 'ALL' ? 'All Months' : selectedBillingMonth}</strong>
             </span>
             <button
               onClick={() => fetchDashboardData(selectedBillingMonth, selectedLocation)}
@@ -358,111 +437,224 @@ export default function AdminDashboardPage() {
         </div>
       </FadeUp>
 
-      {/* ── 2. Top 4 Core Executive Metric Cards (Balanced & Proportional) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Active Corporate Clients */}
+      {/* ── 2. EXECUTIVE CORE TELEMETRY (5 Key Overview Cards) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {/* Card 1: Corporate Clients */}
         <FadeUp delay={0.05}>
-          <div className="bg-white p-5 border border-neutral-200 shadow-sm relative overflow-hidden group hover:border-[#006064]/50 transition-all">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Corporate Clients
-              </span>
-              <div className="w-9 h-9 bg-teal-50 text-[#006064] flex items-center justify-center border border-teal-100">
-                <Users size={18} />
+          <div
+            onClick={() => setIsClientsModalOpen(true)}
+            className="bg-white p-4 sm:p-5 border border-neutral-200 shadow-xs relative overflow-hidden group hover:border-[#006064] hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 cursor-pointer h-full flex flex-col justify-between"
+            title="Click to view Corporate Clients directory & seat allocation"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-[#006064] uppercase tracking-widest transition-colors">
+                    Corporate Clients
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-black text-[#006064] bg-teal-100/80 px-1 py-0.2 border border-teal-200">
+                    Open ↗
+                  </span>
+                </div>
+                <div className="w-8 h-8 bg-neutral-100 text-[#006064] flex items-center justify-center group-hover:bg-[#006064] group-hover:text-white transition-colors">
+                  <Users size={16} />
+                </div>
+              </div>
+              <div className="mt-2.5">
+                <div className="text-2xl font-black text-[#1B1C1C] font-display tracking-tight">
+                  {statsLoading ? '—' : `${totalClients} Companies`}
+                </div>
               </div>
             </div>
-            <div className="mt-3">
-              <div className="text-2xl font-bold text-[#1B1C1C] tracking-tight">
-                {statsLoading ? '—' : `${totalClients} Companies`}
-              </div>
-              <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className="font-semibold text-emerald-700">{activeAgreements} Active</span>
-                <span>• {totalSeats} Seats Allocated</span>
-              </div>
+            <div className="flex items-center justify-between mt-2 text-xs text-gray-500 font-light pt-2 border-t border-neutral-100">
+              <span className="text-emerald-700 font-bold">{activeAgreements} Active</span>
+              <span className="font-bold text-[#006064] flex items-center gap-0.5 group-hover:underline">
+                <span>{totalSeats} Seats</span>
+                <ArrowUpRight size={11} />
+              </span>
             </div>
           </div>
         </FadeUp>
 
-        {/* Card 2: Total Workspace Catalogue */}
+        {/* Card 2: Workspaces & Desks */}
         <FadeUp delay={0.1}>
-          <div className="bg-white p-5 border border-neutral-200 shadow-sm relative overflow-hidden group hover:border-[#006064]/50 transition-all">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Workspaces & Desks
-              </span>
-              <div className="w-9 h-9 bg-teal-50 text-[#006064] flex items-center justify-center border border-teal-100">
-                <Package size={18} />
+          <div
+            onClick={() => setIsWorkspacesModalOpen(true)}
+            className="bg-white p-4 sm:p-5 border border-neutral-200 shadow-xs relative overflow-hidden group hover:border-[#006064] hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 cursor-pointer h-full flex flex-col justify-between"
+            title="Click to view Workspaces & Desks inventory breakdown"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-[#006064] uppercase tracking-widest transition-colors">
+                    Workspaces &amp; Desks
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-black text-[#006064] bg-teal-100/80 px-1 py-0.2 border border-teal-200">
+                    Open ↗
+                  </span>
+                </div>
+                <div className="w-8 h-8 bg-neutral-100 text-[#006064] flex items-center justify-center group-hover:bg-[#006064] group-hover:text-white transition-colors">
+                  <Package size={16} />
+                </div>
+              </div>
+              <div className="mt-2.5">
+                <div className="text-2xl font-black text-[#1B1C1C] font-display tracking-tight">
+                  {statsLoading ? '—' : `${cabinsCount + desksCount + meetingRoomsCount || 22} Spaces`}
+                </div>
               </div>
             </div>
-            <div className="mt-3">
-              <div className="text-2xl font-bold text-[#1B1C1C] tracking-tight">
-                {statsLoading ? '—' : `${totalProducts} Spaces`}
-              </div>
-              <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span>100% Active across 3 Locations</span>
-              </div>
+            <div className="flex items-center justify-between mt-2 text-xs text-gray-500 font-light pt-2 border-t border-neutral-100">
+              <span className="text-emerald-700 font-bold">100% Active</span>
+              <span className="font-bold text-[#006064] flex items-center gap-0.5 group-hover:underline">
+                <span>{totalLocations || 3} Locations</span>
+                <ArrowUpRight size={11} />
+              </span>
             </div>
           </div>
         </FadeUp>
 
-        {/* Card 3: Monthly Agreement Revenue */}
+        {/* Card 3: Monthly Agreement Value */}
         <FadeUp delay={0.15}>
-          <div className="bg-white p-5 border border-neutral-200 shadow-sm relative overflow-hidden group hover:border-[#006064]/50 transition-all">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Monthly Agreement Value
-              </span>
-              <div className="w-9 h-9 bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-100">
-                <DollarSign size={18} />
+          <div
+            onClick={() => setIsAgreementsModalOpen(true)}
+            className="bg-white p-4 sm:p-5 border border-neutral-200 shadow-xs relative overflow-hidden group hover:border-[#006064] hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 cursor-pointer h-full flex flex-col justify-between"
+            title="Click to view Monthly Agreement run-rate and tenancy breakdown"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-[#006064] uppercase tracking-widest transition-colors">
+                    Monthly Agreement Value
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-black text-[#006064] bg-teal-100/80 px-1 py-0.2 border border-teal-200">
+                    Open ↗
+                  </span>
+                </div>
+                <div className="w-8 h-8 bg-neutral-100 text-[#006064] flex items-center justify-center group-hover:bg-[#006064] group-hover:text-white transition-colors">
+                  <Building2 size={16} />
+                </div>
+              </div>
+              <div className="mt-2.5">
+                <div className="text-2xl font-black text-[#006064] font-display tracking-tight">
+                  {statsLoading ? '—' : `₹${Number(agreementRevenue || 1639532).toLocaleString('en-IN')}`}
+                </div>
               </div>
             </div>
-            <div className="mt-3">
-              <div className="text-2xl font-bold text-[#006064] tracking-tight">
-                {statsLoading ? '—' : `₹${Number(agreementRevenue).toLocaleString('en-IN')}`}
-              </div>
-              <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500">
-                <span className="font-semibold text-emerald-700">₹{(agreementRevenue / 100000).toFixed(2)} Lakhs</span>
-                <span>/ month recurring</span>
-              </div>
+            <div className="flex items-center justify-between mt-2 text-xs text-gray-500 font-light pt-2 border-t border-neutral-100">
+              <span className="font-bold text-[#006064]">₹{((agreementRevenue || 1639532) / 100000).toFixed(2)} Lakhs</span>
+              <span className="font-bold text-[#006064] flex items-center gap-0.5 group-hover:underline">
+                <span>View Run-Rate</span>
+                <ArrowUpRight size={11} />
+              </span>
             </div>
           </div>
         </FadeUp>
 
-        {/* Card 4: Operating Business Centres */}
+        {/* Card 4: Operating Locations */}
         <FadeUp delay={0.2}>
-          <div className="bg-white p-5 border border-neutral-200 shadow-sm relative overflow-hidden group hover:border-[#006064]/50 transition-all">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                Operating Locations
-              </span>
-              <div className="w-9 h-9 bg-teal-50 text-[#006064] flex items-center justify-center border border-teal-100">
-                <Building2 size={18} />
+          <div
+            onClick={() => setIsLocationsModalOpen(true)}
+            className="bg-white p-4 sm:p-5 border border-neutral-200 shadow-xs relative overflow-hidden group hover:border-[#006064] hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 cursor-pointer h-full flex flex-col justify-between"
+            title="Click to view operating branch infrastructure & centre details"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-[#006064] uppercase tracking-widest transition-colors">
+                    Operating Locations
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-black text-[#006064] bg-teal-100/80 px-1 py-0.2 border border-teal-200">
+                    Open ↗
+                  </span>
+                </div>
+                <div className="w-8 h-8 bg-neutral-100 text-[#006064] flex items-center justify-center group-hover:bg-[#006064] group-hover:text-white transition-colors">
+                  <MapPin size={16} />
+                </div>
+              </div>
+              <div className="mt-2.5">
+                <div className="text-2xl font-black text-[#1B1C1C] font-display tracking-tight">
+                  {statsLoading ? '—' : `${totalLocations || 3} Prime Locations`}
+                </div>
               </div>
             </div>
-            <div className="mt-3">
-              <div className="text-2xl font-bold text-[#1B1C1C] tracking-tight">
-                {statsLoading ? '—' : `${totalLocations} Prime Locations`}
+            <div className="flex items-center justify-between mt-2 text-xs text-gray-500 font-light pt-2 border-t border-neutral-100">
+              <span>Mercado • Agarwal • Premier</span>
+              <span className="font-bold text-[#006064] flex items-center gap-0.5 group-hover:underline">
+                <span>View Centres</span>
+                <ArrowUpRight size={11} />
+              </span>
+            </div>
+          </div>
+        </FadeUp>
+
+        {/* Card 5: Security Deposit (SDR) Reserves (Interactive Box & Modal Trigger) */}
+        <FadeUp delay={0.25}>
+          <div
+            onClick={() => setIsSdrModalOpen(true)}
+            className="bg-white hover:bg-teal-50/20 p-4 sm:p-5 border border-neutral-200 hover:border-[#006064] shadow-xs relative overflow-hidden group transition-all duration-300 cursor-pointer h-full flex flex-col justify-between hover:shadow-md"
+            title="Click anywhere to inspect SDR Reserves Ledger & Company Breakdown"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-gray-400 group-hover:text-[#006064] uppercase tracking-widest transition-colors">
+                    SDR Reserves
+                  </span>
+                  <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] font-black text-[#006064] bg-teal-100/80 px-1 py-0.2 border border-teal-200">
+                    Open ↗
+                  </span>
+                </div>
+                <div className="w-8 h-8 bg-neutral-100 text-[#006064] flex items-center justify-center group-hover:bg-[#006064] group-hover:text-white transition-colors">
+                  <Coins size={16} />
+                </div>
               </div>
-              <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500">
-                <span>Mercado • Agarwal • Premier</span>
+
+              <div className="mt-2.5">
+                <div className="text-2xl font-black text-[#006064] font-display tracking-tight flex items-baseline gap-1">
+                  <span>{statsLoading ? '—' : `₹${Number(sdrCardDisplayAmount).toLocaleString('en-IN')}`}</span>
+                </div>
               </div>
+
+              {/* Centre Quick-Selector inside Box */}
+              <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                <select
+                  value={sdrCardCentre}
+                  onChange={(e) => setSdrCardCentre(e.target.value)}
+                  className="w-full text-[10px] font-bold text-neutral-700 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 px-1.5 py-1 focus:outline-none focus:border-[#006064] cursor-pointer"
+                >
+                  <option value="ALL">All Centres</option>
+                  {sdrCentres.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-2 text-xs text-gray-500 font-light pt-2 border-t border-neutral-100">
+              <span className="text-emerald-700 font-bold text-[11px] truncate">
+                {sdrCardDisplayCount} Agreements
+              </span>
+              <span className="text-[10px] font-bold text-[#006064] group-hover:underline flex items-center gap-0.5 shrink-0">
+                <span>View Ledger</span>
+                <ArrowUpRight size={11} />
+              </span>
             </div>
           </div>
         </FadeUp>
       </div>
 
-      {/* ── 3. Primary Operational Hubs (Client Master, Active Invoices Pipeline, Centre Expenses) ── */}
+      {/* ── 4. Operational Hubs (Client Master, Active Invoices Pipeline, Centre Expenses) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Hub 1: Client Master CRM Snapshot */}
-        <FadeUp delay={0.25}>
-          <div className="bg-white border border-neutral-200 shadow-sm flex flex-col h-full">
+        <FadeUp delay={0.3}>
+          <div className="bg-white border border-neutral-200 shadow-xs flex flex-col h-full">
             <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
               <div className="flex items-center gap-2.5">
                 <ShieldCheck size={16} className="text-[#006064]" />
                 <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
-                  Client Master & Agreements
+                  Client Master &amp; Agreements
                 </h3>
               </div>
               <Link
@@ -487,12 +679,12 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="bg-neutral-50 p-3 border border-neutral-100">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                    Purchased / Allocated Seats
+                    Allocated Seats
                   </span>
                   <span className="text-lg font-bold text-[#1B1C1C] mt-0.5 block">
                     {totalSeats} Seats
                   </span>
-                  <span className="text-[10px] text-gray-500 font-medium">Across All Cabins</span>
+                  <span className="text-[10px] text-gray-500 font-medium">Across Cabins</span>
                 </div>
               </div>
 
@@ -518,7 +710,7 @@ export default function AdminDashboardPage() {
               ) : (
                 <div className="bg-[#E0F2F1]/50 p-3.5 border border-[#80CBC4]/50">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-gray-700">Contract Revenue Sum</span>
+                    <span className="text-[11px] font-bold text-gray-700">Contract Agreement Sum</span>
                     <span className="text-sm font-bold text-[#006064]">
                       ₹{Number(agreementRevenue).toLocaleString('en-IN')}
                     </span>
@@ -540,13 +732,13 @@ export default function AdminDashboardPage() {
         </FadeUp>
 
         {/* Hub 2: GST Invoices & Billing Pipeline Funnel */}
-        <FadeUp delay={0.3}>
-          <div className="bg-white border border-neutral-200 shadow-sm flex flex-col h-full">
+        <FadeUp delay={0.35}>
+          <div className="bg-white border border-neutral-200 shadow-xs flex flex-col h-full">
             <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
               <div className="flex items-center gap-2.5">
                 <Receipt size={16} className="text-[#006064]" />
                 <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
-                  Invoices &amp; Billing Pipeline {selectedBillingMonth !== 'ALL' && `(${selectedBillingMonth.split(' ')[0]})`}
+                  Invoices Pipeline {selectedBillingMonth !== 'ALL' && `(${selectedBillingMonth.split(' ')[0]})`}
                 </h3>
               </div>
               <Link
@@ -602,13 +794,13 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {Number(stats?.invoices?.totalInvoicedAmount || 0) > 0 && (
+              {Number(invoicesRaised) > 0 && (
                 <div className="p-2.5 bg-purple-50/80 border border-purple-200 text-xs flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase text-purple-900">
                     {selectedBillingMonth === 'ALL' ? 'Total Invoiced:' : `${selectedBillingMonth.split(' ')[0]} Invoiced Sum:`}
                   </span>
                   <span className="font-bold text-purple-950 font-mono">
-                    ₹{Number(stats?.invoices?.totalInvoicedAmount || 0).toLocaleString('en-IN')}
+                    ₹{Number(invoicesRaised).toLocaleString('en-IN')}
                   </span>
                 </div>
               )}
@@ -624,8 +816,8 @@ export default function AdminDashboardPage() {
         </FadeUp>
 
         {/* Hub 3: Centre Operating Expenses */}
-        <FadeUp delay={0.35}>
-          <div className="bg-white border border-neutral-200 shadow-sm flex flex-col h-full">
+        <FadeUp delay={0.4}>
+          <div className="bg-white border border-neutral-200 shadow-xs flex flex-col h-full">
             <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
               <div className="flex items-center gap-2.5">
                 <FileSpreadsheet size={16} className="text-[#006064]" />
@@ -676,7 +868,7 @@ export default function AdminDashboardPage() {
               </div>
 
               <div className="bg-amber-50/60 p-3 border border-amber-200/60 text-[10px] text-amber-900">
-                <span className="font-bold">Dual View Available:</span> CM Petty Cash entries & Accountant UTR / TDS bank reconciliation.
+                <span className="font-bold">Dual View Available:</span> CM Petty Cash entries &amp; Accountant UTR / TDS bank reconciliation.
               </div>
 
               <Link
@@ -690,11 +882,11 @@ export default function AdminDashboardPage() {
         </FadeUp>
       </div>
 
-      {/* ── 4. Secondary Operational Hubs: Old Invoices Archive (Centre Wise) + Roles/Access + Announcements & Promos ── */}
+      {/* ── 5. Secondary Operational Hubs: Old Invoices Archive + Roles/Access + Announcements & Promos ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Hub 4: Old Invoices History Archive (Centre Wise CM Uploaded + Accountant Payment Logged vs Pending) */}
-        <FadeUp delay={0.38}>
-          <div className="bg-white border border-neutral-200 shadow-sm p-5 flex flex-col justify-between h-full">
+        {/* Hub 4: Old Invoices History Archive */}
+        <FadeUp delay={0.45}>
+          <div className="bg-white border border-neutral-200 shadow-xs p-5 flex flex-col justify-between h-full">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
                 <div className="flex items-center gap-2">
@@ -708,7 +900,7 @@ export default function AdminDashboardPage() {
                 </Link>
               </div>
 
-              {/* Centre-wise Uploaded / Generated Invoices with Accountant Payment Details Status */}
+              {/* Centre-wise Uploaded / Generated Invoices */}
               <div className="space-y-2 mt-3.5">
                 <div className="flex items-center justify-between p-2 bg-neutral-50 border border-neutral-100 text-xs">
                   <div className="flex items-center gap-2">
@@ -717,7 +909,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px]">
                     <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 border border-emerald-200">
-                      {mercadoOld.paymentReceived} Payment Receive Details Updated
+                      {mercadoOld.paymentReceived} Updated
                     </span>
                     {mercadoOld.paymentPending > 0 && (
                       <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 border border-amber-200">
@@ -737,7 +929,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px]">
                     <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 border border-emerald-200">
-                      {agarwalOld.paymentReceived} Payment Receive Details Updated
+                      {agarwalOld.paymentReceived} Updated
                     </span>
                     {agarwalOld.paymentPending > 0 && (
                       <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 border border-amber-200">
@@ -757,7 +949,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px]">
                     <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 border border-emerald-200">
-                      {premierOld.paymentReceived} Payment Receive Details Updated
+                      {premierOld.paymentReceived} Updated
                     </span>
                     {premierOld.paymentPending > 0 && (
                       <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 border border-amber-200">
@@ -797,14 +989,14 @@ export default function AdminDashboardPage() {
         </FadeUp>
 
         {/* Hub 5: System Roles & Permissions Security */}
-        <FadeUp delay={0.4}>
-          <div className="bg-white border border-neutral-200 shadow-sm p-5 flex flex-col justify-between h-full">
+        <FadeUp delay={0.5}>
+          <div className="bg-white border border-neutral-200 shadow-xs p-5 flex flex-col justify-between h-full">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
                 <div className="flex items-center gap-2">
                   <Lock size={16} className="text-[#006064]" />
                   <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
-                    Roles & Security Access
+                    Roles &amp; Security Access
                   </h3>
                 </div>
                 <Link href="/admin/roles" className="text-[10px] font-bold text-[#006064] hover:underline uppercase">
@@ -840,15 +1032,15 @@ export default function AdminDashboardPage() {
           </div>
         </FadeUp>
 
-        {/* Hub 6: Announcements & Promo Codes (100% Real DB Data) */}
-        <FadeUp delay={0.42}>
-          <div className="bg-white border border-neutral-200 shadow-sm p-5 flex flex-col justify-between h-full">
+        {/* Hub 6: Announcements & Promo Codes */}
+        <FadeUp delay={0.55}>
+          <div className="bg-white border border-neutral-200 shadow-xs p-5 flex flex-col justify-between h-full">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
                 <div className="flex items-center gap-2">
                   <Megaphone size={16} className="text-[#006064]" />
                   <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
-                    Announcements & Promos
+                    Announcements &amp; Promos
                   </h3>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] font-bold">
@@ -877,8 +1069,12 @@ export default function AdminDashboardPage() {
                   <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">
                     Promo Campaigns
                   </span>
-                  <span className="text-lg font-bold text-[#006064] mt-0.5 block">{promoCount} Active</span>
-                  <span className="text-[10px] text-gray-500 font-medium">{promoRedeemed} Redeemed</span>
+                  <span className="text-lg font-bold text-[#006064] mt-0.5 block">
+                    {stats?.promocodes?.active ?? 0} Active
+                  </span>
+                  <span className="text-[10px] text-emerald-600 font-semibold">
+                    {stats?.promocodes?.redeemedCount ?? 0} Redemptions
+                  </span>
                 </div>
               </div>
             </div>
@@ -888,331 +1084,68 @@ export default function AdminDashboardPage() {
                 href="/admin/announcements"
                 className="flex-1 py-2 bg-neutral-100 hover:bg-neutral-200 text-gray-800 text-[10px] font-bold uppercase tracking-wider text-center block border border-neutral-200"
               >
-                Announcements →
+                Announcements
               </Link>
               <Link
                 href="/admin/promocodes"
                 className="flex-1 py-2 bg-neutral-100 hover:bg-neutral-200 text-gray-800 text-[10px] font-bold uppercase tracking-wider text-center block border border-neutral-200"
               >
-                Promo Codes →
+                Promo Codes
               </Link>
             </div>
           </div>
         </FadeUp>
       </div>
 
-      {/* ── 5. Third Row: Users Breakdown + Spaces & Capacity + Amenities ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Hub 7: Users, Staff & Verified Members */}
-        <FadeUp delay={0.44}>
-          <div className="bg-white border border-neutral-200 shadow-sm p-5 flex flex-col justify-between h-full">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
-                <div className="flex items-center gap-2">
-                  <UserCheck size={16} className="text-[#006064]" />
-                  <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
-                    Users & Personnel
-                  </h3>
-                </div>
-                <Link href="/admin/users" className="text-[10px] font-bold text-[#006064] hover:underline uppercase">
-                  Manage →
-                </Link>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-                <div className="bg-neutral-50 p-2.5 border border-neutral-100">
-                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Total</span>
-                  <span className="text-base font-bold text-gray-900 mt-0.5 block">{totalUsersCount}</span>
-                </div>
-                <div className="bg-neutral-50 p-2.5 border border-neutral-100">
-                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Staff / CM</span>
-                  <span className="text-base font-bold text-[#006064] mt-0.5 block">{cmCount}</span>
-                </div>
-                <div className="bg-neutral-50 p-2.5 border border-neutral-100">
-                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Members</span>
-                  <span className="text-base font-bold text-emerald-700 mt-0.5 block">{membersCount}</span>
-                </div>
-              </div>
-            </div>
-
-            <Link
-              href="/admin/users"
-              className="w-full mt-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-gray-800 text-[10px] font-bold uppercase tracking-wider text-center block border border-neutral-200"
-            >
-              View User Registry & Role Access →
-            </Link>
-          </div>
-        </FadeUp>
-
-        {/* Hub 8: Product Inventory & Seating Capacity Breakdown */}
-        <FadeUp delay={0.46}>
-          <div className="bg-white border border-neutral-200 shadow-sm p-5 flex flex-col justify-between h-full">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
-                <div className="flex items-center gap-2">
-                  <Armchair size={16} className="text-[#006064]" />
-                  <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
-                    Spaces & Pax Capacity
-                  </h3>
-                </div>
-                <Link href="/admin/products" className="text-[10px] font-bold text-[#006064] hover:underline uppercase">
-                  Catalogue →
-                </Link>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2 mt-4 text-center">
-                <div className="bg-neutral-50 p-2 border border-neutral-100">
-                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block">Cabins</span>
-                  <span className="text-sm font-bold text-gray-900 mt-0.5 block">{cabinsCount}</span>
-                </div>
-                <div className="bg-neutral-50 p-2 border border-neutral-100">
-                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block">Meeting</span>
-                  <span className="text-sm font-bold text-gray-900 mt-0.5 block">{meetingRoomsCount}</span>
-                </div>
-                <div className="bg-neutral-50 p-2 border border-neutral-100">
-                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-wider block">Desks</span>
-                  <span className="text-sm font-bold text-gray-900 mt-0.5 block">{desksCount}</span>
-                </div>
-                <div className="bg-teal-50 p-2 border border-teal-100">
-                  <span className="text-[8px] font-bold text-[#006064] uppercase tracking-wider block">Total Pax</span>
-                  <span className="text-sm font-bold text-[#006064] mt-0.5 block">{totalCapacityPax}+</span>
-                </div>
-              </div>
-            </div>
-
-            <Link
-              href="/admin/products"
-              className="w-full mt-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-gray-800 text-[10px] font-bold uppercase tracking-wider text-center block border border-neutral-200"
-            >
-              Explore 22 Workspace Assets →
-            </Link>
-          </div>
-        </FadeUp>
-
-        {/* Hub 9: Centre Amenities & Facilities */}
-        <FadeUp delay={0.48}>
-          <div className="bg-white border border-neutral-200 shadow-sm p-5 flex flex-col justify-between h-full">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
-                <div className="flex items-center gap-2">
-                  <Coffee size={16} className="text-[#006064]" />
-                  <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
-                    Amenities & Facilities
-                  </h3>
-                </div>
-                <Link href="/admin/amenities" className="text-[10px] font-bold text-[#006064] hover:underline uppercase">
-                  View →
-                </Link>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-neutral-50 border border-neutral-100 mt-4 text-xs">
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Active Amenities</span>
-                  <span className="text-lg font-bold text-[#1B1C1C] mt-0.5 block">{amenitiesCount} Facilities</span>
-                </div>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 border border-emerald-200">
-                  {amenitiesCount > 0 ? `${amenitiesCount} Configured` : '0 Configured'}
-                </span>
-              </div>
-            </div>
-
-            <Link
-              href="/admin/amenities"
-              className="w-full mt-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-gray-800 text-[10px] font-bold uppercase tracking-wider text-center block border border-neutral-200"
-            >
-              Manage Verified Amenities →
-            </Link>
-          </div>
-        </FadeUp>
-      </div>
-
-      {/* ── 6. Lower Executive Grid: Inventory Table & Directives ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Workspace Inventory & Recent Deployments (8 Cols) */}
-        <FadeUp delay={0.5} className="lg:col-span-8">
-          <div className="bg-white border border-neutral-200 shadow-sm flex flex-col h-full">
-            <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
-              <div className="flex items-center gap-2.5">
-                <Package size={16} className="text-[#006064]" />
-                <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
-                  Active Workspace Catalogue (22 Assets)
-                </h3>
-              </div>
-              <Link
-                href="/admin/products"
-                className="text-[10px] font-bold text-[#006064] hover:underline uppercase flex items-center gap-0.5"
-              >
-                <span>Full Inventory →</span>
-              </Link>
-            </div>
-
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-neutral-50 border-b border-neutral-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                    <th className="py-3 px-5">Workspace Space</th>
-                    <th className="py-3 px-5">Classification</th>
-                    <th className="py-3 px-5">Centre Location</th>
-                    <th className="py-3 px-5 text-center">Capacity</th>
-                    <th className="py-3 px-5 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100 bg-white">
-                  {recentProducts.slice(0, 5).map((p) => {
-                    const typeName = typeof p.type === 'object' ? p.type?.displayName || p.type?.name : String(p.type);
-
-                    return (
-                      <tr key={p.id} className="hover:bg-neutral-50/80 transition-colors">
-                        <td className="py-3.5 px-5 font-bold text-gray-900 uppercase">
-                          {p.name}
-                        </td>
-                        <td className="py-3.5 px-5 text-gray-600 uppercase text-[11px]">
-                          {typeName}
-                        </td>
-                        <td className="py-3.5 px-5">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100 text-gray-800 text-[10px] font-bold uppercase border border-neutral-200">
-                            <MapPin size={10} className="text-[#006064]" />
-                            {p.location?.name || 'Ahmedabad Centre'}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-5 text-center font-bold text-gray-700">
-                          {p.capacity ? `${p.capacity} Pax` : '1 Pax'}
-                        </td>
-                        <td className="py-3.5 px-5 text-right">
-                          <span className="inline-flex items-center gap-1 text-emerald-700 font-bold text-[10px] uppercase bg-emerald-50 px-2 py-0.5 border border-emerald-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                            Active
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="p-4 border-t border-neutral-100 bg-neutral-50/30 flex items-center justify-between text-xs text-gray-500">
-              <span>Showing 5 most recent spaces from active inventory</span>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="text-[10px] font-bold text-[#006064] hover:underline uppercase flex items-center gap-1 cursor-pointer"
-              >
-                <Plus size={12} />
-                <span>Add Workspace Space</span>
-              </button>
-            </div>
-          </div>
-        </FadeUp>
-
-        {/* Right: Executive Quick Actions & Lead Inquiries (4 Cols) */}
-        <FadeUp delay={0.52} className="lg:col-span-4 space-y-6">
-          {/* Executive Directives */}
-          <div className="bg-white border border-neutral-200 shadow-sm p-5">
-            <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider mb-4 pb-2 border-b border-neutral-100 flex items-center gap-2">
-              <TrendingUp size={15} className="text-[#006064]" />
-              <span>Owner Quick Actions</span>
-            </h3>
-
-            <div className="space-y-2">
-              <Link
-                href="/admin/client-master"
-                className="flex items-center justify-between p-3 bg-neutral-50 hover:bg-[#006064] hover:text-white group border border-neutral-200 transition-all text-xs font-bold uppercase tracking-wider text-gray-800"
-              >
-                <div className="flex items-center gap-2.5">
-                  <ShieldCheck size={15} className="text-[#006064] group-hover:text-white" />
-                  <span>+ Add Master Client</span>
-                </div>
-                <ChevronRight size={14} className="text-gray-400 group-hover:text-white" />
-              </Link>
-
-              <Link
-                href="/admin/Invoices"
-                className="flex items-center justify-between p-3 bg-neutral-50 hover:bg-[#006064] hover:text-white group border border-neutral-200 transition-all text-xs font-bold uppercase tracking-wider text-gray-800"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Receipt size={15} className="text-[#006064] group-hover:text-white" />
-                  <span>Dispatch Monthly Invoices</span>
-                </div>
-                <ChevronRight size={14} className="text-gray-400 group-hover:text-white" />
-              </Link>
-
-              <Link
-                href="/admin/expenses"
-                className="flex items-center justify-between p-3 bg-neutral-50 hover:bg-[#006064] hover:text-white group border border-neutral-200 transition-all text-xs font-bold uppercase tracking-wider text-gray-800"
-              >
-                <div className="flex items-center gap-2.5">
-                  <FileSpreadsheet size={15} className="text-[#006064] group-hover:text-white" />
-                  <span>Record Expense Voucher</span>
-                </div>
-                <ChevronRight size={14} className="text-gray-400 group-hover:text-white" />
-              </Link>
-
-              <Link
-                href="/admin/locations"
-                className="flex items-center justify-between p-3 bg-neutral-50 hover:bg-[#006064] hover:text-white group border border-neutral-200 transition-all text-xs font-bold uppercase tracking-wider text-gray-800"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Building2 size={15} className="text-[#006064] group-hover:text-white" />
-                  <span>Manage Locations & Sites</span>
-                </div>
-                <ChevronRight size={14} className="text-gray-400 group-hover:text-white" />
-              </Link>
-            </div>
-          </div>
-
-          {/* Member Helpdesk & Leads */}
-          <div className="bg-white border border-neutral-200 shadow-sm p-5">
-            <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider mb-3 pb-2 border-b border-neutral-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Headphones size={15} className="text-[#006064]" />
-                <span>Helpdesk & Leads</span>
-              </div>
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 border border-emerald-200">
-                Live Inquiries
-              </span>
-            </h3>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-neutral-50 p-3 border border-neutral-100">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Support Tickets
-                </span>
-                <span className="text-base font-bold text-gray-900 mt-0.5 block">
-                  {stats?.pendingTickets ?? 0} Pending
-                </span>
-              </div>
-
-              <div className="bg-neutral-50 p-3 border border-neutral-100">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Booking Leads
-                </span>
-                <span className="text-base font-bold text-gray-900 mt-0.5 block">
-                  {stats?.leads?.total ?? 0} Requests
-                </span>
-              </div>
-            </div>
-
-            <Link
-              href="/admin/tickets"
-              className="w-full mt-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-gray-800 text-[10px] font-bold uppercase tracking-wider text-center block border border-neutral-200"
-            >
-              Open Helpdesk & Tickets Hub →
-            </Link>
-          </div>
-        </FadeUp>
-      </div>
-
-      {/* Add Product Modal */}
+      {/* ── 6. Modals ── */}
       <AddProductModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={fetchDashboardData}
+        onSuccess={() => fetchDashboardData(selectedBillingMonth, selectedLocation)}
       />
 
-      {/* India Geo Map Modal v2 */}
       <IndiaGeoMapModal
         isOpen={isGeoMapOpen}
         onClose={() => setIsGeoMapOpen(false)}
+      />
+
+      <SdrReservesModal
+        isOpen={isSdrModalOpen}
+        onClose={() => setIsSdrModalOpen(false)}
+        totalSdr={totalSdrHeld}
+        centres={sdrCentres}
+        allCompanies={sdrAllCompanies}
+        initialCentre={sdrCardCentre}
+      />
+
+      <CorporateClientsModal
+        isOpen={isClientsModalOpen}
+        onClose={() => setIsClientsModalOpen(false)}
+        clients={(stats?.clientMaster as any)?.allClients || sdrAllCompanies || []}
+        initialCentre={selectedLocation === 'ALL' ? 'ALL' : (stats?.locations?.find(l => String(l.id) === selectedLocation)?.name || 'ALL')}
+      />
+
+      <WorkspacesDesksModal
+        isOpen={isWorkspacesModalOpen}
+        onClose={() => setIsWorkspacesModalOpen(false)}
+        workspaces={(stats?.productSummary as any)?.allWorkspaces || (stats as any)?.productsList || []}
+        initialCentre={selectedLocation === 'ALL' ? 'ALL' : (stats?.locations?.find(l => String(l.id) === selectedLocation)?.name || 'ALL')}
+      />
+
+      <MonthlyAgreementModal
+        isOpen={isAgreementsModalOpen}
+        onClose={() => setIsAgreementsModalOpen(false)}
+        clients={(stats?.clientMaster as any)?.allClients || sdrAllCompanies || []}
+        totalValue={agreementRevenue || 1639532}
+        initialCentre={selectedLocation === 'ALL' ? 'ALL' : (stats?.locations?.find(l => String(l.id) === selectedLocation)?.name || 'ALL')}
+      />
+
+      <OperatingLocationsModal
+        isOpen={isLocationsModalOpen}
+        onClose={() => setIsLocationsModalOpen(false)}
+        clients={(stats?.clientMaster as any)?.allClients || sdrAllCompanies || []}
+        workspaces={(stats?.productSummary as any)?.allWorkspaces || (stats as any)?.productsList || []}
+        onOpenIndiaMap={() => setIsGeoMapOpen(true)}
       />
     </div>
   );

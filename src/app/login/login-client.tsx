@@ -5,9 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
-import { User, Mail, Lock, ArrowRight, Loader2, LogIn, Eye, EyeOff, X, KeyRound } from 'lucide-react';
+import { User, Mail, Lock, ArrowRight, Loader2, LogIn, Eye, EyeOff, X, KeyRound, CheckCircle2 } from 'lucide-react';
 import { SectionLabel } from '@/components/ui/section-label';
 import { useAuth } from '@/context/AuthContext';
+import { validatePassword } from '@/lib/password-validator';
 import Image from 'next/image';
 
 export default function LoginClient() {
@@ -87,6 +88,12 @@ export default function LoginClient() {
 
     if (!username.trim() || !email.trim() || !newPassword.trim()) {
       toast.error('All fields are required');
+      return;
+    }
+
+    const pwdCheck = validatePassword(newPassword);
+    if (!pwdCheck.isValid) {
+      toast.error(pwdCheck.error || 'Password does not meet complexity requirements');
       return;
     }
 
@@ -379,10 +386,54 @@ export default function LoginClient() {
                   </div>
                 </div>
 
+                {/* Password Rule Helper */}
+                {forgotData.newPassword.length > 0 && (
+                  <div className="text-[11px] text-tertiary space-y-1 bg-surface-high p-2.5 border-l-2 border-primary">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2
+                        size={12}
+                        className={forgotData.newPassword.trim().length >= 6 ? 'text-emerald-600' : 'text-outline-variant'}
+                      />
+                      <span className={forgotData.newPassword.trim().length >= 6 ? 'text-emerald-700 font-semibold' : ''}>
+                        At least 6 characters
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2
+                        size={12}
+                        className={/[A-Z]/.test(forgotData.newPassword) ? 'text-emerald-600' : 'text-outline-variant'}
+                      />
+                      <span className={/[A-Z]/.test(forgotData.newPassword) ? 'text-emerald-700 font-semibold' : ''}>
+                        At least 1 uppercase letter (A-Z)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2
+                        size={12}
+                        className={/[0-9]/.test(forgotData.newPassword) ? 'text-emerald-600' : 'text-outline-variant'}
+                      />
+                      <span className={/[0-9]/.test(forgotData.newPassword) ? 'text-emerald-700 font-semibold' : ''}>
+                        At least 1 number (0-9)
+                      </span>
+                    </div>
+                    {forgotData.confirmPassword.length > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2
+                          size={12}
+                          className={forgotData.newPassword === forgotData.confirmPassword ? 'text-emerald-600' : 'text-outline-variant'}
+                        />
+                        <span className={forgotData.newPassword === forgotData.confirmPassword ? 'text-emerald-700 font-semibold' : ''}>
+                          Passwords match
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   disabled={forgotLoading}
-                  className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 px-4 font-bold text-xs uppercase tracking-widest hover:bg-primary-container disabled:opacity-50 transition-colors mt-6 rounded-none"
+                  className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 px-4 font-bold text-xs uppercase tracking-widest hover:bg-primary-container disabled:opacity-50 transition-colors mt-4 rounded-none cursor-pointer"
                 >
                   {forgotLoading ? (
                     <Loader2 size={16} className="animate-spin" />

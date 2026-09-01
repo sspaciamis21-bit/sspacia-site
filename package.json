@@ -10,6 +10,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@mlightcad/libredwg-web": "^0.7.10",
     "@peculiar/x509": "^2.0.0",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^6.2.1",
@@ -35,6 +36,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.3.1",
+    "dwg2dxf-converter": "^1.0.4",
+    "dxf-parser": "^1.1.2",
     "geoip-lite": "^2.0.3",
     "jose": "^6.2.2",
     "lucide-react": "^0.577.0",
@@ -46,6 +49,8 @@
     "node-forge": "^1.4.0",
     "nodemailer": "^7.0.13",
     "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "pdf-to-png-converter": "^4.2.1",
     "pg": "^8.20.0",
     "postcss": "^8.5.8",
     "prisma": "^6.2.1",

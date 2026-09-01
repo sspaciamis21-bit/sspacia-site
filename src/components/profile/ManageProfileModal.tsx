@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, User, Mail, Lock, Eye, EyeOff, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { validatePassword } from '@/lib/password-validator';
 
 interface ManageProfileModalProps {
   isOpen: boolean;
@@ -46,8 +47,9 @@ export function ManageProfileModal({ isOpen, onClose }: ManageProfileModalProps)
     }
 
     if (password) {
-      if (password.length < 6) {
-        toast.error('Password must be at least 6 characters');
+      const pwdCheck = validatePassword(password);
+      if (!pwdCheck.isValid) {
+        toast.error(pwdCheck.error || 'Password does not meet complexity requirements');
         return;
       }
       if (password !== confirmPassword) {

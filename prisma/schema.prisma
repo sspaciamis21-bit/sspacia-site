@@ -188,6 +188,7 @@ model User {
   role              Role            @relation(fields: [roleId], references: [id])
   assignedLocations UserLocation[]
   reviewedDocuments Document[]      @relation("DocumentReviewer")
+  terminationsCreated ClientTermination[] @relation("TerminationCreatedBy")
   contractsCreated  Contract[]      @relation("ContractCreator")
   contractVersions  ContractVersion[] @relation("VersionCreator")
   negotiationMessages NegotiationMessage[]
@@ -1013,6 +1014,7 @@ model ClientMaster {
   contactPersons         ClientContactPerson[]
   products               ClientMasterProduct[]
   invoiceRecords         InvoiceRecord[]
+  termination            ClientTermination?
 
   @@index([createdById])
   @@index([companyName])
@@ -1359,4 +1361,74 @@ model OldInvoiceHistory {
   @@index([uploadedById])
   @@index([createdAt])
 }
+
+// ── CLIENT TERMINATION CHECKLIST & APPROVAL LIFECYCLE ───────────────────────
+model ClientTermination {
+  id                      Int           @id @default(autoincrement())
+  clientMasterId          Int           @unique
+  clientMaster            ClientMaster  @relation(fields: [clientMasterId], references: [id], onDelete: Cascade)
+  
+  // Checklist Data
+  agreementStartDate      DateTime?
+  agreementEndDate        DateTime?
+  lockinEndDate           DateTime?
+  noticePeriodMonths      Int?
+  noticeReceivedDate      DateTime?
+  noticeApplicableEndDate DateTime?
+  sorAmountHeld           Decimal?      @db.Decimal(12, 2)
+  duesHeld                Decimal?      @db.Decimal(12, 2)
+  tdsPending              Decimal?      @db.Decimal(12, 2)
+  isSdrRefundApplicable   Boolean       @default(false)
+  sdrRefundAmount         Decimal?      @db.Decimal(12, 2)
+  remarks                 String?       @db.Text
+  
+  // Workflow Stages:
+  // PENDING_SA_APPROVAL_1 | SA_APPROVED_1 | CLOSURE_FORM_SENT | 
+  // SIGNED_FORM_UPLOADED | SA_APPROVED_2 | IN_ACCOUNTS_QUEUE | COMPLETED_TERMINATED | REJECTED
+  status                  String        @default("PENDING_SA_APPROVAL_1")
+  
+  // Step 2: Super Admin 1st Review & Approval
+  saApproval1At           DateTime?
+  saApproval1ById         Int?
+  saApproval1Remarks      String?       @db.Text
+  
+  // Step 3: Closure Form PDF & Client Dispatch
+  closureFormPdfUrl       String?       @db.Text
+  closureFormPdfName      String?
+  closureFormGeneratedAt  DateTime?
+  closureFormSentAt       DateTime?
+  closureFormSentToEmail  String?
+  
+  // Step 4: Signed Closure Upload
+  signedClosurePdfUrl     String?       @db.Text
+  signedClosurePdfName    String?
+  signedClosureUploadedAt DateTime?
+  signedClosureUploadedById Int?
+  
+  // Step 5: Super Admin 2nd Approval (Final Sign-off)
+  saApproval2At           DateTime?
+  saApproval2ById         Int?
+  saApproval2Remarks      String?       @db.Text
+  
+  // Step 6 & 7: Accounts Settlement & Refund
+  sentToAccountsAt        DateTime?
+  accountsProcessedAt     DateTime?
+  accountsProcessedById   Int?
+  refundPaymentMode       String?
+  refundUtrNumber         String?
+  refundUtrDate           DateTime?
+  refundUtrFileUrl        String?       @db.Text
+  refundUtrFileName       String?
+  completedAt             DateTime?
+  
+  createdById             Int
+  createdBy               User          @relation("TerminationCreatedBy", fields: [createdById], references: [id])
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  @@index([clientMasterId])
+  @@index([status])
+  @@index([createdById])
+}
+
 

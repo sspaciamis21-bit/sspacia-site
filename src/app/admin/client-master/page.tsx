@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import Link from 'next/link';
 import {
   MapPin,
   Building2,
@@ -29,8 +30,10 @@ import {
   FileText,
   Paperclip,
   Sparkles,
-  AlertTriangle
+  AlertTriangle,
+  FileSpreadsheet
 } from 'lucide-react';
+import { ClientTerminationModal } from '@/components/admin/client-termination-modal';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
 import { useAuth } from '@/context/AuthContext';
@@ -144,9 +147,109 @@ interface ClientMasterEntry {
   createdBy: { id: number; name: string; email: string; assignedLocations?: { location: LocationOption }[] };
   contactPersons: ContactPerson[];
   products?: ClientMasterProductItem[];
+  termination?: {
+    id: number;
+    status: string;
+    sorAmountHeld?: number | null;
+    duesHeld?: number | null;
+    tdsPending?: number | null;
+    sdrRefundAmount?: number | null;
+    isSdrRefundApplicable?: boolean;
+    saApproval1At?: string | null;
+    saApproval1Remarks?: string | null;
+    closureFormSentAt?: string | null;
+    signedClosureUploadedAt?: string | null;
+    saApproval2At?: string | null;
+    refundUtrNumber?: string | null;
+  } | null;
 }
 
-const CLIENT_STATUS_OPTIONS = ['Active', 'Inactive', 'On Notice', 'Terminated', 'Pending Renewal'];
+function getTerminationStageInfo(status: string | null | undefined, termination?: any) {
+  const termStatus = termination?.status || '';
+  const s = status || '';
+
+  if (s === 'Terminated' || termStatus === 'COMPLETED_TERMINATED') {
+    return {
+      label: 'Terminated',
+      sublabel: 'Settlement Completed',
+      bgClass: 'bg-red-50 text-red-800 border-red-200 hover:bg-red-100',
+      badgeClass: 'bg-red-600 text-white',
+      stepNum: 6,
+      totalSteps: 6,
+      isTerminating: true,
+      isCompleted: true,
+    };
+  }
+
+  if (s.includes('Accounts') || termStatus === 'IN_ACCOUNTS_QUEUE' || termStatus === 'SA_APPROVED_2') {
+    return {
+      label: 'In Accounts Queue',
+      sublabel: 'Step 5/5: Refund Settlement',
+      bgClass: 'bg-purple-50 text-purple-900 border-purple-300 hover:bg-purple-100',
+      badgeClass: 'bg-purple-700 text-white',
+      stepNum: 5,
+      totalSteps: 5,
+      isTerminating: true,
+      isCompleted: false,
+    };
+  }
+
+  if (s.includes('Signed') || termStatus === 'SIGNED_FORM_UPLOADED') {
+    return {
+      label: 'Signed NOC Uploaded',
+      sublabel: 'Step 4/5: Pending SA 2nd Approval',
+      bgClass: 'bg-indigo-50 text-indigo-900 border-indigo-300 hover:bg-indigo-100',
+      badgeClass: 'bg-indigo-700 text-white',
+      stepNum: 4,
+      totalSteps: 5,
+      isTerminating: true,
+      isCompleted: false,
+    };
+  }
+
+  if (s.includes('Closure') || termStatus === 'CLOSURE_FORM_SENT') {
+    return {
+      label: 'Closure Form Sent',
+      sublabel: 'Step 3/5: Awaiting Signed Form',
+      bgClass: 'bg-cyan-50 text-cyan-900 border-cyan-300 hover:bg-cyan-100',
+      badgeClass: 'bg-cyan-700 text-white',
+      stepNum: 3,
+      totalSteps: 5,
+      isTerminating: true,
+      isCompleted: false,
+    };
+  }
+
+  if (s.includes('SA 1st Approved') || termStatus === 'SA_APPROVED_1') {
+    return {
+      label: 'SA 1st Approved',
+      sublabel: 'Step 2/5: Send Closure Form',
+      bgClass: 'bg-blue-50 text-blue-900 border-blue-300 hover:bg-blue-100',
+      badgeClass: 'bg-blue-700 text-white',
+      stepNum: 2,
+      totalSteps: 5,
+      isTerminating: true,
+      isCompleted: false,
+    };
+  }
+
+  if (s.includes('Termination') || termStatus === 'PENDING_SA_APPROVAL_1' || termStatus) {
+    return {
+      label: 'Pending SA Approval',
+      sublabel: 'Step 1/5: SA 1st Review',
+      bgClass: 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100',
+      badgeClass: 'bg-amber-600 text-white',
+      stepNum: 1,
+      totalSteps: 5,
+      isTerminating: true,
+      isCompleted: false,
+    };
+  }
+
+  return null;
+}
+
+const CLIENT_STATUS_OPTIONS = ['Active', 'Inactive', 'On Notice', 'Pending Renewal', 'Terminated'];
 const NOTICE_APPLICABLE_OPTIONS = ['After Lock-in', 'Before Lock-in'];
 
 export default function ClientMasterRegistryPage() {
@@ -326,6 +429,10 @@ export default function ClientMasterRegistryPage() {
   const [uploadingSdrPdf, setUploadingSdrPdf] = useState(false);
   const [paymentDueDay, setPaymentDueDay] = useState<number | ''>('');
   const [clientStatus, setClientStatus] = useState('Active');
+
+  // Termination Checklist Modal States
+  const [showTerminationModal, setShowTerminationModal] = useState(false);
+  const [clientForTermination, setClientForTermination] = useState<any>(null);
 
   // Custom Editable Prorated Amount
   const [prorateCustomAmount, setProrateCustomAmount] = useState<number | ''>('');
@@ -1251,6 +1358,14 @@ export default function ClientMasterRegistryPage() {
               </button>
             )}
 
+            <Link
+              href={isAdmin ? "/admin/client-master/terminations" : "/manager/client-master/terminations"}
+              className="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md cursor-pointer"
+            >
+              <FileSpreadsheet size={16} className="text-amber-200" />
+              <span>Termination Checklist 📋</span>
+            </Link>
+
             <button
               onClick={() => {
                 resetForm();
@@ -1541,9 +1656,64 @@ export default function ClientMasterRegistryPage() {
                         </td>
 
                         <td className="p-3">
-                          <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-200">
-                            {entry.clientStatus || 'Active'}
-                          </span>
+                          {(() => {
+                            const termInfo = getTerminationStageInfo(entry.clientStatus, entry.termination);
+                            if (termInfo) {
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setClientForTermination(entry);
+                                    setShowTerminationModal(true);
+                                  }}
+                                  className={`group inline-flex flex-col text-left px-2.5 py-1 text-[10px] font-bold rounded border cursor-pointer transition-all shadow-xs ${termInfo.bgClass}`}
+                                  title="Click to view/manage termination progress"
+                                >
+                                  <div className="flex items-center gap-1">
+                                    {termInfo.isCompleted ? (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
+                                    ) : (
+                                      <Clock size={10} className="text-amber-700 animate-pulse shrink-0" />
+                                    )}
+                                    <span className="uppercase tracking-wider font-extrabold">{termInfo.label}</span>
+                                  </div>
+                                  <span className="text-[9px] font-semibold opacity-90 mt-0.5 whitespace-nowrap">
+                                    {termInfo.sublabel}
+                                  </span>
+                                </button>
+                              );
+                            }
+
+                            if (entry.clientStatus === 'Inactive') {
+                              return (
+                                <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-700 border border-gray-200">
+                                  Inactive
+                                </span>
+                              );
+                            }
+
+                            if (entry.clientStatus === 'On Notice') {
+                              return (
+                                <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-orange-800 border border-orange-200">
+                                  On Notice
+                                </span>
+                              );
+                            }
+
+                            if (entry.clientStatus === 'Pending Renewal') {
+                              return (
+                                <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-200">
+                                  Pending Renewal
+                                </span>
+                              );
+                            }
+
+                            return (
+                              <span className="inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                {entry.clientStatus || 'Active'}
+                              </span>
+                            );
+                          })()}
                         </td>
 
                         <td className="p-3 text-center">
@@ -3079,7 +3249,24 @@ export default function ClientMasterRegistryPage() {
                       </label>
                       <select
                         value={clientStatus}
-                        onChange={(e) => setClientStatus(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'Terminated') {
+                            if (editingId) {
+                              const found = entries.find((en) => en.id === editingId);
+                              if (found) {
+                                setShowAddClientModal(false);
+                                setClientForTermination(found);
+                                setShowTerminationModal(true);
+                                return;
+                              }
+                            } else {
+                              toast.info('Please save the client entry before initiating the termination checklist.');
+                              return;
+                            }
+                          }
+                          setClientStatus(val);
+                        }}
                         className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold"
                       >
                         {CLIENT_STATUS_OPTIONS.map((st) => (
@@ -3087,7 +3274,52 @@ export default function ClientMasterRegistryPage() {
                             {st}
                           </option>
                         ))}
+                        {clientStatus && !CLIENT_STATUS_OPTIONS.includes(clientStatus) && (
+                          <option value={clientStatus}>
+                            {clientStatus}
+                          </option>
+                        )}
                       </select>
+
+                      {(() => {
+                        if (!editingId) return null;
+                        const found = entries.find((e) => e.id === editingId);
+                        const termInfo = getTerminationStageInfo(clientStatus, found?.termination);
+                        if (!termInfo) return null;
+
+                        return (
+                          <div className={`mt-2 p-2.5 border rounded text-[11px] flex items-center justify-between gap-2 shadow-xs ${termInfo.bgClass}`}>
+                            <div className="flex items-center gap-1.5 font-medium">
+                              {termInfo.isCompleted ? (
+                                <AlertTriangle size={13} className="text-red-700 shrink-0" />
+                              ) : (
+                                <Clock size={13} className="text-amber-700 shrink-0 animate-pulse" />
+                              )}
+                              <div>
+                                <div className="font-extrabold uppercase tracking-wide">
+                                  {termInfo.label}
+                                </div>
+                                <div className="text-[10px] opacity-90 font-semibold">
+                                  {termInfo.sublabel}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (found) {
+                                  setShowAddClientModal(false);
+                                  setClientForTermination(found);
+                                  setShowTerminationModal(true);
+                                }
+                              }}
+                              className="px-2.5 py-1 text-[10px] font-bold text-white bg-[#006064] hover:bg-[#004d40] rounded uppercase tracking-wider cursor-pointer shrink-0 shadow-xs"
+                            >
+                              Open Live Checklist 📋
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -3193,9 +3425,35 @@ export default function ClientMasterRegistryPage() {
                     <span className="font-mono font-bold bg-neutral-100 text-neutral-700 px-2 py-0.5">
                       SR.No #{entryToViewDetails.srNo}
                     </span>
-                    <span className="font-bold uppercase tracking-wider bg-slate-100 px-2 py-0.5">
-                      Status: {entryToViewDetails.clientStatus || 'Active'}
-                    </span>
+                    {(() => {
+                      const termInfo = getTerminationStageInfo(entryToViewDetails.clientStatus, entryToViewDetails.termination);
+                      if (termInfo) {
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span className={`font-extrabold uppercase tracking-wider px-2 py-0.5 border rounded ${termInfo.bgClass}`}>
+                              {termInfo.label} • {termInfo.sublabel}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const ent = entryToViewDetails;
+                                setEntryToViewDetails(null);
+                                setClientForTermination(ent);
+                                setShowTerminationModal(true);
+                              }}
+                              className="px-2 py-0.5 text-[10px] font-bold text-white bg-[#006064] hover:bg-[#004d40] rounded uppercase tracking-wider shadow-xs cursor-pointer"
+                            >
+                              Open Checklist 📋
+                            </button>
+                          </div>
+                        );
+                      }
+                      return (
+                        <span className="font-bold uppercase tracking-wider bg-slate-100 px-2 py-0.5">
+                          Status: {entryToViewDetails.clientStatus || 'Active'}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <h3 className="text-xl font-bold text-[#1B1C1C] mt-1">
                     {entryToViewDetails.companyName}
@@ -3589,6 +3847,21 @@ export default function ClientMasterRegistryPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* ── CLIENT TERMINATION CHECKLIST MODAL ── */}
+      {clientForTermination && (
+        <ClientTerminationModal
+          isOpen={showTerminationModal}
+          onClose={() => {
+            setShowTerminationModal(false);
+            setClientForTermination(null);
+          }}
+          client={clientForTermination}
+          onSuccess={() => {
+            fetchData();
+          }}
+        />
+      )}
     </div>
   );
 }

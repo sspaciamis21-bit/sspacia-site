@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, UserPlus, Loader2, ChevronDown, Check, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { validatePassword } from '@/lib/password-validator';
 
 interface Role {
   id: number;
@@ -128,9 +129,12 @@ export function EditUserModal({ isOpen, onClose, onSuccess, user }: EditUserModa
     }
 
     // Password validation if provided
-    if (password && password.length < 6) {
-      toast.error('Secure passcode must be at least 6 characters.');
-      return;
+    if (password) {
+      const pwdCheck = validatePassword(password);
+      if (!pwdCheck.isValid) {
+        toast.error(pwdCheck.error || 'Secure passcode must be at least 6 characters with 1 capital and 1 number.');
+        return;
+      }
     }
 
     setIsSubmitting(true);

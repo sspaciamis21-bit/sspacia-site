@@ -362,3 +362,5 @@ function generateAlertEmailHtml(
     </html>
   `;
 }
+
+export { sendEmail, getEmailTransporter } from './email';

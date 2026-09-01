@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import prisma from '@/lib/prisma'
+import { validatePassword } from '@/lib/password-validator'
 
 export async function POST(req: Request) {
   try {
@@ -14,9 +15,10 @@ export async function POST(req: Request) {
       )
     }
 
-    if (newPassword.trim().length < 6) {
+    const validation = validatePassword(newPassword)
+    if (!validation.isValid) {
       return NextResponse.json(
-        { error: 'New password must be at least 6 characters long' },
+        { error: validation.error },
         { status: 400 }
       )
     }

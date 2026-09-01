@@ -123,7 +123,7 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
       console.warn('[STATS_USERS_ERROR]', e);
     }
 
-    // ── 3. Client Master Executive CRM Aggregates ────────────────
+    // ── 3. Client Master Executive CRM Aggregates & SDR Analytics ──
     let clientMasterStats = {
       totalClients: 0,
       activeAgreements: 0,
@@ -132,6 +132,37 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
       totalMonthlyAgreementValue: 0,
       dispatchedForSelectedMonth: 0,
       pendingDispatchForSelectedMonth: 0,
+    };
+
+    let sdrAnalytics = {
+      totalSdr: 0,
+      totalCompaniesCount: 0,
+      centreWise: [] as Array<{
+        id: number | null;
+        name: string;
+        totalSdr: number;
+        clientCount: number;
+        companies: Array<{
+          id: number;
+          companyName: string;
+          clientId: string | null;
+          cabinName: string | null;
+          noOfSeats: number | null;
+          sdrAmount: number;
+          clientStatus: string | null;
+        }>;
+      }>,
+      allCompanies: [] as Array<{
+        id: number;
+        companyName: string;
+        clientId: string | null;
+        cabinName: string | null;
+        noOfSeats: number | null;
+        sdrAmount: number;
+        clientStatus: string | null;
+        centreName: string;
+        centreId: number | null;
+      }>,
     };
 
     let availableBillingMonths: string[] = [];
@@ -148,6 +179,16 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           where: cmWhere,
           include: {
             products: true,
+            createdBy: {
+              select: {
+                name: true,
+                assignedLocations: {
+                  select: {
+                    location: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            },
           },
         });
 
@@ -155,24 +196,88 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           clientMasterStats.totalClients = clientMasters.length;
           clientMasterStats.activeAgreements = clientMasters.filter((c: any) => c.clientStatus !== 'Terminated' && c.clientStatus !== 'Inactive').length;
           clientMasterStats.onNoticeClients = clientMasters.filter((c: any) => c.clientStatus === 'On Notice' || (c.noticePeriodMonths && c.noticePeriodMonths > 0 && c.clientStatus !== 'Active')).length;
-
           let seatsSum = 0;
           let valueSum = 0;
+          let totalSdrSum = 0;
+          const centreSdrMap: Record<string, { id: number | null; name: string; totalSdr: number; companies: any[] }> = {};
+          const allClientsList: any[] = [];
 
           clientMasters.forEach((c: any) => {
+            let clientSeats = 0;
+            let clientVal = 0;
+
             if (Array.isArray(c.products) && c.products.length > 0) {
               c.products.forEach((p: any) => {
-                seatsSum += Number(p.noOfSeats || 0);
-                valueSum += Number(p.totalAmount || p.amount || 0);
+                clientSeats += Number(p.noOfSeats || 0);
+                clientVal += Number(p.totalAmount || p.amount || 0);
               });
             } else {
-              seatsSum += Number(c.noOfSeats || 0);
-              valueSum += Number(c.totalAmount || c.amount || 0);
+              clientSeats = Number(c.noOfSeats || 0);
+              clientVal = Number(c.totalAmount || c.amount || 0);
             }
+
+            seatsSum += clientSeats;
+            valueSum += clientVal;
+
+            // SDR aggregation
+            const sdr = Number(c.sorAmount || c.sdrAmount || 0);
+            totalSdrSum += sdr;
+
+            const loc = c.createdBy?.assignedLocations?.[0]?.location;
+            let locName = loc?.name;
+            let locId = loc?.id || null;
+
+            if (!locName) {
+              const cid = (c.clientId || '').toUpperCase();
+              const cabin = (c.cabinName || '').toUpperCase();
+              if (cid.includes('SGP') || cid.includes('/PH/') || cabin.includes('PREMIER')) {
+                locName = 'Premier House';
+                locId = 3;
+              } else if (cid.includes('CGA') || cid.includes('AGARWAL') || cid.includes('AGC') || cabin.includes('AGARWAL')) {
+                locName = 'Agarwal Complex';
+                locId = 1;
+              } else {
+                locName = 'Mercado';
+                locId = 2;
+              }
+            }
+
+            if (!centreSdrMap[locName]) {
+              centreSdrMap[locName] = { id: locId, name: locName, totalSdr: 0, companies: [] };
+            }
+            centreSdrMap[locName].totalSdr += sdr;
+
+            const compData = {
+              id: c.id,
+              companyName: c.companyName,
+              clientId: c.clientId,
+              cabinName: c.cabinName,
+              noOfSeats: clientSeats || c.noOfSeats || 1,
+              monthlyAmount: clientVal,
+              sdrAmount: sdr,
+              clientStatus: c.clientStatus || 'Active',
+              centreName: locName,
+              centreId: locId,
+              agreementStartDate: c.agreementStartDate || c.createdAt,
+              lockInPeriod: c.lockInPeriodMonths || c.lockInPeriod || 11,
+              noticePeriodMonths: c.noticePeriodMonths || 1,
+            };
+
+            centreSdrMap[locName].companies.push(compData);
+            allClientsList.push(compData);
+            sdrAnalytics.allCompanies.push(compData);
           });
 
           clientMasterStats.totalAllocatedSeats = seatsSum;
           clientMasterStats.totalMonthlyAgreementValue = valueSum;
+          (clientMasterStats as any).allClients = allClientsList;
+
+          sdrAnalytics.totalSdr = totalSdrSum;
+          sdrAnalytics.totalCompaniesCount = clientMasters.length;
+          sdrAnalytics.centreWise = Object.values(centreSdrMap).map((c) => ({
+            ...c,
+            clientCount: c.companies.length,
+          }));
         }
       }
     } catch (e) {
@@ -188,12 +293,36 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
       approved: 0,
       rejected: 0,
       totalInvoicedAmount: 0,
+      invoicesRaised: 0,
+      paymentReceived: 0,
+      balancePayment: 0,
+      centreFinancials: [] as Array<{
+        name: string;
+        invoicesRaised: number;
+        paymentReceived: number;
+        balancePayment: number;
+        collectionRate: number;
+      }>,
     };
 
     try {
       if ((prisma as any).invoiceRecord) {
         const allInvoices = await (prisma as any).invoiceRecord.findMany({
-          select: { status: true, totalAmount: true, billingMonth: true, clientMasterId: true, createdById: true },
+          select: {
+            status: true,
+            totalAmount: true,
+            amount: true,
+            billingMonth: true,
+            clientMasterId: true,
+            createdById: true,
+            createdBy: {
+              select: {
+                assignedLocations: {
+                  select: { location: { select: { id: true, name: true } } },
+                },
+              },
+            },
+          },
         });
 
         // Collect all distinct normalized billing months
@@ -240,7 +369,35 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           invoiceStats.invoiceAttached = filteredInvs.filter((i: any) => i.status === 'INVOICE_ATTACHED').length;
           invoiceStats.approved = filteredInvs.filter((i: any) => i.status === 'APPROVED').length;
           invoiceStats.rejected = filteredInvs.filter((i: any) => i.status === 'REJECTED_WITH_REMARKS').length;
-          invoiceStats.totalInvoicedAmount = filteredInvs.reduce((sum: number, i: any) => sum + Number(i.totalAmount || 0), 0);
+          
+          let totalRaised = 0;
+          let totalReceived = 0;
+          const centreMap: Record<string, { raised: number; received: number; balance: number }> = {};
+
+          filteredInvs.forEach((inv: any) => {
+            const amt = Number(inv.totalAmount || inv.amount || 0);
+            totalRaised += amt;
+            const isApproved = inv.status === 'APPROVED' || inv.status === 'CONFIRMED' || inv.status === 'PAID';
+            if (isApproved) totalReceived += amt;
+
+            const locName = inv.createdBy?.assignedLocations?.[0]?.location?.name || 'Mercado';
+            if (!centreMap[locName]) centreMap[locName] = { raised: 0, received: 0, balance: 0 };
+            centreMap[locName].raised += amt;
+            if (isApproved) centreMap[locName].received += amt;
+            centreMap[locName].balance = centreMap[locName].raised - centreMap[locName].received;
+          });
+
+          invoiceStats.totalInvoicedAmount = totalRaised;
+          invoiceStats.invoicesRaised = totalRaised;
+          invoiceStats.paymentReceived = totalReceived;
+          invoiceStats.balancePayment = Math.max(0, totalRaised - totalReceived);
+          invoiceStats.centreFinancials = Object.entries(centreMap).map(([name, d]) => ({
+            name,
+            invoicesRaised: d.raised,
+            paymentReceived: d.received,
+            balancePayment: d.balance,
+            collectionRate: d.raised > 0 ? Math.round((d.received / d.raised) * 100) : 100,
+          }));
         }
 
         // Cross-check dispatched vs pending dispatch for the selected billing month
@@ -350,10 +507,27 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
             if (!centreMap[locName]) {
               centreMap[locName] = { name: locName, amount: 0, count: 0 };
             }
-            const rows = Array.isArray(sheet.rows) ? sheet.rows : [];
+            const rawRows = typeof sheet.rows === 'string' ? JSON.parse(sheet.rows) : sheet.rows;
+            const rows = Array.isArray(rawRows) ? rawRows : [];
             rows.forEach((r: any) => {
-              const amt = Number(r.col_4 || r.amount || 0);
-              if (!isNaN(amt) && amt > 0) {
+              const desc = (r.col_2 || r.col_3 || '').toString().toLowerCase();
+              if (desc.includes('total') || desc.includes('subtotal') || desc.includes('fx')) return;
+
+              const val = r.col_4 || r.col_3 || r.amount || r.acc_receive_amount;
+              let amt = 0;
+              if (typeof val === 'number') amt = isNaN(val) ? 0 : val;
+              else if (typeof val === 'string') {
+                const raw = val.trim();
+                if (!raw.startsWith('=') && !raw.toLowerCase().includes('sum')) {
+                  const cleaned = raw.replace(/[₹$,\s]/g, '').replace(/^(rs|inr)\.?/i, '').trim();
+                  if (/^[-+]?[0-9]+(\.[0-9]+)?$/.test(cleaned)) {
+                    const num = parseFloat(cleaned);
+                    if (!isNaN(num)) amt = num;
+                  }
+                }
+              }
+
+              if (amt > 0) {
                 totalExpSum += amt;
                 totalCount += 1;
                 centreMap[locName].amount += amt;
@@ -433,7 +607,13 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
     };
 
     try {
+      const productWhere: any = { isActive: true };
+      if (locationIdParam && locationIdParam !== 'ALL') {
+        productWhere.locationId = parseInt(locationIdParam, 10);
+      }
+
       productsList = await prisma.product.findMany({
+        where: productWhere,
         select: {
           id: true,
           name: true,
@@ -443,23 +623,72 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           type: { select: { displayName: true, name: true } },
           category: { select: { displayName: true, name: true } },
           location: { select: { id: true, name: true } },
-          pricingPlans: { select: { price: true, durationType: true }, take: 1 },
+          pricingPlans: {
+            select: {
+              price: true,
+              durationType: {
+                select: { displayName: true, name: true, slug: true },
+              },
+            },
+            take: 1,
+          },
         },
-        orderBy: { id: 'desc' },
+        orderBy: { id: 'asc' },
       });
 
       if (productsList.length > 0) {
         let cab = 0, meet = 0, dsk = 0, evt = 0, capSum = 0;
         productsList.forEach((p) => {
-          const typeName = (p.type?.name || p.type?.displayName || '').toUpperCase();
+          const typeName = (p.type?.displayName || p.type?.name || p.name || '').toUpperCase();
+          const catName = (p.category?.displayName || p.category?.name || '').toUpperCase();
           const cap = Number(p.capacity || 1);
           const qty = Number(p.quantity || 1);
           capSum += cap * qty;
 
-          if (typeName.includes('CABIN')) cab += 1;
-          else if (typeName.includes('MEETING') || typeName.includes('BOARD')) meet += 1;
-          else if (typeName.includes('DESK')) dsk += 1;
-          else if (typeName.includes('EVENT')) evt += 1;
+          if (typeName.includes('CABIN')) {
+            cab += 1;
+          } else if (typeName.includes('DESK')) {
+            dsk += 1;
+          } else if (typeName.includes('EVENT')) {
+            evt += 1;
+            meet += 1;
+          } else if (typeName.includes('MEETING') || typeName.includes('BOARD') || catName.includes('GUEST')) {
+            meet += 1;
+          } else {
+            cab += 1;
+          }
+        });
+
+        const allWorkspaces = productsList.map((p) => {
+          const typeName = p.type?.displayName || p.type?.name || 'Workspace';
+          const catName = p.category?.displayName || p.category?.name || 'General';
+          const price = p.pricingPlans?.[0]?.price || 0;
+          const dur = p.pricingPlans?.[0]?.durationType;
+          let durationStr = 'month';
+          if (typeof dur === 'string') {
+            durationStr = dur;
+          } else if (dur && typeof dur === 'object') {
+            const raw = (dur.displayName || dur.name || dur.slug || '').toLowerCase();
+            if (raw.includes('hour')) durationStr = 'hour';
+            else if (raw.includes('day')) durationStr = 'day';
+            else if (raw.includes('week')) durationStr = 'week';
+            else if (raw.includes('year')) durationStr = 'year';
+            else durationStr = 'month';
+          }
+
+          return {
+            id: p.id,
+            name: p.name,
+            type: typeName,
+            category: catName,
+            locationId: p.location?.id,
+            locationName: p.location?.name || 'Centre',
+            capacity: p.capacity || 1,
+            quantity: p.quantity || 1,
+            price: Number(price),
+            durationType: durationStr,
+            isActive: p.isActive,
+          };
         });
 
         productTypeCounts = {
@@ -468,7 +697,8 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           desks: dsk,
           eventSpaces: evt,
           totalCapacity: capSum,
-        };
+          allWorkspaces: allWorkspaces as any,
+        } as any;
       }
     } catch (e) {
       console.warn('[STATS_PRODUCTS_ERROR]', e);
@@ -490,6 +720,7 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
         users: userStats,
         productSummary: productTypeCounts,
         clientMaster: clientMasterStats,
+        sdrAnalytics,
         invoices: invoiceStats,
         availableBillingMonths,
         selectedBillingMonth: billingMonthParam || 'ALL',
@@ -502,7 +733,7 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           total: contractLeadsCount,
           pending: pendingLeadsCount,
         },
-        productsList: productsList.slice(0, 8),
+        productsList: (productTypeCounts as any).allWorkspaces || [],
       },
     });
   } catch (error) {

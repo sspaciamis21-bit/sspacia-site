@@ -48,7 +48,8 @@ export const GET = withPermission('dashboard', 'view', async (req: NextRequest) 
       totalProducts,
       totalBookings,
       bookingStatusSummary,
-      totalRevenue,
+      onlineRevenue,
+      invoiceRevenue,
       pendingTickets,
       totalTickets,
       recentBookings,
@@ -68,12 +69,18 @@ export const GET = withPermission('dashboard', 'view', async (req: NextRequest) 
         orderBy: { statusId: 'asc' },
       }),
 
-      // 4. Revenue
+      // 4. Revenue (Online Payments + Approved Invoice Records)
       prisma.payment.aggregate({
         _sum: { amount: true },
         where: {
           status: { name: 'PAID' },
           booking: { product: productFilter },
+        },
+      }),
+      (prisma as any).invoiceRecord.aggregate({
+        _sum: { totalAmount: true },
+        where: {
+          status: { in: ['APPROVED', 'CONFIRMED', 'PAID'] },
         },
       }),
 
@@ -155,7 +162,7 @@ export const GET = withPermission('dashboard', 'view', async (req: NextRequest) 
         stats: {
           totalProducts,
           totalBookings,
-          totalRevenue: Number(totalRevenue._sum.amount ?? 0),
+          totalRevenue: Number(onlineRevenue._sum.amount ?? 0) + Number((invoiceRevenue as any)?._sum?.totalAmount ?? 0),
           openTickets: pendingTickets,
           totalTickets,
           totalLocations: assignedLocationIds.length,
