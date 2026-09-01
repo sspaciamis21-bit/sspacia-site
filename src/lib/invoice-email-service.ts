@@ -17,14 +17,10 @@ function createSmtpTransport() {
   const pass = rawPass.replace(/\s+/g, '');
 
   return {
-    transporter: nodemailer.createTransport({
-      host: hostCandidates[0],
-      port,
-      secure: port === 465,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false },
-    } as nodemailer.TransportOptions),
-    sender: user,
+    hostCandidates,
+    port,
+    user,
+    pass,
   };
 }
 
@@ -66,22 +62,55 @@ async function fetchPdfBuffer(url: string): Promise<Buffer | null> {
 }
 
 /**
- * Format Indian Rupee currency string
+ * Formats ordinal suffix for due days (e.g. 7 -> "7th", 15 -> "15th", 1 -> "1st")
  */
-function formatCurrency(amount: number | string | null | undefined): string {
-  const num = Number(amount) || 0;
-  return `₹${num.toLocaleString('en-IN')}`;
+function formatOrdinalDay(day: number): string {
+  const j = day % 10;
+  const k = day % 100;
+  if (j === 1 && k !== 11) return `${day}st`;
+  if (j === 2 && k !== 12) return `${day}nd`;
+  if (j === 3 && k !== 13) return `${day}rd`;
+  return `${day}th`;
+}
+
+export interface SendInvoiceEmailOptions {
+  invoiceRecordId: number;
+  primaryContactPersonId?: number | null;
+  customPrimaryEmail?: string;
+  customPrimaryName?: string;
+  customCcEmails?: string[];
 }
 
 /**
- * Dispatches an official Tax Invoice Email when Community Manager approves the attached invoice.
- * Handles both Single PDF invoices and Split Multiple PDF invoices with proper formatting.
+ * Dispatches the official clean Tax Invoice Email to the client.
  * 
- * Target Recipient: cm@sspacia.com (client CC can be enabled later).
+ * Rules:
+ * - Sender: SSPACIA Community Manager <cm@sspacia.com>
+ * - To: Selected Primary Contact Person's Email
+ * - CC: Remaining Contact Persons' Emails + praveen@sspacia.com
+ * - Subject: Tax Invoice : {Company Name} - {Month and Year}
+ * - Header: SSPACIA COWORKING (Approved & Issued by Community Manager)
+ * - Salutation: Dear {Primary Contact Name} Ji,
+ * - Body: 
+ *     Please find your tax invoice for the month attached with this email.
+ *     The due date for payment is {due day} of this month.
+ *     [ 📥 Download Tax Invoice Button ]
+ *     For any clarification, please feel free to reach us anytime.
+ * - Regard: Best Regards, {Centre Name}'s Community Manager
+ * - Footer: SSPACIA INDIA PVT LTD with social media links
  */
-export async function sendInvoiceApprovalEmail(invoiceRecordId: number): Promise<{ success: boolean; messageId?: string; error?: string }> {
+export async function sendInvoiceApprovalEmail(
+  optionsOrId: number | SendInvoiceEmailOptions
+): Promise<{ success: boolean; messageId?: string; recipient?: string; cc?: string[]; error?: string }> {
   try {
-    // 1. Fetch invoice record with client details, products, and attachments
+    const options: SendInvoiceEmailOptions =
+      typeof optionsOrId === 'number'
+        ? { invoiceRecordId: optionsOrId }
+        : optionsOrId;
+
+    const invoiceRecordId = options.invoiceRecordId;
+
+    // 1. Fetch invoice record with client details, contacts, products, location, and attachments
     const invoice = await (prisma as any).invoiceRecord.findUnique({
       where: { id: invoiceRecordId },
       include: {
@@ -89,6 +118,16 @@ export async function sendInvoiceApprovalEmail(invoiceRecordId: number): Promise
           include: {
             contactPersons: { orderBy: { sortOrder: 'asc' } },
             products: { orderBy: { sortOrder: 'asc' } },
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                assignedLocations: {
+                  select: { location: { select: { id: true, name: true } } },
+                },
+              },
+            },
           },
         },
         attachedInvoice: true,
@@ -98,9 +137,7 @@ export async function sendInvoiceApprovalEmail(invoiceRecordId: number): Promise
             name: true,
             email: true,
             assignedLocations: {
-              select: {
-                location: { select: { id: true, name: true } },
-              },
+              select: { location: { select: { id: true, name: true } } },
             },
           },
         },
@@ -111,17 +148,62 @@ export async function sendInvoiceApprovalEmail(invoiceRecordId: number): Promise
       return { success: false, error: `InvoiceRecord #${invoiceRecordId} not found` };
     }
 
-    const companyName = invoice.companyName || invoice.clientMaster?.companyName || 'Valued Client';
-    const clientId = invoice.clientMaster?.clientId || `SSP-${invoice.clientMasterId}`;
-    const billingMonth = invoice.billingMonth || 'Current Billing Cycle';
-    const locationName = invoice.createdBy?.assignedLocations?.[0]?.location?.name || 'SSPACIA Centre';
-    const totalAmount = Number(invoice.totalAmount || 0);
-    const baseAmount = Number(invoice.amount || 0);
-    const gstPercent = Number(invoice.gstPercent || 18);
-    const gstAmount = totalAmount > baseAmount ? totalAmount - baseAmount : (baseAmount * gstPercent) / 100;
-    const dueDateStr = invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Due upon receipt';
+    const companyName = (invoice.companyName || invoice.clientMaster?.companyName || 'Valued Client').trim();
+    const billingMonth = (invoice.billingMonth || 'Current Month').trim();
 
-    // 2. Parse splits if present
+    // 2. Identify Centre Name for Community Manager Sign-off
+    const locNameFromInvoice = invoice.createdBy?.assignedLocations?.[0]?.location?.name;
+    const locNameFromClient = invoice.clientMaster?.createdBy?.assignedLocations?.[0]?.location?.name;
+    const centreName = locNameFromInvoice || locNameFromClient || 'SSPACIA';
+
+    // 3. Determine Primary Contact Person (To:) and Remaining Contact Persons (CC:)
+    const contacts: any[] = invoice.clientMaster?.contactPersons || [];
+    let primaryContact: any = null;
+
+    if (options.primaryContactPersonId) {
+      primaryContact = contacts.find((c: any) => c.id === Number(options.primaryContactPersonId));
+    }
+
+    if (!primaryContact && contacts.length > 0) {
+      // Find first contact with a valid email
+      primaryContact = contacts.find((c: any) => c.email && c.email.trim().includes('@')) || contacts[0];
+    }
+
+    const primaryName = (
+      options.customPrimaryName ||
+      primaryContact?.name ||
+      companyName ||
+      'Valued Member'
+    ).trim();
+
+    const recipientEmail = (
+      options.customPrimaryEmail ||
+      primaryContact?.email ||
+      'cm@sspacia.com' // Fallback to CM if client has no email on file
+    ).trim().toLowerCase();
+
+    // Prepare CC List: All other contact persons + praveen@sspacia.com
+    const otherContactEmails: string[] = [];
+    contacts.forEach((c: any) => {
+      if (c.email && typeof c.email === 'string') {
+        const cleanEmail = c.email.trim().toLowerCase();
+        if (cleanEmail.includes('@') && cleanEmail !== recipientEmail && !otherContactEmails.includes(cleanEmail)) {
+          otherContactEmails.push(cleanEmail);
+        }
+      }
+    });
+
+    const standardCc = Array.from(new Set([...otherContactEmails, 'praveen@sspacia.com']));
+    const finalCcList = options.customCcEmails !== undefined
+      ? options.customCcEmails
+      : standardCc;
+
+    // 4. Determine Due Date String
+    const rawDueDay = invoice.paymentDueDay || invoice.clientMaster?.paymentDueDay || 7;
+    const dueDayNumber = Math.min(31, Math.max(1, Number(rawDueDay) || 7));
+    const dueDayStr = formatOrdinalDay(dueDayNumber);
+
+    // 5. Parse splits if present
     let splits: any[] = [];
     if (invoice.splitsJson) {
       try {
@@ -136,17 +218,20 @@ export async function sendInvoiceApprovalEmail(invoiceRecordId: number): Promise
 
     const isSplitInvoice = splits.length > 1;
 
-    // 3. Prepare PDF Attachments
+    // 6. Prepare PDF Attachments & Download URL
     const emailAttachments: { filename: string; content: Buffer; contentType: string }[] = [];
+    let primaryDownloadUrl = 'https://sspacia.com';
 
     if (isSplitInvoice) {
-      // Split Invoice: Download and attach every sub-invoice PDF
       for (let i = 0; i < splits.length; i++) {
         const sp = splits[i];
         const fileUrl = sp.attachedInvoice?.fileUrl || (i === 0 ? invoice.attachedInvoice?.fileUrl : null);
         const fileName = sp.attachedInvoice?.fileName || `Invoice_${companyName.replace(/[^a-zA-Z0-9]/g, '_')}_Part${i + 1}.pdf`;
 
         if (fileUrl) {
+          if (i === 0) {
+            primaryDownloadUrl = fileUrl.startsWith('http') ? fileUrl : `https://sspacia.com${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+          }
           const buffer = await fetchPdfBuffer(fileUrl);
           if (buffer) {
             emailAttachments.push({
@@ -158,9 +243,9 @@ export async function sendInvoiceApprovalEmail(invoiceRecordId: number): Promise
         }
       }
     } else if (invoice.attachedInvoice?.fileUrl) {
-      // Single Invoice: Download and attach single Tally invoice PDF
       const fileUrl = invoice.attachedInvoice.fileUrl;
-      const fileName = invoice.attachedInvoice.fileName || `Tax_Invoice_${companyName.replace(/[^a-zA-Z0-9]/g, '_')}_${billingMonth.replace(/\s+/g, '_')}.pdf`;
+      const fileName = invoice.attachedInvoice.fileName || `Tax_Invoice_${companyName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      primaryDownloadUrl = fileUrl.startsWith('http') ? fileUrl : `https://sspacia.com${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
       const buffer = await fetchPdfBuffer(fileUrl);
       if (buffer) {
         emailAttachments.push({
@@ -171,175 +256,229 @@ export async function sendInvoiceApprovalEmail(invoiceRecordId: number): Promise
       }
     }
 
-    // 4. Generate HTML Email Template
-    const subject = `📄 Tax Invoice Issued: ${companyName} — ${billingMonth} | SSPACIA Workspaces`;
+    // 7. Clean Subject: Tax Invoice : {Company Name} - {Month and Year}
+    const subject = `Tax Invoice : ${companyName} - ${billingMonth}`;
 
+    // 8. Plain Text Body (Anti-Spam Fallback)
+    const textBody = `
+Dear ${primaryName} Ji,
+
+Please find your tax invoice for the month attached with this email.
+
+The due date for payment is ${dueDayStr} of this month.
+
+Download Invoice: ${primaryDownloadUrl}
+
+For any clarification, please feel free to reach us anytime.
+
+Best Regards,
+${centreName}'s Community Manager
+
+SSPACIA INDIA PVT LTD
+Ahmedabad, Gujarat, India
+Website: https://sspacia.com | Email: cm@sspacia.com | WhatsApp: +91 76003 93779
+    `.trim();
+
+    // 9. Premium HTML Template (Authentic, Minimal, Zero Fake Content)
     const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; color: #1e293b; }
-          .container { max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-          .header { background: #006064; color: #ffffff; padding: 25px 30px; text-align: left; }
-          .header h1 { margin: 0 0 4px 0; font-size: 20px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
-          .header p { margin: 0; font-size: 12px; color: #b2dfdb; letter-spacing: 0.5px; }
-          .badge { display: inline-block; background: #004d40; color: #80cbc4; padding: 4px 10px; font-size: 10px; font-weight: bold; border-radius: 3px; margin-top: 10px; text-transform: uppercase; }
-          .content { padding: 30px; }
-          .section-title { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; }
-          .info-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-          .info-table td { padding: 8px 0; font-size: 13px; border-bottom: 1px solid #f8fafc; }
-          .info-table .label { color: #64748b; width: 40%; }
-          .info-table .value { font-weight: 700; color: #0f172a; text-align: right; }
-          .summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin-bottom: 25px; }
-          .summary-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
-          .summary-row.total { border-top: 2px dashed #cbd5e1; padding-top: 12px; margin-top: 12px; font-size: 16px; font-weight: 900; color: #006064; }
-          .split-box { background: #eef2f6; border-left: 4px solid #006064; padding: 12px 15px; margin-bottom: 12px; font-size: 12px; }
-          .attachment-badge { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 10px 15px; border-radius: 4px; font-size: 12px; margin-bottom: 25px; display: flex; align-items: center; }
-          .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 30px; font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.5; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>SSPACIA COWORKING &amp; ENTERPRISE</h1>
-            <p>Official Billing &amp; Invoicing Division</p>
-            <div class="badge">Approved &amp; Issued by Community Management</div>
-          </div>
-          
-          <div class="content">
-            <p style="font-size: 14px; line-height: 1.5; margin-top: 0; margin-bottom: 20px;">
-              Dear <strong>${companyName}</strong>,
-              <br/><br/>
-              Please find your verified tax invoice for <strong>${billingMonth}</strong> attached with this email. Community Management has reviewed and approved the billing terms.
-            </p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+      margin: 0;
+      padding: 24px 12px;
+      color: #0f172a;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    }
+    .brand-header {
+      background-color: #006064;
+      padding: 24px 30px;
+      color: #ffffff;
+    }
+    .brand-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      margin: 0 0 6px 0;
+      text-transform: uppercase;
+    }
+    .brand-badge {
+      display: inline-block;
+      background-color: rgba(255, 255, 255, 0.15);
+      color: #e0f2f1;
+      padding: 3px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+    }
+    .email-body {
+      padding: 32px 30px;
+      font-size: 15px;
+      line-height: 1.6;
+      color: #1e293b;
+    }
+    .salutation {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 16px;
+    }
+    .action-container {
+      margin: 28px 0;
+      text-align: left;
+    }
+    .btn-download {
+      display: inline-block;
+      background-color: #006064;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 12px 26px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0, 96, 100, 0.2);
+    }
+    .signoff {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #f1f5f9;
+      font-size: 14px;
+      color: #334155;
+    }
+    .footer-section {
+      background-color: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      padding: 24px 30px;
+      text-align: center;
+      font-size: 12px;
+      color: #64748b;
+    }
+    .social-links {
+      margin: 12px 0 16px 0;
+    }
+    .social-link {
+      display: inline-block;
+      color: #006064;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 11px;
+      margin: 0 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <!-- Header -->
+    <div class="brand-header">
+      <div class="brand-title">SSPACIA COWORKING</div>
+      <div class="brand-badge">Approved &amp; Issued by Community Manager</div>
+    </div>
 
-            <div class="section-title">Invoice &amp; Tenancy Specifications</div>
-            <table class="info-table">
-              <tr>
-                <td class="label">Company Name:</td>
-                <td class="value">${companyName}</td>
-              </tr>
-              <tr>
-                <td class="label">Client UID:</td>
-                <td class="value">${clientId}</td>
-              </tr>
-              <tr>
-                <td class="label">Centre Location:</td>
-                <td class="value">${locationName}</td>
-              </tr>
-              <tr>
-                <td class="label">Space / Cabin Allotted:</td>
-                <td class="value">${invoice.cabinName || 'Enterprise Workspace'}</td>
-              </tr>
-              <tr>
-                <td class="label">Total Seating Capacity:</td>
-                <td class="value">${invoice.noOfSeats || 0} Seats</td>
-              </tr>
-              <tr>
-                <td class="label">Billing Cycle:</td>
-                <td class="value">${billingMonth}</td>
-              </tr>
-              <tr>
-                <td class="label">Payment Due Date:</td>
-                <td class="value" style="color: #b91c1c;">${dueDateStr}</td>
-              </tr>
-            </table>
+    <!-- Content -->
+    <div class="email-body">
+      <div class="salutation">Dear ${primaryName} Ji,</div>
+      
+      <p style="margin-top: 0; margin-bottom: 14px;">
+        Please find your tax invoice for the month attached with this email.
+      </p>
 
-            ${
-              isSplitInvoice
-                ? `
-                <div class="section-title">Split Invoices Itemization (${splits.length} Sub-Invoices)</div>
-                ${splits
-                  .map(
-                    (sp, idx) => `
-                  <div class="split-box">
-                    <strong style="color: #0f172a; font-size: 13px;">${sp.name || `Sub-Invoice ${idx + 1}`}</strong><br/>
-                    <span>Base Amount: ${formatCurrency(sp.amount)} &bull; GST (18%): ${formatCurrency(sp.gstAmount || (sp.amount * 0.18))}</span><br/>
-                    <strong style="color: #006064;">Total Payable: ${formatCurrency(sp.totalAmount)}</strong>
-                  </div>
-                `
-                  )
-                  .join('')}
-              `
-                : ''
-            }
+      <p style="margin-top: 0; margin-bottom: 22px;">
+        The due date for payment is <strong>${dueDayStr}</strong> of this month.
+      </p>
 
-            <div class="summary-card">
-              <div class="section-title" style="border: none; margin-bottom: 8px;">Financial Breakdown</div>
-              <div class="summary-row">
-                <span style="color: #64748b;">Subtotal (Base Amount):</span>
-                <span style="font-weight: 700;">${formatCurrency(baseAmount)}</span>
-              </div>
-              <div class="summary-row">
-                <span style="color: #64748b;">GST (18% IGST / CGST+SGST):</span>
-                <span style="font-weight: 700;">${formatCurrency(gstAmount)}</span>
-              </div>
-              <div class="summary-row total">
-                <span>Net Total Payable:</span>
-                <span>${formatCurrency(totalAmount)}</span>
-              </div>
-            </div>
+      <!-- Download Button -->
+      <div class="action-container">
+        <a href="${primaryDownloadUrl}" target="_blank" class="btn-download">
+          📥 Download Tax Invoice
+        </a>
+      </div>
 
-            <div class="attachment-badge">
-              <span>📎 <strong>Attached Documents (${emailAttachments.length}):</strong> ${
-                emailAttachments.map((a) => a.filename).join(', ') || 'Official Tax Invoice PDF'
-              }</span>
-            </div>
-          </div>
+      <p style="color: #64748b; font-size: 13px; margin-bottom: 24px;">
+        For any clarification, please feel free to reach us anytime.
+      </p>
 
-          <div class="footer">
-            SSPACIA Coworking &amp; Managed Offices &bull; Automated Billing System
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+      <!-- Regard -->
+      <div class="signoff">
+        Best Regards,<br>
+        <strong style="color: #0f172a;">${centreName}'s Community Manager</strong>
+      </div>
+    </div>
 
-    // 5. Send via Nodemailer SMTP to cm@sspacia.com and CC t6565154@gmail.com
-    const configsToTry = [
-      { host: process.env.SMTP_HOST || 'smtppro.zoho.in', port: Number(process.env.SMTP_PORT || 465) },
-      { host: 'smtp.zoho.in', port: 465 },
-      { host: 'smtppro.zoho.com', port: 465 },
-      { host: 'smtp.zoho.com', port: 465 },
-      { host: 'smtp.zoho.in', port: 587 },
-    ];
+    <!-- Footer -->
+    <div class="footer-section">
+      <div style="font-weight: 800; color: #0f172a; font-size: 12px; letter-spacing: 1px; margin-bottom: 6px;">
+        SSPACIA INDIA PVT LTD
+      </div>
+      <div class="social-links">
+        <a href="https://wa.me/917600393779" class="social-link" target="_blank">WhatsApp</a> &bull;
+        <a href="https://www.instagram.com/sspacia?igsh=aWR3Z2F4MG0yMXRt" class="social-link" target="_blank">Instagram</a> &bull;
+        <a href="https://www.linkedin.com/company/sspacia/" class="social-link" target="_blank">LinkedIn</a> &bull;
+        <a href="https://www.facebook.com/sspacia" class="social-link" target="_blank">Facebook</a> &bull;
+        <a href="https://www.youtube.com/@sspacia_" class="social-link" target="_blank">YouTube</a>
+      </div>
+      <div>Ahmedabad, Gujarat, India &bull; <a href="mailto:cm@sspacia.com" style="color: #006064; text-decoration: none;">cm@sspacia.com</a></div>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
 
-    const user = (process.env.SMTP_USER || 'cm@sspacia.com').trim();
-    const rawPass = (process.env.SMTP_PASS || 'VXQxVpCnBDZg').trim();
-    const pass = rawPass.replace(/\s+/g, '');
-    const recipient = 'cm@sspacia.com';
-    const ccRecipient = 't6565154@gmail.com';
-
-    let lastError: any = null;
+    // 10. Dispatch Email via Zoho SMTP with Multi-Host Fallback
+    const { hostCandidates, port, user, pass } = createSmtpTransport();
     let messageId: string | undefined;
+    let lastError: any = null;
 
-    for (const cfg of configsToTry) {
+    for (const host of hostCandidates) {
       try {
-        const isSecure = cfg.port === 465;
+        const isSecure = port === 465;
         const transporter = nodemailer.createTransport({
-          host: cfg.host,
-          port: cfg.port,
+          host,
+          port,
           secure: isSecure,
           auth: { user, pass },
           tls: { rejectUnauthorized: false },
         } as nodemailer.TransportOptions);
 
         const info = await transporter.sendMail({
-          from: `"SSPACIA Community & Accounts" <${user}>`,
-          to: recipient,
-          cc: ccRecipient,
+          from: `"SSPACIA Community Manager" <${user}>`,
+          sender: user,
+          replyTo: user,
+          to: recipientEmail,
+          ...(finalCcList && finalCcList.length > 0 ? { cc: finalCcList } : {}),
           subject,
+          text: textBody,
           html,
           attachments: emailAttachments,
+          envelope: {
+            from: user,
+            to: [recipientEmail, ...finalCcList].filter(Boolean),
+          },
         });
 
         messageId = info.messageId;
-        console.log(`[Invoice Email] ✅ Approved invoice email dispatched for ${companyName} (${billingMonth}) to ${recipient} (CC: ${ccRecipient}) via ${cfg.host}:${cfg.port}. Message ID: ${info.messageId}`);
+        console.log(`[Invoice Email] ✅ Approved invoice email dispatched for ${companyName} (${billingMonth}) to ${recipientEmail} (CC: ${finalCcList.join(', ')}) via ${host}:${port}. Message ID: ${info.messageId}`);
         break;
       } catch (err: any) {
-        console.warn(`[Invoice Email] SMTP attempt on ${cfg.host}:${cfg.port} failed:`, err?.message || err);
+        console.warn(`[Invoice Email] SMTP attempt on ${host}:${port} failed:`, err?.message || err);
         lastError = err;
       }
     }
@@ -351,9 +490,11 @@ export async function sendInvoiceApprovalEmail(invoiceRecordId: number): Promise
     return {
       success: true,
       messageId,
+      recipient: recipientEmail,
+      cc: finalCcList,
     };
   } catch (error: any) {
-    console.error(`[Invoice Email] ❌ Failed to dispatch approval email for invoice #${invoiceRecordId}:`, error?.message || error);
+    console.error(`[Invoice Email] ❌ Failed to dispatch approval email:`, error?.message || error);
     return {
       success: false,
       error: error?.message || 'Failed to dispatch invoice approval email',

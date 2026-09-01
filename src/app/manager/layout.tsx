@@ -22,6 +22,7 @@ import {
   FileSpreadsheet,
   Menu,
   X,
+  Boxes,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -167,6 +168,7 @@ export default function ManagerLayout({
     items.push({ name: 'Agreements', href: '/manager/agreements', icon: FileText });
     items.push({ name: 'Users', href: '/manager/users', icon: Users });
     items.push({ name: 'Client Master', href: '/manager/client-master', icon: FileText });
+    items.push({ name: 'Internal Inventory', href: '/manager/inventory', icon: Boxes });
     items.push({ name: 'Invoices', href: '/manager/Invoices', icon: Receipt });
 
     // Optional/Permission based routes (Keeping Locations if managed by some)

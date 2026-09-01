@@ -577,6 +577,124 @@ export default function AdminInvoicesWorkflowPage() {
   // ── DISPATCH APPROVED INVOICES EMAILS TO CM@SSPACIA.COM ──
   const [isSendingApprovedEmails, setIsSendingApprovedEmails] = useState(false);
 
+  // ── SEND TAX INVOICE TO CLIENT (PRIMARY PERSON & CCs) ──
+  const [entryToSendClientEmail, setEntryToSendClientEmail] = useState<InvoiceRecord | null>(null);
+  const [clientEmailPreview, setClientEmailPreview] = useState<any>(null);
+  const [selectedPrimaryContactId, setSelectedPrimaryContactId] = useState<number | null>(null);
+  const [customPrimaryNameInput, setCustomPrimaryNameInput] = useState('');
+  const [customPrimaryEmailInput, setCustomPrimaryEmailInput] = useState('');
+  const [customCcInput, setCustomCcInput] = useState('praveen@sspacia.com');
+  const [isSendingClientEmail, setIsSendingClientEmail] = useState(false);
+  const [loadingEmailPreview, setLoadingEmailPreview] = useState(false);
+
+  const handleOpenSendClientEmailModal = async (inv: InvoiceRecord) => {
+    setEntryToSendClientEmail(inv);
+    setLoadingEmailPreview(true);
+    try {
+      const res = await fetch(`/api/admin/Invoices/${inv.id}/send-client-email`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        setClientEmailPreview(json.data);
+        const contacts = json.data.contactPersons || [];
+        if (contacts.length > 0) {
+          const firstWithEmail = contacts.find((c: any) => c.email && c.email.includes('@')) || contacts[0];
+          setSelectedPrimaryContactId(firstWithEmail.id);
+          setCustomPrimaryNameInput(firstWithEmail.name || '');
+          setCustomPrimaryEmailInput(firstWithEmail.email || '');
+
+          const otherEmails = contacts
+            .filter((c: any) => c.id !== firstWithEmail.id && c.email && c.email.includes('@'))
+            .map((c: any) => c.email.trim());
+          setCustomCcInput(Array.from(new Set([...otherEmails, 'praveen@sspacia.com'])).join(', '));
+        } else {
+          setSelectedPrimaryContactId(null);
+          setCustomPrimaryNameInput(inv.companyName);
+          setCustomPrimaryEmailInput('');
+          setCustomCcInput('praveen@sspacia.com');
+        }
+      }
+    } catch {
+      toast.error('Failed to load client contact details');
+    } finally {
+      setLoadingEmailPreview(false);
+    }
+  };
+
+  const handleSelectPrimaryContact = (contact: any) => {
+    setSelectedPrimaryContactId(contact.id);
+    setCustomPrimaryNameInput(contact.name || '');
+    setCustomPrimaryEmailInput(contact.email || '');
+
+    const contacts = clientEmailPreview?.contactPersons || [];
+    const otherEmails = contacts
+      .filter((c: any) => c.id !== contact.id && c.email && c.email.includes('@'))
+      .map((c: any) => c.email.trim());
+    setCustomCcInput(Array.from(new Set([...otherEmails, 'praveen@sspacia.com'])).join(', '));
+  };
+
+  const handleSendClientEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!entryToSendClientEmail) return;
+
+    if (!customPrimaryEmailInput.trim() || !customPrimaryEmailInput.includes('@')) {
+      toast.error('Please specify a valid Primary Contact Email address (To:)');
+      return;
+    }
+
+    const ccArray = customCcInput
+      .split(',')
+      .map((em) => em.trim().toLowerCase())
+      .filter((em) => em.includes('@'));
+
+    setIsSendingClientEmail(true);
+    try {
+      const res = await fetch(`/api/admin/Invoices/${entryToSendClientEmail.id}/send-client-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          primaryContactPersonId: selectedPrimaryContactId,
+          customPrimaryName: customPrimaryNameInput.trim(),
+          customPrimaryEmail: customPrimaryEmailInput.trim(),
+          customCcEmails: ccArray,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message || 'Tax invoice email sent to client successfully!');
+        setEntryToSendClientEmail(null);
+      } else {
+        toast.error(json.error || 'Failed to send invoice email');
+      }
+    } catch {
+      toast.error('Network error sending invoice email');
+    } finally {
+      setIsSendingClientEmail(false);
+    }
+  };
+
+  // ── TEST MERCADO EMAIL TO T6565154@GMAIL.COM ──
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+
+  const handleSendTestMercadoEmail = async () => {
+    setIsSendingTestEmail(true);
+    try {
+      const res = await fetch('/api/admin/Invoices/test-mercado-email', {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message);
+      } else {
+        toast.error(json.error || 'Failed to send test email');
+      }
+    } catch {
+      toast.error('Network error sending test email');
+    } finally {
+      setIsSendingTestEmail(false);
+    }
+  };
+
   const handleSendAllApprovedEmails = async () => {
     setIsSendingApprovedEmails(true);
     try {
@@ -1649,17 +1767,36 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
                 </div>
               </div>
 
-              {/* Primary Action: Digital Signature Stamp Hub */}
-              {(canAccessCM || isAdmin) && (
-                <button
-                  type="button"
-                  onClick={() => setShowSignatureSettingsModal(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-colors shrink-0 cursor-pointer"
-                >
-                  <PenTool size={13} />
-                  <span>Digital Signature Stamp</span>
-                </button>
-              )}
+              {/* Primary Actions: Send Test Email & Digital Signature Stamp Hub */}
+              <div className="flex items-center gap-2 shrink-0">
+                {(canAccessCM || isAdmin) && (
+                  <button
+                    type="button"
+                    onClick={handleSendTestMercadoEmail}
+                    disabled={isSendingTestEmail}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                    title="Send test invoice email of 1 Mercado client to t6565154@gmail.com"
+                  >
+                    {isSendingTestEmail ? (
+                      <Loader2 size={13} className="animate-spin text-amber-200" />
+                    ) : (
+                      <Send size={13} className="text-amber-200" />
+                    )}
+                    <span>🧪 Send Test (t6565154@gmail.com)</span>
+                  </button>
+                )}
+
+                {(canAccessCM || isAdmin) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSignatureSettingsModal(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-colors shrink-0 cursor-pointer"
+                  >
+                    <PenTool size={13} />
+                    <span>Digital Signature Stamp</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Tier 2: Search, Node Scoping, Status Filter & Refresh */}
@@ -2002,6 +2139,17 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
                                 </>
                               )}
 
+                              {(invoice.status === 'APPROVED' || invoice.attachedInvoice || invoice.splitsJson || invoice.digitallySignedPdfUrl) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenSendClientEmailModal(invoice)}
+                                  className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-xs transition-colors cursor-pointer"
+                                  title="Send Tax Invoice Email directly to Client with Primary Contact selection"
+                                >
+                                  <Send size={11} /> Send Invoice to Client
+                                </button>
+                              )}
+
                               {invoice.digitallySignedPdfUrl && (
                                 <a
                                   href={invoice.digitallySignedPdfUrl}
@@ -2049,6 +2197,15 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
                             >
                               <Eye size={12} />
                             </button>
+                            {(canAccessCM || isAdmin) && (
+                              <button
+                                onClick={() => handleOpenSendClientEmailModal(invoice)}
+                                className="p-1 text-neutral-500 hover:text-emerald-700 hover:bg-emerald-50"
+                                title="Send Tax Invoice to Client"
+                              >
+                                <Send size={12} />
+                              </button>
+                            )}
                             {userRoleView === 'CM' && (
                               <button
                                 onClick={() => handleOpenEditModal(invoice)}
@@ -4065,6 +4222,224 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
                   </button>
                 </div>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* MODAL 9: SEND TAX INVOICE TO CLIENT (PRIMARY PERSON & CCs) */}
+      <AnimatePresence>
+        {entryToSendClientEmail && (
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
+                <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
+                  <Send size={18} className="text-[#006064]" />
+                  <span>Send Tax Invoice to Client</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setEntryToSendClientEmail(null)}
+                  className="text-neutral-400 hover:text-neutral-700"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {loadingEmailPreview ? (
+                <div className="py-12 text-center text-neutral-500">
+                  <Loader2 size={24} className="animate-spin text-[#006064] mx-auto mb-2" />
+                  <span>Loading client contact persons and invoice details...</span>
+                </div>
+              ) : (
+                <form onSubmit={handleSendClientEmailSubmit} className="overflow-y-auto flex-1 pr-1 space-y-4">
+                  {/* Context Banner */}
+                  <div className="bg-[#F8F9FA] p-3 border border-neutral-200 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="font-extrabold text-sm text-[#1B1C1C]">
+                        {entryToSendClientEmail.companyName}
+                      </div>
+                      <span className="px-2 py-0.5 bg-[#006064] text-white text-[10px] font-bold uppercase rounded">
+                        {entryToSendClientEmail.billingMonth}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-neutral-600 flex items-center gap-2">
+                      <span><strong>Centre:</strong> {clientEmailPreview?.centreName || 'SSPACIA Centre'}</span>
+                      <span>&bull;</span>
+                      <span><strong>Attached PDF:</strong> {clientEmailPreview?.attachedPdfName || 'Tally Invoice PDF'}</span>
+                    </div>
+                  </div>
+
+                  {/* 1. SELECT PRIMARY CONTACT PERSON (TO:) */}
+                  <div className="space-y-2">
+                    <div className="font-bold text-neutral-800 uppercase tracking-wider text-[11px] flex items-center justify-between">
+                      <span>1. Select Primary Contact Person (To: Recipient) *</span>
+                      <span className="text-[10px] text-[#006064] font-semibold lowercase">
+                        uses Dear {customPrimaryNameInput || 'Name'} Ji,
+                      </span>
+                    </div>
+
+                    {clientEmailPreview?.contactPersons && clientEmailPreview.contactPersons.length > 0 ? (
+                      <div className="space-y-2">
+                        {clientEmailPreview.contactPersons.map((contact: any) => {
+                          const isSelected = selectedPrimaryContactId === contact.id;
+                          return (
+                            <label
+                              key={contact.id}
+                              onClick={() => handleSelectPrimaryContact(contact)}
+                              className={`flex items-start gap-3 p-2.5 border rounded cursor-pointer transition-all ${
+                                isSelected
+                                  ? 'bg-teal-50/80 border-[#006064] ring-1 ring-[#006064]'
+                                  : 'bg-white border-neutral-200 hover:bg-neutral-50'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="primaryContact"
+                                checked={isSelected}
+                                onChange={() => handleSelectPrimaryContact(contact)}
+                                className="mt-0.5 text-[#006064] focus:ring-[#006064]"
+                              />
+                              <div className="flex-1 text-xs">
+                                <div className="font-bold text-[#1B1C1C] flex items-center gap-2">
+                                  <span>{contact.name}</span>
+                                  {contact.designation && (
+                                    <span className="text-[10px] px-1.5 py-0.2 bg-neutral-100 text-neutral-600 rounded">
+                                      {contact.designation}
+                                    </span>
+                                  )}
+                                  {isSelected && (
+                                    <span className="text-[10px] font-bold text-teal-800 bg-teal-100 px-1.5 py-0.2 rounded">
+                                      Primary (To:)
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-neutral-500 text-[11px] mt-0.5">
+                                  {contact.email ? (
+                                    <span className="font-mono text-neutral-700">{contact.email}</span>
+                                  ) : (
+                                    <span className="text-red-500 italic">No email on file</span>
+                                  )}
+                                  {contact.mobileNo && <span> &bull; {contact.mobileNo}</span>}
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded space-y-2">
+                        <div className="font-bold">No Contact Persons in Client Master. Please specify:</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Primary Contact Name"
+                            value={customPrimaryNameInput}
+                            onChange={(e) => setCustomPrimaryNameInput(e.target.value)}
+                            required
+                            className="bg-white border border-neutral-300 p-2 text-xs font-bold"
+                          />
+                          <input
+                            type="email"
+                            placeholder="Primary Email Address"
+                            value={customPrimaryEmailInput}
+                            onChange={(e) => setCustomPrimaryEmailInput(e.target.value)}
+                            required
+                            className="bg-white border border-neutral-300 p-2 text-xs font-bold"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. CC RECIPIENTS */}
+                  <div className="space-y-1">
+                    <label className="block font-bold text-neutral-800 uppercase tracking-wider text-[11px]">
+                      2. CC Recipients (Comma-separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={customCcInput}
+                      onChange={(e) => setCustomCcInput(e.target.value)}
+                      placeholder="e.g. rajesh@example.com, accounts@client.com, praveen@sspacia.com"
+                      className="w-full bg-white border border-neutral-300 p-2 text-xs font-mono text-neutral-800 focus:outline-none focus:border-[#006064]"
+                    />
+                    <div className="text-[10px] text-neutral-500">
+                      Remaining client contacts &amp; <strong>praveen@sspacia.com</strong> are included in CC.
+                    </div>
+                  </div>
+
+                  {/* 3. LIVE EMAIL PREVIEW */}
+                  <div className="space-y-1.5 pt-2 border-t border-neutral-200">
+                    <div className="font-bold text-neutral-700 uppercase tracking-wider text-[10px]">
+                      Email Content Preview:
+                    </div>
+
+                    <div className="p-4 bg-neutral-50 border border-neutral-200 rounded text-xs space-y-2.5 font-sans">
+                      <div className="border-b border-neutral-200 pb-2 text-[11px] space-y-0.5 text-neutral-600">
+                        <div><strong>From:</strong> SSPACIA Community Manager &lt;cm@sspacia.com&gt;</div>
+                        <div><strong>To:</strong> {customPrimaryEmailInput || 'primary@client.com'}</div>
+                        <div><strong>CC:</strong> {customCcInput}</div>
+                        <div><strong>Subject:</strong> Tax Invoice : {entryToSendClientEmail.companyName} - {entryToSendClientEmail.billingMonth}</div>
+                      </div>
+
+                      <div className="space-y-2 text-neutral-900 leading-relaxed">
+                        <div className="font-bold text-sm text-[#006064]">
+                          SSPACIA COWORKING
+                        </div>
+                        <div className="font-semibold">
+                          Dear {customPrimaryNameInput || 'Client'} Ji,
+                        </div>
+                        <p className="m-0">
+                          Please find your tax invoice for the month attached with this email.
+                        </p>
+                        <p className="m-0">
+                          The due date for payment is <strong>{clientEmailPreview?.dueDay ? `${clientEmailPreview.dueDay}th` : '7th'}</strong> of this month.
+                        </p>
+                        <div className="pt-1">
+                          <span className="inline-block px-3 py-1.5 bg-[#006064] text-white font-bold text-[11px] rounded">
+                            📥 Download Tax Invoice ({clientEmailPreview?.attachedPdfName || 'PDF Attached'})
+                          </span>
+                        </div>
+                        <p className="m-0 text-neutral-500 text-[11px]">
+                          For any clarification, please feel free to reach us anytime.
+                        </p>
+                        <div className="pt-2 text-[11px] text-neutral-700">
+                          Best Regards,<br />
+                          <strong>{clientEmailPreview?.centreName || 'SSPACIA'}'s Community Manager</strong>
+                        </div>
+                        <div className="text-[10px] text-neutral-400 pt-1 border-t border-neutral-200">
+                          SSPACIA INDIA PVT LTD &bull; WhatsApp &bull; Instagram &bull; LinkedIn &bull; Facebook &bull; YouTube
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setEntryToSendClientEmail(null)}
+                      className="px-4 py-2 font-bold uppercase tracking-wider text-neutral-600 hover:bg-neutral-100 rounded"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSendingClientEmail || !customPrimaryEmailInput.trim()}
+                      className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      {isSendingClientEmail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                      <span>Send Tax Invoice to Client</span>
+                    </button>
+                  </div>
+                </form>
+              )}
             </motion.div>
           </div>
         )}
