@@ -1107,6 +1107,9 @@ model InvoiceRecord {
   digitallySignedPdfName String?
   signedAt               DateTime?
   signedByName           String?
+  clientEmailSentAt      DateTime?
+  clientEmailSentTo      String?
+  clientEmailSentCc      String?
   createdById            Int
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt

@@ -483,6 +483,21 @@ Website: https://sspacia.com | Email: cm@sspacia.com | WhatsApp: +91 76003 93779
 
         messageId = info.messageId;
         console.log(`[Invoice Email] ✅ Approved invoice email dispatched for ${companyName} (${billingMonth}) to ${recipientEmail} (CC: ${finalCcList.join(', ')}) via ${host}:${port}. Message ID: ${info.messageId}`);
+
+        // Update DB record with sent timestamp and recipient info
+        try {
+          await (prisma as any).invoiceRecord.update({
+            where: { id: invoiceRecordId },
+            data: {
+              clientEmailSentAt: new Date(),
+              clientEmailSentTo: recipientEmail,
+              clientEmailSentCc: (finalCcList || []).join(', '),
+            },
+          });
+        } catch (dbErr) {
+          console.warn(`[Invoice Email] Could not update clientEmailSentAt on Invoice #${invoiceRecordId}:`, dbErr);
+        }
+
         break;
       } catch (err: any) {
         console.warn(`[Invoice Email] SMTP attempt on ${host}:${port} failed:`, err?.message || err);

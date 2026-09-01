@@ -122,6 +122,9 @@ interface InvoiceRecord {
   digitallySignedPdfName?: string | null;
   signedAt?: string | null;
   signedByName?: string | null;
+  clientEmailSentAt?: string | null;
+  clientEmailSentTo?: string | null;
+  clientEmailSentCc?: string | null;
   gstNo: string | null;
   billingMonth: string | null;
   sendType: 'MANUAL' | 'AUTOMATIC_MONTH_END';
@@ -663,6 +666,7 @@ export default function AdminInvoicesWorkflowPage() {
       if (json.success) {
         toast.success(json.message || 'Tax invoice email sent to client successfully!');
         setEntryToSendClientEmail(null);
+        fetchData();
       } else {
         toast.error(json.error || 'Failed to send invoice email');
       }
@@ -2139,7 +2143,26 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
                                 </>
                               )}
 
-                              {(invoice.status === 'APPROVED' || invoice.attachedInvoice || invoice.splitsJson || invoice.digitallySignedPdfUrl) && (
+                              {invoice.clientEmailSentAt ? (
+                                <div className="flex flex-col gap-1 w-full items-center">
+                                  <div
+                                    className="px-2 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-[9.5px] uppercase tracking-wider rounded flex items-center justify-center gap-1 w-full shadow-2xs"
+                                    title={`Email sent to: ${invoice.clientEmailSentTo || 'Primary Contact'} on ${new Date(invoice.clientEmailSentAt).toLocaleString('en-IN')}`}
+                                  >
+                                    <CheckCircle2 size={11} className="text-emerald-700 shrink-0" />
+                                    <span>Sent to Client ({invoice.billingMonth || 'Month'})</span>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenSendClientEmailModal(invoice)}
+                                    className="text-[9px] text-neutral-500 hover:text-emerald-800 underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                                    title="Click if you need to resend this invoice email"
+                                  >
+                                    <RotateCcw size={9} /> Resend Email
+                                  </button>
+                                </div>
+                              ) : (invoice.status === 'APPROVED' || invoice.attachedInvoice || invoice.splitsJson || invoice.digitallySignedPdfUrl) ? (
                                 <button
                                   type="button"
                                   onClick={() => handleOpenSendClientEmailModal(invoice)}
@@ -2148,7 +2171,7 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
                                 >
                                   <Send size={11} /> Send Invoice to Client
                                 </button>
-                              )}
+                              ) : null}
 
                               {invoice.digitallySignedPdfUrl && (
                                 <a
