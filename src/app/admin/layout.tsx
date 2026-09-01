@@ -83,6 +83,13 @@ export default function AdminLayout({
     }
   }, [user, isLoading, router, isRole]);
 
+  // Auto-shrink sidebar on Occupancy CAD page to maximize architectural canvas
+  useEffect(() => {
+    if (pathname?.includes('/admin/occupancy')) {
+      setIsSidebarOpen(false);
+    }
+  }, [pathname, setIsSidebarOpen]);
+
   const handleLogout = async () => {
     try {
       await logout();

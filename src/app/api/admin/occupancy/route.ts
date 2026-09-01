@@ -207,37 +207,38 @@ export async function GET(req: NextRequest) {
       ],
       // 2. Mercado Location (Navrangpura / Flagship) - Calibrated to mercado.pdf
       2: [
-        { code: 'MC-CAB-01', name: 'Angle One Executive Suite', category: 'CABIN', typeName: 'Executive Suite (13\'-2" x 12\'-11")', capacity: 18, basePrice: 150000, companyKey: 'angle one', grid: { x: 3, y: 10, w: 17, h: 18, zone: 'Executive Row' } },
-        { code: 'MC-CAB-02', name: 'Edelcap Securities Suite', category: 'CABIN', typeName: 'Dedicated Cabin (8\'-0" x 12\'-6")', capacity: 6, basePrice: 45000, companyKey: 'edelcap', grid: { x: 20, y: 10, w: 12, h: 18, zone: 'Executive Row' } },
-        { code: 'MC-CAB-03', name: 'Edelweiss Investment Suite', category: 'CABIN', typeName: 'Dedicated Cabin (8\'-0" x 12\'-2")', capacity: 6, basePrice: 45000, companyKey: 'edelweiss investment', grid: { x: 32, y: 10, w: 12, h: 18, zone: 'Executive Row' } },
-        { code: 'MC-CAB-04', name: 'Edelweiss Securities Hub', category: 'CABIN', typeName: 'Private Suite', capacity: 8, basePrice: 55000, companyKey: 'edelweiss securities', grid: { x: 45, y: 10, w: 24, h: 13, zone: 'Executive Row' } },
-        { code: 'MC-CAB-05', name: 'Abakkus Asset Managers Suite', category: 'CABIN', typeName: 'Dedicated Cabin (9\'-7" x 7\'-3")', capacity: 6, basePrice: 50000, companyKey: 'abakkus', grid: { x: 3, y: 33, w: 15, h: 13, zone: 'West Wing' } },
-        { code: 'MC-CAB-06', name: 'Shriram Asset Management', category: 'CABIN', typeName: 'Dedicated Cabin (9\'-8" x 10\'-3")', capacity: 5, basePrice: 50150, companyKey: 'shriram', grid: { x: 3, y: 47, w: 15, h: 13, zone: 'West Wing' } },
-        { code: 'MC-CAB-07', name: 'Groww Asset / Respect Returns', category: 'CABIN', typeName: 'Dedicated Cabin (6\'-9" x 8\'-5")', capacity: 4, basePrice: 35000, companyKey: 'respect returns', grid: { x: 3, y: 61, w: 15, h: 13, zone: 'West Wing' } },
-        { code: 'MC-CAB-08', name: 'Indus Environmental Suite', category: 'CABIN', typeName: 'Dedicated Cabin (9\'-8" x 9\'-0")', capacity: 5, basePrice: 47200, companyKey: 'indus', grid: { x: 3, y: 75, w: 15, h: 11, zone: 'West Wing' } },
-        { code: 'MC-CAB-09', name: 'Helios Capital Asset Suite', category: 'CABIN', typeName: 'Dedicated Cabin (9\'-8" x 6\'-5")', capacity: 3, basePrice: 31860, companyKey: 'helios', grid: { x: 3, y: 87, w: 15, h: 10, zone: 'West Wing' } },
-        { code: 'MC-CAB-10', name: 'Dawntech Electronics Suite', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 2, basePrice: 21240, companyKey: 'dawntech', grid: { x: 33, y: 74, w: 13, h: 12, zone: 'Central Spine' } },
-        { code: 'MC-CAB-11', name: '360 ONE Asset Management', category: 'CABIN', typeName: 'Dedicated Cabin (10\'-5" x 8\'-6")', capacity: 8, basePrice: 72570, companyKey: '360 one', grid: { x: 64, y: 43, w: 16, h: 13, zone: 'East Wing' } },
-        { code: 'MC-CAB-12', name: 'Novel Jewels Suite', category: 'CABIN', typeName: 'Dedicated Cabin & Parking', capacity: 7, basePrice: 62540, companyKey: 'novel jewels', grid: { x: 80, y: 50, w: 18, h: 13, zone: 'East Wing' } },
-        { code: 'MC-CAB-13', name: 'YES Securities Executive Suite', category: 'CABIN', typeName: 'Dedicated Suite', capacity: 8, basePrice: 65000, companyKey: 'yes securities', grid: { x: 82, y: 28, w: 16, h: 21, zone: 'East Wing' } },
-        { code: 'MC-MR-01', name: 'Grand Board Room', category: 'MEETING', typeName: 'Conference Room (11\'-9" x 19\'-3")', capacity: 14, basePrice: 1000, companyKey: '', grid: { x: 37, y: 43, w: 12, h: 30, zone: 'Central Spine' } },
-        { code: 'MC-DSK-01', name: 'Redington & Design Workstations', category: 'DESK', typeName: 'Dedicated Desk Bay', capacity: 12, basePrice: 6000, companyKey: 'ecap equities', grid: { x: 20, y: 43, w: 15, h: 30, zone: 'Central Spine' } },
-        { code: 'MC-DSK-02', name: 'Staff Area & Open Workstations', category: 'DESK', typeName: 'Open Flexi Desks (28\'-6" x 33\'-9")', capacity: 20, basePrice: 5000, companyKey: 'meet ashokbhai', grid: { x: 64, y: 65, w: 34, h: 25, zone: 'East Wing Hall' } },
+        { code: 'MC-CAB-01', name: 'Angle One Executive Suite', category: 'CABIN', typeName: 'Executive Suite (13\'-2" x 12\'-11")', capacity: 18, basePrice: 150000, companyKey: 'angle one', grid: { x: 3.5, y: 8, w: 16, h: 16.5, zone: 'Executive Row' } },
+        { code: 'MC-CAB-02', name: 'Edelcap Securities Suite', category: 'CABIN', typeName: 'Dedicated Cabin (8\'-0" x 12\'-6")', capacity: 6, basePrice: 45000, companyKey: 'edelcap', grid: { x: 19.5, y: 8, w: 10.5, h: 16.5, zone: 'Executive Row' } },
+        { code: 'MC-CAB-03', name: 'Edelweiss Investment Suite', category: 'CABIN', typeName: 'Dedicated Cabin (8\'-0" x 12\'-2")', capacity: 6, basePrice: 45000, companyKey: 'edelweiss investment', grid: { x: 30, y: 8, w: 10.5, h: 16.5, zone: 'Executive Row' } },
+        { code: 'MC-CAB-04', name: 'Edelweiss Securities Hub', category: 'CABIN', typeName: 'Private Suite', capacity: 8, basePrice: 55000, companyKey: 'edelweiss securities', grid: { x: 41, y: 8, w: 25, h: 12, zone: 'Executive Row' } },
+        { code: 'MC-MR-02', name: 'Executive Meeting Room', category: 'MEETING', typeName: 'Meeting Room (7\'-9" x 9\'-9")', capacity: 6, basePrice: 500, companyKey: '', grid: { x: 13.5, y: 29, w: 19, h: 13, zone: 'Central Gallery' } },
+        { code: 'MC-CAB-05', name: 'Abakkus Asset Managers Suite', category: 'CABIN', typeName: 'Dedicated Cabin (9\'-7" x 7\'-3")', capacity: 6, basePrice: 50000, companyKey: 'abakkus', grid: { x: 3.5, y: 33, w: 14, h: 9.5, zone: 'West Wing' } },
+        { code: 'MC-CAB-06', name: 'Shriram Asset Management', category: 'CABIN', typeName: 'Dedicated Cabin (9\'-8" x 10\'-3")', capacity: 5, basePrice: 50150, companyKey: 'shriram', grid: { x: 3.5, y: 43, w: 14, h: 11.5, zone: 'West Wing' } },
+        { code: 'MC-CAB-07', name: 'Groww Asset / Respect Returns', category: 'CABIN', typeName: 'Dedicated Cabin (6\'-9" x 8\'-5")', capacity: 4, basePrice: 35000, companyKey: 'respect returns', grid: { x: 3.5, y: 55, w: 14, h: 10.5, zone: 'West Wing' } },
+        { code: 'MC-CAB-08', name: 'Indus Environmental Suite', category: 'CABIN', typeName: 'Dedicated Cabin (9\'-8" x 9\'-0")', capacity: 5, basePrice: 47200, companyKey: 'indus', grid: { x: 3.5, y: 66, w: 14, h: 9, zone: 'West Wing' } },
+        { code: 'MC-CAB-09', name: 'Helios Capital Asset Suite', category: 'CABIN', typeName: 'Dedicated Cabin (9\'-8" x 6\'-5")', capacity: 3, basePrice: 31860, companyKey: 'helios', grid: { x: 3.5, y: 75.5, w: 14, h: 9, zone: 'West Wing' } },
+        { code: 'MC-DSK-01', name: 'Redington & Design Workstations', category: 'DESK', typeName: 'Dedicated Desk Bay', capacity: 12, basePrice: 6000, companyKey: 'ecap equities', grid: { x: 20, y: 45, w: 16, h: 31, zone: 'Central Spine' } },
+        { code: 'MC-MR-01', name: 'Grand Board Room', category: 'MEETING', typeName: 'Conference Room (11\'-9" x 19\'-3")', capacity: 14, basePrice: 1000, companyKey: '', grid: { x: 36.5, y: 44.5, w: 11.5, h: 27.5, zone: 'Central Spine' } },
+        { code: 'MC-CAB-10', name: 'Dawntech Electronics Suite', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 2, basePrice: 21240, companyKey: 'dawntech', grid: { x: 33, y: 73, w: 13.5, h: 8.5, zone: 'Central Spine' } },
+        { code: 'MC-CAB-11', name: '360 ONE Asset Management', category: 'CABIN', typeName: 'Dedicated Cabin (10\'-5" x 8\'-6")', capacity: 8, basePrice: 72570, companyKey: '360 one', grid: { x: 62, y: 50.5, w: 14, h: 9.5, zone: 'East Wing' } },
+        { code: 'MC-CAB-12', name: 'Novel Jewels Suite', category: 'CABIN', typeName: 'Dedicated Cabin & Parking', capacity: 7, basePrice: 62540, companyKey: 'novel jewels', grid: { x: 76.5, y: 49.5, w: 18, h: 10, zone: 'East Wing' } },
+        { code: 'MC-CAB-13', name: 'YES Securities Executive Suite', category: 'CABIN', typeName: 'Dedicated Suite', capacity: 8, basePrice: 65000, companyKey: 'yes securities', grid: { x: 76.5, y: 29, w: 18, h: 19.5, zone: 'East Wing' } },
+        { code: 'MC-DSK-02', name: 'Staff Area & Open Workstations', category: 'DESK', typeName: 'Open Flexi Desks (28\'-6" x 33\'-9")', capacity: 20, basePrice: 5000, companyKey: 'meet ashokbhai', grid: { x: 62, y: 63, w: 34, h: 27, zone: 'East Wing Hall' } },
       ],
       // 3. Premier House (Bodakdev / SG Highway) - Calibrated to premier.pdf
       3: [
-        { code: 'PH-CAB-01', name: 'DATALOGICS INDIA PVT LTD', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 3, basePrice: 24780, companyKey: 'datalogics', grid: { x: 3, y: 6, w: 18, h: 23, zone: 'North-West Row' } },
-        { code: 'PH-CAB-02', name: 'Culand & BWIZ Solution', category: 'CABIN', typeName: 'Executive Cabin', capacity: 4, basePrice: 30000, companyKey: 'culand', grid: { x: 36, y: 6, w: 13, h: 23, zone: 'North Central Row' } },
-        { code: 'PH-CAB-03', name: 'Mizuho Capsave Finance', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 4, basePrice: 45454, companyKey: 'mizuho', grid: { x: 50, y: 6, w: 13, h: 23, zone: 'North-East Row' } },
-        { code: 'PH-MR-01', name: 'Executive Round Meeting Room', category: 'MEETING', typeName: 'Round Table Meeting Room', capacity: 4, basePrice: 500, companyKey: '', grid: { x: 67, y: 6, w: 9, h: 23, zone: 'VIP Meeting Zone' } },
-        { code: 'PH-MR-02', name: 'Premier Board Room', category: 'MEETING', typeName: 'Smart Boardroom (12 Seats)', capacity: 12, basePrice: 1000, companyKey: '', grid: { x: 77, y: 6, w: 15, h: 23, zone: 'Boardroom Gallery' } },
-        { code: 'PH-DSK-01', name: 'Premium Dedicated & Fixed Desks', category: 'DESK', typeName: 'Fixed Desk Hub', capacity: 14, basePrice: 8000, companyKey: 'jayrajsinh', grid: { x: 5, y: 35, w: 18, h: 46, zone: 'West Wing Hall' } },
-        { code: 'PH-CAB-04', name: 'Startup Savera Services', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 2, basePrice: 12000, companyKey: 'savera', grid: { x: 26, y: 38, w: 11, h: 22, zone: 'Central Bay' } },
-        { code: 'PH-CAB-05', name: 'NOVA FORMWORKS PRIVATE LIMITED', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 4, basePrice: 32000, companyKey: 'nova formworks', grid: { x: 38, y: 38, w: 11, h: 22, zone: 'Central Bay' } },
-        { code: 'PH-CAB-06', name: 'Scaleana Pvt Ltd Suite', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 6, basePrice: 56817, companyKey: 'scaleana', grid: { x: 22, y: 66, w: 15, h: 22, zone: 'South-West Bay' } },
-        { code: 'PH-CAB-07', name: 'Talent Bridge RPO Suite', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 3, basePrice: 28320, companyKey: 'talent bridge', grid: { x: 38, y: 66, w: 11, h: 22, zone: 'South Central Bay' } },
-        { code: 'PH-CAB-08', name: 'Begwani Agri Executive Cabin', category: 'CABIN', typeName: 'Executive Cabin', capacity: 1, basePrice: 29181, companyKey: 'begwani', grid: { x: 50, y: 66, w: 8, h: 22, zone: 'South-East Bay' } },
-        { code: 'PH-EVT-01', name: 'Grand Event & Training Atrium', category: 'EVENT', typeName: 'Event & Collaboration Space', capacity: 40, basePrice: 2000, companyKey: '', grid: { x: 77, y: 38, w: 20, h: 50, zone: 'Event Atrium' } },
+        { code: 'PH-CAB-01', name: 'DATALOGICS INDIA PVT LTD', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 3, basePrice: 24780, companyKey: 'datalogics', grid: { x: 2.5, y: 5.5, w: 18, h: 19, zone: 'North-West Row' } },
+        { code: 'PH-CAB-02', name: 'Culand & BWIZ Solution', category: 'CABIN', typeName: 'Executive Cabin', capacity: 4, basePrice: 30000, companyKey: 'culand', grid: { x: 36, y: 5.5, w: 12.5, h: 19, zone: 'North Central Row' } },
+        { code: 'PH-CAB-03', name: 'Mizuho Capsave Finance', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 4, basePrice: 45454, companyKey: 'mizuho', grid: { x: 49, y: 5.5, w: 12, h: 19, zone: 'North-East Row' } },
+        { code: 'PH-MR-01', name: 'Executive Round Meeting Room', category: 'MEETING', typeName: 'Round Table Meeting Room', capacity: 4, basePrice: 500, companyKey: '', grid: { x: 66, y: 5.5, w: 9, h: 19, zone: 'VIP Meeting Zone' } },
+        { code: 'PH-MR-02', name: 'Premier Board Room', category: 'MEETING', typeName: 'Smart Boardroom (12 Seats)', capacity: 12, basePrice: 1000, companyKey: '', grid: { x: 76.5, y: 5.5, w: 18, h: 19, zone: 'Boardroom Gallery' } },
+        { code: 'PH-DSK-01', name: 'Premium Dedicated & Fixed Desks', category: 'DESK', typeName: 'Fixed Desk Hub', capacity: 14, basePrice: 8000, companyKey: 'jayrajsinh', grid: { x: 2.5, y: 27, w: 18.5, h: 40, zone: 'West Wing Hall' } },
+        { code: 'PH-CAB-04', name: 'Startup Savera Services', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 2, basePrice: 12000, companyKey: 'savera', grid: { x: 27.5, y: 32, w: 12, h: 19, zone: 'Central Bay' } },
+        { code: 'PH-CAB-05', name: 'NOVA FORMWORKS PRIVATE LIMITED', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 4, basePrice: 32000, companyKey: 'nova formworks', grid: { x: 39.5, y: 32, w: 12, h: 19, zone: 'Central Bay' } },
+        { code: 'PH-CAB-06', name: 'Scaleana Pvt Ltd Suite', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 6, basePrice: 56817, companyKey: 'scaleana', grid: { x: 23, y: 52, w: 16.5, h: 18, zone: 'South-West Bay' } },
+        { code: 'PH-CAB-07', name: 'Talent Bridge RPO Suite', category: 'CABIN', typeName: 'Dedicated Cabin', capacity: 3, basePrice: 28320, companyKey: 'talent bridge', grid: { x: 39.5, y: 52, w: 12, h: 18, zone: 'South Central Bay' } },
+        { code: 'PH-CAB-08', name: 'Begwani Agri Executive Cabin', category: 'CABIN', typeName: 'Executive Cabin', capacity: 1, basePrice: 29181, companyKey: 'begwani', grid: { x: 52, y: 52, w: 8, h: 18, zone: 'South-East Bay' } },
+        { code: 'PH-EVT-01', name: 'Grand Event & Training Atrium', category: 'EVENT', typeName: 'Event & Collaboration Space', capacity: 40, basePrice: 2000, companyKey: '', grid: { x: 75.5, y: 34, w: 21.5, h: 36, zone: 'Event Atrium' } },
       ],
     };
 
@@ -300,25 +301,45 @@ export async function GET(req: NextRequest) {
 
         totalSeats += blueprintUnit.capacity;
 
+        let occupiedSeatsCount = 0;
+        let availableSeatsCount = 0;
+
         if (blueprintUnit.category === 'CABIN') {
           totalCabins += 1;
           if (isOccupied) {
+            occupiedSeatsCount = Math.min(blueprintUnit.capacity, clientSeats);
+            availableSeatsCount = Math.max(0, blueprintUnit.capacity - occupiedSeatsCount);
+            
             occupiedCabins += 1;
-            occupiedSeats += clientSeats;
+            occupiedSeats += occupiedSeatsCount;
+            availableSeats += availableSeatsCount;
             monthlyRevenue += clientAmount;
+
+            if (availableSeatsCount > 0) {
+              availableCabins += 1; // Partially available cabin with free desks
+            }
           } else {
+            availableSeatsCount = blueprintUnit.capacity;
             availableCabins += 1;
+            availableSeats += blueprintUnit.capacity;
           }
         } else if (blueprintUnit.category === 'DESK') {
           totalDesks += blueprintUnit.capacity;
-          const deskTaken = isOccupied ? Math.min(blueprintUnit.capacity, clientSeats) : (blueprintUnit.companyKey ? blueprintUnit.capacity : 0);
+          const deskTaken = isOccupied ? Math.min(blueprintUnit.capacity, clientSeats) : (blueprintUnit.companyKey ? 1 : 0);
+          occupiedSeatsCount = deskTaken;
+          availableSeatsCount = blueprintUnit.capacity - deskTaken;
+
           occupiedDesks += deskTaken;
           occupiedSeats += deskTaken;
-          availableDesks += (blueprintUnit.capacity - deskTaken);
+          availableDesks += availableSeatsCount;
+          availableSeats += availableSeatsCount;
           monthlyRevenue += isOccupied ? clientAmount : (deskTaken * (blueprintUnit.basePrice || 5000));
         } else {
           // Meeting / Event Spaces
-          occupiedSeats += Math.round(blueprintUnit.capacity * 0.6);
+          occupiedSeatsCount = Math.round(blueprintUnit.capacity * 0.6);
+          availableSeatsCount = blueprintUnit.capacity - occupiedSeatsCount;
+          occupiedSeats += occupiedSeatsCount;
+          availableSeats += availableSeatsCount;
         }
 
         // Space Tickets
@@ -327,13 +348,19 @@ export async function GET(req: NextRequest) {
           (t.description || '').toLowerCase().includes(blueprintUnit.name.toLowerCase())
         );
 
-        let statusStr: 'OCCUPIED' | 'AVAILABLE' | 'ON_NOTICE' | 'GUEST_BOOKABLE' = 'AVAILABLE';
+        let statusStr: 'OCCUPIED' | 'AVAILABLE' | 'PARTIALLY_AVAILABLE' | 'ON_NOTICE' | 'GUEST_BOOKABLE' = 'AVAILABLE';
         if (blueprintUnit.category === 'MEETING' || blueprintUnit.category === 'EVENT') {
           statusStr = 'GUEST_BOOKABLE';
         } else if (isOnNotice) {
           statusStr = 'ON_NOTICE';
         } else if (isOccupied) {
-          statusStr = 'OCCUPIED';
+          if (availableSeatsCount > 0) {
+            statusStr = 'PARTIALLY_AVAILABLE';
+          } else {
+            statusStr = 'OCCUPIED';
+          }
+        } else {
+          statusStr = 'AVAILABLE';
         }
 
         const unitData = {
@@ -345,6 +372,8 @@ export async function GET(req: NextRequest) {
           category: blueprintUnit.category,
           typeName: blueprintUnit.typeName,
           capacity: blueprintUnit.capacity,
+          occupiedSeats: occupiedSeatsCount,
+          availableSeats: availableSeatsCount,
           basePrice: blueprintUnit.basePrice,
           status: statusStr,
           grid: blueprintUnit.grid,
@@ -354,7 +383,7 @@ export async function GET(req: NextRequest) {
                 clientId: assignedClient.clientId || `#CL-${assignedClient.id}`,
                 seats: clientSeats,
                 monthlyAmount: clientAmount,
-                sdrDeposit: Number(assignedClient.sorAmount || assignedClient.sdrAmount || 0),
+                sdrDeposit: Number(assignedClient.sdrAmount || assignedClient.sorAmount || 0),
                 status: assignedClient.clientStatus || 'Active',
                 agreementStartDate: assignedClient.agreementStartDate
                   ? new Date(assignedClient.agreementStartDate).toLocaleDateString('en-GB')
@@ -362,7 +391,12 @@ export async function GET(req: NextRequest) {
                 agreementEndDate: assignedClient.agreementEndDate
                   ? new Date(assignedClient.agreementEndDate).toLocaleDateString('en-GB')
                   : 'N/A',
-                lockInPeriod: `${assignedClient.lockInPeriodMonths || 11} Months`,
+                lockinEndDate: assignedClient.lockinEndDate
+                  ? new Date(assignedClient.lockinEndDate).toLocaleDateString('en-GB')
+                  : null,
+                lockInPeriod: assignedClient.lockinEndDate
+                  ? `${new Date(assignedClient.lockinEndDate).toLocaleDateString('en-GB')} (${assignedClient.lockInPeriodMonths || 11}M)`
+                  : `${assignedClient.lockInPeriodMonths || 11} Months`,
                 noticeMonths: assignedClient.noticePeriodMonths || 1,
               }
             : null,
