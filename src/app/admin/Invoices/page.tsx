@@ -574,6 +574,31 @@ export default function AdminInvoicesWorkflowPage() {
     }
   };
 
+  // ── DISPATCH APPROVED INVOICES EMAILS TO CM@SSPACIA.COM ──
+  const [isSendingApprovedEmails, setIsSendingApprovedEmails] = useState(false);
+
+  const handleSendAllApprovedEmails = async () => {
+    setIsSendingApprovedEmails(true);
+    try {
+      const activeMonth = selectedBillingMonthFilter === 'ALL' ? 'SEP 2026' : selectedBillingMonthFilter;
+      const res = await fetch('/api/admin/Invoices/send-approved-emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billingMonth: activeMonth }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message);
+      } else {
+        toast.error(data.error || 'Failed to dispatch approved invoice emails');
+      }
+    } catch (err: any) {
+      toast.error('Network error dispatching emails');
+    } finally {
+      setIsSendingApprovedEmails(false);
+    }
+  };
+
   // ── SPLIT INVOICE (PRODUCT-WISE) HANDLERS ──
   const handleOpenSplitModal = (inv: InvoiceRecord) => {
     setSplitModalInvoice(inv);

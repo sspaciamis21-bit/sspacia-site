@@ -16,11 +16,17 @@ export async function GET(request: Request) {
     const cookieStore = await cookies();
     const token = cookieStore.get('auth-token')?.value;
     let currentUserId: number | null = null;
+    let userRole = '';
+    let userEmail = '';
+    let userCompanyName = '';
 
     if (token) {
       const payload = await verifyToken(token);
       if (payload?.id) {
         currentUserId = Number(payload.id);
+        userRole = ((payload?.role as string) || '').toUpperCase();
+        userEmail = ((payload?.email as string) || '').toLowerCase();
+        userCompanyName = (payload?.companyName as string) || '';
       }
     }
 
@@ -34,16 +40,29 @@ export async function GET(request: Request) {
 
     const where: any = {};
 
+    const isInternalStaff = ['ADMIN', 'SUPER_ADMIN', 'SUPERADMIN', 'COMMUNITY_MANAGER', 'COMMUNITY MANAGER'].includes(userRole) || userEmail === 'ssinfrazone21@gmail.com';
+
+    if (!isInternalStaff && userEmail) {
+      // Client Portal perspective: strictly show APPROVED invoices belonging to client's company
+      where.status = 'APPROVED';
+      where.clientMaster = {
+        OR: [
+          { contactPersons: { some: { email: { equals: userEmail } } } },
+          ...(userCompanyName ? [{ companyName: { equals: userCompanyName } }] : []),
+        ],
+      };
+    } else {
+      if (status && status !== 'ALL') {
+        where.status = status;
+      }
+    }
+
     if (search) {
       where.OR = [
         { companyName: { contains: search } },
         { gstNo: { contains: search } },
         { cabinName: { contains: search } },
       ];
-    }
-
-    if (status && status !== 'ALL') {
-      where.status = status;
     }
 
     if (sendType && sendType !== 'ALL') {
@@ -58,8 +77,8 @@ export async function GET(request: Request) {
       where.paymentDueDay = parseInt(dueDay, 10);
     }
 
-    // ── Node-based data isolation ────────────────────────────────
-    if (currentUserId) {
+    // ── Node-based data isolation for internal staff ────────────────────────────────
+    if (currentUserId && isInternalStaff) {
       if (locationId && locationId !== 'ALL') {
         const locationUserIds = await getUserIdsByLocation(parseInt(locationId, 10));
         if (locationUserIds) {

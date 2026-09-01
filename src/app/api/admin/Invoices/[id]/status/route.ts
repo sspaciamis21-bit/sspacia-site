@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { sendInvoiceApprovalEmail } from '@/lib/invoice-email-service';
 
 export async function PATCH(
   request: Request,
@@ -37,9 +38,23 @@ export async function PATCH(
       },
     });
 
+    // ── When CM approves invoice, trigger automated email with attached PDF(s) to cm@sspacia.com ──
+    if (status === 'APPROVED') {
+      sendInvoiceApprovalEmail(invoiceRecordId).then((res) => {
+        if (res.success) {
+          console.log(`[Invoice Status] ✅ Approval email delivered for Invoice #${invoiceRecordId}`);
+        } else {
+          console.warn(`[Invoice Status] ⚠️ Approval email notice for Invoice #${invoiceRecordId}: ${res.error}`);
+        }
+      }).catch((err) => {
+        console.error(`[Invoice Status] ❌ Async email error on Invoice #${invoiceRecordId}:`, err);
+      });
+    }
+
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     console.error('Update invoice record status error:', error);
     return NextResponse.json({ error: 'Failed to update invoice status' }, { status: 500 });
   }
 }
+

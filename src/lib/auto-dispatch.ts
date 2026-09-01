@@ -26,7 +26,14 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
-    const currentBillingMonth = `${monthNames[currentMonthIndex]} ${currentYear}`;
+    
+    // In coworking advance billing, invoice generated on the last day of the month is for the UPCOMING billing month
+    const nextMonthDate = new Date(currentYear, currentMonthIndex + 1, 1);
+    const targetMonthIndex = nextMonthDate.getMonth();
+    const targetYear = nextMonthDate.getFullYear();
+    const currentBillingMonth = `${monthNames[targetMonthIndex]} ${targetYear}`;
+
+    console.log(`[Auto-Dispatch] 🗓️ Last day of month detected (${today}/${currentMonthIndex + 1}/${currentYear}). Preparing invoices for: "${currentBillingMonth}"`);
 
     // Fetch all active clients with their products
     const clientsToDispatch = await (prisma as any).clientMaster.findMany({
@@ -40,7 +47,7 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
       return { dispatched: false, count: 0, message: 'No active clients found to dispatch' };
     }
 
-    // Check which clients already have an invoice for this billing month
+    // Check which clients already have an invoice for this upcoming billing month
     const existingInvoices = await (prisma as any).invoiceRecord.findMany({
       where: { billingMonth: currentBillingMonth },
       select: { clientMasterId: true },
@@ -79,7 +86,8 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
         totalAmt = Number(cm.totalAmount) || 0;
       }
 
-      const dueDate = new Date(currentYear, currentMonthIndex, Math.min(primaryDueDay, 28));
+      // Due date set for the upcoming billing month (e.g. 5th of September)
+      const dueDate = new Date(targetYear, targetMonthIndex, Math.min(primaryDueDay, 28));
 
       invoiceCreates.push(
         (prisma as any).invoiceRecord.create({
@@ -112,7 +120,7 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
     }
 
     if (invoiceCreates.length === 0) {
-      return { dispatched: false, count: 0, message: 'All active clients already invoiced for this month' };
+      return { dispatched: false, count: 0, message: `All active clients already have invoice entries for ${currentBillingMonth}` };
     }
 
     const createdRecords = await (prisma as any).$transaction(invoiceCreates);

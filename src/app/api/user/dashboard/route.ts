@@ -74,14 +74,82 @@ export async function GET() {
     }
 
 
+    // 2. Fetch ClientMaster record if the user is a registered client
+    let clientMasterRecord: any = null;
+    let approvedInvoices: any[] = [];
+
+    try {
+      clientMasterRecord = await (prisma as any).clientMaster.findFirst({
+        where: {
+          clientStatus: { in: ['Active', 'On Notice'] },
+          OR: [
+            { contactPersons: { some: { email: { equals: email } } } },
+            ...(user?.companyName ? [{ companyName: { equals: user.companyName } }] : []),
+          ],
+        },
+        include: {
+          products: { orderBy: { sortOrder: 'asc' } },
+          contactPersons: { orderBy: { sortOrder: 'asc' } },
+          createdBy: {
+            select: {
+              assignedLocations: {
+                select: { location: { select: { id: true, name: true } } },
+              },
+            },
+          },
+        },
+      });
+
+      if (clientMasterRecord) {
+        approvedInvoices = await (prisma as any).invoiceRecord.findMany({
+          where: {
+            clientMasterId: clientMasterRecord.id,
+            status: 'APPROVED',
+          },
+          include: {
+            attachedInvoice: true,
+          },
+          orderBy: { sentAt: 'desc' },
+          take: 6,
+        });
+      }
+    } catch (cmErr) {
+      console.warn('[User Dashboard] ClientMaster lookup note:', cmErr);
+    }
+
     return NextResponse.json({
       data: {
         stats: {
           totalBookings,
-          activePasses: isProfileComplete ? 1 : 0, // Placeholder mapping
+          activePasses: isProfileComplete ? 1 : (clientMasterRecord ? 1 : 0),
           pendingTickets,
           totalTickets,
+          totalSeats: clientMasterRecord?.noOfSeats || (clientMasterRecord?.products?.reduce((s: number, p: any) => s + (Number(p.noOfSeats) || 0), 0) || 0),
         },
+        clientMaster: clientMasterRecord ? {
+          id: clientMasterRecord.id,
+          clientId: clientMasterRecord.clientId,
+          companyName: clientMasterRecord.companyName,
+          cabinName: clientMasterRecord.cabinName,
+          noOfSeats: clientMasterRecord.noOfSeats,
+          agreementStartDate: clientMasterRecord.agreementStartDate,
+          agreementEndDate: clientMasterRecord.agreementEndDate,
+          locationName: clientMasterRecord.createdBy?.assignedLocations?.[0]?.location?.name || 'SSPACIA Centre',
+          products: clientMasterRecord.products || [],
+          contactPersons: clientMasterRecord.contactPersons || [],
+        } : null,
+        approvedInvoices: approvedInvoices.map((inv: any) => ({
+          id: inv.id,
+          billingMonth: inv.billingMonth,
+          amount: inv.amount,
+          gstPercent: inv.gstPercent,
+          totalAmount: inv.totalAmount,
+          dueDate: inv.dueDate,
+          status: inv.status,
+          splitsJson: inv.splitsJson,
+          attachedPdfUrl: inv.attachedInvoice?.fileUrl || null,
+          attachedPdfName: inv.attachedInvoice?.fileName || null,
+        })),
         recentActivity: recentBookings
       }
     });
