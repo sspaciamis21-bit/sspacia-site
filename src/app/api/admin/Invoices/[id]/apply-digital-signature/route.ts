@@ -64,18 +64,49 @@ export async function POST(
     const activeTitle = signerTitle || signatureSetting?.signerTitle || 'Director';
     const company = signatureSetting?.companyName || 'SSPACIA INDIA PVT LTD';
 
-    // 3. Read base PDF bytes
-    let pdfBuffer: Buffer;
-    if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) {
-      const res = await fetch(pdfUrl);
-      if (!res.ok) throw new Error('Failed to fetch attached PDF from remote storage');
-      pdfBuffer = Buffer.from(await res.arrayBuffer());
-    } else {
-      const localPath = path.join(process.cwd(), 'public', pdfUrl.startsWith('/') ? pdfUrl.slice(1) : pdfUrl);
-      if (!fs.existsSync(localPath)) {
-        return NextResponse.json({ error: `File not found at ${localPath}` }, { status: 404 });
+    // 3. Read base PDF bytes (support both DB StoredDocument and Remote/Local files)
+    let pdfBuffer: Buffer | null = null;
+
+    if (pdfUrl.includes('/api/admin/stored-documents/')) {
+      const match = pdfUrl.match(/\/api\/admin\/stored-documents\/(\d+)/);
+      if (match && match[1]) {
+        const docId = Number(match[1]);
+        const doc = await (prisma as any).storedDocument.findUnique({
+          where: { id: docId },
+          select: { fileData: true },
+        });
+        if (doc?.fileData) {
+          pdfBuffer = Buffer.from(doc.fileData);
+        }
       }
-      pdfBuffer = fs.readFileSync(localPath);
+    }
+
+    if (!pdfBuffer) {
+      if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) {
+        const res = await fetch(pdfUrl);
+        if (!res.ok) throw new Error(`Failed to fetch attached PDF from remote storage: HTTP ${res.status}`);
+        pdfBuffer = Buffer.from(await res.arrayBuffer());
+      } else {
+        const localPath = path.join(process.cwd(), 'public', pdfUrl.startsWith('/') ? pdfUrl.slice(1) : pdfUrl);
+        if (fs.existsSync(localPath)) {
+          pdfBuffer = fs.readFileSync(localPath);
+        } else {
+          // If not on disk, try looking up in storedDocument as fallback
+          const doc = await (prisma as any).storedDocument.findFirst({
+            where: { fileName: invoiceRecord.attachedInvoice?.fileName || '' },
+            select: { fileData: true },
+          });
+          if (doc?.fileData) {
+            pdfBuffer = Buffer.from(doc.fileData);
+          } else {
+            return NextResponse.json({ error: `Attached invoice PDF file not found at ${pdfUrl}` }, { status: 404 });
+          }
+        }
+      }
+    }
+
+    if (!pdfBuffer) {
+      return NextResponse.json({ error: 'Could not load PDF content to apply digital signature' }, { status: 400 });
     }
 
     // 4. Apply Digital Signature Stamp
@@ -87,16 +118,30 @@ export async function POST(
       date: new Date(),
     });
 
-    // 5. Save stamped PDF to public/uploads/signed-invoices/
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'signed-invoices');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
+    // 5. Save stamped PDF to Database StoredDocument (ensures persistence on Hostinger / Cloud)
     const signedFileName = `signed_invoice_${invoiceRecord.id}_${Date.now()}.pdf`;
-    const signedFilePath = path.join(uploadDir, signedFileName);
-    fs.writeFileSync(signedFilePath, signedPdfBuffer);
-    const signedPdfUrl = `/uploads/signed-invoices/${signedFileName}`;
+
+    const storedDoc = await (prisma as any).storedDocument.create({
+      data: {
+        fileName: signedFileName,
+        fileData: signedPdfBuffer,
+        mimeType: 'application/pdf',
+        fileSize: signedPdfBuffer.length,
+      },
+    });
+
+    const signedPdfUrl = `/api/admin/stored-documents/${storedDoc.id}`;
+
+    // Optionally also write to disk if directory is accessible
+    try {
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'signed-invoices');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      fs.writeFileSync(path.join(uploadDir, signedFileName), signedPdfBuffer);
+    } catch (diskErr) {
+      console.warn('[DIGITAL_SIGN] Disk write notice (DB storage used):', diskErr);
+    }
 
     // 6. Update InvoiceRecord
     const updated = await (prisma as any).invoiceRecord.update({

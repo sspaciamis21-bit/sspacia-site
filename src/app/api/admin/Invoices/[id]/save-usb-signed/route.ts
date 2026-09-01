@@ -39,9 +39,29 @@ export async function POST(
     });
 
     const fileName = `usb_signed_invoice_${invoiceRecordId}_${Date.now()}.pdf`;
-    const filePath = path.join(uploadDir, fileName);
-    fs.writeFileSync(filePath, finalSignedPdf);
-    const signedPdfUrl = `/uploads/signed-invoices/${fileName}`;
+
+    // Save to database StoredDocument
+    const storedDoc = await (prisma as any).storedDocument.create({
+      data: {
+        fileName,
+        fileData: finalSignedPdf,
+        mimeType: 'application/pdf',
+        fileSize: finalSignedPdf.length,
+      },
+    });
+
+    const signedPdfUrl = `/api/admin/stored-documents/${storedDoc.id}`;
+
+    // Optionally also write to disk if directory is accessible
+    try {
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'signed-invoices');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      fs.writeFileSync(path.join(uploadDir, fileName), finalSignedPdf);
+    } catch (diskErr) {
+      console.warn('[USB_SIGN] Disk write notice (DB storage used):', diskErr);
+    }
 
     const updated = await (prisma as any).invoiceRecord.update({
       where: { id: invoiceRecordId },
