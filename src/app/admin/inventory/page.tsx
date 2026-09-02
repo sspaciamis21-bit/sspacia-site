@@ -553,6 +553,8 @@ export default function InternalInventoryPage() {
   // Inline Quick Adjust Available Qty for Consumed item (Increments/Decrements & triggers buffer evaluation)
   const handleQuickAdjustConsumedQty = async (item: ConsumedItem, delta: number) => {
     const newQty = Math.max(0, item.balanceQty + delta);
+    if (newQty === item.balanceQty) return;
+
     try {
       const res = await fetch(`/api/admin/inventory/consumed/${item.id}`, {
         method: 'PUT',
@@ -572,6 +574,32 @@ export default function InternalInventoryPage() {
       toast.error('Network error updating stock');
     }
   };
+
+  // Direct edit/type Available Qty for Consumed item
+  const handleDirectSetConsumedQty = async (item: ConsumedItem, newQty: number) => {
+    const validQty = Math.max(0, newQty);
+    if (validQty === item.balanceQty) return;
+
+    try {
+      const res = await fetch(`/api/admin/inventory/consumed/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          balanceQty: validQty,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message || `Available quantity updated to ${validQty} units`);
+        fetchConsumedInventory();
+      } else {
+        toast.error(json.error || 'Failed to update stock');
+      }
+    } catch {
+      toast.error('Network error updating stock');
+    }
+  };
+
 
   // Confirm Purchase Delivery by Community Manager
   const handleConfirmPurchaseDelivery = async (item: ConsumedItem) => {
@@ -1478,30 +1506,54 @@ export default function InternalInventoryPage() {
                               </div>
                             </td>
 
-                            {/* Available Qty with quick -1 and +1 inline buttons */}
+                            {/* Available Qty with quick - / editable numeric input / + inline buttons */}
                             <td className="py-2.5 px-3.5 text-center">
-                              <div className="inline-flex items-center justify-center gap-1.5 bg-white border border-neutral-300 p-0.5 shadow-2xs">
+                              <div className="inline-flex items-center justify-center bg-white border border-neutral-300 p-0.5 shadow-2xs hover:border-[#006064] transition-colors">
                                 <button
                                   type="button"
                                   onClick={() => handleQuickAdjustConsumedQty(item, -1)}
                                   disabled={item.balanceQty <= 0}
-                                  className="w-5 h-5 flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-neutral-700 disabled:opacity-30 cursor-pointer text-xs font-bold"
-                                  title="Consume 1 unit"
+                                  className="w-5 h-6 flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-neutral-700 disabled:opacity-30 cursor-pointer text-xs font-bold shrink-0"
+                                  title="Decrease by 1 unit (-)"
                                 >
                                   <Minus size={10} />
                                 </button>
                                 
-                                <span className={`px-2 py-0.5 font-mono font-black text-xs ${
-                                  isBreached ? 'text-red-700' : 'text-emerald-800'
-                                }`}>
-                                  {item.balanceQty}
-                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  defaultValue={item.balanceQty}
+                                  key={`qty-input-${item.id}-${item.balanceQty}`}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const val = parseInt((e.target as HTMLInputElement).value, 10);
+                                      if (!isNaN(val) && val >= 0) {
+                                        handleDirectSetConsumedQty(item, val);
+                                      }
+                                      (e.target as HTMLInputElement).blur();
+                                    }
+                                  }}
+                                  onBlur={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val) && val >= 0) {
+                                      if (val !== item.balanceQty) {
+                                        handleDirectSetConsumedQty(item, val);
+                                      }
+                                    } else {
+                                      e.target.value = String(item.balanceQty);
+                                    }
+                                  }}
+                                  className={`w-11 h-6 text-center font-mono font-black text-xs bg-transparent focus:bg-teal-50/50 focus:outline-none focus:ring-1 focus:ring-[#006064] p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                                    isBreached ? 'text-red-700 font-bold' : 'text-emerald-800 font-bold'
+                                  }`}
+                                  title="Click to type exact quantity and press Enter"
+                                />
 
                                 <button
                                   type="button"
                                   onClick={() => handleQuickAdjustConsumedQty(item, 1)}
-                                  className="w-5 h-5 flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-neutral-700 cursor-pointer text-xs font-bold"
-                                  title="Add 1 unit"
+                                  className="w-5 h-6 flex items-center justify-center bg-neutral-100 hover:bg-neutral-200 text-neutral-700 cursor-pointer text-xs font-bold shrink-0"
+                                  title="Increase by 1 unit (+)"
                                 >
                                   <Plus size={10} />
                                 </button>
