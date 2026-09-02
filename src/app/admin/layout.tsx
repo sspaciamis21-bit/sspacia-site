@@ -218,7 +218,12 @@ export default function AdminLayout({
                 </div>
                 <div className="w-full min-w-0 overflow-hidden">
                   <p className="text-[11px] font-black text-[#1B1C1C] truncate w-full uppercase tracking-widest">{user.name}</p>
-                  <p className="text-[9px] text-[#616161] font-bold uppercase tracking-[0.3em] truncate opacity-50">{user.role}</p>
+                  <p className="text-[9px] text-[#006064] font-black uppercase tracking-[0.25em] truncate">
+                    {user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'SUPER_ADMIN' || user.role?.toUpperCase() === 'SUPER ADMIN'
+                      ? 'SUPER ADMIN'
+                      : user.role}
+                  </p>
+
                 </div>
               </div>
             ) : (

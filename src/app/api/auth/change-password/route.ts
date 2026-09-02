@@ -21,7 +21,37 @@ export async function POST(req: Request) {
 
     const userId = Number(payload.id);
     const body = await req.json();
-    const { newPassword, confirmPassword } = body;
+    const { newPassword, confirmPassword, otp } = body;
+
+    if (!otp || typeof otp !== 'string' || !otp.trim()) {
+      return NextResponse.json(
+        { error: 'Email OTP is mandatory to change your password. Please enter the verification code sent to your email.' },
+        { status: 400 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+
+    if (!user || !user.email) {
+      return NextResponse.json({ error: 'Account email not found' }, { status: 404 });
+    }
+
+    const { verifyOtpCode, consumeOtpCode } = await import('@/lib/otpDb');
+    const otpVerification = await verifyOtpCode({
+      email: user.email,
+      otp: String(otp).trim(),
+      purpose: 'RESET_PASSWORD',
+    });
+
+    if (!otpVerification.valid) {
+      return NextResponse.json(
+        { error: otpVerification.error || 'Invalid or expired OTP. Please click "Resend OTP".' },
+        { status: 400 }
+      );
+    }
 
     const validation = validatePassword(newPassword);
     if (!validation.isValid) {
@@ -39,6 +69,14 @@ export async function POST(req: Request) {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
+
+    // Consume OTP after successful password hashing
+    await consumeOtpCode({
+      email: user.email,
+      otp: String(otp).trim(),
+      purpose: 'RESET_PASSWORD',
+    });
+
 
     const updatedUser: any = await (prisma as any).user.update({
       where: { id: userId },

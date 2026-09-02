@@ -348,6 +348,41 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           return db.getTime() - da.getTime();
         });
 
+        // Compute month-wise breakdown for all months
+        const monthWiseInvoices: Record<string, any> = {};
+        allInvoices.forEach((inv: any) => {
+          const m = normalizeBillingMonth(inv.billingMonth) || 'August 2026';
+          if (!monthWiseInvoices[m]) {
+            monthWiseInvoices[m] = {
+              totalInvoices: 0,
+              pendingCmReview: 0,
+              sentToAccountant: 0,
+              invoiceAttached: 0,
+              approved: 0,
+              rejected: 0,
+              totalInvoicedAmount: 0,
+              invoicesRaised: 0,
+              paymentReceived: 0,
+              balancePayment: 0,
+            };
+          }
+          monthWiseInvoices[m].totalInvoices += 1;
+          if (inv.status === 'PENDING_CM_REVIEW') monthWiseInvoices[m].pendingCmReview += 1;
+          if (inv.status === 'SENT_TO_ACCOUNTANT') monthWiseInvoices[m].sentToAccountant += 1;
+          if (inv.status === 'INVOICE_ATTACHED') monthWiseInvoices[m].invoiceAttached += 1;
+          if (inv.status === 'APPROVED') monthWiseInvoices[m].approved += 1;
+          if (inv.status === 'REJECTED_WITH_REMARKS') monthWiseInvoices[m].rejected += 1;
+
+          const amt = Number(inv.totalAmount || inv.amount || 0);
+          monthWiseInvoices[m].invoicesRaised += amt;
+          monthWiseInvoices[m].totalInvoicedAmount += amt;
+          if (inv.status === 'APPROVED' || inv.status === 'CONFIRMED' || inv.status === 'PAID') {
+            monthWiseInvoices[m].paymentReceived += amt;
+          }
+          monthWiseInvoices[m].balancePayment = Math.max(0, monthWiseInvoices[m].invoicesRaised - monthWiseInvoices[m].paymentReceived);
+        });
+        (invoiceStats as any).monthWise = monthWiseInvoices;
+
         // Apply filters for invoiceStats
         let filteredInvs = allInvoices;
         if (locationIdParam && locationIdParam !== 'ALL') {
@@ -455,18 +490,11 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
             centreMap[locName] = { name: locName, total: 0, paymentReceived: 0, paymentPending: 0, amount: 0 };
           }
 
-          // Check if accountant updated payment details against CM uploaded invoice
-          const hasPayment = Boolean(
-            inv.payReceiveDate ||
-            (inv.receiveAmount && Number(inv.receiveAmount) > 0) ||
-            (inv.utrNumber && String(inv.utrNumber).trim() !== '') ||
-            (inv.paymentsJson && inv.paymentsJson !== '[]')
-          );
-
-          const amt = Number(inv.amount || inv.receiveAmount || 0);
-
+          const amt = Number(inv.grandTotal || inv.amount || 0);
           centreMap[locName].total += 1;
-          if (hasPayment) {
+
+          const isReceived = inv.paymentStatus === 'RECEIVED' || inv.paymentStatus === 'PAID' || Boolean(inv.utrNumber);
+          if (isReceived) {
             centreMap[locName].paymentReceived += 1;
             oldInvoicesStats.totalPaymentReceived += 1;
           } else {
@@ -489,6 +517,7 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
       totalExpensesLogged: 0,
       totalExpenseAmount: 0,
       centreExpenses: [] as any[],
+      monthWise: {} as Record<string, any>,
     };
 
     try {
@@ -501,6 +530,7 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           let totalExpSum = 0;
           let totalCount = 0;
           const centreMap: Record<string, { name: string; amount: number; count: number }> = {};
+          const monthWiseExp: Record<string, Record<string, { name: string; amount: number; count: number }>> = {};
 
           sheets.forEach((sheet: any) => {
             const locName = sheet.location?.name || 'Ahmedabad Centre';
@@ -532,6 +562,30 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
                 totalCount += 1;
                 centreMap[locName].amount += amt;
                 centreMap[locName].count += 1;
+
+                // Extract month
+                let rowMonth = 'August 2026';
+                const dateVal = String(r.col_1 || '').trim();
+                if (dateVal) {
+                  const d = new Date(dateVal);
+                  if (!isNaN(d.getTime()) && d.getFullYear() >= 2020) {
+                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    rowMonth = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+                  } else {
+                    const mMatch = dateVal.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+                    if (mMatch) {
+                      const mIdx = parseInt(mMatch[2], 10) - 1;
+                      const mYear = parseInt(mMatch[3], 10);
+                      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                      if (mIdx >= 0 && mIdx < 12) rowMonth = `${monthNames[mIdx]} ${mYear}`;
+                    }
+                  }
+                }
+
+                if (!monthWiseExp[rowMonth]) monthWiseExp[rowMonth] = {};
+                if (!monthWiseExp[rowMonth][locName]) monthWiseExp[rowMonth][locName] = { name: locName, amount: 0, count: 0 };
+                monthWiseExp[rowMonth][locName].amount += amt;
+                monthWiseExp[rowMonth][locName].count += 1;
               }
             });
           });
@@ -539,6 +593,19 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           expenseStats.totalExpensesLogged = totalCount;
           expenseStats.totalExpenseAmount = totalExpSum;
           expenseStats.centreExpenses = Object.values(centreMap);
+
+          const formattedMonthWise: Record<string, any> = {};
+          Object.entries(monthWiseExp).forEach(([m, cMap]) => {
+            const list = Object.values(cMap);
+            const sum = list.reduce((acc, c) => acc + c.amount, 0);
+            const cnt = list.reduce((acc, c) => acc + c.count, 0);
+            formattedMonthWise[m] = {
+              totalExpensesLogged: cnt,
+              totalExpenseAmount: sum,
+              centreExpenses: list,
+            };
+          });
+          expenseStats.monthWise = formattedMonthWise;
         }
       }
     } catch (e) {

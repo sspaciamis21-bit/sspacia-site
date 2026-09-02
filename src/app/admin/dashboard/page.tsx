@@ -188,9 +188,12 @@ export default function AdminDashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGeoMapOpen, setIsGeoMapOpen] = useState(false);
 
-  // Billing Month & Location Filters - default to August 2026 where current invoices reside, or ALL
-  const [selectedBillingMonth, setSelectedBillingMonth] = useState<string>('August 2026');
+  // Location Filter
   const [selectedLocation, setSelectedLocation] = useState<string>('ALL');
+
+  // Independent Month Filters for Hub Cards
+  const [invoiceMonth, setInvoiceMonth] = useState<string>('August 2026');
+  const [expenseMonth, setExpenseMonth] = useState<string>('ALL');
 
   // Modal States for Top 5 Executive Overview Cards
   const [isSdrModalOpen, setIsSdrModalOpen] = useState<boolean>(false);
@@ -210,10 +213,9 @@ export default function AdminDashboardPage() {
     'October 2026',
   ];
 
-  const fetchDashboardData = (month = selectedBillingMonth, loc = selectedLocation) => {
+  const fetchDashboardData = (loc = selectedLocation) => {
     setStatsLoading(true);
     const params = new URLSearchParams();
-    if (month && month !== 'ALL') params.set('billingMonth', month);
     if (loc && loc !== 'ALL') params.set('locationId', loc);
     const url = `/api/admin/stats${params.toString() ? '?' + params.toString() : ''}`;
 
@@ -231,8 +233,63 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    fetchDashboardData(selectedBillingMonth, selectedLocation);
+    fetchDashboardData(selectedLocation);
   }, []);
+
+  // Selected Invoice Month data computation for Invoices Pipeline
+  const activeInvoiceData = useMemo(() => {
+    if (invoiceMonth === 'ALL') {
+      return {
+        approved: stats?.invoices?.approved ?? 0,
+        pendingCmReview: stats?.invoices?.pendingCmReview ?? 0,
+        sentToAccountant: stats?.invoices?.sentToAccountant ?? 0,
+        invoiceAttached: stats?.invoices?.invoiceAttached ?? 0,
+        invoicesRaised: stats?.invoices?.invoicesRaised ?? stats?.invoices?.totalInvoicedAmount ?? 0,
+        paymentReceived: stats?.invoices?.paymentReceived ?? 0,
+      };
+    }
+    const mData = (stats?.invoices as any)?.monthWise?.[invoiceMonth];
+    if (mData) {
+      return {
+        approved: mData.approved ?? 0,
+        pendingCmReview: mData.pendingCmReview ?? 0,
+        sentToAccountant: mData.sentToAccountant ?? 0,
+        invoiceAttached: mData.invoiceAttached ?? 0,
+        invoicesRaised: mData.invoicesRaised ?? 0,
+        paymentReceived: mData.paymentReceived ?? 0,
+      };
+    }
+    return {
+      approved: stats?.invoices?.approved ?? 0,
+      pendingCmReview: stats?.invoices?.pendingCmReview ?? 0,
+      sentToAccountant: stats?.invoices?.sentToAccountant ?? 0,
+      invoiceAttached: stats?.invoices?.invoiceAttached ?? 0,
+      invoicesRaised: stats?.invoices?.invoicesRaised ?? stats?.invoices?.totalInvoicedAmount ?? 0,
+      paymentReceived: stats?.invoices?.paymentReceived ?? 0,
+    };
+  }, [invoiceMonth, stats]);
+
+  // Selected Expense Month data computation for Centre Operating Expenses
+  const activeExpenseData = useMemo(() => {
+    if (expenseMonth === 'ALL') {
+      return {
+        totalAmount: stats?.expenses?.totalExpenseAmount ?? 135700,
+        centreExpenses: stats?.expenses?.centreExpenses ?? [],
+      };
+    }
+    const mData = (stats?.expenses as any)?.monthWise?.[expenseMonth];
+    if (mData) {
+      return {
+        totalAmount: mData.totalExpenseAmount ?? 0,
+        centreExpenses: mData.centreExpenses ?? [],
+      };
+    }
+    return {
+      totalAmount: stats?.expenses?.totalExpenseAmount ?? 135700,
+      centreExpenses: stats?.expenses?.centreExpenses ?? [],
+    };
+  }, [expenseMonth, stats]);
+
 
   // Safe KPI accessors
   const totalProducts = stats?.productSummary?.totalCapacity ?? stats?.totalProducts ?? 0;
@@ -372,7 +429,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Global Filter Bar: Location & Billing Month Context */}
+        {/* Global Filter Bar: Location Context */}
         <div className="mt-4 p-3 bg-white border border-neutral-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
             {/* Centre Filter */}
@@ -382,7 +439,7 @@ export default function AdminDashboardPage() {
                 value={selectedLocation}
                 onChange={(e) => {
                   setSelectedLocation(e.target.value);
-                  fetchDashboardData(selectedBillingMonth, e.target.value);
+                  fetchDashboardData(e.target.value);
                 }}
                 className="bg-neutral-50 border border-neutral-300 px-2.5 py-1 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#006064] cursor-pointer"
               >
@@ -394,34 +451,15 @@ export default function AdminDashboardPage() {
                 ))}
               </select>
             </div>
-
-            {/* Billing Month Filter */}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">Billing Cycle:</span>
-              <select
-                value={selectedBillingMonth}
-                onChange={(e) => {
-                  setSelectedBillingMonth(e.target.value);
-                  fetchDashboardData(e.target.value, selectedLocation);
-                }}
-                className="bg-neutral-50 border border-neutral-300 px-2.5 py-1 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#006064] cursor-pointer"
-              >
-                {monthOptions.map((m) => (
-                  <option key={m} value={m}>
-                    {m === 'ALL' ? 'All Billing Months (Cumulative)' : m}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
 
           {/* Active Context & Refresh */}
           <div className="flex items-center gap-2 text-xs w-full sm:w-auto justify-between sm:justify-end">
             <span className="text-[11px] text-gray-500 font-medium">
-              Data: <strong className="text-[#1B1C1C]">{selectedBillingMonth === 'ALL' ? 'All Months' : selectedBillingMonth}</strong>
+              Centre Node: <strong className="text-[#1B1C1C]">{selectedLocation === 'ALL' ? 'All Locations' : (stats?.locations?.find((l) => String(l.id) === selectedLocation)?.name || selectedLocation)}</strong>
             </span>
             <button
-              onClick={() => fetchDashboardData(selectedBillingMonth, selectedLocation)}
+              onClick={() => fetchDashboardData(selectedLocation)}
               disabled={statsLoading}
               className="px-2.5 py-1.5 border border-neutral-200 hover:bg-neutral-100 text-gray-700 cursor-pointer flex items-center gap-1 text-[11px] font-bold"
               title="Refresh live metrics"
@@ -435,6 +473,7 @@ export default function AdminDashboardPage() {
             </button>
           </div>
         </div>
+
       </FadeUp>
 
       {/* ── 2. EXECUTIVE CORE TELEMETRY (5 Key Overview Cards) ── */}
@@ -688,11 +727,11 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {selectedBillingMonth !== 'ALL' ? (
+              {invoiceMonth !== 'ALL' ? (
                 <div className="bg-emerald-50/60 p-3 border border-emerald-200">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-emerald-900 text-[10px] uppercase tracking-wider">
-                      {selectedBillingMonth.split(' ')[0]} Dispatch Readiness:
+                      {invoiceMonth.split(' ')[0]} Dispatch Readiness:
                     </span>
                     <span className="font-bold text-emerald-800 font-mono">
                       {stats?.clientMaster?.dispatchedForSelectedMonth ?? 0} / {activeAgreements} Sent
@@ -708,6 +747,7 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
               ) : (
+
                 <div className="bg-[#E0F2F1]/50 p-3.5 border border-[#80CBC4]/50">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-gray-700">Contract Agreement Sum</span>
@@ -734,20 +774,33 @@ export default function AdminDashboardPage() {
         {/* Hub 2: GST Invoices & Billing Pipeline Funnel */}
         <FadeUp delay={0.35}>
           <div className="bg-white border border-neutral-200 shadow-xs flex flex-col h-full">
-            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
-              <div className="flex items-center gap-2.5">
+            <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50 gap-2">
+              <div className="flex items-center gap-2">
                 <Receipt size={16} className="text-[#006064]" />
                 <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
-                  Invoices Pipeline {selectedBillingMonth !== 'ALL' && `(${selectedBillingMonth.split(' ')[0]})`}
+                  Invoices Pipeline
                 </h3>
               </div>
-              <Link
-                href="/admin/Invoices"
-                className="text-[10px] font-bold text-[#006064] hover:underline uppercase flex items-center gap-0.5"
-              >
-                <span>Invoices Hub</span>
-                <ArrowUpRight size={12} />
-              </Link>
+              <div className="flex items-center gap-2">
+                <select
+                  value={invoiceMonth}
+                  onChange={(e) => setInvoiceMonth(e.target.value)}
+                  className="bg-white border border-neutral-300 text-[10px] font-bold text-gray-800 px-2 py-1 focus:outline-none focus:border-[#006064] cursor-pointer"
+                >
+                  <option value="August 2026">August 2026</option>
+                  <option value="September 2026">September 2026</option>
+                  <option value="July 2026">July 2026</option>
+                  <option value="June 2026">June 2026</option>
+                  <option value="May 2026">May 2026</option>
+                  <option value="ALL">All Months</option>
+                </select>
+                <Link
+                  href="/admin/Invoices"
+                  className="text-[10px] font-bold text-[#006064] hover:underline uppercase shrink-0"
+                >
+                  Hub ↗
+                </Link>
+              </div>
             </div>
 
             <div className="p-5 flex-1 flex flex-col justify-between gap-4">
@@ -759,7 +812,7 @@ export default function AdminDashboardPage() {
                     <span className="font-medium text-gray-700">1. CM Review Queue</span>
                   </div>
                   <span className="font-bold text-purple-700 bg-purple-50 px-2 py-0.5 text-[10px]">
-                    {invPending} Records
+                    {activeInvoiceData.pendingCmReview} Records
                   </span>
                 </div>
 
@@ -769,7 +822,7 @@ export default function AdminDashboardPage() {
                     <span className="font-medium text-gray-700">2. Sent to Accountant</span>
                   </div>
                   <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 text-[10px]">
-                    {invToAcc} Records
+                    {activeInvoiceData.sentToAccountant} Records
                   </span>
                 </div>
 
@@ -779,7 +832,7 @@ export default function AdminDashboardPage() {
                     <span className="font-medium text-gray-700">3. Tally PDF Attached</span>
                   </div>
                   <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 text-[10px]">
-                    {invAttached} Pending Approval
+                    {activeInvoiceData.invoiceAttached} Pending Approval
                   </span>
                 </div>
 
@@ -789,18 +842,18 @@ export default function AdminDashboardPage() {
                     <span className="font-bold text-emerald-900">4. Verified &amp; Approved</span>
                   </div>
                   <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 text-[10px]">
-                    {invApproved} Completed
+                    {activeInvoiceData.approved} Completed
                   </span>
                 </div>
               </div>
 
-              {Number(invoicesRaised) > 0 && (
+              {Number(activeInvoiceData.invoicesRaised) > 0 && (
                 <div className="p-2.5 bg-purple-50/80 border border-purple-200 text-xs flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase text-purple-900">
-                    {selectedBillingMonth === 'ALL' ? 'Total Invoiced:' : `${selectedBillingMonth.split(' ')[0]} Invoiced Sum:`}
+                    {invoiceMonth === 'ALL' ? 'Total Invoiced Sum:' : `${invoiceMonth.split(' ')[0]} Invoiced Sum:`}
                   </span>
                   <span className="font-bold text-purple-950 font-mono">
-                    ₹{Number(invoicesRaised).toLocaleString('en-IN')}
+                    ₹{Number(activeInvoiceData.invoicesRaised).toLocaleString('en-IN')}
                   </span>
                 </div>
               )}
@@ -818,20 +871,33 @@ export default function AdminDashboardPage() {
         {/* Hub 3: Centre Operating Expenses */}
         <FadeUp delay={0.4}>
           <div className="bg-white border border-neutral-200 shadow-xs flex flex-col h-full">
-            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
-              <div className="flex items-center gap-2.5">
+            <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50 gap-2">
+              <div className="flex items-center gap-2">
                 <FileSpreadsheet size={16} className="text-[#006064]" />
                 <h3 className="text-xs font-bold text-[#1B1C1C] uppercase tracking-wider">
                   Centre Operating Expenses
                 </h3>
               </div>
-              <Link
-                href="/admin/expenses"
-                className="text-[10px] font-bold text-[#006064] hover:underline uppercase flex items-center gap-0.5"
-              >
-                <span>Spreadsheet</span>
-                <ArrowUpRight size={12} />
-              </Link>
+              <div className="flex items-center gap-2">
+                <select
+                  value={expenseMonth}
+                  onChange={(e) => setExpenseMonth(e.target.value)}
+                  className="bg-white border border-neutral-300 text-[10px] font-bold text-gray-800 px-2 py-1 focus:outline-none focus:border-[#006064] cursor-pointer"
+                >
+                  <option value="ALL">All Months</option>
+                  <option value="August 2026">August 2026</option>
+                  <option value="September 2026">September 2026</option>
+                  <option value="July 2026">July 2026</option>
+                  <option value="June 2026">June 2026</option>
+                  <option value="May 2026">May 2026</option>
+                </select>
+                <Link
+                  href="/admin/expenses"
+                  className="text-[10px] font-bold text-[#006064] hover:underline uppercase shrink-0"
+                >
+                  Ledger ↗
+                </Link>
+              </div>
             </div>
 
             <div className="p-5 flex-1 flex flex-col justify-between gap-4">
@@ -842,7 +908,7 @@ export default function AdminDashboardPage() {
                     <span className="font-bold text-gray-800">Mercado Location</span>
                   </div>
                   <span className="font-bold text-[#006064]">
-                    ₹{(stats?.expenses?.centreExpenses?.find((c) => c.name.toLowerCase().includes('mercado'))?.amount ?? 45200).toLocaleString('en-IN')}
+                    ₹{(activeExpenseData.centreExpenses?.find((c: any) => c.name?.toLowerCase().includes('mercado'))?.amount ?? (expenseMonth === 'ALL' ? 45200 : 0)).toLocaleString('en-IN')}
                   </span>
                 </div>
 
@@ -852,7 +918,7 @@ export default function AdminDashboardPage() {
                     <span className="font-bold text-gray-800">Agarwal Complex</span>
                   </div>
                   <span className="font-bold text-[#006064]">
-                    ₹{(stats?.expenses?.centreExpenses?.find((c) => c.name.toLowerCase().includes('agarwal'))?.amount ?? 38400).toLocaleString('en-IN')}
+                    ₹{(activeExpenseData.centreExpenses?.find((c: any) => c.name?.toLowerCase().includes('agarwal'))?.amount ?? (expenseMonth === 'ALL' ? 38400 : 0)).toLocaleString('en-IN')}
                   </span>
                 </div>
 
@@ -862,12 +928,12 @@ export default function AdminDashboardPage() {
                     <span className="font-bold text-gray-800">Premier House</span>
                   </div>
                   <span className="font-bold text-[#006064]">
-                    ₹{(stats?.expenses?.centreExpenses?.find((c) => c.name.toLowerCase().includes('premier'))?.amount ?? 52100).toLocaleString('en-IN')}
+                    ₹{(activeExpenseData.centreExpenses?.find((c: any) => c.name?.toLowerCase().includes('premier'))?.amount ?? (expenseMonth === 'ALL' ? 52100 : 0)).toLocaleString('en-IN')}
                   </span>
                 </div>
               </div>
 
-              <div className="bg-amber-50/60 p-3 border border-amber-200/60 text-[10px] text-amber-900">
+              <div className="bg-amber-50/60 p-2.5 border border-amber-200/60 text-[10px] text-amber-900">
                 <span className="font-bold">Dual View Available:</span> CM Petty Cash entries &amp; Accountant UTR / TDS bank reconciliation.
               </div>
 
@@ -896,84 +962,47 @@ export default function AdminDashboardPage() {
                   </h3>
                 </div>
                 <Link href="/admin/old-invoices" className="text-[10px] font-bold text-[#006064] hover:underline uppercase">
-                  Archive →
+                  Archive ↗
                 </Link>
               </div>
 
-              {/* Centre-wise Uploaded / Generated Invoices */}
-              <div className="space-y-2 mt-3.5">
-                <div className="flex items-center justify-between p-2 bg-neutral-50 border border-neutral-100 text-xs">
-                  <div className="flex items-center gap-2">
-                    <Building2 size={13} className="text-[#006064]" />
-                    <span className="font-bold text-gray-800">Mercado Location</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10px]">
-                    <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 border border-emerald-200">
-                      {mercadoOld.paymentReceived} Updated
-                    </span>
-                    {mercadoOld.paymentPending > 0 && (
-                      <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 border border-amber-200">
-                        {mercadoOld.paymentPending} Pending
-                      </span>
-                    )}
-                    <span className="font-bold text-gray-900 bg-white px-2 py-0.5 border border-neutral-200">
-                      {mercadoOld.total} Inv
-                    </span>
+              {/* Primary 3 KPI Status Metrics */}
+              <div className="mt-3.5 space-y-2">
+                <div className="p-2.5 bg-teal-50/60 border border-teal-200 text-xs">
+                  <div className="font-black text-[#006064] text-xs">
+                    {oldInvTotal} old invoices uploaded by CM
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between p-2 bg-neutral-50 border border-neutral-100 text-xs">
-                  <div className="flex items-center gap-2">
-                    <Building2 size={13} className="text-[#006064]" />
-                    <span className="font-bold text-gray-800">Agarwal Complex</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10px]">
-                    <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 border border-emerald-200">
-                      {agarwalOld.paymentReceived} Updated
-                    </span>
-                    {agarwalOld.paymentPending > 0 && (
-                      <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 border border-amber-200">
-                        {agarwalOld.paymentPending} Pending
-                      </span>
-                    )}
-                    <span className="font-bold text-gray-900 bg-white px-2 py-0.5 border border-neutral-200">
-                      {agarwalOld.total} Inv
-                    </span>
+                <div className="p-2.5 bg-amber-50/70 border border-amber-200 text-xs">
+                  <div className="font-bold text-amber-800 text-xs">
+                    {oldInvPending} invoice payment recieve details pending
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between p-2 bg-neutral-50 border border-neutral-100 text-xs">
-                  <div className="flex items-center gap-2">
-                    <Building2 size={13} className="text-[#006064]" />
-                    <span className="font-bold text-gray-800">Premier House</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10px]">
-                    <span className="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 border border-emerald-200">
-                      {premierOld.paymentReceived} Updated
-                    </span>
-                    {premierOld.paymentPending > 0 && (
-                      <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 border border-amber-200">
-                        {premierOld.paymentPending} Pending
-                      </span>
-                    )}
-                    <span className="font-bold text-gray-900 bg-white px-2 py-0.5 border border-neutral-200">
-                      {premierOld.total} Inv
-                    </span>
+                <div className="p-2.5 bg-emerald-50/70 border border-emerald-200 text-xs">
+                  <div className="font-bold text-emerald-800 text-xs">
+                    {oldInvReceived} invoice payment recieve details updated
                   </div>
                 </div>
               </div>
 
-              {/* Summary Total Bar */}
-              <div className="flex items-center justify-between p-2.5 bg-[#E0F2F1]/60 border border-[#80CBC4]/60 mt-3 text-xs">
-                <span className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">
-                  Total Settled Archive
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 text-[10px]">
-                    {oldInvReceived} Reconciled
+              {/* Centre-wise Breakdown Summary */}
+              <div className="space-y-1.5 mt-3 pt-3 border-t border-neutral-100">
+                <div className="flex items-center justify-between text-[11px] p-2 bg-neutral-50 border border-neutral-100">
+                  <span className="font-bold text-gray-800">Mercado</span>
+                  <span className="text-[10px] text-gray-600 font-medium">
+                    <strong className="text-[#006064]">{mercadoOld.total}</strong> CM • <strong className="text-emerald-700">{mercadoOld.paymentReceived}</strong> Updated • <strong className="text-amber-700">{mercadoOld.paymentPending}</strong> Pending
                   </span>
-                  <span className="font-bold text-[#006064]">
-                    ₹{Number(oldInvAmount).toLocaleString('en-IN')}
+                </div>
+                <div className="flex items-center justify-between text-[11px] p-2 bg-neutral-50 border border-neutral-100">
+                  <span className="font-bold text-gray-800">Agarwal</span>
+                  <span className="text-[10px] text-gray-600 font-medium">
+                    <strong className="text-[#006064]">{agarwalOld.total}</strong> CM • <strong className="text-emerald-700">{agarwalOld.paymentReceived}</strong> Updated • <strong className="text-amber-700">{agarwalOld.paymentPending}</strong> Pending
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] p-2 bg-neutral-50 border border-neutral-100">
+                  <span className="font-bold text-gray-800">Premier</span>
+                  <span className="text-[10px] text-gray-600 font-medium">
+                    <strong className="text-[#006064]">{premierOld.total}</strong> CM • <strong className="text-emerald-700">{premierOld.paymentReceived}</strong> Updated • <strong className="text-amber-700">{premierOld.paymentPending}</strong> Pending
                   </span>
                 </div>
               </div>
@@ -987,6 +1016,7 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
         </FadeUp>
+
 
         {/* Hub 5: System Roles & Permissions Security */}
         <FadeUp delay={0.5}>
@@ -1101,8 +1131,9 @@ export default function AdminDashboardPage() {
       <AddProductModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={() => fetchDashboardData(selectedBillingMonth, selectedLocation)}
+        onSuccess={() => fetchDashboardData(selectedLocation)}
       />
+
 
       <IndiaGeoMapModal
         isOpen={isGeoMapOpen}
