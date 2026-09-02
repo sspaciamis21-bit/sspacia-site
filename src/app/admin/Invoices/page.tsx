@@ -46,7 +46,11 @@ import {
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
 import { useAuth } from '@/context/AuthContext';
-import { OldInvoicesArchive } from '@/components/admin/old-invoices-archive';
+import { InvoicePaymentManagement } from '@/components/admin/invoice-payment-management';
+
+
+
+
 
 interface AttachedInvoice {
   id: number;
@@ -1596,11 +1600,9 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
               }`}
             >
               <FolderArchive size={15} />
-              <span>Old Invoices History Archive</span>
-              <span className="px-1.5 py-0.2 bg-teal-100 text-teal-800 rounded text-[10px] font-mono font-bold">
-                NEW
-              </span>
+              <span>Invoice Payment Receive Management</span>
             </button>
+
           </div>
 
           {activeSection === 'ACTIVE_WORKFLOW' && canAccessCM && canAccessAccountant && (
@@ -1632,9 +1634,9 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
         </div>
       </FadeUp>
 
-      {/* ── RENDER OLD INVOICES ARCHIVE OR ACTIVE INVOICE WORKFLOW ── */}
+      {/* ── RENDER INVOICE PAYMENT MANAGEMENT OR ACTIVE INVOICE WORKFLOW ── */}
       {activeSection === 'OLD_INVOICES' ? (
-        <OldInvoicesArchive
+        <InvoicePaymentManagement
           isSuperAdmin={isAdmin}
           userRoleView={userRoleView}
           canAccessCM={canAccessCM}
@@ -1643,6 +1645,7 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
           currentUserLocationName={(user as any)?.location?.name || (user as any)?.assignedLocations?.[0]?.location?.name}
         />
       ) : (
+
         <>
           {/* Header */}
           <FadeUp delay={0.05}>
@@ -1784,24 +1787,9 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
                 </div>
               </div>
 
-              {/* Primary Actions: Send Test Email & Digital Signature Stamp Hub */}
+              {/* Primary Actions: Digital Signature Stamp Hub */}
               <div className="flex items-center gap-2 shrink-0">
-                {(canAccessCM || isAdmin) && (
-                  <button
-                    type="button"
-                    onClick={handleSendTestMercadoEmail}
-                    disabled={isSendingTestEmail}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-colors shrink-0 cursor-pointer disabled:opacity-50"
-                    title="Send test invoice email of 1 Mercado client to t6565154@gmail.com"
-                  >
-                    {isSendingTestEmail ? (
-                      <Loader2 size={13} className="animate-spin text-amber-200" />
-                    ) : (
-                      <Send size={13} className="text-amber-200" />
-                    )}
-                    <span>🧪 Send Test (t6565154@gmail.com)</span>
-                  </button>
-                )}
+
 
                 {(canAccessCM || isAdmin) && (
                   <button

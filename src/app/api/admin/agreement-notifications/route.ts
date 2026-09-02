@@ -294,6 +294,42 @@ export async function GET(request: Request) {
     }
 
 
+    // 5. APPROVED INVOICE PAYMENT SETTLEMENT ALERTS
+    let paymentAlerts: any[] = [];
+    try {
+      const approvedInvs = await (prisma as any).invoiceRecord.findMany({
+        where: {
+          status: 'APPROVED',
+          ...(scopedUserIds !== null ? { createdById: { in: scopedUserIds } } : {}),
+        },
+        include: {
+          clientMaster: { select: { companyName: true } },
+          createdBy: { select: { assignedLocations: { select: { location: { select: { name: true } } } } } },
+        },
+        orderBy: { sentAt: 'desc' },
+      });
+
+      paymentAlerts = approvedInvs
+        .filter((inv: any) => {
+          const hasUTR = inv.utrNumber && String(inv.utrNumber).trim() !== '';
+          const hasPayDate = Boolean(inv.payReceiveDate);
+          const hasRecAmt = Number(inv.receiveAmount || 0) > 0;
+          return !hasUTR && !hasPayDate && !hasRecAmt && inv.paymentStatus !== 'RECEIVED';
+        })
+        .map((inv: any) => ({
+          id: inv.id,
+          companyName: inv.companyName || inv.clientMaster?.companyName || 'Valued Client',
+          billingMonth: inv.billingMonth || 'Current Month',
+          totalAmount: Number(inv.totalAmount || inv.amount || 0),
+          locationName: inv.createdBy?.assignedLocations?.[0]?.location?.name || 'Centre',
+          status: 'PAYMENT_PENDING',
+          title: `Approved Invoice Payment Pending: ${inv.companyName || inv.clientMaster?.companyName || 'Client'}`,
+          message: `Tally invoice for ${inv.billingMonth || 'Current Month'} was approved. Please record payment receive details once payment arrives.`,
+        }));
+    } catch (payErr) {
+      console.warn('Failed to query invoice payment alerts:', payErr);
+    }
+
     // Sort arrays
     agreementNotifications.sort((a, b) => a.daysRemaining - b.daysRemaining);
     lockinNotifications.sort((a, b) => a.daysRemaining - b.daysRemaining);
@@ -303,7 +339,13 @@ export async function GET(request: Request) {
       lockinCount: lockinNotifications.length,
       ticketCount: isSuperOrAdmin ? ticketEscalations.length : 0,
       bufferAlertCount: bufferAlerts.length,
-      totalCount: agreementNotifications.length + lockinNotifications.length + (isSuperOrAdmin ? ticketEscalations.length : 0) + bufferAlerts.length,
+      paymentAlertCount: paymentAlerts.length,
+      totalCount:
+        agreementNotifications.length +
+        lockinNotifications.length +
+        (isSuperOrAdmin ? ticketEscalations.length : 0) +
+        bufferAlerts.length +
+        paymentAlerts.length,
     };
 
     return NextResponse.json({
@@ -313,6 +355,7 @@ export async function GET(request: Request) {
       lockins: lockinNotifications,
       escalatedTickets: ticketEscalations,
       bufferAlerts,
+      paymentAlerts,
     });
   } catch (error) {
     console.error('Agreement, Lock-in & Ticket notifications error:', error);
@@ -322,4 +365,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
 

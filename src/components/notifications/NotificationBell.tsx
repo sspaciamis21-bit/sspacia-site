@@ -21,8 +21,11 @@ import {
   FileText,
   ExternalLink,
   ShieldAlert,
-  Ticket as TicketIcon
+  Ticket as TicketIcon,
+  Receipt
 } from 'lucide-react';
+
+
 import { useAuth } from '@/context/AuthContext';
 
 interface ContactPerson {
@@ -81,11 +84,23 @@ interface NotificationItem {
   statusName?: string;
 }
 
+export interface InvoicePaymentAlert {
+  id: number;
+  companyName: string;
+  billingMonth: string;
+  totalAmount: number;
+  locationName: string;
+  status: string;
+  title: string;
+  message: string;
+}
+
 interface NotificationSummary {
   agreementCount: number;
   lockinCount: number;
   ticketCount: number;
   bufferAlertCount?: number;
+  paymentAlertCount?: number;
   totalCount: number;
 }
 
@@ -101,37 +116,55 @@ export function NotificationBell() {
   
   const [isOpen, setIsOpen] = useState(false);
   const [isHoveredBell, setIsHoveredBell] = useState(false);
-  const [activeTab, setActiveTab] = useState<'AGREEMENT' | 'LOCK_IN' | 'TICKET' | 'BUFFER'>('AGREEMENT');
+  const [activeTab, setActiveTab] = useState<'AGREEMENT' | 'LOCK_IN' | 'TICKET' | 'BUFFER' | 'PAYMENT'>(
+    isAccountant ? 'PAYMENT' : 'AGREEMENT'
+  );
   
-  const [summary, setSummary] = useState<NotificationSummary>({ agreementCount: 0, lockinCount: 0, ticketCount: 0, bufferAlertCount: 0, totalCount: 0 });
+  const [summary, setSummary] = useState<NotificationSummary>({
+    agreementCount: 0,
+    lockinCount: 0,
+    ticketCount: 0,
+    bufferAlertCount: 0,
+    paymentAlertCount: 0,
+    totalCount: 0,
+  });
   const [agreements, setAgreements] = useState<NotificationItem[]>([]);
   const [lockins, setLockins] = useState<NotificationItem[]>([]);
   const [escalatedTickets, setEscalatedTickets] = useState<NotificationItem[]>([]);
   const [bufferAlerts, setBufferAlerts] = useState<ConsumedBufferAlert[]>([]);
+  const [paymentAlerts, setPaymentAlerts] = useState<InvoicePaymentAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [deliveringId, setDeliveringId] = useState<number | null>(null);
   
   const [expandedContactId, setExpandedContactId] = useState<number | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Fetch agreement, lock-in, 48h ticket, and low-stock buffer notifications
+  // Fetch agreement, lock-in, 48h ticket, low-stock buffer, and approved invoice payment notifications
   const fetchNotifications = useCallback(async () => {
-    if (isAccountant) return;
     setLoading(true);
     try {
       const res = await fetch('/api/admin/agreement-notifications');
       if (res.ok) {
         const json = await res.json();
         if (json.success) {
-          const sum = json.summary || { agreementCount: 0, lockinCount: 0, ticketCount: 0, bufferAlertCount: 0, totalCount: 0 };
+          const sum = json.summary || {
+            agreementCount: 0,
+            lockinCount: 0,
+            ticketCount: 0,
+            bufferAlertCount: 0,
+            paymentAlertCount: 0,
+            totalCount: 0,
+          };
           setSummary(sum);
           setAgreements(json.agreements || []);
           setLockins(json.lockins || []);
           setEscalatedTickets(json.escalatedTickets || []);
           setBufferAlerts(json.bufferAlerts || []);
+          setPaymentAlerts(json.paymentAlerts || []);
 
-          // Auto-select tab with alerts if active tab is empty
-          if (sum.agreementCount === 0 && sum.lockinCount > 0) {
+          if (isAccountant || ((sum.paymentAlertCount || 0) > 0 && sum.agreementCount === 0 && sum.lockinCount === 0)) {
+            setActiveTab('PAYMENT');
+          } else if (sum.agreementCount === 0 && sum.lockinCount > 0) {
             setActiveTab('LOCK_IN');
           } else if (sum.agreementCount === 0 && sum.lockinCount === 0 && (sum.bufferAlertCount || 0) > 0) {
             setActiveTab('BUFFER');
@@ -164,15 +197,11 @@ export function NotificationBell() {
   };
 
   useEffect(() => {
-    if (isAccountant) return;
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [fetchNotifications, isAccountant]);
+  }, [fetchNotifications]);
 
-  if (isAccountant) {
-    return null;
-  }
 
   // Close popover on outside click
   useEffect(() => {
@@ -207,6 +236,12 @@ export function NotificationBell() {
     router.push(targetPath);
   };
 
+  const handleNavigateToInvoices = (companyName?: string) => {
+    setIsOpen(false);
+    const targetPath = '/admin/Invoices';
+    router.push(companyName ? `${targetPath}?search=${encodeURIComponent(companyName)}` : targetPath);
+  };
+
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return 'N/A';
     try {
@@ -222,6 +257,7 @@ export function NotificationBell() {
   };
 
   const getActiveList = () => {
+    if (activeTab === 'PAYMENT') return paymentAlerts;
     if (activeTab === 'AGREEMENT') return agreements;
     if (activeTab === 'LOCK_IN') return lockins;
     if (activeTab === 'BUFFER') return bufferAlerts as any[];
@@ -229,6 +265,7 @@ export function NotificationBell() {
   };
 
   const activeList = getActiveList();
+
 
   return (
     <div className="relative" ref={popoverRef}>
@@ -376,8 +413,26 @@ export function NotificationBell() {
                 </div>
               </div>
 
-              {/* 4 Section Tabs */}
-              <div className="grid grid-cols-4 gap-1 bg-teal-950/70 p-1 border border-teal-700/60">
+              {/* Section Tabs */}
+              <div className="grid grid-cols-4 sm:grid-cols-5 gap-1 bg-teal-950/70 p-1 border border-teal-700/60">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('PAYMENT')}
+                  className={`py-2 px-1 text-[8.5px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
+                    activeTab === 'PAYMENT'
+                      ? 'bg-emerald-600 text-white shadow-xs font-black'
+                      : 'text-emerald-200 hover:text-white hover:bg-emerald-900/40'
+                  }`}
+                >
+                  <Receipt size={11} />
+                  <span className="truncate">Payments</span>
+                  <span className={`px-1 rounded-full font-mono text-[8px] ${
+                    activeTab === 'PAYMENT' ? 'bg-emerald-800 text-white' : 'bg-emerald-950 text-emerald-300'
+                  }`}>
+                    {summary.paymentAlertCount || 0}
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setActiveTab('AGREEMENT')}
@@ -444,6 +499,7 @@ export function NotificationBell() {
                     </span>
                   </button>
                 )}
+
               </div>
             </div>
 
@@ -461,7 +517,9 @@ export function NotificationBell() {
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-[#1B1C1C]">
-                      {activeTab === 'AGREEMENT'
+                      {activeTab === 'PAYMENT'
+                        ? 'All Approved Invoices Settled!'
+                        : activeTab === 'AGREEMENT'
                         ? 'No Agreements Ending Soon!'
                         : activeTab === 'LOCK_IN'
                         ? 'No Lock-ins Ending Soon!'
@@ -470,7 +528,9 @@ export function NotificationBell() {
                         : 'No 48h Overdue Tickets!'}
                     </h4>
                     <p className="text-xs text-neutral-500 font-light mt-1 max-w-xs mx-auto">
-                      {activeTab === 'AGREEMENT'
+                      {activeTab === 'PAYMENT'
+                        ? 'There are no approved invoices awaiting payment settlement details.'
+                        : activeTab === 'AGREEMENT'
                         ? 'No active client agreements are ending in the next 60 days.'
                         : activeTab === 'LOCK_IN'
                         ? 'No active client lock-in periods are ending in the next 15 days.'
@@ -480,9 +540,52 @@ export function NotificationBell() {
                     </p>
                   </div>
                 </div>
+              ) : activeTab === 'PAYMENT' ? (
+                /* 💳 APPROVED INVOICE PAYMENT SETTLEMENT ALERTS */
+                paymentAlerts.map((item) => (
+                  <div key={item.id} className="p-4 hover:bg-emerald-50/50 transition-colors relative space-y-2 bg-emerald-50/20">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-mono font-bold text-emerald-800 uppercase bg-emerald-100 px-1.5 py-0.2">
+                          {item.billingMonth}
+                        </span>
+                        <h4 className="font-bold text-sm text-[#1B1C1C] flex items-center gap-1.5 mt-0.5">
+                          <Building2 size={14} className="text-[#006064] shrink-0" />
+                          <span>{item.companyName}</span>
+                        </h4>
+                      </div>
+
+                      <span className="shrink-0 px-2 py-0.5 bg-emerald-700 text-white text-[9px] font-black uppercase tracking-wider shadow-xs">
+                        ₹{Number(item.totalAmount).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-neutral-700 bg-white p-2.5 border border-emerald-200 space-y-1">
+                      <p className="text-neutral-800 text-[11px] font-medium leading-relaxed">
+                        For <strong className="text-emerald-950">{item.billingMonth}</strong>, uploaded Tally invoice for <strong className="text-emerald-950">{item.companyName}</strong> was approved and entry generated in Invoice Payment Receive Management. Please enter payment receive details when payment arrives.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-emerald-200/60">
+                      <div className="text-[10.5px] text-gray-600 font-bold flex items-center gap-1">
+                        <MapPin size={11} className="text-[#006064]" />
+                        <span>{item.locationName}</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleNavigateToInvoices(item.companyName)}
+                        className="px-2.5 py-1 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                      >
+                        <span>Settle Payment</span> <ChevronRight size={11} />
+                      </button>
+                    </div>
+                  </div>
+                ))
               ) : activeTab === 'BUFFER' ? (
                 /* 🛒 LOW STOCK BUFFER ALERTS LIST */
                 bufferAlerts.map((item) => (
+
                   <div key={item.id} className="p-4 hover:bg-amber-50/50 transition-colors relative space-y-2.5 bg-amber-50/20">
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-0.5">

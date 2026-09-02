@@ -1110,6 +1110,18 @@ model InvoiceRecord {
   clientEmailSentAt      DateTime?
   clientEmailSentTo      String?
   clientEmailSentCc      String?
+  // Payment Settlement Fields (Accountant View)
+  payReceiveDate         DateTime?
+  receiveAmount          Decimal?               @db.Decimal(12, 2)
+  paymentMode            String?
+  utrNumber              String?
+  utrDate                DateTime?
+  utrFileUrl             String?                @db.Text
+  utrFileName            String?
+  tdsDeducted            String?                @default("No")
+  tdsAmount              Decimal?               @default(0) @db.Decimal(12, 2)
+  paymentsJson           String?                @db.Text
+  paymentStatus          String?                @default("PENDING")
   createdById            Int
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
