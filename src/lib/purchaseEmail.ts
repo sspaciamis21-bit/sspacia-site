@@ -37,7 +37,7 @@ export async function sendPurchaseOrderEmail(options: SendPurchaseOrderEmailOpti
   } = options;
 
   const toEmail = 'ssinfrazone1@gmail.com';
-  const ccEmails = ['praveen.agarwal1@gmail.com', 't6565154@gmail.com'];
+  const ccEmails = ['praveen.agarwal1@gmail.com'];
 
   const subject = `🛒 [Purchase Order Request] Low Stock: ${productName} - ${centerName}`;
   const nowFormatted = new Date().toLocaleString('en-IN', {
