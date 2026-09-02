@@ -247,6 +247,53 @@ export async function GET(request: Request) {
       });
     }
 
+    // 4. CONSUMED INVENTORY BUFFER ALERTS (Available <= Buffer Limit)
+    let bufferAlerts: any[] = [];
+    try {
+      const { findManyConsumedItems } = await import('@/lib/consumedInventoryDb');
+      let userLocationIds: number[] | undefined = undefined;
+      if (scopedUserIds !== null) {
+        const currentUserWithLocs = await prisma.user.findUnique({
+          where: { id: currentUserId },
+          select: { assignedLocations: { select: { locationId: true } } },
+        });
+        const myIds = currentUserWithLocs?.assignedLocations.map((ul) => ul.locationId) || [];
+        if (myIds.length > 0) {
+          userLocationIds = myIds;
+        }
+      }
+
+      const allConsumed = await findManyConsumedItems({
+        locationIds: userLocationIds,
+      });
+
+      const locations = await prisma.location.findMany({
+        select: { id: true, name: true },
+      });
+      const locationMap = new Map<number, string>();
+      locations.forEach((loc) => locationMap.set(loc.id, loc.name));
+
+      const lowStockItems = allConsumed.filter((item: any) => Number(item.balanceQty) <= Number(item.bufferLimit));
+
+      bufferAlerts = lowStockItems.map((item: any) => ({
+        id: item.id,
+        productName: item.productName,
+        locationId: item.locationId,
+        locationName: item.locationId ? locationMap.get(item.locationId) || 'General' : 'General',
+        availableQty: Number(item.availableQty || item.initialQty || 0),
+        bufferLimit: Number(item.bufferLimit || 0),
+        unitCost: Number(item.unitCost || 0),
+        balanceQty: Number(item.balanceQty || 0),
+        purchaseStatus: item.purchaseStatus || 'PENDING',
+        reorderQuantity: Number(item.bufferLimit || 1) * 3,
+        remarks: item.remarks,
+        type: 'BUFFER_ALERT',
+      }));
+    } catch (invErr) {
+      console.error('Failed to query consumed inventory buffer alerts:', invErr);
+    }
+
+
     // Sort arrays
     agreementNotifications.sort((a, b) => a.daysRemaining - b.daysRemaining);
     lockinNotifications.sort((a, b) => a.daysRemaining - b.daysRemaining);
@@ -255,7 +302,8 @@ export async function GET(request: Request) {
       agreementCount: agreementNotifications.length,
       lockinCount: lockinNotifications.length,
       ticketCount: isSuperOrAdmin ? ticketEscalations.length : 0,
-      totalCount: agreementNotifications.length + lockinNotifications.length + (isSuperOrAdmin ? ticketEscalations.length : 0),
+      bufferAlertCount: bufferAlerts.length,
+      totalCount: agreementNotifications.length + lockinNotifications.length + (isSuperOrAdmin ? ticketEscalations.length : 0) + bufferAlerts.length,
     };
 
     return NextResponse.json({
@@ -264,6 +312,7 @@ export async function GET(request: Request) {
       agreements: agreementNotifications,
       lockins: lockinNotifications,
       escalatedTickets: ticketEscalations,
+      bufferAlerts,
     });
   } catch (error) {
     console.error('Agreement, Lock-in & Ticket notifications error:', error);
@@ -273,3 +322,4 @@ export async function GET(request: Request) {
     );
   }
 }
+

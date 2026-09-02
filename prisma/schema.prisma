@@ -1476,5 +1476,30 @@ model InventoryTransferLog {
   @@index([productName])
 }
 
+model ConsumedInventoryItem {
+  id                     Int       @id @default(autoincrement())
+  srNo                   Int       @default(1)
+  entryDate              DateTime? @default(now())
+  productName            String
+  locationId             Int?
+  initialQty             Int       @default(0)
+  balanceQty             Int       @default(0)
+  bufferLimit            Int       @default(1)
+  unitCost               Float?    @default(0)
+  balanceAmount          Float?    @default(0)
+  remarks                String?   @db.Text
+  createdById            Int?
+  isBufferAlertActive    Boolean   @default(false)
+  bufferAlertTriggeredAt DateTime?
+  purchaseStatus         String    @default("NORMAL") // "NORMAL" | "PENDING_PURCHASE" | "DELIVERED"
+  purchasePlannedAt      DateTime?
+  purchaseActualAt       DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@index([locationId])
+  @@index([productName])
+}
+
 
 
