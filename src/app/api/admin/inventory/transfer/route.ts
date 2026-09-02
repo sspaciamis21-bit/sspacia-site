@@ -27,9 +27,11 @@ export async function POST(request: Request) {
       sourceItemId,
       toLocationId,
       quantity,
+      transferDate,
       remarks = '',
     } = body;
 
+    const parsedTransferDate = transferDate ? new Date(transferDate) : new Date();
     const qtyToTransfer = parseInt(String(quantity), 10);
     const targetLocId = parseInt(String(toLocationId), 10);
     const srcItemId = parseInt(String(sourceItemId), 10);
@@ -95,11 +97,13 @@ export async function POST(request: Request) {
     if (destinationItem) {
       // Increase existing stock at destination centre
       const newDestBalance = destinationItem.balanceQty + qtyToTransfer;
+      const newDestInitial = (destinationItem.initialQty || 0) + qtyToTransfer;
       const newDestBalanceAmount = newDestBalance * (Number(destinationItem.unitCost) || (Number(sourceItem.unitCost) || 0));
 
       destinationItem = await (prisma as any).fixedInventoryItem.update({
         where: { id: destinationItem.id },
         data: {
+          initialQty: newDestInitial,
           balanceQty: newDestBalance,
           balanceAmount: newDestBalanceAmount,
           remarks: destinationItem.remarks
@@ -120,6 +124,7 @@ export async function POST(request: Request) {
       destinationItem = await (prisma as any).fixedInventoryItem.create({
         data: {
           srNo: nextSrNoAtDest,
+          createdAt: parsedTransferDate,
           productName: sourceItem.productName,
           locationId: targetLocId,
           initialQty: qtyToTransfer,
@@ -146,6 +151,7 @@ export async function POST(request: Request) {
         remarks: remarks ? String(remarks).trim() : null,
         transferredById: userId,
         transferredByName: userName,
+        createdAt: parsedTransferDate,
       },
     });
 

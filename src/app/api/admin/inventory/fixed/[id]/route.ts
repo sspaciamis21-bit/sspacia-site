@@ -31,6 +31,7 @@ export async function PUT(
 
     const body = await request.json();
     const {
+      entryDate,
       productName,
       locationId,
       balanceQty,
@@ -48,6 +49,7 @@ export async function PUT(
     }
 
     const updateData: any = {};
+    if (entryDate !== undefined) updateData.createdAt = entryDate ? new Date(entryDate) : new Date();
     if (productName !== undefined) updateData.productName = String(productName).trim();
     if (locationId !== undefined) updateData.locationId = locationId ? Number(locationId) : null;
     if (initialQty !== undefined) updateData.initialQty = Math.max(0, parseInt(String(initialQty), 10) || 0);

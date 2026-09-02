@@ -665,6 +665,19 @@ export default function AdminInvoicesWorkflowPage() {
       const json = await res.json();
       if (json.success) {
         toast.success(json.message || 'Tax invoice email sent to client successfully!');
+        const targetId = entryToSendClientEmail.id;
+        setInvoices((prev) =>
+          prev.map((inv) =>
+            inv.id === targetId
+              ? {
+                  ...inv,
+                  clientEmailSentAt: new Date().toISOString(),
+                  clientEmailSentTo: customPrimaryEmailInput.trim(),
+                  clientEmailSentCc: ccArray.join(', '),
+                }
+              : inv
+          )
+        );
         setEntryToSendClientEmail(null);
         fetchData();
       } else {

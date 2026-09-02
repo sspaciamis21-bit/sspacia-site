@@ -1440,6 +1440,7 @@ model ClientTermination {
 model FixedInventoryItem {
   id            Int                    @id @default(autoincrement())
   srNo          Int                    @default(1)
+  entryDate     DateTime?              @default(now())
   productName   String
   locationId    Int?
   initialQty    Int                    @default(0)
