@@ -168,9 +168,9 @@ export default function SignupClient() {
   };
 
   return (
-    <div className="min-h-[90vh] flex bg-surface-lowest flex-row-reverse">
-      {/* Visual Side */}
-      <div className="hidden lg:flex w-1/2 relative bg-surface-high border-l border-outline-variant/10 overflow-hidden group">
+    <div className="min-h-[90vh] flex bg-surface-lowest flex-row-reverse items-stretch">
+      {/* Visual Side (Sticky in viewport) */}
+      <div className="hidden lg:flex w-1/2 relative bg-surface-high border-l border-outline-variant/10 overflow-hidden group sticky top-[72px] self-start h-[calc(100vh-72px)] min-h-[550px]">
         <Image
           src="/IMAGES_SSPACIA/PREMIER HOUSE/Reception.JPG"
           alt="SSPACIA Auth"
@@ -178,16 +178,21 @@ export default function SignupClient() {
           className="object-cover transition-all duration-1000 group-hover:scale-105"
           priority
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10 z-10" />
         <div className="absolute top-0 left-12 w-[1px] h-full bg-white/10 z-20"></div>
-        <div className="absolute bottom-12 right-12 z-20 space-y-4 text-right flex flex-col items-end">
-          <SectionLabel className="bg-white/10 text-white border-white/20 backdrop-blur-md self-end">
+        <div className="absolute bottom-8 right-8 z-20 space-y-3 text-right flex flex-col items-end max-w-md">
+          <SectionLabel className="bg-white/15 text-white border-white/25 backdrop-blur-md self-end shadow-xs">
             <UserPlus className="h-3 w-3" /> New Membership
           </SectionLabel>
-          <h2 className="text-4xl font-display font-bold text-white tracking-tighter shadow-sm">Join the community.</h2>
-          <p className="text-white/80 max-w-sm font-light">Create your account to book premium workspaces, connect with professionals, and fuel your productivity.</p>
+          <h2 className="text-3xl xl:text-4xl font-display font-bold text-white tracking-tight shadow-sm">
+            Join the community.
+          </h2>
+          <p className="text-white/85 text-xs sm:text-sm font-light leading-relaxed">
+            Create your account to book premium workspaces, connect with professionals, and fuel your productivity.
+          </p>
         </div>
       </div>
+
 
       {/* Form Side */}
       <div className="flex w-full lg:w-1/2 items-center justify-center p-5 sm:p-12 lg:p-16 relative">

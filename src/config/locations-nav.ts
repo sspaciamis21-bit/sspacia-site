@@ -42,40 +42,26 @@ export const locationsNavData: LocationArea[] = [
         name: "Agarwal Complex",
         shortName: "CG Road, Navrangpura",
         address: "C.G. Road, Navrangpura, Ahmedabad",
-        href: "/products?centre=agarwal-complex",
+        href: "/products?centre=1",
         guestSpaces: {
           title: "Guest Spaces",
           type: "guest",
           badge: "Hourly / Daily",
-          href: "/guest-spaces?centre=agarwal-complex",
+          href: "/guest-spaces?centre=1",
           products: [
             { 
               name: "Meeting Room", 
-              badge: "4-6 Seater", 
-              image: "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/Meeting Room.jpeg",
-              href: "/products?centre=agarwal-complex&type=meeting-room", 
-              description: "Smart Display, Whiteboard, High-speed WiFi & Coffee" 
+              badge: "5 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787635417/sspacia/zn8uhmxi970pwbicxfvo.jpg",
+              href: "/products?centre=1&type=meeting-room", 
+              description: "High-Speed WiFi, Display Screen, Whiteboard, Air Conditioning" 
             },
             { 
-              name: "Conference Room", 
-              badge: "10-12 Seater", 
-              image: "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/Board Room.jpeg",
-              href: "/products?centre=agarwal-complex&type=conference-room", 
-              description: "Video Conferencing, Projector Setup & Soundproofing" 
-            },
-            { 
-              name: "Day Pass (Hot Desk)", 
-              badge: "Per Day", 
-              image: "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/flexi cabin .jpeg",
-              href: "/products?centre=agarwal-complex", 
-              description: "Full Day Access with High-Speed WiFi & Power Backup" 
-            },
-            { 
-              name: "Training Room", 
-              badge: "20-30 Seater", 
-              image: "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/Traning Room-1.jpeg",
-              href: "/products?centre=agarwal-complex", 
-              description: "Modular Workshop & Seminar Room Setup" 
+              name: "Board Room", 
+              badge: "11 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787635368/sspacia/wmgzactuei1zw9bybxjd.jpg",
+              href: "/products?centre=1&type=board-room", 
+              description: "HD Video Conferencing, Audio System, Executive Seating" 
             }
           ]
         },
@@ -83,35 +69,42 @@ export const locationsNavData: LocationArea[] = [
           title: "Co-working Spaces",
           type: "coworking",
           badge: "Monthly / Dedicated",
-          href: "/coworking-spaces?centre=agarwal-complex",
+          href: "/coworking-spaces?centre=1",
           products: [
             { 
-              name: "Dedicated Desk", 
-              badge: "Monthly", 
-              image: "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/4 seater dedicated cabin.jpeg",
-              href: "/products?centre=agarwal-complex", 
-              description: "Fixed Personal Desk with Lockable Storage" 
+              name: "Flexi Desk", 
+              badge: "1 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787635869/sspacia/kobfavhkbawfimpzqszt.jpg",
+              href: "/products?centre=1&type=flexi-desk", 
+              description: "Ultra-Fast WiFi, 24/7 Access, Gourmet Brews, Homely Staff" 
             },
             { 
-              name: "Flexi / Hot Desk", 
-              badge: "Monthly", 
-              image: "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/flexi cabin .jpeg",
-              href: "/products?centre=agarwal-complex", 
-              description: "Flexible Seating Across Open Lounge" 
+              name: "Fixed Desk", 
+              badge: "1 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787635812/sspacia/rf39f2avjwoziofpmkj8.jpg",
+              href: "/products?centre=1&type=fixed-desk", 
+              description: "Fixed Workstation, Lockable Storage, Ultra-Fast WiFi" 
+            },
+            { 
+              name: "Dedicated Cabin", 
+              badge: "4 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787635561/sspacia/s2auntn8fgam4zcothjl.jpg",
+              href: "/products?centre=1&type=dedicated-cabin", 
+              description: "Private Glass Cabin, Dedicated Access, Ultra-Fast WiFi" 
             },
             { 
               name: "Private Cabin", 
-              badge: "1-4 Seater", 
-              image: "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/Private Cabin.jpeg",
-              href: "/products?centre=agarwal-complex", 
-              description: "Fully Furnished Enclosed Glass Cabin" 
+              badge: "8 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787635518/sspacia/cbquo8pwvgtliddvp7hu.jpg",
+              href: "/products?centre=1&type=private-cabin", 
+              description: "Acoustic Glass Enclosure, Key Lockable, Ultra-Fast WiFi" 
             },
             { 
               name: "Executive Cabin", 
-              badge: "VIP Suite", 
-              image: "/IMAGES_SSPACIA/AGARWAL COMPLEX IMAGES/Executive Cabin.jpeg",
-              href: "/products?centre=agarwal-complex", 
-              description: "Managerial Suite with Private Meeting Privileges" 
+              badge: "10 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787635472/sspacia/pisc6f6onwuhxyiutyoh.jpg",
+              href: "/products?centre=1&type=executive-cabin", 
+              description: "Executive Team Suite, Premium Ergonomics, Ultra-Fast WiFi" 
             }
           ]
         }
@@ -119,42 +112,28 @@ export const locationsNavData: LocationArea[] = [
       {
         id: "mercardo",
         name: "Mercado",
-        shortName: "CG Road / Ellisbridge",
-        address: "Sindhu Bhavan Marg / CG Road, Ahmedabad",
-        href: "/products?centre=mercardo",
+        shortName: "Chandkheda",
+        address: "Mercado, Chandkheda, Ahmedabad",
+        href: "/products?centre=2",
         guestSpaces: {
           title: "Guest Spaces",
           type: "guest",
           badge: "Hourly / Daily",
-          href: "/guest-spaces?centre=mercardo",
+          href: "/guest-spaces?centre=2",
           products: [
             { 
               name: "Meeting Room", 
-              badge: "4-6 Seater", 
-              image: "/IMAGES_SSPACIA/MERCADO IMAGES/Meeting Room.jpg",
-              href: "/products?centre=mercardo", 
-              description: "HD Display, Conference Audio & Gourmet Coffee" 
+              badge: "6 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787634689/sspacia/spxy536xlynfktvqopwt.jpg",
+              href: "/products?centre=2&type=meeting-room", 
+              description: "Advanced Tech, Ultra-Fast WiFi, 24/7 Access, Homely Staff" 
             },
             { 
               name: "Board Room", 
-              badge: "10-14 Seater", 
-              image: "/IMAGES_SSPACIA/MERCADO IMAGES/Board room.jpg",
-              href: "/products?centre=mercardo", 
-              description: "Executive Board Setup with AV & Soundproofing" 
-            },
-            { 
-              name: "Day Pass (Flex Desk)", 
-              badge: "Per Day", 
-              image: "/IMAGES_SSPACIA/MERCADO IMAGES/Fix-flexi desk.jpg",
-              href: "/products?centre=mercardo", 
-              description: "Single Day Premium Coworking Pass" 
-            },
-            { 
-              name: "Conference Area", 
-              badge: "25-35 Seater", 
-              image: "/IMAGES_SSPACIA/MERCADO IMAGES/Mercado conference area.jpg",
-              href: "/products?centre=mercardo", 
-              description: "Ideal for Seminars, Meetups & Corporate Demos" 
+              badge: "14 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787634504/sspacia/folrtl4pgrpfxaxd6afc.jpg",
+              href: "/products?centre=2&type=board-room", 
+              description: "Executive Boardroom Setup, Advanced Tech, Ultra-Fast WiFi" 
             }
           ]
         },
@@ -162,35 +141,42 @@ export const locationsNavData: LocationArea[] = [
           title: "Co-working Spaces",
           type: "coworking",
           badge: "Monthly / Dedicated",
-          href: "/coworking-spaces?centre=mercardo",
+          href: "/coworking-spaces?centre=2",
           products: [
             { 
-              name: "Dedicated Desk", 
-              badge: "Monthly", 
-              image: "/IMAGES_SSPACIA/MERCADO IMAGES/Fix-flexi desk.jpg",
-              href: "/products?centre=mercardo", 
-              description: "Assigned Workstation with Power Backup & Drawer" 
+              name: "Flexi Desk", 
+              badge: "1 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787634847/sspacia/leelnmezm7hzdtqzqywf.jpg",
+              href: "/products?centre=2&type=flexi-desk", 
+              description: "Ultra-Fast WiFi, 24/7 Access, Gourmet Brews, Homely Staff" 
+            },
+            { 
+              name: "Fixed Desk", 
+              badge: "1 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787635130/sspacia/wgxtq7cliwyspnvkrsfi.jpg",
+              href: "/products?centre=2&type=fixed-desk", 
+              description: "Reserved Workstation, Ultra-Fast WiFi, Gourmet Brews" 
             },
             { 
               name: "Dedicated Cabin", 
-              badge: "4-6 Seater", 
-              image: "/IMAGES_SSPACIA/MERCADO IMAGES/MERCADO 4-SEATER CABIN.jpg",
-              href: "/products?centre=mercardo", 
-              description: "Fully Key-Lockable Team Workspace" 
+              badge: "6 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787634750/sspacia/xjqmrfsn69ithe7tc0id.jpg",
+              href: "/products?centre=2&type=dedicated-cabin", 
+              description: "Furnished Team Cabin, Ultra-Fast WiFi, 24/7 Access" 
             },
             { 
               name: "Private Cabin", 
-              badge: "1-6 Seater", 
-              image: "/IMAGES_SSPACIA/MERCADO IMAGES/Private Cabin.jpg",
-              href: "/products?centre=mercardo", 
-              description: "Acoustic Glass Partitioned Fully Furnished Suite" 
+              badge: "8 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787634897/sspacia/j8jisbg2vbs3s3gs71r4.jpg",
+              href: "/products?centre=2&type=private-cabin", 
+              description: "Private Glass Suite, Ultra-Fast WiFi, 24/7 Access" 
             },
             { 
-              name: "Executive Suite", 
-              badge: "VIP Suite", 
-              image: "/IMAGES_SSPACIA/MERCADO IMAGES/Executive Cabin.jpg",
-              href: "/products?centre=mercardo", 
-              description: "Premium Director Suite with Reception Access" 
+              name: "Executive Cabin", 
+              badge: "12 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787635070/sspacia/qnraod6yuhuyitpfzzvo.jpg",
+              href: "/products?centre=2&type=executive-cabin", 
+              description: "Director Executive Cabin, Ultra-Fast WiFi, 24/7 Access" 
             }
           ]
         }
@@ -207,40 +193,33 @@ export const locationsNavData: LocationArea[] = [
         name: "Premier House",
         shortName: "SG Highway, Bodakdev",
         address: "SG Highway, Bodakdev, Ahmedabad",
-        href: "/products?centre=premier-house",
+        href: "/products?centre=3",
         guestSpaces: {
           title: "Guest Spaces",
           type: "guest",
           badge: "Hourly / Daily",
-          href: "/guest-spaces?centre=premier-house",
+          href: "/guest-spaces?centre=3",
           products: [
             { 
-              name: "Executive Meeting Room", 
-              badge: "4-6 Seater", 
-              image: "/IMAGES_SSPACIA/PREMIER HOUSE/meeting room.jpg",
-              href: "/products?centre=premier-house", 
-              description: "Ergonomic Chairs, 4K Screen & High-speed WiFi" 
+              name: "Meeting Room", 
+              badge: "4 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787637449/sspacia/zyqeedod9lxhnzixspdf.jpg",
+              href: "/products?centre=3&type=meeting-room", 
+              description: "Display Screen, Ultra-Fast WiFi, High-Speed Internet, AC" 
             },
             { 
-              name: "Conference Hall", 
-              badge: "12-16 Seater", 
-              image: "/IMAGES_SSPACIA/PREMIER HOUSE/board room.jpg",
-              href: "/products?centre=premier-house", 
-              description: "Large Format Corporate Conference Room" 
+              name: "Board Room", 
+              badge: "12 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787637125/sspacia/vjk4ttvafaojoy3c11ag.jpg",
+              href: "/products?centre=3&type=board-room", 
+              description: "Executive Boardroom Setup, Video Conferencing, Audio System" 
             },
             { 
-              name: "Day Pass (Coworking)", 
-              badge: "Per Day", 
-              image: "/IMAGES_SSPACIA/PREMIER HOUSE/Flexi Desk.jpeg",
-              href: "/products?centre=premier-house", 
-              description: "Access Premium Amenities & Collaborative Lounge" 
-            },
-            { 
-              name: "Event & Workshop Hall", 
-              badge: "30-50 Seater", 
-              image: "/IMAGES_SSPACIA/PREMIER HOUSE/EVENT ROOM 1.jpg",
-              href: "/products?centre=premier-house", 
-              description: "State-of-the-Art AV & Modular Event Setup" 
+              name: "Event Room", 
+              badge: "40 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787637220/sspacia/ombcwnvxurdyiwc2atud.jpg",
+              href: "/products?centre=3&type=event-room", 
+              description: "Large Format Event Hall, Presentation Setup, PA Audio System" 
             }
           ]
         },
@@ -248,35 +227,42 @@ export const locationsNavData: LocationArea[] = [
           title: "Co-working Spaces",
           type: "coworking",
           badge: "Monthly / Dedicated",
-          href: "/coworking-spaces?centre=premier-house",
+          href: "/coworking-spaces?centre=3",
           products: [
             { 
-              name: "Dedicated Desk", 
-              badge: "Monthly", 
-              image: "/IMAGES_SSPACIA/PREMIER HOUSE/Fixed Desk Cabin.jpeg",
-              href: "/products?centre=premier-house", 
-              description: "Reserved Desk with Personal Lockable Storage" 
+              name: "Flexi Desk", 
+              badge: "1 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787637560/sspacia/owf8hte4jizxrazo22sk.jpg",
+              href: "/products?centre=3&type=flexi-desk", 
+              description: "Ultra-Fast WiFi, 24/7 Access, Gourmet Brews, Homely Staff" 
             },
             { 
-              name: "Flexi / Hot Desk", 
-              badge: "Monthly", 
-              image: "/IMAGES_SSPACIA/PREMIER HOUSE/Flexi Desk.jpeg",
-              href: "/products?centre=premier-house", 
-              description: "Dynamic Seating in Premium Vibrant Lounges" 
+              name: "Fixed Desk", 
+              badge: "1 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787723141/sspacia/euunzkotguczezkmo9yl.jpg",
+              href: "/products?centre=3&type=fixed-desk", 
+              description: "Dedicated Workstation, Ultra-Fast WiFi, 24/7 Access" 
+            },
+            { 
+              name: "Dedicated Cabin", 
+              badge: "4 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787637494/sspacia/u9b5c1xebx39uoynlnqd.jpg",
+              href: "/products?centre=3&type=dedicated-cabin", 
+              description: "Private Glass Cabin, Ultra-Fast WiFi, 24/7 Access" 
             },
             { 
               name: "Private Cabin", 
-              badge: "1-8 Seater", 
-              image: "/IMAGES_SSPACIA/PREMIER HOUSE/Private Cabin.jpeg",
-              href: "/products?centre=premier-house", 
-              description: "Sound-Treated Dedicated Private Glass Cabins" 
+              badge: "8 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787723034/sspacia/hsou3eratsy8zieiyscr.jpg",
+              href: "/products?centre=3&type=private-cabin", 
+              description: "Team Glass Suite, Ultra-Fast WiFi, 24/7 Access" 
             },
             { 
               name: "Executive Cabin", 
-              badge: "VIP Suite", 
-              image: "/IMAGES_SSPACIA/PREMIER HOUSE/Executive Cabin.jpeg",
-              href: "/products?centre=premier-house", 
-              description: "Custom Scalable Wing for High-Growth Teams" 
+              badge: "10 Seater", 
+              image: "https://res.cloudinary.com/dmgwi8dqd/image/upload/v1787722962/sspacia/ip38muckfafkwnihjia6.jpg",
+              href: "/products?centre=3&type=executive-cabin", 
+              description: "Executive Team Wing, Ultra-Fast WiFi, 24/7 Access" 
             }
           ]
         }

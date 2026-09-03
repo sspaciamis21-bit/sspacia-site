@@ -244,9 +244,9 @@ export default function LoginClient() {
   };
 
   return (
-    <div className="min-h-[90vh] flex bg-surface-lowest">
-      {/* Visual Side */}
-      <div className="hidden lg:flex w-1/2 relative bg-surface-high border-r border-outline-variant/10 overflow-hidden group">
+    <div className="min-h-[90vh] flex bg-surface-lowest items-stretch">
+      {/* Visual Side (Sticky in viewport) */}
+      <div className="hidden lg:flex w-1/2 relative bg-surface-high border-r border-outline-variant/10 overflow-hidden group sticky top-[72px] self-start h-[calc(100vh-72px)] min-h-[550px]">
         <Image
           src="/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"
           alt="SSPACIA Auth"
@@ -254,16 +254,21 @@ export default function LoginClient() {
           className="object-cover transition-all duration-1000 group-hover:scale-105"
           priority
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10 z-10" />
         <div className="absolute top-0 right-12 w-[1px] h-full bg-white/10 z-20"></div>
-        <div className="absolute bottom-12 left-12 z-20 space-y-4">
-          <SectionLabel className="bg-white/10 text-white border-white/20 backdrop-blur-md">
+        <div className="absolute bottom-8 left-8 z-20 space-y-3 max-w-md">
+          <SectionLabel className="bg-white/15 text-white border-white/25 backdrop-blur-md shadow-xs">
             <LogIn className="h-3 w-3" /> Member Access
           </SectionLabel>
-          <h2 className="text-4xl font-display font-bold text-white tracking-tighter shadow-sm">Your premium space awaits.</h2>
-          <p className="text-white/80 max-w-sm font-light">Sign in to manage your bookings, access the community, and explore exclusive perks.</p>
+          <h2 className="text-3xl xl:text-4xl font-display font-bold text-white tracking-tight shadow-sm">
+            Your premium space awaits.
+          </h2>
+          <p className="text-white/85 text-xs sm:text-sm font-light leading-relaxed">
+            Sign in to manage your bookings, access the community, and explore exclusive perks.
+          </p>
         </div>
       </div>
+
 
       {/* Form Side */}
       <div className="flex w-full lg:w-1/2 items-center justify-center p-5 sm:p-12 lg:p-16 relative">
