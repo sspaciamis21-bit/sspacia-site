@@ -96,9 +96,24 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
     };
   }, [showSuccessPopup, successCountdown]);
 
+  // Fetch fresh positions in background on mount
+  useEffect(() => {
+    fetch('/api/careers/positions')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.positions && Array.isArray(data.positions) && data.positions.length > 0) {
+          setPositions(data.positions);
+        }
+      })
+      .catch((err) => {
+        console.warn('Background positions sync notice:', err);
+      });
+  }, []);
+
   // Filter positions when search or gender changes
   useEffect(() => {
     let list = positions.filter((p) => p.isActive);
+
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -245,14 +260,10 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
       <section className="relative bg-gradient-to-r from-[#00363A] via-[#006064] to-[#00838F] text-white py-8 md:py-10 px-4 sm:px-6 lg:px-8 shadow-sm">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
           <div className="space-y-2 text-center md:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-[#80DEEA] text-[11px] font-bold uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>{positions.filter((p) => p.isActive).length} Open Positions ({totalOpeningsCount} Vacancies)</span>
-            </div>
-
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white">
               We’re Hiring at SSPACIA!
             </h1>
+
 
             <p className="text-xs sm:text-sm text-[#E0F7FA] max-w-xl leading-relaxed">
               Join the SSPACIA team at <strong>CG Road, Ahmedabad</strong>. We are seeking energetic, talented & communication-driven professionals.
@@ -424,45 +435,53 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
       {/* ── APPLICATION MODAL & FULL-SCREEN BACKDROP BLUR ───────── */}
       <AnimatePresence>
         {isApplyModalOpen && selectedJob && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-md overflow-y-auto">
+          <div
+            onClick={handleCloseApply}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-2.5 sm:p-6 bg-slate-950/75 backdrop-blur-md overflow-y-auto"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 12 }}
-              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden my-auto relative"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden my-auto relative"
             >
-              {/* Modal Header */}
-              <div className="bg-[#006064] text-white px-6 py-4 flex items-center justify-between">
+              {/* Modal Header (Sticky) */}
+              <div className="bg-[#006064] text-white px-5 sm:px-6 py-4 flex items-center justify-between shrink-0 sticky top-0 z-20 shadow-xs">
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-[#80DEEA]">
                     OFFICIAL APPLICATION FORM
                   </span>
-                  <h3 className="text-lg font-bold text-white mt-0.5">
+                  <h3 className="text-base sm:text-lg font-bold text-white mt-0.5">
                     Apply for {selectedJob.title}
                   </h3>
                 </div>
                 <button
                   type="button"
                   onClick={handleCloseApply}
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+                  title="Close"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Form Content */}
-              <form onSubmit={handleSubmitApplication} className="p-6 sm:p-8 space-y-4 text-xs">
+              {/* Form Content (Scrollable) */}
+              <form onSubmit={handleSubmitApplication} className="p-4 sm:p-7 space-y-4 text-xs overflow-y-auto flex-1">
                 {/* Position Summary Banner */}
                 <div className="bg-[#E0F2F1] border border-[#006064]/20 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                   <div className="font-bold text-[#006064] text-sm">
                     {selectedJob.title}
                   </div>
-                  <div className="flex items-center gap-2 text-[11px] text-slate-700">
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-700">
                     <span className="bg-white px-2.5 py-0.5 rounded-full border border-[#006064]/20 font-bold">
                       {selectedJob.openings}
                     </span>
                     <span className="bg-white px-2.5 py-0.5 rounded-full border border-[#006064]/20 font-bold">
                       {selectedJob.gender}
+                    </span>
+                    <span className="bg-white px-2.5 py-0.5 rounded-full border border-[#006064]/20 text-slate-500 font-medium">
+                      CG Road, Ahmedabad
                     </span>
                   </div>
                 </div>
@@ -477,12 +496,12 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                     required
                     value={formData.fullName}
                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
                   />
                 </div>
 
                 {/* 2. Email Address & 3. Mobile Number */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <label className="block text-xs font-bold text-slate-800 mb-1">
                       Email Address <span className="text-red-500 font-bold">*</span>
@@ -492,7 +511,7 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                       required
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
                     />
                   </div>
 
@@ -515,14 +534,14 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                             mobileNo: e.target.value.replace(/\D/g, ''),
                           })
                         }
-                        className="w-full pl-12 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
+                        className="w-full pl-12 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-bold text-slate-900 font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* 4. Age & 5. Gender */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <label className="block text-xs font-bold text-slate-800 mb-1">
                       Age <span className="text-red-500 font-bold">*</span>
@@ -534,7 +553,7 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                       max={75}
                       value={formData.age}
                       onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
                     />
                   </div>
 
@@ -545,7 +564,7 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                     <select
                       value={formData.gender}
                       onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs cursor-pointer"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs cursor-pointer"
                     >
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
@@ -563,7 +582,7 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                     required
                     value={formData.qualification}
                     onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
                   />
                 </div>
 
@@ -575,7 +594,7 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                   <select
                     value={formData.experience}
                     onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs cursor-pointer"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs cursor-pointer"
                   >
                     {EXPERIENCE_OPTIONS.map((opt) => (
                       <option key={opt} value={opt}>
@@ -594,9 +613,10 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                       <input
                         type="text"
                         required
+                        placeholder="Type your experience (e.g. 8 years in sales)"
                         value={formData.customExperience}
                         onChange={(e) => setFormData({ ...formData, customExperience: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-amber-50 border border-amber-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
+                        className="w-full px-3.5 py-2 bg-amber-50 border border-amber-300 rounded-xl text-base sm:text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs"
                       />
                     </motion.div>
                   )}
@@ -611,16 +631,16 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                     rows={2}
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs resize-none"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs resize-none"
                   />
                 </div>
 
                 {/* Submit Actions */}
-                <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
+                <div className="pt-3 flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2.5 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={handleCloseApply}
-                    className="px-5 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+                    className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer text-center"
                   >
                     Cancel
                   </button>
@@ -628,7 +648,7 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex items-center justify-center gap-2 px-7 py-2.5 bg-[#006064] text-white text-xs font-bold rounded-xl hover:bg-[#004D40] disabled:opacity-50 transition-all shadow-md active:scale-98"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-7 py-2.5 bg-[#006064] text-white text-xs font-bold rounded-xl hover:bg-[#004D40] disabled:opacity-50 transition-all shadow-md active:scale-98 cursor-pointer"
                   >
                     {isSubmitting ? (
                       <>
@@ -648,6 +668,7 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
           </div>
         )}
       </AnimatePresence>
+
 
       {/* ── 4-SECOND SUCCESS POPUP MODAL ────────────────────────── */}
       <AnimatePresence>

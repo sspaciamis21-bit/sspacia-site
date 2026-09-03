@@ -111,7 +111,7 @@ export function HrPortalClient() {
   // Position Form
   const [positionForm, setPositionForm] = useState({
     title: '',
-    openings: '1 Opening',
+    openingsCount: '1',
     gender: 'Male / Female',
     description: '',
     location: 'CG Road, Ahmedabad',
@@ -184,7 +184,7 @@ export function HrPortalClient() {
   const handleOpenAdd = () => {
     setPositionForm({
       title: '',
-      openings: '1 Opening',
+      openingsCount: '1',
       gender: 'Male / Female',
       description: '',
       location: 'CG Road, Ahmedabad',
@@ -205,12 +205,24 @@ export function HrPortalClient() {
       return;
     }
 
+    const countNum = parseInt(positionForm.openingsCount.toString(), 10);
+    const validCount = isNaN(countNum) || countNum <= 0 ? 1 : countNum;
+    const formattedOpenings = validCount === 1 ? '1 Opening' : `${validCount} Openings`;
+
     setSavingPosition(true);
     try {
       const res = await fetch('/api/careers/positions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(positionForm),
+        body: JSON.stringify({
+          title: positionForm.title.trim(),
+          openings: formattedOpenings,
+          gender: positionForm.gender,
+          description: positionForm.description.trim(),
+          location: positionForm.location.trim(),
+          isActive: positionForm.isActive,
+          sortOrder: Number(positionForm.sortOrder) || 0,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create position');
@@ -228,9 +240,12 @@ export function HrPortalClient() {
   // Handle Edit Position
   const handleOpenEdit = (job: JobPosition) => {
     setEditingJob(job);
+    const match = job.openings.match(/\d+/);
+    const count = match ? match[0] : '1';
+
     setPositionForm({
       title: job.title,
-      openings: job.openings,
+      openingsCount: count,
       gender: job.gender,
       description: job.description,
       location: job.location,
@@ -244,12 +259,33 @@ export function HrPortalClient() {
     e.preventDefault();
     if (!editingJob) return;
 
+    if (!positionForm.title.trim()) {
+      toast.error('Position title is required');
+      return;
+    }
+    if (!positionForm.description.trim()) {
+      toast.error('Position description is required');
+      return;
+    }
+
+    const countNum = parseInt(positionForm.openingsCount.toString(), 10);
+    const validCount = isNaN(countNum) || countNum <= 0 ? 1 : countNum;
+    const formattedOpenings = validCount === 1 ? '1 Opening' : `${validCount} Openings`;
+
     setSavingPosition(true);
     try {
       const res = await fetch(`/api/careers/positions/${editingJob.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(positionForm),
+        body: JSON.stringify({
+          title: positionForm.title.trim(),
+          openings: formattedOpenings,
+          gender: positionForm.gender,
+          description: positionForm.description.trim(),
+          location: positionForm.location.trim(),
+          isActive: positionForm.isActive,
+          sortOrder: Number(positionForm.sortOrder) || 0,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update position');
@@ -916,29 +952,38 @@ export function HrPortalClient() {
       {/* ── ADD / EDIT POSITION MODAL ──────────────────────────── */}
       <AnimatePresence>
         {(isAddModalOpen || isEditModalOpen) && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div
+            onClick={() => {
+              setIsAddModalOpen(false);
+              setIsEditModalOpen(false);
+            }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-md overflow-y-auto"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden my-auto"
             >
-              <div className="bg-[#006064] text-white px-6 py-4 flex items-center justify-between">
+              <div className="bg-[#006064] text-white px-5 sm:px-6 py-4 flex items-center justify-between shrink-0 sticky top-0 z-10 shadow-xs">
                 <h3 className="text-base font-bold">
                   {isEditModalOpen ? 'Edit Job Opening' : 'Add New Job Opening'}
                 </h3>
                 <button
+                  type="button"
                   onClick={() => {
                     setIsAddModalOpen(false);
                     setIsEditModalOpen(false);
                   }}
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer"
+                  title="Close"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={isEditModalOpen ? handleSaveEdit : handleSaveAdd} className="p-6 space-y-4 text-xs">
+              <form onSubmit={isEditModalOpen ? handleSaveEdit : handleSaveAdd} className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Position Title <span className="text-red-500">*</span>
@@ -949,23 +994,42 @@ export function HrPortalClient() {
                     placeholder="e.g. Front Desk Executive"
                     value={positionForm.title}
                     onChange={(e) => setPositionForm({ ...positionForm, title: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:ring-2 focus:ring-[#006064] focus:bg-white"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 text-base sm:text-xs focus:ring-2 focus:ring-[#006064] focus:bg-white"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">
-                      Openings <span className="text-red-500">*</span>
+                      Openings (Count) <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. 2 Openings or 1 Opening"
-                      value={positionForm.openings}
-                      onChange={(e) => setPositionForm({ ...positionForm, openings: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:ring-2 focus:ring-[#006064] focus:bg-white"
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        min={1}
+                        max={999}
+                        required
+                        value={positionForm.openingsCount}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            setPositionForm({ ...positionForm, openingsCount: '' });
+                            return;
+                          }
+                          const parsed = parseInt(val, 10);
+                          if (!isNaN(parsed)) {
+                            setPositionForm({
+                              ...positionForm,
+                              openingsCount: Math.max(0, parsed).toString(),
+                            });
+                          }
+                        }}
+                        className="w-full pl-3 pr-16 py-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-900 text-base sm:text-xs focus:ring-2 focus:ring-[#006064] focus:bg-white"
+                      />
+                      <span className="absolute right-3 text-[11px] text-slate-400 font-semibold pointer-events-none">
+                        {Number(positionForm.openingsCount) === 1 ? 'Opening' : 'Openings'}
+                      </span>
+                    </div>
                   </div>
 
                   <div>
@@ -975,7 +1039,7 @@ export function HrPortalClient() {
                     <select
                       value={positionForm.gender}
                       onChange={(e) => setPositionForm({ ...positionForm, gender: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:ring-2 focus:ring-[#006064] focus:bg-white"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 text-base sm:text-xs focus:ring-2 focus:ring-[#006064] focus:bg-white cursor-pointer"
                     >
                       <option value="Male / Female">Male / Female</option>
                       <option value="Female">Female</option>
@@ -994,18 +1058,18 @@ export function HrPortalClient() {
                     placeholder="e.g. Guest & visitor management, front office reception..."
                     value={positionForm.description}
                     onChange={(e) => setPositionForm({ ...positionForm, description: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:ring-2 focus:ring-[#006064] focus:bg-white resize-none"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 text-base sm:text-xs focus:ring-2 focus:ring-[#006064] focus:bg-white resize-none"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Location</label>
                     <input
                       type="text"
                       value={positionForm.location}
                       onChange={(e) => setPositionForm({ ...positionForm, location: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:ring-2 focus:ring-[#006064] focus:bg-white"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 text-base sm:text-xs focus:ring-2 focus:ring-[#006064] focus:bg-white"
                     />
                   </div>
 
@@ -1015,7 +1079,7 @@ export function HrPortalClient() {
                       type="number"
                       value={positionForm.sortOrder}
                       onChange={(e) => setPositionForm({ ...positionForm, sortOrder: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:ring-2 focus:ring-[#006064] focus:bg-white"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 text-base sm:text-xs focus:ring-2 focus:ring-[#006064] focus:bg-white"
                     />
                   </div>
                 </div>
@@ -1026,28 +1090,28 @@ export function HrPortalClient() {
                     id="isActivePos"
                     checked={positionForm.isActive}
                     onChange={(e) => setPositionForm({ ...positionForm, isActive: e.target.checked })}
-                    className="w-4 h-4 text-[#006064] rounded-sm focus:ring-[#006064]"
+                    className="w-4 h-4 text-[#006064] rounded-sm focus:ring-[#006064] cursor-pointer"
                   />
                   <label htmlFor="isActivePos" className="font-bold text-slate-700 cursor-pointer">
                     Active & visible on public careers page
                   </label>
                 </div>
 
-                <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
+                <div className="pt-3 flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2.5 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => {
                       setIsAddModalOpen(false);
                       setIsEditModalOpen(false);
                     }}
-                    className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="w-full sm:w-auto px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer text-center"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={savingPosition}
-                    className="px-5 py-2 bg-[#006064] hover:bg-[#004D40] text-white font-bold rounded-lg transition-colors shadow-xs"
+                    className="w-full sm:w-auto px-5 py-2 bg-[#006064] hover:bg-[#004D40] text-white font-bold rounded-lg transition-colors shadow-xs cursor-pointer text-center"
                   >
                     {savingPosition ? 'Saving...' : isEditModalOpen ? 'Save Changes' : 'Create Position'}
                   </button>
@@ -1058,15 +1122,16 @@ export function HrPortalClient() {
         )}
       </AnimatePresence>
 
+
       {/* ── DELETE POSITION MODAL ──────────────────────────────── */}
       <AnimatePresence>
         {isDeleteModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl p-6 shadow-xl border border-slate-200 max-w-sm w-full text-center space-y-4"
+              className="bg-white rounded-2xl p-6 shadow-2xl border border-slate-200 max-w-sm w-full text-center space-y-4"
             >
               <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
                 <Trash2 className="w-6 h-6" />
@@ -1077,14 +1142,16 @@ export function HrPortalClient() {
               </p>
               <div className="flex items-center justify-center gap-3 pt-2">
                 <button
+                  type="button"
                   onClick={() => setIsDeleteModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg"
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handleConfirmDelete}
-                  className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-xs"
+                  className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-xs cursor-pointer"
                 >
                   Confirm Delete
                 </button>
@@ -1093,6 +1160,7 @@ export function HrPortalClient() {
           </div>
         )}
       </AnimatePresence>
+
 
       {/* ── CANDIDATE DETAILS DRAWER / MODAL ───────────────────── */}
       <AnimatePresence>
