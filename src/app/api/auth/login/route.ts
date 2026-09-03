@@ -23,6 +23,7 @@ export async function POST(request: Request) {
 
     // ─── Find User by Username (name) OR Email (Flexible lookup) ────────────
     const isAccountantAlias = ['accountant', 'accounts', 'account', 'ssinfrazone21'].includes(identifier.toLowerCase())
+    const isHrAlias = ['hr', 'human resource', 'human resources', 'hr.ssinfrazone', 'hr.ssinfrazone@gmail.com'].includes(identifier.toLowerCase())
 
     const user: any = await (prisma as any).user.findFirst({
       where: {
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
           { email: identifier },
           { email: identifier.toLowerCase() },
           ...(isAccountantAlias ? [{ email: 'ssinfrazone21@gmail.com' }, { name: 'Accounts' }] : []),
+          ...(isHrAlias ? [{ email: 'hr.ssinfrazone@gmail.com' }, { name: 'human resource' }] : []),
         ],
       },
       include: {
@@ -76,6 +78,15 @@ export async function POST(request: Request) {
         isPasswordValid = true;
       }
     }
+
+    // Special fallback validation for HR account
+    if (!isPasswordValid && (user.email.toLowerCase() === 'hr.ssinfrazone@gmail.com' || user.name.toLowerCase() === 'human resource')) {
+      const validHrPasswords = ['Hr@112', 'hr@112', 'Hr112', 'hr112'];
+      if (typeof password === 'string' && validHrPasswords.includes(password.trim())) {
+        isPasswordValid = true;
+      }
+    }
+
 
     if (!isPasswordValid) {
       return NextResponse.json(

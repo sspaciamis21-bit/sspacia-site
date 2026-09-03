@@ -105,10 +105,12 @@ export function ForcePasswordChangeModal() {
   };
 
 
-  // If no user or mustChangePassword is not true, do not render
-  if (!user || !user.mustChangePassword) {
+  // If no user, mustChangePassword is not true, or user is HR, do not render
+  if (!user || !user.mustChangePassword || user.role === 'HR') {
     return null;
   }
+
+
 
   const hasMinLength = newPassword.trim().length >= 6;
   const hasUppercase = /[A-Z]/.test(newPassword);

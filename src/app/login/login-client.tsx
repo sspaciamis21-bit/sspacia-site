@@ -161,13 +161,16 @@ export default function LoginClient() {
       }
 
       const role = data.user.role?.toUpperCase();
-      if (role === 'ADMIN') {
+      if (role === 'HR') {
+        router.push('/hr');
+      } else if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
         router.push('/admin/dashboard');
       } else if (role === 'USER') {
         router.push('/dashboard');
       } else {
         router.push('/manager/dashboard');
       }
+
 
       router.refresh();
     } catch (error: unknown) {

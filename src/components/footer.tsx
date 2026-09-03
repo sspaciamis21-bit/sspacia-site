@@ -76,7 +76,19 @@ export function Footer() {
               <li><Link href="/coworking-spaces" className="hover:text-[#1ab0bc] transition-colors">All Workspaces</Link></li>
               <li><Link href="/guest-spaces" className="hover:text-[#1ab0bc] transition-colors">Guest Meeting Rooms</Link></li>
               <li><Link href="/about" className="hover:text-[#1ab0bc] transition-colors">About Us</Link></li>
+              <li>
+                <Link
+                  href="/careers"
+                  className="inline-flex items-center gap-2 group text-white font-bold hover:text-[#1ab0bc] transition-all bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg border border-white/10"
+                >
+                  <span>Careers</span>
+                  <span className="bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded-full shadow-xs tracking-wide uppercase">
+                    We're Hiring
+                  </span>
+                </Link>
+              </li>
               <li><Link href="/contact" className="hover:text-[#1ab0bc] transition-colors">Contact Support</Link></li>
+
             </ul>
           </div>
 

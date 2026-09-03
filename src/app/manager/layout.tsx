@@ -60,12 +60,18 @@ export default function ManagerLayout({
         return;
       }
 
+      if (isRole('HR')) {
+        router.push('/hr');
+        return;
+      }
+
       // Allow any role that is not USER (or explicitly ADMIN/MANAGER/COMMUNITY_MANAGER/ACCOUNTS)
       if (isRole('USER')) {
         toast.error('Unauthorized access.');
         router.push('/dashboard');
         return;
       }
+
 
       // Ensure they have assigned locations if they aren't admin/community manager/accounts and just a basic staff
       if (

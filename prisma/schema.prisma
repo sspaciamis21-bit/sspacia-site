@@ -1517,7 +1517,7 @@ model PasswordResetOtp {
   id        Int      @id @default(autoincrement())
   email     String
   otp       String
-  purpose   String   // "FORGOT_PASSWORD" | "RESET_PASSWORD"
+  purpose   String   // "FORGOT_PASSWORD" | "RESET_PASSWORD" | "REGISTRATION"
   expiresAt DateTime
   verified  Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -1525,3 +1525,48 @@ model PasswordResetOtp {
   @@index([email])
   @@index([expiresAt])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CAREERS & JOB APPLICATIONS (HR PORTAL)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model JobPosition {
+  id           Int                 @id @default(autoincrement())
+  title        String
+  openings     String              @default("1 Opening")
+  gender       String              @default("Male / Female") // "Female" | "Male" | "Male / Female"
+  description  String              @db.Text
+  location     String              @default("CG Road, Ahmedabad")
+  isActive     Boolean             @default(true)
+  sortOrder    Int                 @default(0)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  applications CareerApplication[]
+
+  @@index([isActive])
+}
+
+model CareerApplication {
+  id              Int          @id @default(autoincrement())
+  jobPositionId   Int?
+  jobPosition     JobPosition? @relation(fields: [jobPositionId], references: [id], onDelete: SetNull)
+  appliedPosition String
+  fullName        String
+  email           String?
+  mobileNo        String
+  age             Int
+  gender          String?      // "Male" | "Female"
+  qualification   String
+  experience      String       // e.g. "Fresher", "6 Months", "1 Year", "2 Years", "5 Years", etc.
+  address         String?      @db.Text
+  status          String       @default("APPLIED") // "APPLIED" | "SHORTLISTED" | "INTERVIEW_SCHEDULED" | "REJECTED" | "HIRED"
+  notes           String?      @db.Text
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([jobPositionId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+

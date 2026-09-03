@@ -26,7 +26,9 @@ import {
   X,
   Tag,
   Boxes,
+  Briefcase,
 } from 'lucide-react';
+
 import { toast } from 'sonner';
 
 import { useAuth } from '@/context/AuthContext';
@@ -51,9 +53,11 @@ const sidebarItems = [
   { name: 'Documents', href: '/manager/documents', icon: FileText },
   { name: 'Client Master', href: '/admin/client-master', icon: FileText },
   { name: 'Invoices', href: '/admin/Invoices', icon: FileText },
+  { name: 'Careers & HR', href: '/hr', icon: Briefcase },
   { name: 'Announcements', href: '/admin/announcements', icon: Sparkles },
   { name: 'Promo Codes', href: '/admin/promocodes', icon: Tag },
 ];
+
 
 export default function AdminLayout({
   children,
@@ -78,10 +82,13 @@ export default function AdminLayout({
     if (!isLoading) {
       if (!user) {
         router.push('/login');
+      } else if (isRole('HR')) {
+        router.push('/hr');
       } else if (!isRole('ADMIN')) {
         toast.error('Unauthorized access');
         router.push('/');
       }
+
     }
   }, [user, isLoading, router, isRole]);
 
