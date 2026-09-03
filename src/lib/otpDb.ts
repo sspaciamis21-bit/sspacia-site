@@ -1,10 +1,12 @@
 import prisma from '@/lib/prisma';
 
+export type OtpPurpose = 'FORGOT_PASSWORD' | 'RESET_PASSWORD' | 'REGISTRATION';
+
 export interface OtpRow {
   id: number;
   email: string;
   otp: string;
-  purpose: 'FORGOT_PASSWORD' | 'RESET_PASSWORD';
+  purpose: OtpPurpose;
   expiresAt: Date;
   verified: boolean;
   createdAt: Date;
@@ -27,7 +29,7 @@ export function generateNumericOtp(): string {
  */
 export async function createAndStoreOtp(params: {
   email: string;
-  purpose: 'FORGOT_PASSWORD' | 'RESET_PASSWORD';
+  purpose: OtpPurpose;
 }): Promise<{ otp: string; expiresAt: Date; expiresInSeconds: number }> {
   const email = params.email.trim().toLowerCase();
   const purpose = params.purpose;
@@ -65,11 +67,12 @@ export async function createAndStoreOtp(params: {
 
 /**
  * Verifies if an OTP is valid, unexpired (<= 4 minutes), and matches.
+ * Marks the OTP as verified in the DB upon successful match.
  */
 export async function verifyOtpCode(params: {
   email: string;
   otp: string;
-  purpose: 'FORGOT_PASSWORD' | 'RESET_PASSWORD';
+  purpose: OtpPurpose;
 }): Promise<{ valid: boolean; error?: string }> {
   const email = params.email.trim().toLowerCase();
   const inputOtp = params.otp.trim();
@@ -80,7 +83,6 @@ export async function verifyOtpCode(params: {
     SELECT * FROM \`PasswordResetOtp\`
     WHERE \`email\` = '${email.replace(/'/g, "''")}'
       AND \`purpose\` = '${purpose}'
-      AND \`verified\` = false
     ORDER BY \`createdAt\` DESC
     LIMIT 1
   `;
@@ -101,17 +103,54 @@ export async function verifyOtpCode(params: {
     return { valid: false, error: 'Invalid verification code. Please check and try again.' };
   }
 
+  // Mark as verified
+  const updateSql = `
+    UPDATE \`PasswordResetOtp\`
+    SET \`verified\` = true
+    WHERE \`id\` = ${latestOtp.id}
+  `;
+  await (prisma as any).$executeRawUnsafe(updateSql);
+
   return { valid: true };
 }
 
 /**
- * Consumes / Marks OTP as verified and deletes it once password is updated.
+ * Checks whether an unexpired, verified OTP exists for the given email and purpose.
+ */
+export async function isEmailOtpVerified(params: {
+  email: string;
+  purpose: OtpPurpose;
+}): Promise<boolean> {
+  const email = params.email.trim().toLowerCase();
+  const purpose = params.purpose;
+  const now = new Date();
+
+  const selectSql = `
+    SELECT * FROM \`PasswordResetOtp\`
+    WHERE \`email\` = '${email.replace(/'/g, "''")}'
+      AND \`purpose\` = '${purpose}'
+      AND \`verified\` = true
+    ORDER BY \`createdAt\` DESC
+    LIMIT 1
+  `;
+  const rows = (await (prisma as any).$queryRawUnsafe(selectSql)) as any[];
+
+  if (!rows || rows.length === 0) return false;
+
+  const latest = rows[0];
+  const expiresAt = new Date(latest.expiresAt);
+  return now.getTime() <= expiresAt.getTime();
+}
+
+/**
+ * Consumes / Deletes OTP records for an email and purpose once action is completed.
  */
 export async function consumeOtpCode(params: {
   email: string;
-  otp: string;
-  purpose: 'FORGOT_PASSWORD' | 'RESET_PASSWORD';
+  purpose: OtpPurpose;
+  otp?: string;
 }): Promise<void> {
+
   const email = params.email.trim().toLowerCase();
   const purpose = params.purpose;
 

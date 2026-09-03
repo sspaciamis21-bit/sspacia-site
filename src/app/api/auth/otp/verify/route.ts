@@ -21,13 +21,19 @@ export async function POST(req: Request) {
 
     const trimmedEmail = String(email).trim().toLowerCase();
     const trimmedOtp = String(otp).trim();
-    const validPurpose = purpose === 'RESET_PASSWORD' ? 'RESET_PASSWORD' : 'FORGOT_PASSWORD';
+    const validPurpose: 'FORGOT_PASSWORD' | 'RESET_PASSWORD' | 'REGISTRATION' =
+      purpose === 'REGISTRATION'
+        ? 'REGISTRATION'
+        : purpose === 'RESET_PASSWORD'
+        ? 'RESET_PASSWORD'
+        : 'FORGOT_PASSWORD';
 
     const verification = await verifyOtpCode({
       email: trimmedEmail,
       otp: trimmedOtp,
       purpose: validPurpose,
     });
+
 
     if (!verification.valid) {
       return NextResponse.json(

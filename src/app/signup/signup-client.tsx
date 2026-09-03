@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
-import { User, Mail, Lock, ArrowRight, Loader2, UserPlus, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { User, Mail, Lock, ArrowRight, Loader2, UserPlus, Eye, EyeOff, CheckCircle2, KeyRound, Sparkles } from 'lucide-react';
 import { SectionLabel } from '@/components/ui/section-label';
 import { useAuth } from '@/context/AuthContext';
 import { validatePassword } from '@/lib/password-validator';
@@ -26,12 +26,106 @@ export default function SignupClient() {
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Email OTP state with 4-minute validity
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpCountdown, setOtpCountdown] = useState(0);
+  const [otpValidated, setOtpValidated] = useState(false);
+  const [otpValidating, setOtpValidating] = useState(false);
+
+  // 4-Minute Countdown Timer
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (otpCountdown > 0) {
+      timer = setInterval(() => {
+        setOtpCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [otpCountdown]);
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleSendOtp = async () => {
+    if (!formData.name.trim() || !formData.email.trim()) {
+      toast.error('Please enter your Full Name and Email Address first');
+      return;
+    }
+
+    setOtpSending(true);
+    try {
+      const res = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          purpose: 'REGISTRATION',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send verification OTP');
+
+      toast.success(data.message || 'Verification OTP sent to your email! Valid for 4 minutes.');
+      setOtpSent(true);
+      setOtpValidated(false);
+      setOtpCountdown(data.expiresInSeconds || 240); // 4 minutes
+    } catch (err: any) {
+      toast.error(err.message || 'Error sending OTP');
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const handleValidateOtp = async () => {
+    if (!otp.trim() || otp.trim().length !== 6) {
+      toast.error('Please enter the full 6-digit OTP code');
+      return;
+    }
+
+    setOtpValidating(true);
+    try {
+      const res = await fetch('/api/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email.trim(),
+          otp: otp.trim(),
+          purpose: 'REGISTRATION',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Invalid or expired OTP');
+
+      toast.success('Email verified successfully! You can now set your password.');
+      setOtpValidated(true);
+    } catch (err: any) {
+      toast.error(err.message || 'OTP verification failed');
+    } finally {
+      setOtpValidating(false);
+    }
+  };
+
   const pwdLengthValid = formData.password.trim().length >= 6;
   const pwdUppercaseValid = /[A-Z]/.test(formData.password);
   const pwdNumberValid = /[0-9]/.test(formData.password);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!otpValidated) {
+      toast.error('Please click "Send OTP" and verify your email before creating an account');
+      return;
+    }
 
     const pwdCheck = validatePassword(formData.password);
     if (!pwdCheck.isValid) {
@@ -45,7 +139,7 @@ export default function SignupClient() {
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, rememberMe }),
+        body: JSON.stringify({ ...formData, otp: otp.trim(), rememberMe }),
       });
 
       const data = await response.json();
@@ -133,21 +227,101 @@ export default function SignupClient() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-tertiary ml-2">Email Address</label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-tertiary group-focus-within:text-primary transition-colors">
-                  <Mail size={18} />
+              <div className="flex items-center justify-between ml-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-tertiary">Email Address</label>
+                {otpSent && otpCountdown > 0 && (
+                  <span className="text-[10px] text-amber-700 font-mono font-bold">
+                    OTP Expires in: {formatCountdown(otpCountdown)}
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <div className="relative group flex-1">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-tertiary group-focus-within:text-primary transition-colors">
+                    <Mail size={18} />
+                  </div>
+                  <input
+                    type="email"
+                    required
+                    disabled={otpValidated}
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="name@company.com"
+                    className="w-full rounded-none border-b-2 border-outline-variant/30 bg-surface-high pl-12 pr-4 py-4 text-sm outline-none transition-all focus:border-primary focus:bg-white text-on-surface placeholder:text-tertiary/50 disabled:bg-surface-lowest"
+                  />
                 </div>
-                <input
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder=""
-                  className="w-full rounded-none border-b-2 border-outline-variant/30 bg-surface-high pl-12 pr-4 py-4 text-sm outline-none transition-all focus:border-primary focus:bg-white text-on-surface placeholder:text-tertiary/50"
-                />
+                <button
+                  type="button"
+                  onClick={handleSendOtp}
+                  disabled={otpSending || (otpSent && otpCountdown > 0 && !otpValidated)}
+                  className="px-4 py-4 bg-surface-high border-b-2 border-outline-variant/30 hover:bg-surface-highest text-primary text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  {otpSending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <KeyRound className="w-3.5 h-3.5" />
+                  )}
+                  <span>{otpSent ? "Resend OTP" : "Send OTP"}</span>
+                </button>
               </div>
             </div>
+
+            {/* OTP Input Card */}
+            {otpSent && !otpValidated && (
+              <div className="bg-amber-50/60 border border-amber-200 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Enter 6-Digit Email Verification Code</span>
+                  </label>
+                  <span className="text-[10px] text-amber-800">Check your inbox</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                    placeholder="• • • • • •"
+                    className="flex-1 px-3 py-3 border border-amber-300 bg-white focus:border-primary outline-none text-center font-mono text-base tracking-[0.35em] font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleValidateOtp}
+                    disabled={otpValidating || otp.trim().length !== 6}
+                    className="px-5 py-3 bg-primary hover:bg-primary-container text-white text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {otpValidating ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>Validate OTP</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Email Verified Badge */}
+            {otpValidated && (
+              <div className="bg-emerald-50 border border-emerald-200 p-2.5 flex items-center justify-between text-emerald-800 text-xs font-medium">
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Email verified successfully</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpValidated(false);
+                    setOtpSent(false);
+                  }}
+                  className="text-[10px] text-emerald-800 underline cursor-pointer"
+                >
+                  Change Email
+                </button>
+              </div>
+            )}
+
 
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest text-tertiary ml-2">Password</label>

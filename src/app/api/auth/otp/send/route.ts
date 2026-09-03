@@ -19,38 +19,61 @@ export async function POST(req: Request) {
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const validPurpose = purpose === 'RESET_PASSWORD' ? 'RESET_PASSWORD' : 'FORGOT_PASSWORD';
+    const validPurpose: 'FORGOT_PASSWORD' | 'RESET_PASSWORD' | 'REGISTRATION' =
+      purpose === 'REGISTRATION'
+        ? 'REGISTRATION'
+        : purpose === 'RESET_PASSWORD'
+        ? 'RESET_PASSWORD'
+        : 'FORGOT_PASSWORD';
 
-    // Verify user exists in database
-    let user: any = null;
-    if (username && typeof username === 'string' && username.trim()) {
-      const trimmedUsername = username.trim();
-      user = await prisma.user.findFirst({
-        where: {
-          name: trimmedUsername,
-          email: trimmedEmail,
-        },
-        select: { id: true, name: true, email: true },
+    let recipientName = body.name || 'Valued Member';
+
+    if (validPurpose === 'REGISTRATION') {
+      // Check if user already exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email: trimmedEmail },
       });
 
-      if (!user) {
+      if (existingUser) {
         return NextResponse.json(
-          { error: 'No account found matching this Username and Email combination' },
-          { status: 404 }
+          { error: 'An account with this email address already exists. Please log in instead.' },
+          { status: 400 }
         );
       }
     } else {
-      user = await prisma.user.findFirst({
-        where: { email: trimmedEmail },
-        select: { id: true, name: true, email: true },
-      });
+      // Verify user exists in database for password reset
+      let user: any = null;
+      if (username && typeof username === 'string' && username.trim()) {
+        const trimmedUsername = username.trim();
+        user = await prisma.user.findFirst({
+          where: {
+            name: trimmedUsername,
+            email: trimmedEmail,
+          },
+          select: { id: true, name: true, email: true },
+        });
 
-      if (!user) {
-        return NextResponse.json(
-          { error: 'No account found with this email address' },
-          { status: 404 }
-        );
+        if (!user) {
+          return NextResponse.json(
+            { error: 'No account found matching this Username and Email combination' },
+            { status: 404 }
+          );
+        }
+      } else {
+        user = await prisma.user.findFirst({
+          where: { email: trimmedEmail },
+          select: { id: true, name: true, email: true },
+        });
+
+        if (!user) {
+          return NextResponse.json(
+            { error: 'No account found with this email address' },
+            { status: 404 }
+          );
+        }
       }
+
+      recipientName = user.name || 'User';
     }
 
     // Generate & store OTP (valid 4 minutes)
@@ -62,10 +85,11 @@ export async function POST(req: Request) {
     // Send Email
     const emailResult = await sendPasswordOtpEmail({
       toEmail: trimmedEmail,
-      recipientName: user.name || 'User',
+      recipientName,
       otp,
       purpose: validPurpose,
     });
+
 
     if (!emailResult.success) {
       return NextResponse.json(

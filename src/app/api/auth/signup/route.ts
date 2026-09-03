@@ -2,16 +2,49 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import prisma from '@/lib/prisma'
 import { validatePassword } from '@/lib/password-validator'
+import { verifyOtpCode, isEmailOtpVerified, consumeOtpCode } from '@/lib/otpDb'
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { name, email, password } = body
+    const { name, email, password, otp } = body
 
     // ─── Validate Fields ──────────────────────────────────
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: 'All fields are required' },
+        { status: 400 }
+      )
+    }
+
+    const trimmedEmail = email.trim().toLowerCase()
+
+    // ─── Mandatory Email OTP Verification ──────────────────
+    let isVerified = false
+    if (otp && String(otp).trim()) {
+      const verifyRes = await verifyOtpCode({
+        email: trimmedEmail,
+        otp: String(otp).trim(),
+        purpose: 'REGISTRATION',
+      })
+      if (verifyRes.valid) {
+        isVerified = true
+      } else {
+        return NextResponse.json(
+          { error: verifyRes.error || 'Invalid or expired registration OTP' },
+          { status: 400 }
+        )
+      }
+    } else {
+      isVerified = await isEmailOtpVerified({
+        email: trimmedEmail,
+        purpose: 'REGISTRATION',
+      })
+    }
+
+    if (!isVerified) {
+      return NextResponse.json(
+        { error: 'Email verification required. Please enter and validate the 6-digit OTP code sent to your email.' },
         { status: 400 }
       )
     }
@@ -26,7 +59,7 @@ export async function POST(request: Request) {
 
     // ─── Check if User Exists ─────────────────────────────
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: trimmedEmail },
     })
 
     if (existingUser) {
@@ -35,6 +68,7 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
+
 
     // ─── Get Default USER Role ────────────────────────────
     const userRole = await prisma.role.findUnique({
@@ -69,9 +103,14 @@ export async function POST(request: Request) {
           select: { name: true },
         },
       },
-    })
+    });
+
+    // ─── Consume / Invalidate Registration OTP ───
+    await consumeOtpCode({ email: trimmedEmail, purpose: 'REGISTRATION' }).catch(() => {});
 
     // ─── Auto-remove from UnregisteredCustomer Lead Table & Mark VisitorLog Converted ───
+
+
     try {
       await (prisma as any).unregisteredCustomer.deleteMany({
         where: {

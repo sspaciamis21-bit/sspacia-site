@@ -4,7 +4,7 @@ export interface SendPasswordOtpEmailOptions {
   toEmail: string;
   recipientName?: string;
   otp: string;
-  purpose: 'FORGOT_PASSWORD' | 'RESET_PASSWORD';
+  purpose: 'FORGOT_PASSWORD' | 'RESET_PASSWORD' | 'REGISTRATION';
 }
 
 function createSmtpTransport() {
@@ -29,8 +29,19 @@ function createSmtpTransport() {
 export async function sendPasswordOtpEmail(options: SendPasswordOtpEmailOptions) {
   const { toEmail, recipientName = 'User', otp, purpose } = options;
 
-  const isForgot = purpose === 'FORGOT_PASSWORD';
-  const subject = `SSPACIA Coworking - Password Reset Code: ${otp}`;
+  let subject = `SSPACIA Verification Code: ${otp}`;
+  let purposeDescription = 'complete your verification';
+
+  if (purpose === 'REGISTRATION') {
+    subject = `SSPACIA Registration Code: ${otp}`;
+    purposeDescription = 'complete your account registration';
+  } else if (purpose === 'FORGOT_PASSWORD') {
+    subject = `SSPACIA Password Reset Code: ${otp}`;
+    purposeDescription = 'reset your account password';
+  } else if (purpose === 'RESET_PASSWORD') {
+    subject = `SSPACIA Password Update Code: ${otp}`;
+    purposeDescription = 'update your account password';
+  }
 
   const html = `
 <!DOCTYPE html>
@@ -40,7 +51,7 @@ export async function sendPasswordOtpEmail(options: SendPasswordOtpEmailOptions)
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${subject}</title>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b;">
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px 12px; color: #1e293b;">
   <div style="max-width: 480px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
     
     <!-- Top Header -->
@@ -52,7 +63,7 @@ export async function sendPasswordOtpEmail(options: SendPasswordOtpEmailOptions)
     <div style="padding: 28px 24px 24px 24px;">
       <p style="font-size: 14px; margin: 0 0 14px 0; color: #0f172a; font-weight: 600;">Hello ${recipientName},</p>
       <p style="font-size: 13px; line-height: 1.5; margin: 0 0 20px 0; color: #475569;">
-        Please use the following verification code to complete your password ${isForgot ? 'reset' : 'update'}:
+        Please use the following verification code to ${purposeDescription}:
       </p>
 
       <!-- OTP Card Box -->
@@ -66,9 +77,18 @@ export async function sendPasswordOtpEmail(options: SendPasswordOtpEmailOptions)
       </div>
 
       <!-- Validity Notice -->
-      <p style="font-size: 12px; line-height: 1.4; color: #64748b; margin: 0;">
-        This OTP is valid for <strong>4 minutes</strong>.
+      <p style="font-size: 12px; line-height: 1.4; color: #64748b; margin: 0 0 12px 0;">
+        This OTP is valid for <strong>4 minutes</strong>. Please do not share this code with anyone.
       </p>
+      
+      <p style="font-size: 11px; line-height: 1.4; color: #94a3b8; margin: 0; border-top: 1px solid #f1f5f9; padding-top: 12px;">
+        If you did not request this verification code, please ignore this email.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background-color: #f8fafc; padding: 14px 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
+      Ahmedabad, Gujarat, India &bull; <a href="mailto:cm@sspacia.com" style="color: #006064; text-decoration: none;">cm@sspacia.com</a>
     </div>
 
   </div>
@@ -81,11 +101,13 @@ SSPACIA COWORKING
 
 Hello ${recipientName},
 
-Please use the following verification code to complete your password ${isForgot ? 'reset' : 'update'}:
+Please use the following verification code to ${purposeDescription}:
 
 YOUR ONE-TIME OTP: ${otp}
 
 This OTP is valid for 4 minutes.
+
+Ahmedabad, Gujarat, India • cm@sspacia.com
   `.trim();
 
   const { hostCandidates, port, user, pass } = createSmtpTransport();
@@ -105,15 +127,20 @@ This OTP is valid for 4 minutes.
 
       const info = await transporter.sendMail({
         from: `"SSPACIA Community Manager" <${user}>`,
-        to: toEmail,
+        sender: user,
         replyTo: user,
+        to: toEmail,
         subject,
         text: textBody,
         html,
+        envelope: {
+          from: user,
+          to: [toEmail],
+        },
       });
 
       messageId = info.messageId;
-      console.log(`[OTP Email] Successfully sent OTP to ${toEmail} via ${host} (ID: ${messageId})`);
+      console.log(`[OTP Email] ✅ Successfully sent OTP to ${toEmail} via ${host}:${port} (Message ID: ${messageId})`);
       break;
     } catch (err: any) {
       lastError = err;
@@ -128,3 +155,5 @@ This OTP is valid for 4 minutes.
 
   return { success: true, messageId };
 }
+
+

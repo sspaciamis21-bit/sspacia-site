@@ -33,11 +33,17 @@ export function AuthModal({
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Signup form state
+  // Signup form state with mandatory 4-minute Email OTP
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [signupOtp, setSignupOtp] = useState("");
+  const [signupOtpSent, setSignupOtpSent] = useState(false);
+  const [signupOtpSending, setSignupOtpSending] = useState(false);
+  const [signupOtpCountdown, setSignupOtpCountdown] = useState(0);
+  const [signupOtpValidated, setSignupOtpValidated] = useState(false);
+  const [signupOtpValidating, setSignupOtpValidating] = useState(false);
 
   // Reset password state with mandatory 4-minute Email OTP
   const [showForgot, setShowForgot] = useState(false);
@@ -52,7 +58,7 @@ export function AuthModal({
   const [otpValidated, setOtpValidated] = useState(false);
   const [otpValidating, setOtpValidating] = useState(false);
 
-  // 4-Minute OTP Countdown Timer
+  // 4-Minute Forgot Password OTP Countdown Timer
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (otpCountdown > 0) {
@@ -65,10 +71,85 @@ export function AuthModal({
     };
   }, [otpCountdown]);
 
+  // 4-Minute Signup OTP Countdown Timer
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (signupOtpCountdown > 0) {
+      timer = setInterval(() => {
+        setSignupOtpCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [signupOtpCountdown]);
+
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleSendSignupOtp = async () => {
+    if (!signupName.trim() || !signupEmail.trim()) {
+      toast.error("Please enter your Full Name and Email Address first");
+      return;
+    }
+
+    setSignupOtpSending(true);
+    try {
+      const res = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: signupName.trim(),
+          email: signupEmail.trim(),
+          purpose: "REGISTRATION",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send verification OTP");
+
+      toast.success(data.message || "Verification OTP sent to your email! Valid for 4 minutes.");
+      setSignupOtpSent(true);
+      setSignupOtpValidated(false);
+      setSignupOtpCountdown(data.expiresInSeconds || 240); // 4 minutes
+    } catch (err: any) {
+      toast.error(err.message || "Error sending OTP");
+    } finally {
+      setSignupOtpSending(false);
+    }
+  };
+
+  const handleValidateSignupOtp = async () => {
+    if (!signupOtp.trim() || signupOtp.trim().length !== 6) {
+      toast.error("Please enter the full 6-digit OTP code");
+      return;
+    }
+
+    setSignupOtpValidating(true);
+    try {
+      const res = await fetch("/api/auth/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: signupEmail.trim(),
+          otp: signupOtp.trim(),
+          purpose: "REGISTRATION",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Invalid or expired OTP");
+
+      toast.success("Email verified successfully! You can now set your password.");
+      setSignupOtpValidated(true);
+    } catch (err: any) {
+      toast.error(err.message || "OTP verification failed");
+    } finally {
+      setSignupOtpValidating(false);
+    }
   };
 
   const handleSendForgotOtp = async () => {
@@ -134,6 +215,7 @@ export function AuthModal({
   };
 
 
+
   if (!isOpen) return null;
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -174,6 +256,11 @@ export function AuthModal({
       return;
     }
 
+    if (!signupOtpValidated && !signupOtp.trim()) {
+      toast.error("Please click 'Send OTP' and enter the 6-digit code sent to your email");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const res = await fetch("/api/auth/signup", {
@@ -183,6 +270,7 @@ export function AuthModal({
           name: signupName.trim(),
           email: signupEmail.trim(),
           password: signupPassword,
+          otp: signupOtp.trim(),
           role: "USER",
         }),
       });
@@ -202,6 +290,7 @@ export function AuthModal({
       setIsLoading(false);
     }
   };
+
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -577,7 +666,7 @@ export function AuthModal({
             </form>
           ) : (
             /* SIGNUP FORM */
-            <form onSubmit={handleSignup} className="space-y-4">
+            <form onSubmit={handleSignup} className="space-y-3.5">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-gray-600 block mb-1 flex items-center gap-1">
                   <User className="w-3 h-3 text-[#006064]" />
@@ -588,24 +677,106 @@ export function AuthModal({
                   required
                   value={signupName}
                   onChange={(e) => setSignupName(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 focus:border-[#006064] outline-none text-xs font-medium"
+                  placeholder="e.g. Rahul Sharma"
+                  className="w-full px-3 py-2 border border-gray-300 focus:border-[#006064] outline-none text-xs font-medium"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-600 block mb-1 flex items-center gap-1">
-                  <Mail className="w-3 h-3 text-[#006064]" />
-                  <span>Email Address</span>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-gray-600 block mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Mail className="w-3 h-3 text-[#006064]" />
+                    <span>Email Address</span>
+                  </span>
+                  {signupOtpSent && signupOtpCountdown > 0 && (
+                    <span className="text-[10px] text-amber-700 font-mono font-bold">
+                      Expires in: {formatCountdown(signupOtpCountdown)}
+                    </span>
+                  )}
                 </label>
-                <input
-                  type="email"
-                  required
-                  value={signupEmail}
-                  onChange={(e) => setSignupEmail(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-300 focus:border-[#006064] outline-none text-xs font-medium"
-                />
+                <div className="flex gap-1.5">
+                  <input
+                    type="email"
+                    required
+                    disabled={signupOtpValidated}
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
+                    placeholder="name@company.com"
+                    className="flex-1 px-3 py-2 border border-gray-300 focus:border-[#006064] outline-none text-xs font-medium disabled:bg-gray-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSendSignupOtp}
+                    disabled={signupOtpSending || (signupOtpSent && signupOtpCountdown > 0 && !signupOtpValidated)}
+                    className="px-3 py-2 bg-neutral-800 hover:bg-black text-white text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0 disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                  >
+                    {signupOtpSending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <KeyRound className="w-3 h-3" />
+                    )}
+                    <span>{signupOtpSent ? "Resend OTP" : "Send OTP"}</span>
+                  </button>
+                </div>
               </div>
 
+              {/* OTP Verification Box */}
+              {signupOtpSent && !signupOtpValidated && (
+                <div className="bg-amber-50/70 border border-amber-200 p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-600" />
+                      <span>Enter 6-Digit Email OTP</span>
+                    </label>
+                    <span className="text-[10px] text-amber-800">Check your inbox</span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={signupOtp}
+                      onChange={(e) => setSignupOtp(e.target.value.replace(/\D/g, ""))}
+                      placeholder="• • • • • •"
+                      className="flex-1 px-3 py-2 border border-amber-300 bg-white focus:border-[#006064] outline-none text-center font-mono text-sm tracking-[0.3em] font-bold"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleValidateSignupOtp}
+                      disabled={signupOtpValidating || signupOtp.trim().length !== 6}
+                      className="px-3.5 py-2 bg-[#006064] hover:bg-[#004D40] text-white text-[10px] font-bold uppercase tracking-wider transition-colors shrink-0 disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                    >
+                      {signupOtpValidating ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3 h-3" />
+                      )}
+                      <span>Validate OTP</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Verified Badge */}
+              {signupOtpValidated && (
+                <div className="bg-emerald-50 border border-emerald-200 p-2 flex items-center justify-between text-emerald-800 text-xs font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Email OTP Verified</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSignupOtpValidated(false);
+                      setSignupOtpSent(false);
+                    }}
+                    className="text-[10px] text-emerald-800 underline cursor-pointer"
+                  >
+                    Change Email
+                  </button>
+                </div>
+              )}
+
+              {/* Password Field (Always visible or enabled once OTP sent/validated) */}
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-gray-600 block mb-1 flex items-center gap-1">
                   <Lock className="w-3 h-3 text-[#006064]" />
@@ -617,7 +788,8 @@ export function AuthModal({
                     required
                     value={signupPassword}
                     onChange={(e) => setSignupPassword(e.target.value)}
-                    className="w-full px-3 py-2.5 pr-9 border border-gray-300 focus:border-[#006064] outline-none text-xs font-medium"
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2 pr-9 border border-gray-300 focus:border-[#006064] outline-none text-xs font-medium"
                   />
                   <button
                     type="button"
@@ -632,12 +804,12 @@ export function AuthModal({
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-[#006064] hover:bg-[#004D40] text-white py-3 text-xs font-black uppercase tracking-[0.2em] shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+                className="w-full bg-[#006064] hover:bg-[#004D40] text-white py-2.5 text-xs font-black uppercase tracking-[0.2em] shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-1"
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>CREATE ACCOUNT & PROCEED</span>}
               </button>
 
-              <div className="text-center pt-2">
+              <div className="text-center pt-1">
                 <p className="text-[11px] text-gray-500">
                   Already registered?{" "}
                   <button
@@ -650,6 +822,7 @@ export function AuthModal({
                 </p>
               </div>
             </form>
+
           )}
         </div>
 
