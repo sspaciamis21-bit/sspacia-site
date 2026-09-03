@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { getOrCreateSyncedCustomer } from '@/lib/customerSyncHelper';
 
 // GET /api/user/documents — List documents for authenticated user
 export async function GET() {
@@ -11,15 +12,13 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
 
-    const email = payload.email as string;
-    const customer = await prisma.customer.findUnique({
-      where: { email },
-      select: { id: true }
-    });
+    const userId = Number(payload.id);
+    const customer = await getOrCreateSyncedCustomer(userId, payload.email as string);
 
     if (!customer) {
       return NextResponse.json({ data: [] });
     }
+
 
     const data = await prisma.document.findMany({
       where: { customerId: customer.id },

@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { getOrCreateSyncedCustomer } from '@/lib/customerSyncHelper';
 
 /**
  * GET /api/user/contracts
@@ -9,17 +10,17 @@ import { requireAuth } from '@/lib/auth';
 export async function GET() {
   try {
     const auth = await requireAuth();
-    if (!auth) {
+    if (!auth?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const customer = await prisma.customer.findUnique({
-      where: { email: auth.email as string }
-    });
+    const userId = Number(auth.id);
+    const customer = await getOrCreateSyncedCustomer(userId, auth.email as string);
 
     if (!customer) {
       return NextResponse.json({ data: [] });
     }
+
 
     const contracts = await prisma.contract.findMany({
       where: { 

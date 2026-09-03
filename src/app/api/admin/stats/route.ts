@@ -563,24 +563,48 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
                 centreMap[locName].amount += amt;
                 centreMap[locName].count += 1;
 
-                // Extract month
+                // Extract month using Indian DD-MM-YYYY standard format
                 let rowMonth = 'August 2026';
-                const dateVal = String(r.col_1 || '').trim();
+                const dateVal = String(r.col_1 || '').trim().toUpperCase();
                 if (dateVal) {
-                  const d = new Date(dateVal);
-                  if (!isNaN(d.getTime()) && d.getFullYear() >= 2020) {
-                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                    rowMonth = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+                  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                  const monthMap: Record<string, number> = {
+                    JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
+                    JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11,
+                  };
+
+                  // 1. Text Month: "1 SEP 2026", "01-AUG-2026", "14 AUG 2026"
+                  const dmmmyyyy = dateVal.match(/^(\d{1,2})[\s\-]([A-Z]{3,9})[\s\-](\d{4})$/);
+                  if (dmmmyyyy) {
+                    const mKey = dmmmyyyy[2].slice(0, 3);
+                    const mIdx = monthMap[mKey];
+                    const mYear = parseInt(dmmmyyyy[3], 10);
+                    if (mIdx !== undefined && !isNaN(mYear)) {
+                      rowMonth = `${monthNames[mIdx]} ${mYear}`;
+                    }
                   } else {
-                    const mMatch = dateVal.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-                    if (mMatch) {
-                      const mIdx = parseInt(mMatch[2], 10) - 1;
-                      const mYear = parseInt(mMatch[3], 10);
-                      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                      if (mIdx >= 0 && mIdx < 12) rowMonth = `${monthNames[mIdx]} ${mYear}`;
+                    // 2. Numerical Date: DD-MM-YYYY ("09-07-2026" -> 9th July 2026)
+                    const ddmmyyyy = dateVal.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+                    if (ddmmyyyy) {
+                      const mIdx = parseInt(ddmmyyyy[2], 10) - 1;
+                      const mYear = parseInt(ddmmyyyy[3], 10);
+                      if (mIdx >= 0 && mIdx < 12 && !isNaN(mYear)) {
+                        rowMonth = `${monthNames[mIdx]} ${mYear}`;
+                      }
+                    } else {
+                      // 3. ISO format: YYYY-MM-DD
+                      const isoyyyy = dateVal.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+                      if (isoyyyy) {
+                        const mIdx = parseInt(isoyyyy[2], 10) - 1;
+                        const mYear = parseInt(isoyyyy[1], 10);
+                        if (mIdx >= 0 && mIdx < 12 && !isNaN(mYear)) {
+                          rowMonth = `${monthNames[mIdx]} ${mYear}`;
+                        }
+                      }
                     }
                   }
                 }
+
 
                 if (!monthWiseExp[rowMonth]) monthWiseExp[rowMonth] = {};
                 if (!monthWiseExp[rowMonth][locName]) monthWiseExp[rowMonth][locName] = { name: locName, amount: 0, count: 0 };

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { getOrCreateSyncedCustomer } from '@/lib/customerSyncHelper';
 
 // GET /api/user/bookings — FETCH the authenticated user's own space reservations
 export async function GET() {
@@ -10,16 +11,13 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
     }
 
-    const email = payload.email as string;
-
-    // Find the customer record matching the user's email to get their external activity
-    const customer = await prisma.customer.findUnique({
-        where: { email }
-    });
+    const userId = Number(payload.id);
+    const customer = await getOrCreateSyncedCustomer(userId, payload.email as string);
 
     if (!customer) {
-        return NextResponse.json({ data: [] });
+      return NextResponse.json({ data: [] });
     }
+
 
     const bookings = await (prisma as any).booking.findMany({
       where: { customerId: customer.id },

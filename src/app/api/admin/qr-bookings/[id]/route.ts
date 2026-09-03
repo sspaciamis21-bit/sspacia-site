@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { deleteBookingCascade } from '@/lib/bookingDeleteHelper';
 
 /**
  * PATCH /api/admin/qr-bookings/[id]
@@ -122,3 +123,86 @@ export async function PATCH(
     return NextResponse.json({ error: error?.message || 'Failed to update QR booking' }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/admin/qr-bookings/[id]
+ * Permanently deletes a QR booking (SUPER ADMIN ONLY).
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const payload = await requireAuth();
+    if (!payload?.id) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+    }
+
+    const userId = Number(payload.id);
+    const resolvedParams = await params;
+    const qrBookingId = Number(resolvedParams.id);
+
+    if (isNaN(qrBookingId)) {
+      return NextResponse.json({ error: 'Invalid QR booking ID' }, { status: 400 });
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { id: userId, isActive: true },
+      include: { role: true },
+    });
+
+    const isSuperAdmin = dbUser?.role?.name === 'ADMIN' || dbUser?.role?.name === 'SUPER_ADMIN';
+    if (!isSuperAdmin) {
+      return NextResponse.json({ error: 'Forbidden: Only Super Admin can delete bookings' }, { status: 403 });
+    }
+
+    const qrBooking = await (prisma as any).qrBooking.findUnique({
+      where: { id: qrBookingId },
+    });
+
+    if (!qrBooking) {
+      return NextResponse.json({ error: 'QR booking record not found' }, { status: 404 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const bookingId = qrBooking.bookingId;
+
+      if (bookingId) {
+        // Delete all dependent records and booking via helper
+        await deleteBookingCascade(tx, bookingId);
+      } else {
+        // Just delete QrBooking
+        await (tx as any).qrBooking.delete({
+          where: { id: qrBookingId },
+        });
+      }
+
+      // Activity Log
+      await tx.activityLog.create({
+        data: {
+          userId,
+          action: 'DELETE',
+          module: 'qr_bookings',
+          recordId: qrBookingId,
+          oldData: JSON.stringify({
+            bookingNumber: qrBooking.bookingNumber,
+            customerName: qrBooking.customerName,
+            customerEmail: qrBooking.customerEmail,
+            grandTotal: qrBooking.grandTotal,
+          }),
+          newData: null,
+        },
+      });
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `QR Booking ${qrBooking.bookingNumber} has been permanently deleted.`,
+    });
+  } catch (error: any) {
+    console.error('[DELETE_QR_BOOKING_ERROR]', error);
+    return NextResponse.json({ error: error?.message || 'Failed to delete QR booking' }, { status: 500 });
+  }
+}
+
+

@@ -14,7 +14,9 @@ import {
   CheckCircle2, 
   XCircle, 
   Eye, 
-  Filter 
+  Filter,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -69,6 +71,18 @@ export default function AdminBookingsPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [processingId, setProcessingId] = useState<number | null>(null);
 
+  // Super Admin Delete Modal State
+  const [deleteModalData, setDeleteModalData] = useState<{
+    id: number;
+    bookingNumber: string;
+    customerName: string;
+    customerEmail?: string;
+    productName?: string;
+    grandTotal?: number | string;
+    isQr: boolean;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -95,6 +109,32 @@ export default function AdminBookingsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleDeleteBooking = async () => {
+    if (!deleteModalData) return;
+    setIsDeleting(true);
+    try {
+      const url = deleteModalData.isQr
+        ? `/api/admin/qr-bookings/${deleteModalData.id}`
+        : `/api/admin/bookings/${deleteModalData.id}`;
+
+      const res = await fetch(url, { method: 'DELETE' });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to delete booking');
+      }
+
+      toast.success(json.message || `Booking ${deleteModalData.bookingNumber} deleted permanently`);
+      setDeleteModalData(null);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Error deleting booking');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
 
   const handleApproveQr = async (id: number) => {
     setProcessingId(id);
@@ -405,43 +445,69 @@ export default function AdminBookingsPage() {
                         )}
 
                         {/* Actions */}
-                        {qr.status === 'PENDING' && (
-                          <div className="w-full flex flex-col gap-2 pt-2">
-                            <button
-                              type="button"
-                              disabled={processingId === qr.id}
-                              onClick={() => handleApproveQr(qr.id)}
-                              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
-                            >
-                              {processingId === qr.id ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                <>
-                                  <CheckCircle2 size={14} />
-                                  <span>Authorize &amp; Reserve</span>
-                                </>
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={processingId === qr.id}
-                              onClick={() => {
-                                setRejectModalId(qr.id);
-                                setRejectReason('');
-                              }}
-                              className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 py-2 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                            >
-                              <XCircle size={14} />
-                              <span>Reject</span>
-                            </button>
-                          </div>
-                        )}
+                        <div className="w-full flex flex-col gap-2 pt-2">
+                          {qr.status === 'PENDING' && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={processingId === qr.id}
+                                onClick={() => handleApproveQr(qr.id)}
+                                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                              >
+                                {processingId === qr.id ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <>
+                                    <CheckCircle2 size={14} />
+                                    <span>Authorize &amp; Reserve</span>
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={processingId === qr.id}
+                                onClick={() => {
+                                  setRejectModalId(qr.id);
+                                  setRejectReason('');
+                                }}
+                                className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 py-2 text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                              >
+                                <XCircle size={14} />
+                                <span>Reject</span>
+                              </button>
+                            </>
+                          )}
 
-                        {qr.status === 'APPROVED' && (
-                          <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1 border border-emerald-200">
-                            ✓ Confirmed &amp; Reserved
-                          </div>
-                        )}
+                          {qr.status === 'APPROVED' && (
+                            <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 border border-emerald-200 text-center">
+                              ✓ Confirmed &amp; Reserved
+                            </div>
+                          )}
+
+                          {qr.status === 'REJECTED' && (
+                            <div className="text-[10px] font-bold text-rose-700 bg-rose-50 px-3 py-1.5 border border-rose-200 text-center">
+                              ✕ Rejected
+                            </div>
+                          )}
+
+                          {/* Super Admin Delete Booking Option */}
+                          <button
+                            type="button"
+                            onClick={() => setDeleteModalData({
+                              id: qr.id,
+                              bookingNumber: qr.bookingNumber,
+                              customerName: qr.customerName,
+                              customerEmail: qr.customerEmail,
+                              productName: qr.productName,
+                              grandTotal: qr.grandTotal,
+                              isQr: true,
+                            })}
+                            className="w-full bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 hover:border-rose-400 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-1"
+                          >
+                            <Trash2 size={12} className="text-rose-500" />
+                            <span>Delete Record</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -474,6 +540,7 @@ export default function AdminBookingsPage() {
                     <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-wider">Schedule</th>
                     <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-wider text-right">Amount</th>
+                    <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-wider text-center w-24">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
@@ -509,6 +576,25 @@ export default function AdminBookingsPage() {
                       <td className="px-6 py-4 text-right">
                         <span className="font-bold text-gray-900">₹{parseFloat(b.grandTotal.toString()).toLocaleString()}</span>
                       </td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setDeleteModalData({
+                            id: b.id,
+                            bookingNumber: b.bookingNumber,
+                            customerName: b.customer.name,
+                            customerEmail: b.customer.email,
+                            productName: b.product.name,
+                            grandTotal: b.grandTotal,
+                            isQr: false,
+                          })}
+                          title="Delete booking permanently (Super Admin)"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[9.5px] font-bold uppercase tracking-wider transition-colors rounded-sm cursor-pointer"
+                        >
+                          <Trash2 size={12} className="text-rose-600" />
+                          <span>Delete</span>
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -517,6 +603,122 @@ export default function AdminBookingsPage() {
           )}
         </div>
       )}
+
+      {/* Super Admin Permanent Delete Confirmation Modal */}
+      {deleteModalData && (
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white max-w-lg w-full shadow-2xl rounded-sm border border-rose-300 p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center gap-3 border-b border-rose-100 pb-3">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-black uppercase tracking-wider text-gray-900">
+                  Delete Booking Record
+                </h3>
+                <span className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">
+                  Super Admin Authorization Required
+                </span>
+              </div>
+            </div>
+
+            {/* Target Booking Info Card */}
+            <div className="bg-neutral-50 p-4 border border-neutral-200 space-y-2 text-xs">
+              <div className="flex justify-between border-b border-neutral-200 pb-1.5">
+                <span className="text-gray-500 font-bold uppercase text-[9.5px]">Booking UID:</span>
+                <span className="font-mono font-bold text-[#006064] text-sm">{deleteModalData.bookingNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 font-bold uppercase text-[9.5px]">Customer:</span>
+                <span className="font-bold text-gray-900">{deleteModalData.customerName}</span>
+              </div>
+              {deleteModalData.customerEmail && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500 font-bold uppercase text-[9.5px]">Email:</span>
+                  <span className="text-gray-700">{deleteModalData.customerEmail}</span>
+                </div>
+              )}
+              {deleteModalData.productName && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500 font-bold uppercase text-[9.5px]">Space &amp; Center:</span>
+                  <span className="font-bold text-gray-800">{deleteModalData.productName}</span>
+                </div>
+              )}
+              {deleteModalData.grandTotal && (
+                <div className="flex justify-between border-t border-neutral-200 pt-1.5">
+                  <span className="text-gray-500 font-bold uppercase text-[9.5px]">Total Amount:</span>
+                  <span className="font-bold text-[#006064]">₹{parseFloat(deleteModalData.grandTotal.toString()).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Detailed "What Will Happen" Explanations */}
+            <div className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-700 block">
+                What will happen after permanent deletion:
+              </span>
+              <div className="space-y-2 text-xs text-gray-700">
+                <div className="p-2.5 bg-rose-50 border-l-4 border-rose-500 space-y-1">
+                  <p className="font-bold text-rose-900 flex items-center gap-1.5">
+                    <span>🚫</span> <span>Hidden from External Customer:</span>
+                  </p>
+                  <p className="text-[11px] text-rose-800 leading-snug">
+                    This booking will be completely removed from the customer&apos;s portal (`/dashboard/bookings`). The user will no longer see this reservation, invoice, or status.
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-emerald-50 border-l-4 border-emerald-500 space-y-1">
+                  <p className="font-bold text-emerald-900 flex items-center gap-1.5">
+                    <span>🔓</span> <span>Inventory &amp; Time Slot Released:</span>
+                  </p>
+                  <p className="text-[11px] text-emerald-800 leading-snug">
+                    The reserved date/time slot (or dedicated workspace/cabin unit) will instantly unlock and become available for other customers to book on the website.
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-amber-50 border-l-4 border-amber-500 space-y-1">
+                  <p className="font-bold text-amber-900 flex items-center gap-1.5">
+                    <span>🛑</span> <span>All Automated Processes Terminated:</span>
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-snug">
+                    Any scheduled reminders, email follow-ups, agreement generation, or payment tracking associated with this booking will immediately stop.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteModalData(null)}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors text-center"
+              >
+                Keep Booking (Do Not Delete)
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleDeleteBooking}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 text-center"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={13} />
+                    <span>Yes, Permanently Delete Record</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Rejection Modal */}
       {rejectModalId && (
@@ -554,6 +756,7 @@ export default function AdminBookingsPage() {
           </div>
         </div>
       )}
+
 
       {/* Screenshot Preview Modal */}
       {selectedScreenshot && (

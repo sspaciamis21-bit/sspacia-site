@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { getOrCreateSyncedCustomer } from '@/lib/customerSyncHelper';
 
 // GET /api/user/dashboard — User personalized dashboard stats
 export async function GET() {
@@ -11,12 +12,8 @@ export async function GET() {
     }
 
     const userId = Number(payload.id);
-    const email = payload.email as string;
+    const customer = await getOrCreateSyncedCustomer(userId, payload.email as string);
 
-    // Find the customer record matching the user's email to get their external activity
-    const customer = await prisma.customer.findUnique({
-        where: { email }
-    });
 
     // Fetch user details for profile completion check
     const user = await prisma.user.findUnique({
@@ -77,19 +74,21 @@ export async function GET() {
     // 2. Fetch ClientMaster record if the user is a registered client
     let clientMasterRecord: any = null;
     let approvedInvoices: any[] = [];
+    const searchEmail = user?.email || (payload.email as string);
 
     try {
       clientMasterRecord = await (prisma as any).clientMaster.findFirst({
         where: {
           clientStatus: { in: ['Active', 'On Notice'] },
           OR: [
-            { contactPersons: { some: { email: { equals: email } } } },
+            ...(searchEmail ? [{ contactPersons: { some: { email: { equals: searchEmail } } } }] : []),
             ...(user?.companyName ? [{ companyName: { equals: user.companyName } }] : []),
           ],
         },
         include: {
           products: { orderBy: { sortOrder: 'asc' } },
           contactPersons: { orderBy: { sortOrder: 'asc' } },
+
           createdBy: {
             select: {
               assignedLocations: {

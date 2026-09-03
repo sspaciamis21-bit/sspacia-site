@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
 import {
@@ -150,6 +151,15 @@ export function OccupancyClient() {
   const [cadTheme, setCadTheme] = useState<"WHITE" | "BLUEPRINT" | "STUDIO">("WHITE");
   const [isExpandedModalOpen, setIsExpandedModalOpen] = useState<boolean>(false);
   const [zoomScale, setZoomScale] = useState<number>(1.0);
+  
+  // Hover and Overlay Mode State (Default to HOVER_ONLY as requested)
+  const [hoveredUnit, setHoveredUnit] = useState<OccupancyFloorUnit | null>(null);
+  const [overlayMode, setOverlayMode] = useState<"HOVER_ONLY" | "SHOW_ALL">("HOVER_ONLY");
+  const [mounted, setMounted] = useState<boolean>(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchOccupancyData = useCallback(async (locId = selectedLocation) => {
     setIsLoading(true);
@@ -162,16 +172,14 @@ export function OccupancyClient() {
       }
       const json: OccupancyApiResponse = await res.json();
       setData(json);
-      if (json.allUnits.length > 0 && !selectedUnit) {
-        setSelectedUnit(json.allUnits[0]);
-      }
     } catch (err) {
       console.error("[Occupancy Fetch Error]", err);
       toast.error("Failed to load live occupancy telemetry.");
     } finally {
       setIsLoading(false);
     }
-  }, [selectedLocation, selectedUnit]);
+  }, [selectedLocation]);
+
 
   useEffect(() => {
     fetchOccupancyData(selectedLocation);
@@ -462,223 +470,126 @@ export function OccupancyClient() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
 
-        {/* ── 1. CENTRE FILTER BAR ── */}
+        {/* ── 1. COMPACT EXECUTIVE CENTRE FILTER & TELEMETRY HUD ── */}
         <FadeUp>
-          <div className="bg-white p-3.5 border border-neutral-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-              <span className="text-xs font-black uppercase text-neutral-600 tracking-wider flex items-center gap-1">
-                <Building2 size={15} className="text-[#006064]" /> Centre Filter:
-              </span>
+          <div className="bg-white border border-neutral-200 shadow-xs divide-y divide-neutral-100">
+            {/* Top Row: Centre Selector & Quick Actions */}
+            <div className="p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 bg-neutral-50/50">
+              <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+                <span className="text-xs font-black uppercase text-neutral-600 tracking-wider flex items-center gap-1">
+                  <Building2 size={15} className="text-[#006064]" /> Centre Filter:
+                </span>
 
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setSelectedLocation("ALL")}
-                  className={`px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
-                    selectedLocation === "ALL"
-                      ? "bg-[#006064] text-white shadow-xs"
-                      : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-                  }`}
-                >
-                  All Centres (Global)
-                </button>
-
-                {data?.locations.map((loc) => (
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <button
-                    key={loc.id}
                     type="button"
-                    onClick={() => setSelectedLocation(String(loc.id))}
-                    className={`px-3 py-1.5 text-xs font-bold transition-all cursor-pointer ${
-                      selectedLocation === String(loc.id)
+                    onClick={() => setSelectedLocation("ALL")}
+                    className={`px-3 py-1 text-xs font-bold transition-all cursor-pointer ${
+                      selectedLocation === "ALL"
                         ? "bg-[#006064] text-white shadow-xs"
-                        : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                        : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100"
                     }`}
                   >
-                    {loc.name}
+                    All Centres (Global)
                   </button>
-                ))}
+
+                  {data?.locations.map((loc) => (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedLocation(String(loc.id));
+                        setActiveCadCentre(String(loc.id));
+                      }}
+                      className={`px-3 py-1 text-xs font-bold transition-all cursor-pointer ${
+                        selectedLocation === String(loc.id)
+                          ? "bg-[#006064] text-white shadow-xs"
+                          : "bg-white text-neutral-700 border border-neutral-200 hover:bg-neutral-100"
+                      }`}
+                    >
+                      {loc.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 text-xs text-neutral-500 self-end sm:self-auto">
+                <span>
+                  Active Scope: <strong className="text-neutral-900 font-bold">{activeMetrics?.name}</strong>
+                </span>
+                <span>•</span>
+                <span className="font-mono text-emerald-700 font-bold">
+                  {activeMetrics?.activeClientsCount} Companies Occupying
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 text-xs text-neutral-500 self-end sm:self-auto">
-              <span>
-                Active Scope: <strong className="text-neutral-900 font-bold">{activeMetrics?.name}</strong>
-              </span>
-              <span>•</span>
-              <span className="font-mono text-emerald-700 font-bold">
-                {activeMetrics?.activeClientsCount} Companies Occupying
-              </span>
+            {/* Bottom Row: Slim Inline Telemetry Badges */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 text-xs">
+              {/* Telemetry 1: Cabins */}
+              <div className="flex items-center justify-between bg-neutral-50 p-2.5 border border-neutral-200/70">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-teal-100 text-[#006064] flex items-center justify-center font-bold text-xs">
+                    <DoorClosed size={14} />
+                  </div>
+                  <div>
+                    <span className="font-black text-neutral-800 uppercase tracking-wider text-[10px] block">Cabins</span>
+                    <span className="font-mono font-bold text-neutral-600 text-[11px]">
+                      {activeMetrics?.occupiedCabins}/{activeMetrics?.totalCabins} Leased
+                    </span>
+                  </div>
+                </div>
+                <span className="font-mono font-black text-teal-800 bg-teal-50 px-2 py-0.5 border border-teal-200 text-[10.5px]">
+                  {activeMetrics?.cabinOccupancyRate ?? 100}% Leased
+                </span>
+              </div>
+
+              {/* Telemetry 2: Desks */}
+              <div className="flex items-center justify-between bg-neutral-50 p-2.5 border border-neutral-200/70">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">
+                    <Laptop size={14} />
+                  </div>
+                  <div>
+                    <span className="font-black text-neutral-800 uppercase tracking-wider text-[10px] block">Desks</span>
+                    <span className="font-mono font-bold text-neutral-600 text-[11px]">
+                      {activeMetrics?.occupiedDesks}/{activeMetrics?.totalDesks} Occupied ({activeMetrics?.availableDesks} Free)
+                    </span>
+                  </div>
+                </div>
+                <span className="font-mono font-black text-purple-800 bg-purple-50 px-2 py-0.5 border border-purple-200 text-[10.5px]">
+                  {activeMetrics?.deskOccupancyRate ?? 13.9}%
+                </span>
+              </div>
+
+              {/* Telemetry 3: Total Seating & Revenue */}
+              <div className="flex items-center justify-between bg-neutral-50 p-2.5 border border-neutral-200/70">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">
+                    <Armchair size={14} />
+                  </div>
+                  <div>
+                    <span className="font-black text-neutral-800 uppercase tracking-wider text-[10px] block">Capacity &amp; Yield</span>
+                    <span className="font-mono font-bold text-neutral-600 text-[11px]">
+                      {activeMetrics?.occupiedSeats}/{activeMetrics?.totalSeats} Seats ({formatINR(activeMetrics?.totalMonthlyRunRate ?? 0)}/mo)
+                    </span>
+                  </div>
+                </div>
+                <span className="font-mono font-black text-emerald-800 bg-emerald-50 px-2 py-0.5 border border-emerald-200 text-[10.5px]">
+                  {activeMetrics?.overallOccupancyRate ?? 57.8}%
+                </span>
+              </div>
             </div>
           </div>
         </FadeUp>
 
-        {/* ── 2. HERO KPI CARDS ── */}
-        <FadeUp delay={0.05}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            
-            {/* CARD 1: CABIN TELEMETRY (Total Cabin | Occupied Cabin | Available Cabin) */}
-            <div className="bg-white p-5 border border-neutral-200 shadow-xs flex flex-col justify-between relative overflow-hidden">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-teal-50 text-[#006064] flex items-center justify-center border border-teal-200">
-                    <DoorClosed size={16} />
-                  </div>
-                  <span className="text-[10.5px] font-black uppercase tracking-wider text-neutral-800">
-                    Cabins Telemetry
-                  </span>
-                </div>
-                <span className="text-[10px] font-black px-2 py-0.5 bg-teal-50 text-[#006064] border border-teal-200">
-                  {activeMetrics?.cabinOccupancyRate ?? 90}% Leased
-                </span>
-              </div>
-
-              <div className="my-3 grid grid-cols-3 gap-2 text-center border-y border-neutral-100 py-3">
-                <div>
-                  <span className="text-[9.5px] font-bold text-neutral-400 uppercase tracking-wider block">
-                    Total
-                  </span>
-                  <span className="text-xl font-black text-neutral-900 font-mono">
-                    {activeMetrics?.totalCabins ?? 0}
-                  </span>
-                </div>
-                <div className="border-x border-neutral-100">
-                  <span className="text-[9.5px] font-bold text-rose-600 uppercase tracking-wider block">
-                    Occupied
-                  </span>
-                  <span className="text-xl font-black text-rose-700 font-mono">
-                    {activeMetrics?.occupiedCabins ?? 0}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[9.5px] font-bold text-amber-600 uppercase tracking-wider block">
-                    Available (Yellow)
-                  </span>
-                  <span className="text-xl font-black text-amber-600 font-mono">
-                    {activeMetrics?.availableCabins ?? 0}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-[10.5px] text-neutral-500 font-medium flex items-center justify-between">
-                <span>Executive &amp; Dedicated Cabins</span>
-                <span className="text-amber-700 font-bold">
-                  {activeMetrics?.availableCabins === 0 ? "100% Occupied" : `${activeMetrics?.availableCabins} Available`}
-                </span>
-              </div>
-            </div>
-
-            {/* CARD 2: DESK TELEMETRY (Total Desk | Occupied Desk | Available Desk) */}
-            <div className="bg-white p-5 border border-neutral-200 shadow-xs flex flex-col justify-between relative overflow-hidden">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-200">
-                    <Laptop size={16} />
-                  </div>
-                  <span className="text-[10.5px] font-black uppercase tracking-wider text-neutral-800">
-                    Desks Telemetry
-                  </span>
-                </div>
-                <span className="text-[10px] font-black px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200">
-                  {activeMetrics?.deskOccupancyRate ?? 85}% Occupied
-                </span>
-              </div>
-
-              <div className="my-3 grid grid-cols-3 gap-2 text-center border-y border-neutral-100 py-3">
-                <div>
-                  <span className="text-[9.5px] font-bold text-neutral-400 uppercase tracking-wider block">
-                    Total
-                  </span>
-                  <span className="text-xl font-black text-neutral-900 font-mono">
-                    {activeMetrics?.totalDesks ?? 0}
-                  </span>
-                </div>
-                <div className="border-x border-neutral-100">
-                  <span className="text-[9.5px] font-bold text-rose-600 uppercase tracking-wider block">
-                    Occupied
-                  </span>
-                  <span className="text-xl font-black text-rose-700 font-mono">
-                    {activeMetrics?.occupiedDesks ?? 0}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[9.5px] font-bold text-emerald-600 uppercase tracking-wider block">
-                    Available
-                  </span>
-                  <span className="text-xl font-black text-emerald-700 font-mono">
-                    {activeMetrics?.availableDesks ?? 0}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-[10.5px] text-neutral-500 font-medium flex items-center justify-between">
-                <span>Fixed &amp; Flex Workstations</span>
-                <span className="text-purple-700 font-bold">
-                  {activeMetrics?.availableDesks ?? 0} Desks Free
-                </span>
-              </div>
-            </div>
-
-            {/* CARD 3: OVERALL SEATING CAPACITY & RUN-RATE */}
-            <div className="bg-white p-5 border border-neutral-200 shadow-xs flex flex-col justify-between relative overflow-hidden">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200">
-                    <Armchair size={16} />
-                  </div>
-                  <span className="text-[10.5px] font-black uppercase tracking-wider text-neutral-800">
-                    Overall Seating &amp; Revenue
-                  </span>
-                </div>
-                <span className="text-[10px] font-black px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {activeMetrics?.overallOccupancyRate ?? 88}% Total
-                </span>
-              </div>
-
-              <div className="my-3 grid grid-cols-3 gap-2 text-center border-y border-neutral-100 py-3">
-                <div>
-                  <span className="text-[9.5px] font-bold text-neutral-400 uppercase tracking-wider block">
-                    Capacity
-                  </span>
-                  <span className="text-xl font-black text-neutral-900 font-mono">
-                    {activeMetrics?.totalSeats ?? 0}
-                  </span>
-                </div>
-                <div className="border-x border-neutral-100">
-                  <span className="text-[9.5px] font-bold text-teal-800 uppercase tracking-wider block">
-                    Occupied
-                  </span>
-                  <span className="text-xl font-black text-teal-900 font-mono">
-                    {activeMetrics?.occupiedSeats ?? 0}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[9.5px] font-bold text-emerald-600 uppercase tracking-wider block">
-                    Vacant
-                  </span>
-                  <span className="text-xl font-black text-emerald-700 font-mono">
-                    {activeMetrics?.availableSeats ?? 0}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-[10.5px] text-neutral-500 font-medium flex items-center justify-between">
-                <span>Run-Rate Yield</span>
-                <span className="text-[#006064] font-black font-mono">
-                  {formatINR(activeMetrics?.totalMonthlyRunRate ?? 0)} / mo
-                </span>
-              </div>
-            </div>
-
-          </div>
-        </FadeUp>
-
-        {/* ── 3. INTERACTIVE 2D CAD ARCHITECTURAL BLUEPRINT CANVAS ── */}
+        {/* ── 2. INTERACTIVE 2D CAD ARCHITECTURAL BLUEPRINT CANVAS ── */}
         {viewMode === "CAD" && (
-          <FadeUp delay={0.1}>
+          <FadeUp delay={0.05}>
             <div className="bg-white border border-neutral-200 shadow-xs overflow-hidden">
               
               {/* CAD Control Header */}
-              <div className="px-5 py-3.5 bg-neutral-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800">
+              <div className="px-4 sm:px-5 py-3 bg-neutral-900 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-neutral-800">
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded bg-teal-500/20 text-teal-300 flex items-center justify-center border border-teal-400/30">
                     <Compass size={16} />
@@ -687,31 +598,44 @@ export function OccupancyClient() {
                     <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
                       <span>Architectural 2D CAD Floor Plan Visualizer</span>
                       <span className="text-[9.5px] font-bold bg-teal-500/20 text-teal-300 px-2 py-0.2 border border-teal-400/30 uppercase">
-                        Live Units Interactive
+                        {overlayMode === "HOVER_ONLY" ? "Hover Reveal Active" : "All Overlays Visible"}
                       </span>
                     </h3>
                     <p className="text-[11px] text-neutral-400 font-light">
-                      Click on any cabin or workspace box in the floor plan to inspect tenant agreements, capacity, and seat occupancy.
+                      Hover over any cabin or workspace to reveal live tenancy details without cluttering the architectural drawing.
                     </p>
                   </div>
                 </div>
 
-                {/* CAD Centre Quick Switcher + Theme Toggle */}
-                <div className="flex items-center gap-3 text-xs flex-wrap">
-                  {/* Legend */}
-                  <div className="flex items-center gap-2 text-[9.5px] font-black uppercase tracking-wider flex-wrap mr-1">
-                    <span className="flex items-center gap-1 text-rose-300">
-                      <span className="w-2 h-2 bg-rose-500 rounded-2xs" /> Occupied (Red)
-                    </span>
-                    <span className="flex items-center gap-1 text-amber-300">
-                      <span className="w-2 h-2 bg-amber-400 rounded-2xs" /> Available Cabin (Yellow)
-                    </span>
-                    <span className="flex items-center gap-1 text-emerald-300">
-                      <span className="w-2 h-2 bg-emerald-500 rounded-2xs" /> Available Desk (Green)
-                    </span>
-                    <span className="flex items-center gap-1 text-purple-300">
-                      <span className="w-2 h-2 bg-purple-500 rounded-2xs" /> Meeting (Purple)
-                    </span>
+                {/* CAD Centre Quick Switcher + Mode + Theme Toggle */}
+                <div className="flex items-center gap-2 text-xs flex-wrap">
+                  
+                  {/* Mode Toggle: Hover Only vs Show All */}
+                  <div className="bg-neutral-800 p-0.5 flex items-center border border-neutral-700">
+                    <button
+                      type="button"
+                      onClick={() => setOverlayMode("HOVER_ONLY")}
+                      className={`px-2 py-1 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        overlayMode === "HOVER_ONLY"
+                          ? "bg-teal-600 text-white shadow-xs"
+                          : "text-neutral-400 hover:text-white"
+                      }`}
+                      title="Keep blueprint clean and only show color coding and tenant tags when hovering over a space"
+                    >
+                      🎯 Hover Reveal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOverlayMode("SHOW_ALL")}
+                      className={`px-2 py-1 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        overlayMode === "SHOW_ALL"
+                          ? "bg-teal-600 text-white shadow-xs"
+                          : "text-neutral-400 hover:text-white"
+                      }`}
+                      title="Display all colored boxes and labels simultaneously"
+                    >
+                      👁️ Show All
+                    </button>
                   </div>
 
                   {/* Centre switcher inside CAD header */}
@@ -723,7 +647,7 @@ export function OccupancyClient() {
                         const first = data?.allUnits.find(u => String(u.centreId) === "1");
                         if (first) setSelectedUnit(first);
                       }}
-                      className={`px-2.5 py-1 text-[10.5px] font-bold uppercase transition-all cursor-pointer ${
+                      className={`px-2.5 py-1 text-[10px] font-bold uppercase transition-all cursor-pointer ${
                         currentCadLocationId === "1" ? "bg-teal-600 text-white font-black shadow-xs" : "text-neutral-400 hover:text-white"
                       }`}
                     >
@@ -736,7 +660,7 @@ export function OccupancyClient() {
                         const first = data?.allUnits.find(u => String(u.centreId) === "2");
                         if (first) setSelectedUnit(first);
                       }}
-                      className={`px-2.5 py-1 text-[10.5px] font-bold uppercase transition-all cursor-pointer ${
+                      className={`px-2.5 py-1 text-[10px] font-bold uppercase transition-all cursor-pointer ${
                         currentCadLocationId === "2" ? "bg-teal-600 text-white font-black shadow-xs" : "text-neutral-400 hover:text-white"
                       }`}
                     >
@@ -749,7 +673,7 @@ export function OccupancyClient() {
                         const first = data?.allUnits.find(u => String(u.centreId) === "3");
                         if (first) setSelectedUnit(first);
                       }}
-                      className={`px-2.5 py-1 text-[10.5px] font-bold uppercase transition-all cursor-pointer ${
+                      className={`px-2.5 py-1 text-[10px] font-bold uppercase transition-all cursor-pointer ${
                         currentCadLocationId === "3" ? "bg-teal-600 text-white font-black shadow-xs" : "text-neutral-400 hover:text-white"
                       }`}
                     >
@@ -757,33 +681,34 @@ export function OccupancyClient() {
                     </button>
                   </div>
 
+                  {/* Theme Switcher */}
                   <div className="bg-neutral-800 p-0.5 flex items-center border border-neutral-700">
                     <button
                       type="button"
-                      onClick={() => setCadTheme("WHITE" as any)}
-                      className={`px-2 py-0.5 text-[10px] font-bold uppercase cursor-pointer ${
-                        (cadTheme as any) === "WHITE" ? "bg-white text-neutral-900 shadow-xs" : "text-neutral-400 hover:text-white"
+                      onClick={() => setCadTheme("WHITE")}
+                      className={`px-2 py-0.5 text-[9.5px] font-bold uppercase cursor-pointer ${
+                        cadTheme === "WHITE" ? "bg-white text-neutral-900 shadow-xs" : "text-neutral-400 hover:text-white"
                       }`}
                     >
-                      Architectural White
+                      White
                     </button>
                     <button
                       type="button"
                       onClick={() => setCadTheme("STUDIO")}
-                      className={`px-2 py-0.5 text-[10px] font-bold uppercase cursor-pointer ${
+                      className={`px-2 py-0.5 text-[9.5px] font-bold uppercase cursor-pointer ${
                         cadTheme === "STUDIO" ? "bg-teal-700 text-white" : "text-neutral-400 hover:text-white"
                       }`}
                     >
-                      Studio Grid
+                      Studio
                     </button>
                     <button
                       type="button"
                       onClick={() => setCadTheme("BLUEPRINT")}
-                      className={`px-2 py-0.5 text-[10px] font-bold uppercase cursor-pointer ${
+                      className={`px-2 py-0.5 text-[9.5px] font-bold uppercase cursor-pointer ${
                         cadTheme === "BLUEPRINT" ? "bg-cyan-800 text-cyan-200" : "text-neutral-400 hover:text-white"
                       }`}
                     >
-                      CAD Blueprint
+                      Blueprint
                     </button>
                   </div>
 
@@ -803,20 +728,20 @@ export function OccupancyClient() {
               </div>
 
               {/* Main CAD Blueprint Stage + Side Inspector Drawer */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[660px]">
+              <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[640px]">
                 
                 {/* 2D Architectural Floor Plan Grid */}
                 <div className={`lg:col-span-8 p-4 sm:p-6 relative overflow-hidden flex flex-col justify-between ${
-                  (cadTheme as any) === "WHITE"
-                    ? "bg-neutral-200/90"
+                  cadTheme === "WHITE"
+                    ? "bg-neutral-100"
                     : cadTheme === "BLUEPRINT"
                     ? "bg-[#0b1d3a] bg-[radial-gradient(#1e3a8a_1px,transparent_1px)] [background-size:16px_16px]"
                     : "bg-neutral-900 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]"
                 }`}>
                   
                   {/* Floor Plan Structural Container with Image-Fitted Overlay */}
-                  <div className="w-full flex items-center justify-center overflow-auto p-2 min-h-[580px]">
-                    <div className="relative inline-block max-w-full overflow-hidden border-2 rounded p-1 shadow-md bg-white">
+                  <div className="w-full flex items-center justify-center overflow-auto p-2 min-h-[540px]">
+                    <div className="relative inline-block max-w-full overflow-hidden border border-neutral-300 rounded p-1 shadow-md bg-white">
                       
                       {/* Real High-Resolution CAD Architectural Floor Plan Backdrop */}
                       <img
@@ -828,10 +753,10 @@ export function OccupancyClient() {
                             : "/cad-previews/premier_cad.png"
                         }
                         alt="AutoCAD Floor Plan"
-                        className="max-h-[700px] w-auto h-auto max-w-full block mx-auto select-none pointer-events-none"
+                        className="max-h-[680px] w-auto h-auto max-w-full block mx-auto select-none pointer-events-none"
                         style={{
                           filter:
-                            (cadTheme as any) === "WHITE"
+                            cadTheme === "WHITE"
                               ? "none"
                               : cadTheme === "BLUEPRINT"
                               ? "invert(1) sepia(1) saturate(6) hue-rotate(170deg) brightness(1.2) contrast(1.4)"
@@ -840,7 +765,7 @@ export function OccupancyClient() {
                       />
 
                       {/* Floor Plan Title Badge */}
-                      <div className="absolute top-2 left-3 bg-teal-600/95 text-white px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-2xs z-20 shadow-md border border-teal-400/40 flex items-center gap-1.5 backdrop-blur-xs">
+                      <div className="absolute top-2 left-3 bg-teal-700/95 text-white px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-2xs z-20 shadow-md border border-teal-400/40 flex items-center gap-1.5 backdrop-blur-xs">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
                         <span>{currentCadLocationId === "1" ? "Agarwal Complex" : currentCadLocationId === "2" ? "Mercado Flagship" : "Premier House"}</span>
                       </div>
@@ -850,21 +775,23 @@ export function OccupancyClient() {
                       </div>
 
                       {/* Hotspots Overlay locked to 100% of the image bounding box */}
-                      <div className="absolute inset-0 w-full h-full pointer-events-auto">
+                      <div 
+                        className="absolute inset-0 w-full h-full pointer-events-auto"
+                        onMouseLeave={() => setHoveredUnit(null)}
+                      >
                         {cadDisplayUnits.map((unit) => {
-                          const isSelected = selectedUnit?.id === unit.id;
+                          const isHovered = hoveredUnit?.id === unit.id;
+                          const isVisible = overlayMode === "SHOW_ALL" ? true : isHovered;
+
                           const isOccupied = unit.status === "OCCUPIED";
                           const isPartiallyAvailable = unit.status === "PARTIALLY_AVAILABLE";
                           const isMeeting = unit.status === "GUEST_BOOKABLE";
                           const isAvailableCabin = unit.status === "AVAILABLE" && unit.category === "CABIN";
 
                           return (
-                            <motion.button
+                            <div
                               key={unit.id}
-                              type="button"
-                              onClick={() => setSelectedUnit(unit)}
-                              whileHover={{ scale: 1.01 }}
-                              whileTap={{ scale: 0.99 }}
+                              onMouseEnter={() => setHoveredUnit(unit)}
                               style={{
                                 position: "absolute",
                                 left: `${unit.grid.x}%`,
@@ -872,68 +799,78 @@ export function OccupancyClient() {
                                 width: `${unit.grid.w}%`,
                                 height: `${unit.grid.h}%`,
                               }}
-                              className={`rounded-2xs p-1 text-left flex flex-col justify-between transition-all cursor-pointer border ${
-                                isSelected
-                                  ? "ring-2 ring-[#006064] ring-offset-1 z-30 scale-[1.02] shadow-lg font-bold"
-                                  : "z-10 hover:shadow-md"
-                              } ${
-                                isOccupied
-                                  ? "bg-rose-500/20 hover:bg-rose-500/30 border-rose-600/80 text-rose-950"
-                                  : isPartiallyAvailable
-                                  ? "bg-amber-400/25 hover:bg-amber-400/35 border-amber-500/90 text-amber-950"
-                                  : isAvailableCabin
-                                  ? "bg-amber-400/20 hover:bg-amber-400/30 border-amber-500/80 text-amber-950"
-                                  : isMeeting
-                                  ? "bg-purple-500/20 hover:bg-purple-500/30 border-purple-600/80 text-purple-950"
-                                  : "bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-600/80 text-emerald-950"
+                              className={`rounded-2xs transition-all duration-150 cursor-pointer ${
+                                isVisible
+                                  ? `border-2 z-30 shadow-lg ${
+                                      isOccupied
+                                        ? "bg-rose-500/35 border-rose-600 text-rose-950 shadow-rose-500/20"
+                                        : isPartiallyAvailable
+                                        ? "bg-amber-400/35 border-amber-500 text-amber-950 shadow-amber-500/20"
+                                        : isAvailableCabin
+                                        ? "bg-amber-400/35 border-amber-500 text-amber-950 shadow-amber-500/20"
+                                        : isMeeting
+                                        ? "bg-purple-500/35 border-purple-600 text-purple-950 shadow-purple-500/20"
+                                        : "bg-emerald-500/35 border-emerald-600 text-emerald-950 shadow-emerald-500/20"
+                                    } ring-2 ring-[#006064]/60 ring-offset-1 scale-[1.01]`
+                                  : "bg-transparent border border-transparent hover:bg-black/5 z-10"
                               }`}
                             >
-                              {/* Top Tag: Room Code + Seat count */}
-                              <div className="flex items-center justify-between gap-1 leading-none w-full">
-                                <span className="text-[7.5px] sm:text-[8.5px] font-mono font-black uppercase tracking-tight text-neutral-900 bg-white/95 px-1 py-0.2 rounded-2xs shadow-2xs border border-neutral-300/70">
-                                  {unit.code}
-                                </span>
-                                <span className={`text-[7px] sm:text-[7.5px] font-black px-1 py-0.2 rounded-2xs text-white shadow-2xs ${
-                                  isOccupied
-                                    ? "bg-rose-700"
-                                    : isPartiallyAvailable
-                                    ? "bg-amber-600"
-                                    : isAvailableCabin
-                                    ? "bg-amber-600"
-                                    : isMeeting
-                                    ? "bg-purple-700"
-                                    : "bg-emerald-700"
-                                }`}>
-                                  {isPartiallyAvailable ? `${unit.occupiedSeats}/${unit.capacity}s` : `${unit.capacity}s`}
-                                </span>
-                              </div>
+                              {/* Content visible only on hover / show all */}
+                              {isVisible && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  transition={{ duration: 0.1 }}
+                                  className="h-full flex flex-col justify-between p-1 select-none pointer-events-none"
+                                >
+                                  {/* Top Tag: Room Code + Seat count */}
+                                  <div className="flex items-center justify-between gap-1 leading-none w-full">
+                                    <span className="text-[7.5px] sm:text-[8.5px] font-mono font-black uppercase tracking-tight text-neutral-900 bg-white/95 px-1 py-0.2 rounded-2xs shadow-md border border-neutral-300/70">
+                                      {unit.code}
+                                    </span>
+                                    <span className={`text-[7px] sm:text-[7.5px] font-black px-1 py-0.2 rounded-2xs text-white shadow-md ${
+                                      isOccupied
+                                        ? "bg-rose-700"
+                                        : isPartiallyAvailable
+                                        ? "bg-amber-600"
+                                        : isAvailableCabin
+                                        ? "bg-amber-600"
+                                        : isMeeting
+                                        ? "bg-purple-700"
+                                        : "bg-emerald-700"
+                                    }`}>
+                                      {isPartiallyAvailable ? `${unit.occupiedSeats}/${unit.capacity}s` : `${unit.capacity}s`}
+                                    </span>
+                                  </div>
 
-                              {/* Bottom Label: Company Name or Available status */}
-                              <div className="mt-auto pt-0.5 w-full">
-                                {unit.occupant ? (
-                                  <div className="bg-neutral-900/90 text-white px-1 py-0.5 rounded-2xs truncate shadow-2xs">
-                                    <p className="font-bold text-[7.5px] sm:text-[8px] truncate leading-tight text-neutral-100">
-                                      {unit.occupant.companyName}
-                                    </p>
-                                    {isPartiallyAvailable && (
-                                      <span className="text-[7px] text-amber-300 font-bold block truncate">
-                                        ({unit.availableSeats} Free)
-                                      </span>
+                                  {/* Bottom Label: Company Name or Available status */}
+                                  <div className="mt-auto pt-0.5 w-full">
+                                    {unit.occupant ? (
+                                      <div className="bg-neutral-900/95 text-white px-1 py-0.5 rounded-2xs truncate shadow-md border border-white/20">
+                                        <p className="font-bold text-[7.5px] sm:text-[8px] truncate leading-tight text-white">
+                                          {unit.occupant.companyName}
+                                        </p>
+                                        {isPartiallyAvailable && (
+                                          <span className="text-[7px] text-amber-300 font-bold block truncate">
+                                            ({unit.availableSeats} Free)
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className={`px-1 py-0.2 rounded-2xs text-center font-black text-[7px] sm:text-[7.5px] uppercase tracking-wider shadow-md ${
+                                        isAvailableCabin
+                                          ? "bg-amber-500 text-neutral-950"
+                                          : isMeeting
+                                          ? "bg-purple-700 text-white"
+                                          : "bg-emerald-700 text-white"
+                                      }`}>
+                                        {isAvailableCabin ? "🟡 Available" : isMeeting ? "🟣 Meeting" : "🟢 Available"}
+                                      </div>
                                     )}
                                   </div>
-                                ) : (
-                                  <div className={`px-1 py-0.2 rounded-2xs text-center font-black text-[7px] sm:text-[7.5px] uppercase tracking-wider ${
-                                    isAvailableCabin
-                                      ? "bg-amber-500 text-neutral-950"
-                                      : isMeeting
-                                      ? "bg-purple-700 text-white"
-                                      : "bg-emerald-700 text-white"
-                                  }`}>
-                                    {isAvailableCabin ? "🟡 Available" : isMeeting ? "🟣 Meeting" : "🟢 Available"}
-                                  </div>
-                                )}
-                              </div>
-                            </motion.button>
+                                </motion.div>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
@@ -942,12 +879,12 @@ export function OccupancyClient() {
                   </div>
 
                   {/* CAD Bottom Status Bar */}
-                  <div className="mt-3 pt-2 border-t border-neutral-800 text-[10px] text-neutral-400 flex items-center justify-between font-mono flex-wrap gap-2">
+                  <div className="mt-3 pt-2 border-t border-neutral-300 text-[10px] text-neutral-600 flex items-center justify-between font-mono flex-wrap gap-2">
                     <span className="flex items-center gap-1.5">
-                      <Compass size={12} className="text-teal-400" />
+                      <Compass size={12} className="text-[#006064]" />
                       <span>
                         Active CAD Drawing:{" "}
-                        <strong className="text-teal-300">
+                        <strong className="text-neutral-900">
                           {currentCadLocationId === "1"
                             ? "Agrawal.dwg (Agarwal Complex, C.G. Road)"
                             : currentCadLocationId === "2"
@@ -962,145 +899,156 @@ export function OccupancyClient() {
 
                 {/* Right Space Inspection Panel */}
                 <div className="lg:col-span-4 bg-white border-t lg:border-t-0 lg:border-l border-neutral-200 p-6 flex flex-col justify-between">
-                  {selectedUnit ? (
-                    <div>
-                      {/* Status Header */}
-                      <div className="flex items-center justify-between pb-3.5 border-b border-neutral-200">
-                        <div>
-                          <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 block mb-0.5">
-                            Space Inspection
-                          </span>
-                          <span className="text-xs font-mono font-bold text-neutral-600">
-                            {selectedUnit.code} • {selectedUnit.centreName}
-                          </span>
+                  {(() => {
+                    const inspected = hoveredUnit;
+                    if (!inspected) {
+                      return (
+                        <div className="py-24 text-center text-neutral-400">
+                          <Compass size={40} className="text-neutral-300 mx-auto mb-3 animate-pulse" />
+                          <p className="text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1">
+                            Interactive Hover Inspection
+                          </p>
+                          <p className="text-[11px] text-neutral-500 max-w-xs mx-auto leading-relaxed">
+                            Hover over any cabin or workspace in the floor plan to inspect tenant agreements, capacity, lock-in dates, and SDR security deposits.
+                          </p>
                         </div>
-                        
-                        {selectedUnit.status === "OCCUPIED" ? (
-                          <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-300 rounded-2xs flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
-                            100% Leased
-                          </span>
-                        ) : selectedUnit.status === "PARTIALLY_AVAILABLE" ? (
-                          <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-300 rounded-2xs flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                            Partially Leased ({selectedUnit.availableSeats} Free)
-                          </span>
-                        ) : selectedUnit.category === "CABIN" ? (
-                          <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-300 rounded-2xs flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-amber-500" />
-                            Available Cabin
-                          </span>
-                        ) : selectedUnit.category === "MEETING" || selectedUnit.category === "EVENT" ? (
-                          <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-purple-50 text-purple-800 border border-purple-300 rounded-2xs flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-purple-500" />
-                            Meeting / Event
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-2xs flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            Available Desk
-                          </span>
-                        )}
-                      </div>
+                      );
+                    }
 
-                      <div className="mt-5 space-y-4">
-                        
-                        {/* 1. Company Name */}
-                        <div className="bg-neutral-50 p-4 border border-neutral-200/80 rounded-xs">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block mb-1">
-                            Company Name
-                          </span>
-                          <h3 className="text-base font-black text-neutral-900 font-display leading-snug">
-                            {selectedUnit.occupant?.companyName || (
-                              <span className="text-neutral-400 font-medium italic">
-                                Vacant Space (Ready for Allocation)
-                              </span>
-                            )}
-                          </h3>
-                          {selectedUnit.occupant?.clientId && (
-                            <span className="text-[10.5px] font-mono text-neutral-500 mt-1 block">
-                              Client UID: <strong className="text-neutral-800">{selectedUnit.occupant.clientId}</strong>
+                    return (
+                      <div>
+                        {/* Status Header */}
+                        <div className="flex items-center justify-between pb-3.5 border-b border-neutral-200">
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 block mb-0.5 flex items-center gap-1">
+                              <span>Space Inspection</span>
+                              {hoveredUnit && <span className="text-teal-600 font-bold">(Live Hover)</span>}
+                            </span>
+                            <span className="text-xs font-mono font-bold text-neutral-800">
+                              {inspected.code} • {inspected.centreName}
+                            </span>
+                          </div>
+                          
+                          {inspected.status === "OCCUPIED" ? (
+                            <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-300 rounded-2xs flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
+                              100% Leased
+                            </span>
+                          ) : inspected.status === "PARTIALLY_AVAILABLE" ? (
+                            <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-300 rounded-2xs flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                              Partially Leased ({inspected.availableSeats} Free)
+                            </span>
+                          ) : inspected.category === "CABIN" ? (
+                            <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-300 rounded-2xs flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-amber-500" />
+                              Available Cabin
+                            </span>
+                          ) : inspected.category === "MEETING" || inspected.category === "EVENT" ? (
+                            <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-purple-50 text-purple-800 border border-purple-300 rounded-2xs flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-purple-500" />
+                              Meeting / Event
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-2xs flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              Available Desk
                             </span>
                           )}
                         </div>
 
-                        {/* 2. Product Details */}
-                        <div className="bg-neutral-50 p-4 border border-neutral-200/80 rounded-xs space-y-2 text-xs">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block mb-1">
-                            Product Details
-                          </span>
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Space Name:</span>
-                            <span className="font-black text-neutral-900">{selectedUnit.name}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Product Category:</span>
-                            <span className="font-bold text-neutral-800">{selectedUnit.typeName}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Total Capacity:</span>
-                            <span className="font-black text-neutral-900 font-mono">{selectedUnit.capacity} Seats</span>
-                          </div>
-                          <div className="flex items-center justify-between bg-white p-2 border border-neutral-200/60 rounded-2xs">
-                            <span className="text-neutral-600 font-bold">Occupancy Breakdown:</span>
-                            <span className="font-mono font-black text-neutral-900">
-                              {selectedUnit.occupiedSeats} Occupied / {selectedUnit.capacity} Total
-                              {selectedUnit.availableSeats > 0 && (
-                                <span className="text-amber-700 ml-1 font-bold">
-                                  ({selectedUnit.availableSeats} Available)
+                        <div className="mt-4 space-y-3.5">
+                          
+                          {/* 1. Company Name */}
+                          <div className="bg-neutral-50 p-3.5 border border-neutral-200/80 rounded-xs">
+                            <span className="text-[9.5px] font-black uppercase tracking-wider text-neutral-400 block mb-0.5">
+                              Company Name
+                            </span>
+                            <h3 className="text-base font-black text-neutral-900 font-display leading-snug">
+                              {inspected.occupant?.companyName || (
+                                <span className="text-neutral-400 font-medium italic">
+                                  Vacant Space (Ready for Allocation)
                                 </span>
                               )}
-                            </span>
+                            </h3>
+                            {inspected.occupant?.clientId && (
+                              <span className="text-[10px] font-mono text-neutral-500 mt-1 block">
+                                Client UID: <strong className="text-neutral-800">{inspected.occupant.clientId}</strong>
+                              </span>
+                            )}
                           </div>
+
+                          {/* 2. Product Details */}
+                          <div className="bg-neutral-50 p-3.5 border border-neutral-200/80 rounded-xs space-y-2 text-xs">
+                            <span className="text-[9.5px] font-black uppercase tracking-wider text-neutral-400 block mb-0.5">
+                              Product Details
+                            </span>
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Space Name:</span>
+                              <span className="font-black text-neutral-900">{inspected.name}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Product Category:</span>
+                              <span className="font-bold text-neutral-800">{inspected.typeName}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Total Capacity:</span>
+                              <span className="font-black text-neutral-900 font-mono">{inspected.capacity} Seats</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-white p-2 border border-neutral-200/60 rounded-2xs">
+                              <span className="text-neutral-600 font-bold">Occupancy Breakdown:</span>
+                              <span className="font-mono font-black text-neutral-900">
+                                {inspected.occupiedSeats} Occupied / {inspected.capacity} Total
+                                {inspected.availableSeats > 0 && (
+                                  <span className="text-amber-700 ml-1 font-bold">
+                                    ({inspected.availableSeats} Available)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 3. Agreement Dates & Lock-in Date */}
+                          <div className="bg-neutral-50 p-3.5 border border-neutral-200/80 rounded-xs space-y-2 text-xs">
+                            <span className="text-[9.5px] font-black uppercase tracking-wider text-neutral-400 block mb-0.5">
+                              Tenancy &amp; Agreement Terms
+                            </span>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Agreement Start Date:</span>
+                              <span className="font-mono font-black text-neutral-900">
+                                {inspected.occupant?.agreementStartDate || "N/A"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Agreement End Date:</span>
+                              <span className="font-mono font-black text-neutral-900">
+                                {inspected.occupant?.agreementEndDate || "N/A"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Lock-In Period / Date:</span>
+                              <span className="font-black text-[#006064] font-mono">
+                                {inspected.occupant?.lockInPeriod || "11 Months"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
+                              <span className="text-neutral-600 font-bold">SDR Security Deposit:</span>
+                              <span className="font-black text-teal-800 font-mono text-xs">
+                                {inspected.occupant?.sdrDeposit ? formatINR(inspected.occupant.sdrDeposit) : "N/A / As per Agreement"}
+                              </span>
+                            </div>
+                          </div>
+
                         </div>
-
-                        {/* 3. Agreement Dates & Lock-in Date */}
-                        <div className="bg-neutral-50 p-4 border border-neutral-200/80 rounded-xs space-y-2.5 text-xs">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block mb-1">
-                            Tenancy &amp; Agreement Terms
-                          </span>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Agreement Start Date:</span>
-                            <span className="font-mono font-black text-neutral-900">
-                              {selectedUnit.occupant?.agreementStartDate || "N/A"}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Agreement End Date:</span>
-                            <span className="font-mono font-black text-neutral-900">
-                              {selectedUnit.occupant?.agreementEndDate || "N/A"}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Lock-In Period / Date:</span>
-                            <span className="font-black text-[#006064] font-mono">
-                              {selectedUnit.occupant?.lockInPeriod || "11 Months"}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
-                            <span className="text-neutral-600 font-bold">SDR Security Deposit:</span>
-                            <span className="font-black text-teal-800 font-mono text-xs">
-                              {selectedUnit.occupant?.sdrDeposit ? formatINR(selectedUnit.occupant.sdrDeposit) : "N/A / As per Agreement"}
-                            </span>
-                          </div>
-                        </div>
-
                       </div>
-                    </div>
-                  ) : (
-                    <div className="py-20 text-center text-neutral-400">
-                      <Compass size={36} className="text-neutral-300 mx-auto mb-2" />
-                      <p className="text-xs font-semibold text-neutral-600">
-                        Click on any cabin or workspace in the floor plan to inspect agreement dates and lock-in details
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })()}
 
-                  <div className="mt-5 pt-3 border-t border-neutral-200 text-[11px] text-neutral-500 flex items-center justify-between">
+                  <div className="mt-4 pt-3 border-t border-neutral-200 text-[11px] text-neutral-500 flex items-center justify-between">
                     <Link
                       href="/admin/client-master"
                       className="text-[#006064] font-bold hover:underline flex items-center gap-1"
@@ -1116,6 +1064,7 @@ export function OccupancyClient() {
             </div>
           </FadeUp>
         )}
+
 
         {/* ── 4. INVENTORY & OCCUPANCY LEDGER TABLE ── */}
         <FadeUp delay={0.15}>
@@ -1305,109 +1254,138 @@ export function OccupancyClient() {
         </FadeUp>
 
         {/* ── 4. EXPANDED FULLSCREEN CAD BLUEPRINT STUDIO MODAL ── */}
-        <AnimatePresence>
-          {isExpandedModalOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-black/95 backdrop-blur-lg flex flex-col p-2 sm:p-4 overflow-hidden"
-            >
-              {/* Pinned Floating High-Visibility Close Button */}
-              <button
-                type="button"
-                onClick={() => setIsExpandedModalOpen(false)}
-                className="fixed top-3 sm:top-5 right-3 sm:right-6 z-[100] px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider rounded-md shadow-2xl flex items-center gap-1.5 border-2 border-white/90 cursor-pointer transition-all hover:scale-105 active:scale-95"
-                title="Close CAD Studio (Press Esc)"
-              >
-                <X size={16} />
-                <span>CLOSE (ESC)</span>
-              </button>
+        {mounted && typeof document !== "undefined" && isExpandedModalOpen && createPortal(
+          <div className="fixed inset-0 z-[9999999] bg-[#0b1329] flex flex-col w-screen h-screen overflow-hidden">
+            {/* Top Fullscreen Header Toolbar */}
+            <div className="bg-neutral-950 border-b border-neutral-800 px-4 py-2.5 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-3 shrink-0 shadow-2xl z-50">
+              
+              {/* Left: Studio Title & Current Scope */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded bg-teal-500/20 text-teal-300 flex items-center justify-center border border-teal-400/30 shrink-0">
+                  <Compass size={18} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white flex items-center gap-2 truncate">
+                    <span>CAD Blueprint Fullscreen Studio</span>
+                    <span className="text-[9px] bg-teal-500/20 text-teal-300 px-2 py-0.5 border border-teal-400/30 uppercase font-bold shrink-0">
+                      {overlayMode === "HOVER_ONLY" ? "Hover Reveal Active" : "All Overlays"}
+                    </span>
+                  </h2>
+                  <span className="text-[11px] text-neutral-400 font-mono block truncate">
+                    {currentCadLocationId === "1"
+                      ? "Agarwal Complex (C.G. Road) • Agrawal.dwg"
+                      : currentCadLocationId === "2"
+                      ? "Mercado Flagship (Navrangpura) • Mercadol.dwg"
+                      : "Premier House (SG Highway) • Premier House.dwg"}
+                  </span>
+                </div>
+              </div>
 
-              {/* Modal Top Control Bar */}
-              <div className="bg-neutral-900 border border-neutral-800 px-4 py-2.5 text-white flex flex-col md:flex-row md:items-center justify-between gap-2.5 shrink-0 rounded-t-lg pr-36">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-7 h-7 rounded bg-teal-500/20 text-teal-300 flex items-center justify-center border border-teal-400/30 shrink-0">
-                    <Compass size={16} />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white flex items-center gap-2 truncate">
-                      <span className="truncate">{currentCadLocationId === "1" ? "Agarwal Complex (C.G. Road)" : currentCadLocationId === "2" ? "Mercado Flagship (Navrangpura)" : "Premier House (SG Highway)"}</span>
-                      <span className="text-[8.5px] bg-teal-500/20 text-teal-300 px-1.5 py-0.2 border border-teal-400/30 uppercase font-bold shrink-0">
-                        Vector CAD View
-                      </span>
-                    </h2>
-                  </div>
+              {/* Center: Prominent Centre Filter Dropdown + Quick Buttons */}
+              <div className="flex items-center gap-2.5 bg-neutral-900 px-3 py-1.5 rounded-md border border-neutral-700 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Building2 size={15} className="text-teal-400 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider text-teal-300 whitespace-nowrap">
+                    Centre Filter:
+                  </span>
+                  <select
+                    value={currentCadLocationId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedLocation(val);
+                      setActiveCadCentre(val);
+                      setHoveredUnit(null);
+                    }}
+                    className="bg-neutral-800 text-white text-xs font-bold px-3 py-1.5 rounded border border-neutral-600 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer min-w-[200px]"
+                  >
+                    <option value="1">🏢 Agarwal Complex (C.G. Road)</option>
+                    <option value="2">🏢 Mercado Flagship (Navrangpura)</option>
+                    <option value="3">🏢 Premier House (SG Highway)</option>
+                  </select>
                 </div>
 
-                {/* Controls */}
-                <div className="flex items-center gap-2 flex-wrap justify-end">
-                  {/* Legend */}
-                  <div className="flex items-center gap-1.5 text-[8.5px] font-black uppercase tracking-wider flex-wrap mr-1">
-                    <span className="flex items-center gap-1 text-rose-300">
-                      <span className="w-1.5 h-1.5 bg-rose-500 rounded-2xs" /> Occupied
-                    </span>
-                    <span className="flex items-center gap-1 text-amber-300">
-                      <span className="w-1.5 h-1.5 bg-amber-400 rounded-2xs" /> Available Cabin
-                    </span>
-                    <span className="flex items-center gap-1 text-emerald-300">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-2xs" /> Available Desk
-                    </span>
-                    <span className="flex items-center gap-1 text-purple-300">
-                      <span className="w-1.5 h-1.5 bg-purple-500 rounded-2xs" /> Meeting
-                    </span>
-                  </div>
+                {/* Quick Switcher Buttons */}
+                <div className="hidden sm:flex items-center gap-1 border-l border-neutral-700 pl-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLocation("1");
+                      setActiveCadCentre("1");
+                      setHoveredUnit(null);
+                    }}
+                    className={`px-2.5 py-1 text-[11px] font-bold uppercase transition-all cursor-pointer rounded-xs ${
+                      currentCadLocationId === "1"
+                        ? "bg-[#006064] text-white font-black shadow-md"
+                        : "bg-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-700"
+                    }`}
+                  >
+                    Agarwal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLocation("2");
+                      setActiveCadCentre("2");
+                      setHoveredUnit(null);
+                    }}
+                    className={`px-2.5 py-1 text-[11px] font-bold uppercase transition-all cursor-pointer rounded-xs ${
+                      currentCadLocationId === "2"
+                        ? "bg-[#006064] text-white font-black shadow-md"
+                        : "bg-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-700"
+                    }`}
+                  >
+                    Mercado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLocation("3");
+                      setActiveCadCentre("3");
+                      setHoveredUnit(null);
+                    }}
+                    className={`px-2.5 py-1 text-[11px] font-bold uppercase transition-all cursor-pointer rounded-xs ${
+                      currentCadLocationId === "3"
+                        ? "bg-[#006064] text-white font-black shadow-md"
+                        : "bg-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-700"
+                    }`}
+                  >
+                    Premier House
+                  </button>
+                </div>
+              </div>
 
-                  {/* Centre Switcher */}
-                  <div className="bg-neutral-800 p-0.5 flex items-center border border-neutral-700 rounded-2xs">
+                {/* Right: Mode + Theme + Zoom + Close */}
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  
+                  {/* Mode Toggle */}
+                  <div className="bg-neutral-900 p-0.5 flex items-center border border-neutral-700 rounded-md">
                     <button
                       type="button"
-                      onClick={() => {
-                        setActiveCadCentre("1");
-                        const first = data?.allUnits.find(u => String(u.centreId) === "1");
-                        if (first) setSelectedUnit(first);
-                      }}
-                      className={`px-2 py-0.5 text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                        currentCadLocationId === "1" ? "bg-teal-600 text-white font-black shadow-xs" : "text-neutral-400 hover:text-white"
+                      onClick={() => setOverlayMode("HOVER_ONLY")}
+                      className={`px-2 py-1 text-[10px] font-black uppercase transition-all cursor-pointer rounded-xs ${
+                        overlayMode === "HOVER_ONLY" ? "bg-teal-600 text-white shadow-xs" : "text-neutral-400 hover:text-white"
                       }`}
                     >
-                      Agarwal
+                      🎯 Hover Reveal
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setActiveCadCentre("2");
-                        const first = data?.allUnits.find(u => String(u.centreId) === "2");
-                        if (first) setSelectedUnit(first);
-                      }}
-                      className={`px-2 py-0.5 text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                        currentCadLocationId === "2" ? "bg-teal-600 text-white font-black shadow-xs" : "text-neutral-400 hover:text-white"
+                      onClick={() => setOverlayMode("SHOW_ALL")}
+                      className={`px-2 py-1 text-[10px] font-black uppercase transition-all cursor-pointer rounded-xs ${
+                        overlayMode === "SHOW_ALL" ? "bg-teal-600 text-white shadow-xs" : "text-neutral-400 hover:text-white"
                       }`}
                     >
-                      Mercado
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveCadCentre("3");
-                        const first = data?.allUnits.find(u => String(u.centreId) === "3");
-                        if (first) setSelectedUnit(first);
-                      }}
-                      className={`px-2 py-0.5 text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                        currentCadLocationId === "3" ? "bg-teal-600 text-white font-black shadow-xs" : "text-neutral-400 hover:text-white"
-                      }`}
-                    >
-                      Premier House
+                      👁️ Show All
                     </button>
                   </div>
 
                   {/* Theme Switcher */}
-                  <div className="bg-neutral-800 p-0.5 flex items-center border border-neutral-700 rounded-2xs">
+                  <div className="bg-neutral-900 p-0.5 flex items-center border border-neutral-700 rounded-md">
                     <button
                       type="button"
-                      onClick={() => setCadTheme("WHITE" as any)}
-                      className={`px-1.5 py-0.5 text-[9.5px] font-bold uppercase cursor-pointer ${
-                        (cadTheme as any) === "WHITE" ? "bg-white text-neutral-900 shadow-xs" : "text-neutral-400 hover:text-white"
+                      onClick={() => setCadTheme("WHITE")}
+                      className={`px-2 py-1 text-[10px] font-bold uppercase cursor-pointer rounded-xs ${
+                        cadTheme === "WHITE" ? "bg-white text-neutral-900 shadow-xs" : "text-neutral-400 hover:text-white"
                       }`}
                     >
                       White
@@ -1415,7 +1393,7 @@ export function OccupancyClient() {
                     <button
                       type="button"
                       onClick={() => setCadTheme("STUDIO")}
-                      className={`px-1.5 py-0.5 text-[9.5px] font-bold uppercase cursor-pointer ${
+                      className={`px-2 py-1 text-[10px] font-bold uppercase cursor-pointer rounded-xs ${
                         cadTheme === "STUDIO" ? "bg-teal-700 text-white" : "text-neutral-400 hover:text-white"
                       }`}
                     >
@@ -1424,7 +1402,7 @@ export function OccupancyClient() {
                     <button
                       type="button"
                       onClick={() => setCadTheme("BLUEPRINT")}
-                      className={`px-1.5 py-0.5 text-[9.5px] font-bold uppercase cursor-pointer ${
+                      className={`px-2 py-1 text-[10px] font-bold uppercase cursor-pointer rounded-xs ${
                         cadTheme === "BLUEPRINT" ? "bg-cyan-800 text-cyan-200" : "text-neutral-400 hover:text-white"
                       }`}
                     >
@@ -1433,313 +1411,368 @@ export function OccupancyClient() {
                   </div>
 
                   {/* Zoom Controls */}
-                  <div className="bg-neutral-800 p-0.5 flex items-center border border-neutral-700 rounded-2xs">
+                  <div className="bg-neutral-900 p-0.5 flex items-center border border-neutral-700 rounded-md gap-0.5">
                     <button
                       type="button"
-                      onClick={() => setZoomScale(prev => Math.max(0.7, prev - 0.15))}
-                      className="px-1.5 py-0.5 text-xs font-bold text-neutral-300 hover:text-white cursor-pointer"
+                      onClick={() => setZoomScale(prev => Math.max(0.8, Number((prev - 0.2).toFixed(1))))}
+                      className="px-2 py-1 text-xs font-black text-neutral-300 hover:text-white hover:bg-neutral-700 rounded-xs cursor-pointer"
+                      title="Zoom Out"
                     >
                       -
                     </button>
                     <button
                       type="button"
                       onClick={() => setZoomScale(1.0)}
-                      className="px-1.5 py-0.5 text-[9.5px] font-mono text-teal-300 hover:text-white cursor-pointer"
+                      className={`px-2 py-1 text-[10px] font-mono rounded-xs cursor-pointer ${
+                        zoomScale === 1.0 ? "bg-teal-700 text-white font-bold" : "text-neutral-300 hover:text-white"
+                      }`}
                     >
-                      {Math.round(zoomScale * 100)}%
+                      Fit (100%)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setZoomScale(prev => Math.min(2.0, prev + 0.15))}
-                      className="px-1.5 py-0.5 text-xs font-bold text-neutral-300 hover:text-white cursor-pointer"
+                      onClick={() => setZoomScale(1.4)}
+                      className={`px-2 py-1 text-[10px] font-mono rounded-xs cursor-pointer ${
+                        zoomScale === 1.4 ? "bg-teal-700 text-white font-bold" : "text-neutral-300 hover:text-white"
+                      }`}
+                    >
+                      140%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setZoomScale(1.8)}
+                      className={`px-2 py-1 text-[10px] font-mono rounded-xs cursor-pointer ${
+                        zoomScale === 1.8 ? "bg-teal-700 text-white font-bold" : "text-neutral-300 hover:text-white"
+                      }`}
+                    >
+                      180%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setZoomScale(prev => Math.min(2.5, Number((prev + 0.2).toFixed(1))))}
+                      className="px-2 py-1 text-xs font-black text-neutral-300 hover:text-white hover:bg-neutral-700 rounded-xs cursor-pointer"
+                      title="Zoom In"
                     >
                       +
                     </button>
                   </div>
 
-                  {/* Close Modal Button */}
+                  {/* Close Fullscreen Button */}
                   <button
                     type="button"
                     onClick={() => setIsExpandedModalOpen(false)}
-                    className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 border border-rose-500 transition-all cursor-pointer shadow-md shrink-0"
+                    className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider rounded-md shadow-lg flex items-center gap-1.5 border border-rose-400 cursor-pointer transition-all hover:scale-105 active:scale-95 shrink-0"
                   >
-                    <X size={14} />
-                    <span>Exit Fullscreen (Esc)</span>
+                    <X size={15} />
+                    <span>CLOSE (ESC)</span>
                   </button>
+
                 </div>
               </div>
 
               {/* Modal Main Stage & Space Inspector */}
-              <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden bg-neutral-900 border-x border-b border-neutral-800 rounded-b-lg min-h-0">
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden bg-neutral-900 min-h-0">
                 
-                {/* Floor Plan Canvas with Zoom and Pan */}
-                <div className={`lg:col-span-8 p-4 overflow-auto relative flex items-center justify-center ${
-                  (cadTheme as any) === "WHITE"
+                {/* Floor Plan Canvas with No-Clipping Physical Zoom Scroll */}
+                <div className={`lg:col-span-8 p-4 sm:p-6 overflow-auto relative flex min-h-0 ${
+                  cadTheme === "WHITE"
                     ? "bg-neutral-200"
                     : cadTheme === "BLUEPRINT"
                     ? "bg-[#0b1d3a] bg-[radial-gradient(#1e3a8a_1px,transparent_1px)] [background-size:16px_16px]"
                     : "bg-neutral-900 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]"
                 }`}>
-                  <div
-                    style={{
-                      transform: `scale(${zoomScale})`,
-                      transformOrigin: "center center",
-                      transition: "transform 0.2s ease-out",
-                    }}
-                    className="relative inline-block max-w-full overflow-hidden border-2 rounded p-1 shadow-2xl bg-white"
-                  >
-                    {/* Architectural Drawing Backdrop */}
-                    <img
-                      src={
-                        currentCadLocationId === "1"
-                          ? "/cad-previews/agarwal_cad.png"
-                          : currentCadLocationId === "2"
-                          ? "/cad-previews/mercado_cad.png"
-                          : "/cad-previews/premier_cad.png"
-                      }
-                      alt="AutoCAD Floor Plan"
-                      className="max-h-[680px] w-auto h-auto max-w-full block mx-auto select-none pointer-events-none"
+                  <div className="m-auto inline-block p-2 sm:p-4">
+                    <div
                       style={{
-                        filter:
-                          (cadTheme as any) === "WHITE"
-                            ? "none"
-                            : cadTheme === "BLUEPRINT"
-                            ? "invert(1) sepia(1) saturate(6) hue-rotate(170deg) brightness(1.2) contrast(1.4)"
-                            : "invert(1) hue-rotate(180deg) brightness(1.25) contrast(1.35)",
+                        width: zoomScale === 1.0 ? "100%" : `${Math.round(zoomScale * 1100)}px`,
+                        maxWidth: zoomScale === 1.0 ? "1150px" : "none",
+                        minWidth: zoomScale > 1.0 ? `${Math.round(zoomScale * 1100)}px` : "auto",
+                        transition: "width 0.12s ease-out",
                       }}
-                    />
+                      className="relative block border-2 border-neutral-300 rounded p-2 shadow-2xl bg-white select-none"
+                    >
+                      {/* Architectural Drawing Backdrop */}
+                      <img
+                        src={
+                          currentCadLocationId === "1"
+                            ? "/cad-previews/agarwal_cad.png"
+                            : currentCadLocationId === "2"
+                            ? "/cad-previews/mercado_cad.png"
+                            : "/cad-previews/premier_cad.png"
+                        }
+                        alt="AutoCAD Floor Plan"
+                        className="w-full h-auto block select-none pointer-events-none"
+                        style={{
+                          filter:
+                            cadTheme === "WHITE"
+                              ? "none"
+                              : cadTheme === "BLUEPRINT"
+                              ? "invert(1) sepia(1) saturate(6) hue-rotate(170deg) brightness(1.2) contrast(1.4)"
+                              : "invert(1) hue-rotate(180deg) brightness(1.25) contrast(1.35)",
+                        }}
+                      />
 
-                    {/* Room Hotspots in Modal */}
-                    <div className="absolute inset-0 w-full h-full pointer-events-auto">
-                      {cadDisplayUnits.map((unit) => {
-                        const isSelected = selectedUnit?.id === unit.id;
-                        const isOccupied = unit.status === "OCCUPIED";
-                        const isPartiallyAvailable = unit.status === "PARTIALLY_AVAILABLE";
-                        const isMeeting = unit.status === "GUEST_BOOKABLE";
-                        const isAvailableCabin = unit.status === "AVAILABLE" && unit.category === "CABIN";
+                      {/* Floor Plan Title Badge */}
+                      <div className="absolute top-2 left-3 bg-teal-700/95 text-white px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-2xs z-20 shadow-md border border-teal-400/40 flex items-center gap-1.5 backdrop-blur-xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                        <span>{currentCadLocationId === "1" ? "Agarwal Complex" : currentCadLocationId === "2" ? "Mercado Flagship" : "Premier House"}</span>
+                      </div>
 
-                        return (
-                          <motion.button
-                            key={`modal_${unit.id}`}
-                            type="button"
-                            onClick={() => setSelectedUnit(unit)}
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.99 }}
-                            style={{
-                              position: "absolute",
-                              left: `${unit.grid.x}%`,
-                              top: `${unit.grid.y}%`,
-                              width: `${unit.grid.w}%`,
-                              height: `${unit.grid.h}%`,
-                            }}
-                            className={`rounded-2xs p-1 text-left flex flex-col justify-between transition-all cursor-pointer border ${
-                              isSelected
-                                ? "ring-2 ring-[#006064] ring-offset-1 z-30 scale-[1.02] shadow-lg font-bold"
-                                : "z-10 hover:shadow-md"
-                            } ${
-                              isOccupied
-                                ? "bg-rose-500/20 hover:bg-rose-500/30 border-rose-600/80 text-rose-950"
-                                : isPartiallyAvailable
-                                ? "bg-amber-400/25 hover:bg-amber-400/35 border-amber-500/90 text-amber-950"
-                                : isAvailableCabin
-                                ? "bg-amber-400/20 hover:bg-amber-400/30 border-amber-500/80 text-amber-950"
-                                : isMeeting
-                                ? "bg-purple-500/20 hover:bg-purple-500/30 border-purple-600/80 text-purple-950"
-                                : "bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-600/80 text-emerald-950"
-                            }`}
-                          >
-                            {/* Top Tag: Room Code + Seat count */}
-                            <div className="flex items-center justify-between gap-1 leading-none w-full">
-                              <span className="text-[7.5px] sm:text-[8.5px] font-mono font-black uppercase tracking-tight text-neutral-900 bg-white/95 px-1 py-0.2 rounded-2xs shadow-2xs border border-neutral-300/70">
-                                {unit.code}
-                              </span>
-                              <span className={`text-[7px] sm:text-[7.5px] font-black px-1 py-0.2 rounded-2xs text-white shadow-2xs ${
-                                isOccupied
-                                  ? "bg-rose-700"
-                                  : isPartiallyAvailable
-                                  ? "bg-amber-600"
-                                  : isAvailableCabin
-                                  ? "bg-amber-600"
-                                  : isMeeting
-                                  ? "bg-purple-700"
-                                  : "bg-emerald-700"
-                              }`}>
-                                {isPartiallyAvailable ? `${unit.occupiedSeats}/${unit.capacity}s` : `${unit.capacity}s`}
-                              </span>
-                            </div>
+                      {/* Room Hotspots in Modal */}
+                      <div 
+                        className="absolute inset-0 w-full h-full pointer-events-auto"
+                        onMouseLeave={() => setHoveredUnit(null)}
+                      >
+                        {cadDisplayUnits.map((unit) => {
+                          const isHovered = hoveredUnit?.id === unit.id;
+                          const isVisible = overlayMode === "SHOW_ALL" ? true : isHovered;
 
-                            {/* Bottom Label: Company Name or Available status */}
-                            <div className="mt-auto pt-0.5 w-full">
-                              {unit.occupant ? (
-                                <div className="bg-neutral-900/90 text-white px-1 py-0.5 rounded-2xs truncate shadow-2xs">
-                                  <p className="font-bold text-[7.5px] sm:text-[8px] truncate leading-tight text-neutral-100">
-                                    {unit.occupant.companyName}
-                                  </p>
-                                  {isPartiallyAvailable && (
-                                    <span className="text-[7px] text-amber-300 font-bold block truncate">
-                                      ({unit.availableSeats} Free)
+                          const isOccupied = unit.status === "OCCUPIED";
+                          const isPartiallyAvailable = unit.status === "PARTIALLY_AVAILABLE";
+                          const isMeeting = unit.status === "GUEST_BOOKABLE";
+                          const isAvailableCabin = unit.status === "AVAILABLE" && unit.category === "CABIN";
+
+                          return (
+                            <div
+                              key={`modal_${unit.id}`}
+                              onMouseEnter={() => setHoveredUnit(unit)}
+                              style={{
+                                position: "absolute",
+                                left: `${unit.grid.x}%`,
+                                top: `${unit.grid.y}%`,
+                                width: `${unit.grid.w}%`,
+                                height: `${unit.grid.h}%`,
+                              }}
+                              className={`rounded-2xs transition-all duration-150 cursor-pointer ${
+                                isVisible
+                                  ? `border-2 z-30 shadow-lg ${
+                                      isOccupied
+                                        ? "bg-rose-500/35 border-rose-600 text-rose-950 shadow-rose-500/20"
+                                        : isPartiallyAvailable
+                                        ? "bg-amber-400/35 border-amber-500 text-amber-950 shadow-amber-500/20"
+                                        : isAvailableCabin
+                                        ? "bg-amber-400/35 border-amber-500 text-amber-950 shadow-amber-500/20"
+                                        : isMeeting
+                                        ? "bg-purple-500/35 border-purple-600 text-purple-950 shadow-purple-500/20"
+                                        : "bg-emerald-500/35 border-emerald-600 text-emerald-950 shadow-emerald-500/20"
+                                    } ring-2 ring-[#006064]/60 ring-offset-1 scale-[1.01]`
+                                  : "bg-transparent border border-transparent hover:bg-black/5 z-10"
+                              }`}
+                            >
+                              {/* Content visible only on hover / show all */}
+                              {isVisible && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  transition={{ duration: 0.1 }}
+                                  className="h-full flex flex-col justify-between p-1 select-none pointer-events-none"
+                                >
+                                  {/* Top Tag: Room Code + Seat count */}
+                                  <div className="flex items-center justify-between gap-1 leading-none w-full">
+                                    <span className="text-[7.5px] sm:text-[8.5px] font-mono font-black uppercase tracking-tight text-neutral-900 bg-white/95 px-1 py-0.2 rounded-2xs shadow-md border border-neutral-300/70">
+                                      {unit.code}
                                     </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className={`px-1 py-0.2 rounded-2xs text-center font-black text-[7px] sm:text-[7.5px] uppercase tracking-wider ${
-                                  isAvailableCabin
-                                    ? "bg-amber-500 text-neutral-950"
-                                    : isMeeting
-                                    ? "bg-purple-700 text-white"
-                                    : "bg-emerald-700 text-white"
-                                }`}>
-                                  {isAvailableCabin ? "🟡 Available" : isMeeting ? "🟣 Meeting" : "🟢 Available"}
-                                </div>
+                                    <span className={`text-[7px] sm:text-[7.5px] font-black px-1 py-0.2 rounded-2xs text-white shadow-md ${
+                                      isOccupied
+                                        ? "bg-rose-700"
+                                        : isPartiallyAvailable
+                                        ? "bg-amber-600"
+                                        : isAvailableCabin
+                                        ? "bg-amber-600"
+                                        : isMeeting
+                                        ? "bg-purple-700"
+                                        : "bg-emerald-700"
+                                    }`}>
+                                      {isPartiallyAvailable ? `${unit.occupiedSeats}/${unit.capacity}s` : `${unit.capacity}s`}
+                                    </span>
+                                  </div>
+
+                                  {/* Bottom Label: Company Name or Available status */}
+                                  <div className="mt-auto pt-0.5 w-full">
+                                    {unit.occupant ? (
+                                      <div className="bg-neutral-900/95 text-white px-1 py-0.5 rounded-2xs truncate shadow-md border border-white/20">
+                                        <p className="font-bold text-[7.5px] sm:text-[8px] truncate leading-tight text-white">
+                                          {unit.occupant.companyName}
+                                        </p>
+                                        {isPartiallyAvailable && (
+                                          <span className="text-[7px] text-amber-300 font-bold block truncate">
+                                            ({unit.availableSeats} Free)
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className={`px-1 py-0.2 rounded-2xs text-center font-black text-[7px] sm:text-[7.5px] uppercase tracking-wider shadow-md ${
+                                        isAvailableCabin
+                                          ? "bg-amber-500 text-neutral-950"
+                                          : isMeeting
+                                          ? "bg-purple-700 text-white"
+                                          : "bg-emerald-700 text-white"
+                                      }`}>
+                                        {isAvailableCabin ? "🟡 Available" : isMeeting ? "🟣 Meeting" : "🟢 Available"}
+                                      </div>
+                                    )}
+                                  </div>
+                                </motion.div>
                               )}
                             </div>
-                          </motion.button>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
 
+                    </div>
                   </div>
                 </div>
 
                 {/* Modal Space Inspection Panel (Right Side) */}
                 <div className="lg:col-span-4 bg-white border-t lg:border-t-0 lg:border-l border-neutral-200 p-6 flex flex-col justify-between overflow-y-auto">
-                  {selectedUnit ? (
-                    <div>
-                      {/* Header */}
-                      <div className="flex items-center justify-between pb-3.5 border-b border-neutral-200">
-                        <div>
-                          <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 block mb-0.5">
-                            Space Inspection Panel
-                          </span>
-                          <span className="text-xs font-mono font-bold text-neutral-600">
-                            {selectedUnit.code} • {selectedUnit.centreName}
-                          </span>
+                  {(() => {
+                    const inspected = hoveredUnit;
+                    if (!inspected) {
+                      return (
+                        <div className="py-24 text-center text-neutral-400">
+                          <Compass size={40} className="text-neutral-300 mx-auto mb-3 animate-pulse" />
+                          <p className="text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1">
+                            Interactive Hover Inspection
+                          </p>
+                          <p className="text-[11px] text-neutral-500 max-w-xs mx-auto leading-relaxed">
+                            Hover over any cabin or workspace in the floor plan to inspect tenant agreements, capacity, lock-in dates, and SDR security deposits.
+                          </p>
                         </div>
-                        
-                        {selectedUnit.status === "OCCUPIED" ? (
-                          <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-300 rounded-2xs flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
-                            100% Leased
-                          </span>
-                        ) : selectedUnit.status === "PARTIALLY_AVAILABLE" ? (
-                          <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-300 rounded-2xs flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                            Partially Leased ({selectedUnit.availableSeats} Free)
-                          </span>
-                        ) : selectedUnit.category === "CABIN" ? (
-                          <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-300 rounded-2xs flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-amber-500" />
-                            Available Cabin
-                          </span>
-                        ) : selectedUnit.category === "MEETING" || selectedUnit.category === "EVENT" ? (
-                          <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-purple-50 text-purple-800 border border-purple-300 rounded-2xs flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-purple-500" />
-                            Meeting / Event
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-2xs flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            Available Desk
-                          </span>
-                        )}
-                      </div>
+                      );
+                    }
 
-                      <div className="mt-5 space-y-4">
-                        
-                        {/* 1. Company Name */}
-                        <div className="bg-neutral-50 p-4 border border-neutral-200/80 rounded-xs">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block mb-1">
-                            Company Name
-                          </span>
-                          <h3 className="text-base font-black text-neutral-900 font-display leading-snug">
-                            {selectedUnit.occupant?.companyName || (
-                              <span className="text-neutral-400 font-medium italic">
-                                Vacant Space (Ready for Allocation)
-                              </span>
-                            )}
-                          </h3>
-                          {selectedUnit.occupant?.clientId && (
-                            <span className="text-[10.5px] font-mono text-neutral-500 mt-1 block">
-                              Client UID: <strong className="text-neutral-800">{selectedUnit.occupant.clientId}</strong>
+                    return (
+                      <div>
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-3.5 border-b border-neutral-200">
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 block mb-0.5 flex items-center gap-1">
+                              <span>Space Inspection Panel</span>
+                              {hoveredUnit && <span className="text-teal-600 font-bold">(Live Hover)</span>}
+                            </span>
+                            <span className="text-xs font-mono font-bold text-neutral-800">
+                              {inspected.code} • {inspected.centreName}
+                            </span>
+                          </div>
+                          
+                          {inspected.status === "OCCUPIED" ? (
+                            <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-300 rounded-2xs flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
+                              100% Leased
+                            </span>
+                          ) : inspected.status === "PARTIALLY_AVAILABLE" ? (
+                            <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-300 rounded-2xs flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                              Partially Leased ({inspected.availableSeats} Free)
+                            </span>
+                          ) : inspected.category === "CABIN" ? (
+                            <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-300 rounded-2xs flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-amber-500" />
+                              Available Cabin
+                            </span>
+                          ) : inspected.category === "MEETING" || inspected.category === "EVENT" ? (
+                            <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-purple-50 text-purple-800 border border-purple-300 rounded-2xs flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-purple-500" />
+                              Meeting / Event
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 text-[11px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-2xs flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              Available Desk
                             </span>
                           )}
                         </div>
 
-                        {/* 2. Product Details */}
-                        <div className="bg-neutral-50 p-4 border border-neutral-200/80 rounded-xs space-y-2 text-xs">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block mb-1">
-                            Product Details
-                          </span>
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Space Name:</span>
-                            <span className="font-black text-neutral-900">{selectedUnit.name}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Product Category:</span>
-                            <span className="font-bold text-neutral-800">{selectedUnit.typeName}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Total Capacity:</span>
-                            <span className="font-black text-neutral-900 font-mono">{selectedUnit.capacity} Seats</span>
-                          </div>
-                          <div className="flex items-center justify-between bg-white p-2 border border-neutral-200/60 rounded-2xs">
-                            <span className="text-neutral-600 font-bold">Occupancy Breakdown:</span>
-                            <span className="font-mono font-black text-neutral-900">
-                              {selectedUnit.occupiedSeats} Occupied / {selectedUnit.capacity} Total
-                              {selectedUnit.availableSeats > 0 && (
-                                <span className="text-amber-700 ml-1 font-bold">
-                                  ({selectedUnit.availableSeats} Available)
+                        <div className="mt-4 space-y-3.5">
+                          
+                          {/* 1. Company Name */}
+                          <div className="bg-neutral-50 p-3.5 border border-neutral-200/80 rounded-xs">
+                            <span className="text-[9.5px] font-black uppercase tracking-wider text-neutral-400 block mb-0.5">
+                              Company Name
+                            </span>
+                            <h3 className="text-base font-black text-neutral-900 font-display leading-snug">
+                              {inspected.occupant?.companyName || (
+                                <span className="text-neutral-400 font-medium italic">
+                                  Vacant Space (Ready for Allocation)
                                 </span>
                               )}
-                            </span>
+                            </h3>
+                            {inspected.occupant?.clientId && (
+                              <span className="text-[10px] font-mono text-neutral-500 mt-1 block">
+                                Client UID: <strong className="text-neutral-800">{inspected.occupant.clientId}</strong>
+                              </span>
+                            )}
                           </div>
+
+                          {/* 2. Product Details */}
+                          <div className="bg-neutral-50 p-3.5 border border-neutral-200/80 rounded-xs space-y-2 text-xs">
+                            <span className="text-[9.5px] font-black uppercase tracking-wider text-neutral-400 block mb-0.5">
+                              Product Details
+                            </span>
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Space Name:</span>
+                              <span className="font-black text-neutral-900">{inspected.name}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Product Category:</span>
+                              <span className="font-bold text-neutral-800">{inspected.typeName}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Total Capacity:</span>
+                              <span className="font-black text-neutral-900 font-mono">{inspected.capacity} Seats</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-white p-2 border border-neutral-200/60 rounded-2xs">
+                              <span className="text-neutral-600 font-bold">Occupancy Breakdown:</span>
+                              <span className="font-mono font-black text-neutral-900">
+                                {inspected.occupiedSeats} Occupied / {inspected.capacity} Total
+                                {inspected.availableSeats > 0 && (
+                                  <span className="text-amber-700 ml-1 font-bold">
+                                    ({inspected.availableSeats} Available)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 3. Agreement Dates & Lock-in Date */}
+                          <div className="bg-neutral-50 p-3.5 border border-neutral-200/80 rounded-xs space-y-2 text-xs">
+                            <span className="text-[9.5px] font-black uppercase tracking-wider text-neutral-400 block mb-0.5">
+                              Tenancy &amp; Agreement Terms
+                            </span>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Agreement Start Date:</span>
+                              <span className="font-mono font-black text-neutral-900">
+                                {inspected.occupant?.agreementStartDate || "N/A"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Agreement End Date:</span>
+                              <span className="font-mono font-black text-neutral-900">
+                                {inspected.occupant?.agreementEndDate || "N/A"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <span className="text-neutral-500">Lock-In Period / Date:</span>
+                              <span className="font-black text-[#006064] font-mono">
+                                {inspected.occupant?.lockInPeriod || "11 Months"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
+                              <span className="text-neutral-600 font-bold">SDR Security Deposit:</span>
+                              <span className="font-black text-teal-800 font-mono text-xs">
+                                {inspected.occupant?.sdrDeposit ? formatINR(inspected.occupant.sdrDeposit) : "N/A / As per Agreement"}
+                              </span>
+                            </div>
+                          </div>
+
                         </div>
-
-                        {/* 3. Agreement Dates & Lock-in Date */}
-                        <div className="bg-neutral-50 p-4 border border-neutral-200/80 rounded-xs space-y-2.5 text-xs">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block mb-1">
-                            Tenancy &amp; Agreement Terms
-                          </span>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Agreement Start Date:</span>
-                            <span className="font-mono font-black text-neutral-900">
-                              {selectedUnit.occupant?.agreementStartDate || "N/A"}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Agreement End Date:</span>
-                            <span className="font-mono font-black text-neutral-900">
-                              {selectedUnit.occupant?.agreementEndDate || "N/A"}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-neutral-500">Lock-In Period / Date:</span>
-                            <span className="font-black text-[#006064] font-mono">
-                              {selectedUnit.occupant?.lockInPeriod || "11 Months"}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-1 border-t border-neutral-200">
-                            <span className="text-neutral-600 font-bold">SDR Security Deposit:</span>
-                            <span className="font-black text-teal-800 font-mono text-xs">
-                              {selectedUnit.occupant?.sdrDeposit ? formatINR(selectedUnit.occupant.sdrDeposit) : "N/A / As per Agreement"}
-                            </span>
-                          </div>
-                        </div>
-
                       </div>
-                    </div>
-                  ) : (
-                    <div className="py-20 text-center text-neutral-400">
-                      <Compass size={36} className="text-neutral-300 mx-auto mb-2" />
-                      <p className="text-xs font-semibold text-neutral-600">
-                        Click on any cabin or workspace in the floor plan to inspect agreement dates and lock-in details
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   <div className="mt-5 pt-3 border-t border-neutral-200 text-[11px] text-neutral-500 flex flex-col gap-2">
                     <button
@@ -1761,9 +1794,10 @@ export function OccupancyClient() {
                 </div>
 
               </div>
-            </motion.div>
+            </div>,
+            document.body
           )}
-        </AnimatePresence>
+
 
       </div>
     </div>

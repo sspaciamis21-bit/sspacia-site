@@ -124,7 +124,32 @@ export async function PATCH(req: Request) {
       }
     })
 
+    // ─── Synchronize Customer Record in DB (Keeps Bookings/Contracts in sync) ──
+    const oldEmail = payload.email as string;
+    const newEmail = updatedUser.email;
+    const targetCustomer = await prisma.customer.findFirst({
+      where: {
+        OR: [
+          { email: newEmail },
+          { email: oldEmail },
+        ]
+      }
+    });
+
+    if (targetCustomer) {
+      await prisma.customer.update({
+        where: { id: targetCustomer.id },
+        data: {
+          email: newEmail,
+          name: updatedUser.name,
+          phone: updatedUser.phone || updatedUser.contactNumber || targetCustomer.phone,
+          organization: updatedUser.companyName || targetCustomer.organization,
+        }
+      });
+    }
+
     // ─── Re-issue JWT Token with fresh details ──────────────
+
     const permissions = updatedUser.role.permissions.map((rp) => rp.permission.name)
     const newToken = await signToken({
       id: updatedUser.id,
