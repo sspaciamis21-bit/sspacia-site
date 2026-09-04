@@ -2,17 +2,43 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 import { FileText, ArrowLeft, ShieldCheck, Scale, AlertCircle } from 'lucide-react';
 import { seoConfig } from '@/config/seo';
+import { StructuredData } from '@/components/structured-data';
 
 export const metadata: Metadata = {
-  title: `Terms of Service | SSPACIA Coworking`,
-  description: `Terms of service and workspace membership agreement guidelines for SSPACIA Coworking Solutions Ltd.`,
+  title: seoConfig.pages.terms.title,
+  description: seoConfig.pages.terms.description,
   alternates: { canonical: `${seoConfig.baseUrl}/terms` },
+  openGraph: {
+    title: seoConfig.pages.terms.title,
+    description: seoConfig.pages.terms.description,
+    url: `${seoConfig.baseUrl}/terms`,
+    type: "website",
+  },
 };
 
 export default function TermsPage() {
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": seoConfig.baseUrl,
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Terms of Service",
+        "item": `${seoConfig.baseUrl}/terms`,
+      },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-surface text-on-surface py-16 px-4 md:px-8 max-w-[1200px] mx-auto space-y-12">
-      
+      <StructuredData data={breadcrumbSchema} />
       {/* TOP BACK BUTTON & HEADER */}
       <div className="space-y-4">
         <Link

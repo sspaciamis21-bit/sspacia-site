@@ -2,17 +2,43 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 import { ShieldCheck, ArrowLeft, Lock, FileText, CheckCircle } from 'lucide-react';
 import { seoConfig } from '@/config/seo';
+import { StructuredData } from '@/components/structured-data';
 
 export const metadata: Metadata = {
-  title: `Privacy Policy | SSPACIA Coworking`,
-  description: `Privacy policy and data protection guidelines for SSPACIA Coworking Solutions Ltd.`,
+  title: seoConfig.pages.privacy.title,
+  description: seoConfig.pages.privacy.description,
   alternates: { canonical: `${seoConfig.baseUrl}/privacy` },
+  openGraph: {
+    title: seoConfig.pages.privacy.title,
+    description: seoConfig.pages.privacy.description,
+    url: `${seoConfig.baseUrl}/privacy`,
+    type: "website",
+  },
 };
 
 export default function PrivacyPage() {
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": seoConfig.baseUrl,
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Privacy Policy",
+        "item": `${seoConfig.baseUrl}/privacy`,
+      },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-surface text-on-surface py-16 px-4 md:px-8 max-w-[1200px] mx-auto space-y-12">
-      
+      <StructuredData data={breadcrumbSchema} />
       {/* TOP BACK BUTTON & HEADER */}
       <div className="space-y-4">
         <Link

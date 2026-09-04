@@ -134,11 +134,9 @@ export default function AdminLayout({
 
       {/* Sidebar (Slide-out drawer on Mobile, Expandable on Desktop) */}
       <aside
-        className={`fixed md:relative top-0 bottom-0 left-0 ${
-          isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0'
-        } ${
-          isSidebarOpen ? 'md:w-72' : 'md:w-20'
-        } bg-white border-r border-[var(--outline-variant)]/40 transition-all duration-300 ease-in-out flex flex-col z-50 md:z-40`}
+        className={`fixed md:relative top-0 bottom-0 left-0 ${isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0'
+          } ${isSidebarOpen ? 'md:w-72' : 'md:w-20'
+          } bg-white border-r border-[var(--outline-variant)]/40 transition-all duration-300 ease-in-out flex flex-col z-50 md:z-40`}
       >
         {/* Desktop Toggle Button */}
         <button
@@ -213,7 +211,7 @@ export default function AdminLayout({
         {user && (
           <div className="border-t border-[var(--outline-variant)]/30 p-4 md:p-6 shrink-0 flex flex-col gap-3">
             {(isSidebarOpen || isMobileMenuOpen) ? (
-              <div 
+              <div
                 onClick={() => {
                   setIsMobileMenuOpen(false);
                   setIsProfileModalOpen(true);
@@ -235,7 +233,7 @@ export default function AdminLayout({
                 </div>
               </div>
             ) : (
-              <div 
+              <div
                 onClick={() => setIsProfileModalOpen(true)}
                 className="flex justify-center w-full cursor-pointer hover:opacity-80 transition-opacity"
                 title="Manage Profile"

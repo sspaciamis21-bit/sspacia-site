@@ -1,15 +1,23 @@
 import { Metadata } from "next";
 import { Suspense } from "react";
 import { seoConfig } from "@/config/seo";
+import { StructuredData } from "@/components/structured-data";
 import ProductsClient from "./products-client";
 import prisma from "@/lib/prisma";
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: "Workspaces & Desks | SSPACIA Coworking",
-  description: "Find and book private offices, dedicated desks, meeting rooms, and hot desks across prime Ahmedabad locations.",
+  title: seoConfig.pages.products.title,
+  description: seoConfig.pages.products.description,
   alternates: { canonical: `${seoConfig.baseUrl}/products` },
+  openGraph: {
+    title: seoConfig.pages.products.title,
+    description: seoConfig.pages.products.description,
+    url: `${seoConfig.baseUrl}/products`,
+    type: "website",
+    images: [{ url: `${seoConfig.baseUrl}/og-image.jpg`, width: 1200, height: 630, alt: "SSPACIA Workspaces & Desks Ahmedabad" }],
+  },
 };
 
 export interface ProductImage {
@@ -171,15 +179,37 @@ export default async function ProductsPage() {
     getProductTypes()
   ]);
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": seoConfig.baseUrl,
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Workspaces & Desks",
+        "item": `${seoConfig.baseUrl}/products`,
+      },
+    ],
+  };
+
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading workspaces...</div>}>
-      <ProductsClient 
-        products={products} 
-        cities={cities} 
-        amenities={amenities} 
-        categories={categories.map(c => ({ id: c.id, name: c.displayName }))}
-        productTypes={productTypes.map(t => ({ id: t.id, name: t.displayName }))}
-      />
-    </Suspense>
+    <>
+      <StructuredData data={breadcrumbSchema} />
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading workspaces...</div>}>
+        <ProductsClient 
+          products={products} 
+          cities={cities} 
+          amenities={amenities} 
+          categories={categories.map(c => ({ id: c.id, name: c.displayName }))}
+          productTypes={productTypes.map(t => ({ id: t.id, name: t.displayName }))}
+        />
+      </Suspense>
+    </>
   );
 }

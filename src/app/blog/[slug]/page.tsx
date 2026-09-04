@@ -70,6 +70,31 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     },
   };
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": seoConfig.baseUrl,
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Blog",
+        "item": `${seoConfig.baseUrl}/blog`,
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": post.title,
+        "item": `${seoConfig.baseUrl}/blog/${post.id}`,
+      },
+    ],
+  };
+
   // Get related posts (exclude current)
   const relatedPosts = siteConfig.blog.posts
     .filter((p) => p.id !== slug)
@@ -78,6 +103,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   return (
     <main className="min-h-screen bg-[#F8F9FA]">
       <StructuredData data={articleSchema} />
+      <StructuredData data={breadcrumbSchema} />
       {/* ── Hero Section ── */}
       <section className="relative h-[70vh] min-h-[500px] w-full overflow-hidden">
         <Image

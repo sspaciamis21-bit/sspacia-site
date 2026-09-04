@@ -1,5 +1,7 @@
 import { Metadata } from 'next';
 import prisma from '@/lib/prisma';
+import { seoConfig } from '@/config/seo';
+import { StructuredData } from '@/components/structured-data';
 import { CareersClient } from './careers-client';
 
 export const dynamic = 'force-dynamic';
@@ -8,9 +10,13 @@ export const metadata: Metadata = {
   title: 'Careers & Hiring | SSPACIA Coworking Spaces Ahmedabad',
   description:
     'Explore current job openings at SSPACIA Coworking, CG Road, Ahmedabad. Join our energetic team in front office, CRM, sales, operations, and inventory management.',
+  alternates: { canonical: `${seoConfig.baseUrl}/careers` },
   openGraph: {
     title: "We're Hiring | SSPACIA Coworking Spaces",
     description: 'Join the SSPACIA team in Ahmedabad. Apply online in 2 minutes.',
+    url: `${seoConfig.baseUrl}/careers`,
+    type: "website",
+    images: [{ url: `${seoConfig.baseUrl}/og-image.jpg`, width: 1200, height: 630, alt: "Careers at SSPACIA Coworking" }],
   },
 };
 
@@ -113,5 +119,29 @@ export default async function CareersPage() {
     positions = DEFAULT_FALLBACK_POSITIONS;
   }
 
-  return <CareersClient initialPositions={JSON.parse(JSON.stringify(positions))} />;
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": seoConfig.baseUrl,
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Careers & Hiring",
+        "item": `${seoConfig.baseUrl}/careers`,
+      },
+    ],
+  };
+
+  return (
+    <>
+      <StructuredData data={breadcrumbSchema} />
+      <CareersClient initialPositions={JSON.parse(JSON.stringify(positions))} />
+    </>
+  );
 }

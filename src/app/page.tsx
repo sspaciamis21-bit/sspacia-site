@@ -8,9 +8,26 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: seoConfig.pages.home.title,
+  title: {
+    absolute: seoConfig.pages.home.title,
+  },
   description: seoConfig.pages.home.description,
   alternates: { canonical: seoConfig.baseUrl },
+  openGraph: {
+    title: seoConfig.pages.home.title,
+    description: seoConfig.pages.home.description,
+    url: seoConfig.baseUrl,
+    siteName: seoConfig.siteName,
+    images: [{ url: `${seoConfig.baseUrl}/og-image.jpg`, width: 1200, height: 630, alt: "SSPACIA Coworking Ahmedabad" }],
+    type: "website",
+    locale: "en_IN",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: seoConfig.pages.home.title,
+    description: seoConfig.pages.home.description,
+    images: [`${seoConfig.baseUrl}/og-image.jpg`],
+  },
 };
 
 export default function Home() {
