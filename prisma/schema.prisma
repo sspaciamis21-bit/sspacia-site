@@ -1569,4 +1569,30 @@ model CareerApplication {
   @@index([createdAt])
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPER ADMIN EXECUTIVE EXPENSES (PRIVATE RECORD KEEPING & GROSS PROFIT % ENGINE)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ExecutiveExpense {
+  id            Int      @id @default(autoincrement())
+  title         String
+  locationId    Int?     // Null = All Centres / Global HQ
+  category      String   // RENT_LEASE, ELECTRICITY_UTILITIES, FITOUT_CAPEX, LEGAL_COMPLIANCE, SALARIES_MGMT, MARKETING_SALES, MAINTENANCE_REPAIRS, MISCELLANEOUS
+  amount        Float
+  isProvisional Boolean  @default(false) // Y/N flag for Provisional estimate vs Settled expense
+  expenseDate   DateTime @default(now())
+  paymentMode   String?  @default("Bank Transfer") // Bank Transfer, RTGS/NEFT, Cheque, UPI, Cash
+  referenceNo   String?  // UTR / Bill No / Ref
+  vendorPayee   String?  // Landlord / Vendor / Service Provider
+  notes         String?  @db.Text
+  createdById   Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([locationId])
+  @@index([category])
+  @@index([isProvisional])
+  @@index([expenseDate])
+}
+
 

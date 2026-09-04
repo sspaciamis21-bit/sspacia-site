@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { FadeUp } from '@/components/ui/fade-up';
 import { 
   Loader2, 
@@ -25,6 +25,8 @@ import '@/components/clm/clm.css';
 
 export default function ManagerContractsPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const basePath = pathname?.startsWith('/admin') ? '/admin/contracts' : '/manager/contracts';
   const [requests, setRequests] = useState<ContractRequest[]>([]);
   const [contracts, setContracts] = useState<ContractSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -208,7 +210,7 @@ export default function ManagerContractsPage() {
               </thead>
               <tbody className="divide-y divide-[var(--outline-variant)]/10">
                  {filteredContracts.map(con => (
-                   <tr key={con.id} className="hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => router.push(`/manager/contracts/${con.id}`)}>
+                   <tr key={con.id} className="hover:bg-neutral-50 transition-colors group cursor-pointer" onClick={() => router.push(`${basePath}/${con.id}`)}>
                       <td className="p-8">
                          <p className="text-sm font-bold text-[#1B1C1C] group-hover:text-[var(--primary)] transition-colors uppercase tracking-tight">{con.contractNumber}</p>
                          <p className="text-[9px] text-[#9E9E9E] font-bold uppercase tracking-widest mt-1 italic">{con.booking?.product?.name || 'GENERIC ASSET'}</p>

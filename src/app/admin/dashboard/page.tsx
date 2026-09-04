@@ -392,6 +392,16 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Quick Link to Super Admin Executive Expenses (P&L & Record Keeping) */}
+            <Link
+              href="/admin/executive-expenses"
+              className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all hover:scale-102"
+              title="Open Private Super Admin Executive Expenses & Gross Profit %"
+            >
+              <Wallet size={14} />
+              <span>Super Admin Expenses →</span>
+            </Link>
+
             {/* Quick Link to Occupancy Section (Super Admin Exclusive) */}
             <Link
               href="/admin/occupancy"

@@ -11,10 +11,103 @@ import {
   Loader2, 
   CheckCircle2, 
   XCircle,
-  Sparkles
+  Sparkles,
+  MapPin,
+  Clock,
+  Users,
+  Coffee,
+  Armchair,
+  Wifi,
+  Monitor,
+  Home,
+  Cpu,
+  Tag,
+  Shield,
+  Zap,
+  Lock,
+  Key,
+  Printer,
+  Server,
+  Car,
+  Tv,
+  Phone,
+  Layers,
+  Briefcase,
+  Wind,
+  Droplets,
+  Utensils,
+  Lightbulb,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
+
+const LUCIDE_ICON_MAP: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
+  mappin: MapPin,
+  clock: Clock,
+  users: Users,
+  coffee: Coffee,
+  sofa: Armchair,
+  armchair: Armchair,
+  wifi: Wifi,
+  monitor: Monitor,
+  tv: Tv,
+  home: Home,
+  cpu: Cpu,
+  tag: Tag,
+  shield: Shield,
+  sparkles: Sparkles,
+  zap: Zap,
+  lock: Lock,
+  key: Key,
+  printer: Printer,
+  server: Server,
+  car: Car,
+  phone: Phone,
+  layers: Layers,
+  briefcase: Briefcase,
+  wind: Wind,
+  droplets: Droplets,
+  utensils: Utensils,
+  lightbulb: Lightbulb,
+};
+
+const PRESET_ICONS = [
+  { key: 'MapPin', label: 'Location', icon: MapPin },
+  { key: 'Clock', label: '24/7 Access', icon: Clock },
+  { key: 'Users', label: 'Community', icon: Users },
+  { key: 'Coffee', label: 'Coffee & Brews', icon: Coffee },
+  { key: 'Sofa', label: 'Lounge / Cozy', icon: Armchair },
+  { key: 'Wifi', label: 'High-Speed WiFi', icon: Wifi },
+  { key: 'Monitor', label: 'Monitors & Screens', icon: Monitor },
+  { key: 'Zap', label: 'Power Backup', icon: Zap },
+  { key: 'Lock', label: 'Security & Lock', icon: Lock },
+  { key: 'Printer', label: 'Print / Scan', icon: Printer },
+  { key: 'Car', label: 'Parking', icon: Car },
+  { key: 'Utensils', label: 'Pantry / Food', icon: Utensils },
+  { key: 'Wind', label: 'Air Conditioning', icon: Wind },
+  { key: 'Phone', label: 'Phone Booth', icon: Phone },
+  { key: 'Sparkles', label: 'Premium', icon: Sparkles },
+  { key: 'Shield', label: 'Safety & CCTV', icon: Shield },
+];
+
+function renderAmenityIcon(iconStr: string | null | undefined, className = "w-5 h-5") {
+  if (!iconStr) return <Sparkles className={className} />;
+  
+  const cleanKey = iconStr.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const IconComponent = LUCIDE_ICON_MAP[cleanKey];
+
+  if (IconComponent) {
+    return <IconComponent className={className} />;
+  }
+
+  // If it's an emoji (single or double char, or contains emoji characters)
+  if (/\p{Emoji}/u.test(iconStr)) {
+    return <span className="text-xl leading-none select-none">{iconStr}</span>;
+  }
+
+  // Fallback for custom or unknown name
+  return <Sparkles className={className} />;
+}
 
 interface Amenity {
   id: number;
@@ -62,7 +155,7 @@ export default function AdminAmenitiesPage() {
 
   const openAddModal = () => {
     setEditingAmenity(null);
-    setFormData({ name: '', icon: '', description: '', isActive: true, sortOrder: 0 });
+    setFormData({ name: '', icon: 'Wifi', description: '', isActive: true, sortOrder: 0 });
     setIsModalOpen(true);
   };
 
@@ -129,7 +222,7 @@ export default function AdminAmenitiesPage() {
         <FadeUp delay={0.1}>
           <button
             onClick={openAddModal}
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#006064] text-white rounded-xl font-bold shadow-lg shadow-[#006064]/20 hover:bg-[#004D40] transition-all transform hover:-translate-y-0.5"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#006064] text-white rounded-xl font-bold shadow-lg shadow-[#006064]/20 hover:bg-[#004D40] transition-all transform hover:-translate-y-0.5 cursor-pointer"
           >
             <Plus size={20} />
             New Amenity
@@ -176,13 +269,8 @@ export default function AdminAmenitiesPage() {
                       className="hover:bg-[#F8F9FA] transition-colors group"
                     >
                       <td className="px-6 py-4">
-                        <div className="w-10 h-10 rounded-lg bg-[#E0F7FA]/50 border border-[#006064]/10 flex items-center justify-center text-[#006064]">
-                           {/* Using a generic Sparkles if icon is just text, or render actual SVG if it's a path */}
-                           {a.icon ? (
-                             <span className="text-xl">{a.icon}</span>
-                           ) : (
-                             <Sparkles className="w-5 h-5 opacity-40" />
-                           )}
+                        <div className="w-11 h-11 rounded-xl bg-teal-50 border border-teal-200/70 flex items-center justify-center text-[#006064] shadow-xs group-hover:scale-105 group-hover:bg-[#006064] group-hover:text-white transition-all">
+                          {renderAmenityIcon(a.icon, "w-5 h-5")}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -202,8 +290,8 @@ export default function AdminAmenitiesPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                           <button onClick={() => openEditModal(a)} className="p-2 text-[#9E9E9E] hover:text-[#006064] hover:bg-white rounded-lg transition-all border border-transparent hover:border-[#CFD8DC]/30"><Edit2 size={16} /></button>
-                           <button onClick={() => handleDelete(a.id, a.name)} className="p-2 text-[#9E9E9E] hover:text-red-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-red-100"><Trash2 size={16} /></button>
+                           <button onClick={() => openEditModal(a)} className="p-2 text-[#9E9E9E] hover:text-[#006064] hover:bg-white rounded-lg transition-all border border-transparent hover:border-[#CFD8DC]/30 cursor-pointer" title="Edit Amenity"><Edit2 size={16} /></button>
+                           <button onClick={() => handleDelete(a.id, a.name)} className="p-2 text-[#9E9E9E] hover:text-red-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-red-100 cursor-pointer" title="Delete Amenity"><Trash2 size={16} /></button>
                         </div>
                       </td>
                     </motion.tr>
@@ -251,13 +339,49 @@ export default function AdminAmenitiesPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#616161] uppercase tracking-widest mb-2">Icon (Emoji or Icon Code)</label>
-                    <input 
-                      value={formData.icon}
-                      onChange={(e) => setFormData({...formData, icon: e.target.value})}
-                      className="w-full px-4 py-3 rounded-xl border border-[#CFD8DC] focus:border-[#006064] focus:ring-4 focus:ring-[#006064]/5 transition-all outline-none font-medium"
-                      placeholder="e.g. 📶 or wifi"
-                    />
+                    <label className="block text-xs font-bold text-[#616161] uppercase tracking-widest mb-2">
+                      Amenity Icon (Select or Type Icon / Emoji)
+                    </label>
+                    <div className="flex items-center gap-3 mb-2.5">
+                      <div className="w-12 h-12 rounded-xl bg-teal-50 border-2 border-teal-500/40 flex items-center justify-center text-[#006064] shadow-xs shrink-0">
+                        {renderAmenityIcon(formData.icon, "w-6 h-6")}
+                      </div>
+                      <input 
+                        value={formData.icon}
+                        onChange={(e) => setFormData({...formData, icon: e.target.value})}
+                        className="flex-1 px-4 py-3 rounded-xl border border-[#CFD8DC] focus:border-[#006064] focus:ring-4 focus:ring-[#006064]/5 transition-all outline-none font-medium"
+                        placeholder="e.g. Wifi, Coffee, MapPin, 📶, ☕..."
+                      />
+                    </div>
+
+                    {/* Quick Preset Icons */}
+                    <div className="p-2.5 bg-[#F8F9FA] rounded-xl border border-[#CFD8DC]/40">
+                      <span className="text-[10px] font-bold text-[#757575] uppercase tracking-wider block mb-1.5">
+                        Quick Select Icon:
+                      </span>
+                      <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                        {PRESET_ICONS.map((p) => {
+                          const IconComp = p.icon;
+                          const isSelected = formData.icon?.toLowerCase() === p.key.toLowerCase();
+                          return (
+                            <button
+                              key={p.key}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, icon: p.key })}
+                              className={`p-2 rounded-lg flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[#006064] text-white shadow-xs scale-105'
+                                  : 'bg-white hover:bg-neutral-100 text-neutral-700 border border-neutral-200/70'
+                              }`}
+                              title={p.label}
+                            >
+                              <IconComp size={16} />
+                              <span className="text-[8.5px] font-bold truncate max-w-full leading-none">{p.key}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   <div>

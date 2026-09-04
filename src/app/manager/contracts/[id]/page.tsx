@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, usePathname } from 'next/navigation';
 import { FadeUp } from '@/components/ui/fade-up';
 import { 
   Loader2,
@@ -51,6 +51,8 @@ export default function ManagerContractDetailPage() {
   const params = useParams();
   const id = params?.id as string;
   const router = useRouter();
+  const pathname = usePathname();
+  const basePath = pathname?.startsWith('/admin') ? '/admin/contracts' : '/manager/contracts';
   const [contract, setContract] = useState<Contract | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -71,11 +73,11 @@ export default function ManagerContractDetailPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error loading contract';
       toast.error(msg);
-      router.push('/manager/contracts');
+      router.push(basePath);
     } finally {
       setLoading(false);
     }
-  }, [id, router]);
+  }, [id, router, basePath]);
 
   useEffect(() => {
     fetchContract();
@@ -200,7 +202,7 @@ export default function ManagerContractDetailPage() {
 
           <div className="flex items-center gap-3 flex-wrap">
             <button 
-              onClick={() => router.push('/manager/contracts')}
+              onClick={() => router.push(basePath)}
               className="flex items-center gap-2 px-5 py-2.5 rounded-none bg-white border border-neutral-200 text-[10px] font-bold uppercase tracking-widest text-neutral-600 hover:bg-neutral-50 transition-all shadow-sm"
             >
               <ChevronLeft size={14} />

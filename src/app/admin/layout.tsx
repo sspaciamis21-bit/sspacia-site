@@ -27,6 +27,7 @@ import {
   Tag,
   Boxes,
   Briefcase,
+  Wallet,
 } from 'lucide-react';
 
 import { toast } from 'sonner';
@@ -49,8 +50,8 @@ const sidebarItems = [
   { name: 'Bookings', href: '/admin/bookings', icon: Calendar },
   { name: 'Expenses', href: '/admin/expenses', icon: FileSpreadsheet },
   { name: 'Internal Inventory', href: '/admin/inventory', icon: Boxes },
-  { name: 'Contracts', href: '/manager/contracts', icon: ShieldCheck },
-  { name: 'Documents', href: '/manager/documents', icon: FileText },
+  { name: 'Contracts', href: '/admin/contracts', icon: ShieldCheck },
+  { name: 'Documents', href: '/admin/documents', icon: FileText },
   { name: 'Client Master', href: '/admin/client-master', icon: FileText },
   { name: 'Invoices', href: '/admin/Invoices', icon: FileText },
   { name: 'Careers & HR', href: '/hr', icon: Briefcase },
@@ -183,7 +184,7 @@ export default function AdminLayout({
 
         <nav className="flex-1 px-3 md:px-4 py-4 md:py-8 space-y-1.5 overflow-y-auto no-scrollbar">
           {sidebarItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || (item.href !== '/admin/dashboard' && pathname?.startsWith(item.href + '/'));
             return (
               <Link
                 key={item.href}
