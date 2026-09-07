@@ -38,7 +38,9 @@ import {
   Calculator,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Link2,
+  Unlink
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -228,6 +230,10 @@ export function OldInvoicesArchive({
   const [activeUploadSlot, setActiveUploadSlot] = useState<'paymentDoc' | 'utrDoc' | 'otherDoc' | null>(null);
   const partFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Merged Payment Target State
+  const [mergedTargetInvoices, setMergedTargetInvoices] = useState<OldInvoiceRecord[]>([]);
+  const [selectedMergeInvoiceIds, setSelectedMergeInvoiceIds] = useState<Set<number>>(new Set());
+
   // Multi-Item Management Handlers
   const handleAddUploadItem = () => {
     const lastItem = uploadItems[uploadItems.length - 1];
@@ -404,9 +410,20 @@ export function OldInvoicesArchive({
   };
 
   // Fetch Old Invoices from API
-  const fetchOldInvoices = async () => {
+  const fetchOldInvoices = async (options?: {
+    background?: boolean;
+    keepExpandedCompany?: string;
+  }) => {
+    const isBackground = options?.background ?? false;
+    const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+
     try {
-      setLoading(true);
+      if (!isBackground) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+
       const queryParams = new URLSearchParams();
       if (selectedLocationFilter !== 'ALL') queryParams.append('locationId', selectedLocationFilter);
       if (selectedCompanyFilter !== 'ALL') queryParams.append('companyName', selectedCompanyFilter);
@@ -422,9 +439,13 @@ export function OldInvoicesArchive({
         if (json.locations) setLocations(json.locations);
         if (json.userLocationName) setResolvedLocationName(json.userLocationName);
 
-        // Auto-expand all companies on initial load
-        const uniqueComps = new Set<string>((json.data || []).map((i: OldInvoiceRecord) => i.companyName));
-        setExpandedCompanies(uniqueComps);
+        // Keep company expanded if requested or if filtering by specific company
+        if (options?.keepExpandedCompany) {
+          setExpandedCompanies((prev) => new Set(prev).add(options.keepExpandedCompany!));
+        } else if (selectedCompanyFilter !== 'ALL') {
+          setExpandedCompanies((prev) => new Set(prev).add(selectedCompanyFilter));
+        }
+        // Note: Default is collapsed, so we do NOT auto-expand all companies
       } else {
         toast.error(json.error || 'Failed to load old invoices');
       }
@@ -434,6 +455,11 @@ export function OldInvoicesArchive({
     } finally {
       setLoading(false);
       setRefreshing(false);
+      if (isBackground && typeof window !== 'undefined') {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY, behavior: 'instant' });
+        });
+      }
     }
   };
 
@@ -605,7 +631,7 @@ export function OldInvoicesArchive({
         if (json.success) {
           toast.success(json.message || `Archived ${validItems.length} invoice(s) successfully!`);
           setIsModalOpen(false);
-          fetchOldInvoices();
+          fetchOldInvoices({ background: true, keepExpandedCompany: formCompany.trim() });
         } else {
           toast.error(json.error || 'Failed to save old invoices');
         }
@@ -639,7 +665,7 @@ export function OldInvoicesArchive({
         if (json.success) {
           toast.success('Invoice details updated successfully!');
           setIsModalOpen(false);
-          fetchOldInvoices();
+          fetchOldInvoices({ background: true, keepExpandedCompany: formCompany.trim() });
         } else {
           toast.error(json.error || 'Failed to update record');
         }
@@ -663,7 +689,7 @@ export function OldInvoicesArchive({
 
       if (json.success) {
         toast.success('Invoice deleted from archive');
-        fetchOldInvoices();
+        fetchOldInvoices({ background: true, keepExpandedCompany: compName });
       } else {
         toast.error(json.error || 'Failed to delete invoice');
       }
@@ -672,8 +698,168 @@ export function OldInvoicesArchive({
     }
   };
 
+  // Open Merged Payment Modal for multiple invoices in the same month
+  const handleOpenMergePaymentModal = (
+    compName: string,
+    month: string,
+    monthInvoices: OldInvoiceRecord[],
+    viewOnly: boolean = false
+  ) => {
+    if (!monthInvoices || monthInvoices.length === 0) return;
+
+    setMergedTargetInvoices(monthInvoices);
+    setIsPaymentViewOnly(viewOnly);
+    setPaymentTargetInvoice(monthInvoices[0]);
+
+    // Check if any invoice in this group already has merged metadata
+    let existingMergedMeta: any = null;
+    for (const inv of monthInvoices) {
+      if (inv.paymentsJson) {
+        try {
+          const parsed = JSON.parse(inv.paymentsJson);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.isMerged) {
+            existingMergedMeta = parsed;
+            break;
+          }
+        } catch {}
+      }
+    }
+
+    if (existingMergedMeta) {
+      // Use existing merged invoice selection if available, else all
+      const mergedIds = Array.isArray(existingMergedMeta.mergedInvoiceIds)
+        ? new Set<number>(existingMergedMeta.mergedInvoiceIds.map((id: any) => Number(id)))
+        : new Set<number>(monthInvoices.map((i) => i.id));
+      setSelectedMergeInvoiceIds(mergedIds);
+
+      // Load installments
+      if (Array.isArray(existingMergedMeta.installments) && existingMergedMeta.installments.length > 0) {
+        setPaymentParts(
+          existingMergedMeta.installments.map((p: any, idx: number) => ({
+            id: p.id || `part_${idx + 1}`,
+            payReceiveDate: p.payReceiveDate ? String(p.payReceiveDate).split('T')[0] : new Date().toISOString().split('T')[0],
+            receiveAmount: p.receiveAmount !== undefined && p.receiveAmount !== null ? String(p.receiveAmount) : '',
+            paymentMode: p.paymentMode || 'NEFT',
+            utrNumber: p.utrNumber || '',
+            utrDate: p.utrDate ? String(p.utrDate).split('T')[0] : new Date().toISOString().split('T')[0],
+            tdsDeducted: p.tdsDeducted === 'Yes' ? 'Yes' : 'No',
+            tdsAmount: p.tdsAmount !== undefined && p.tdsAmount !== null ? String(p.tdsAmount) : '',
+            paymentDocUrl: p.paymentDocUrl || '',
+            paymentDocName: p.paymentDocName || '',
+            utrDocUrl: p.utrDocUrl || '',
+            utrDocName: p.utrDocName || '',
+            otherDocUrl: p.otherDocUrl || '',
+            otherDocName: p.otherDocName || '',
+            remarks: p.remarks || '',
+          }))
+        );
+      } else {
+        // Fallback to primary fields
+        setPaymentParts([
+          {
+            id: `part_${Date.now()}`,
+            payReceiveDate: monthInvoices[0].payReceiveDate
+              ? String(monthInvoices[0].payReceiveDate).split('T')[0]
+              : new Date().toISOString().split('T')[0],
+            receiveAmount: existingMergedMeta.mergedTotalReceiveAmount
+              ? String(existingMergedMeta.mergedTotalReceiveAmount)
+              : '',
+            paymentMode: monthInvoices[0].paymentMode || 'NEFT',
+            utrNumber: monthInvoices[0].utrNumber || '',
+            utrDate: monthInvoices[0].utrDate
+              ? String(monthInvoices[0].utrDate).split('T')[0]
+              : new Date().toISOString().split('T')[0],
+            tdsDeducted: monthInvoices[0].tdsDeducted === 'Yes' ? 'Yes' : 'No',
+            tdsAmount: monthInvoices[0].tdsAmount ? String(monthInvoices[0].tdsAmount) : '',
+            paymentDocUrl: monthInvoices[0].utrFileUrl || '',
+            paymentDocName: monthInvoices[0].utrFileName || '',
+            utrDocUrl: monthInvoices[0].utrFileUrl || '',
+            utrDocName: monthInvoices[0].utrFileName || '',
+            otherDocUrl: '',
+            otherDocName: '',
+            remarks: existingMergedMeta.remarks || '',
+          },
+        ]);
+      }
+    } else {
+      // New merge: select all invoices by default
+      setSelectedMergeInvoiceIds(new Set(monthInvoices.map((i) => i.id)));
+
+      // Calculate total combined invoice amount to pre-fill receiveAmount
+      const combinedInvSum = monthInvoices.reduce((sum, inv) => {
+        const amt = Number(inv.amount) || 0;
+        return sum + amt;
+      }, 0);
+
+      setPaymentParts([
+        {
+          id: `part_${Date.now()}`,
+          payReceiveDate: new Date().toISOString().split('T')[0],
+          receiveAmount: combinedInvSum > 0 ? String(combinedInvSum) : '',
+          paymentMode: 'NEFT',
+          utrNumber: '',
+          utrDate: new Date().toISOString().split('T')[0],
+          tdsDeducted: 'No',
+          tdsAmount: '',
+          paymentDocUrl: '',
+          paymentDocName: '',
+          utrDocUrl: '',
+          utrDocName: '',
+          otherDocUrl: '',
+          otherDocName: '',
+          remarks: `Consolidated payment for ${monthInvoices.length} invoices (${month})`,
+        },
+      ]);
+    }
+
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleToggleMergeInvoiceId = (invoiceId: number) => {
+    setSelectedMergeInvoiceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(invoiceId)) {
+        if (next.size <= 1) {
+          toast.error('At least one invoice must remain selected in the merged payment');
+          return prev;
+        }
+        next.delete(invoiceId);
+      } else {
+        next.add(invoiceId);
+      }
+      return next;
+    });
+  };
+
   // Payment Details Handlers (Accountant View & CM Read-Only View)
   const handleOpenPaymentModal = (item: OldInvoiceRecord, viewOnly: boolean = false) => {
+    // Check if this invoice is already part of a merged payment
+    let isMerged = false;
+    let parsedMerged: any = null;
+    if (item.paymentsJson) {
+      try {
+        const parsed = JSON.parse(item.paymentsJson);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.isMerged) {
+          isMerged = true;
+          parsedMerged = parsed;
+        }
+      } catch {}
+    }
+
+    if (isMerged && parsedMerged) {
+      // Find all invoices in this company belonging to the merged group or same month
+      const groupInvoices = invoices.filter(
+        (inv) =>
+          inv.companyName.toLowerCase().trim() === item.companyName.toLowerCase().trim() &&
+          (parsedMerged.mergedInvoiceIds?.includes(inv.id) || inv.month.trim() === item.month.trim())
+      );
+      handleOpenMergePaymentModal(item.companyName, item.month, groupInvoices.length > 0 ? groupInvoices : [item], viewOnly);
+      return;
+    }
+
+    // Normal single-invoice flow: clear mergedTargetInvoices
+    setMergedTargetInvoices([]);
+    setSelectedMergeInvoiceIds(new Set());
     setPaymentTargetInvoice(item);
     setIsPaymentViewOnly(viewOnly);
 
@@ -883,32 +1069,76 @@ export function OldInvoicesArchive({
         .filter(Boolean)
         .join(', ');
 
-      const res = await fetch(`/api/admin/old-invoices/${paymentTargetInvoice.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentsJson: JSON.stringify(paymentParts),
-          receiveAmount: totalRec > 0 ? totalRec : null,
-          payReceiveDate: primaryPart.payReceiveDate || null,
-          paymentMode: primaryPart.paymentMode || null,
-          utrNumber: allUtrs || primaryPart.utrNumber || null,
-          utrDate: primaryPart.utrDate || null,
-          utrFileUrl: primaryPart.utrDocUrl || primaryPart.paymentDocUrl || null,
-          utrFileName: primaryPart.utrDocName || primaryPart.paymentDocName || null,
-          tdsDeducted: totalTds > 0 ? 'Yes' : 'No',
-          tdsAmount: totalTds > 0 ? totalTds : null,
-        }),
-      });
+      if (mergedTargetInvoices.length > 1) {
+        // MERGED PAYMENT SAVE
+        const selectedIds = Array.from(selectedMergeInvoiceIds);
+        if (selectedIds.length === 0) {
+          toast.error('Please select at least one invoice for the merged payment');
+          setSavingPayment(false);
+          return;
+        }
 
-      const json = await res.json();
-      if (json.success) {
-        toast.success(
-          `Recorded payment entries for ${paymentTargetInvoice.companyName} (${paymentTargetInvoice.month})!`
-        );
-        setIsPaymentModalOpen(false);
-        fetchOldInvoices();
+        const res = await fetch('/api/admin/old-invoices/merge-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'save',
+            invoiceIds: selectedIds,
+            companyName: paymentTargetInvoice.companyName,
+            month: paymentTargetInvoice.month,
+            receiveAmount: totalRec > 0 ? totalRec : null,
+            payReceiveDate: primaryPart.payReceiveDate || null,
+            paymentMode: primaryPart.paymentMode || 'NEFT',
+            utrNumber: allUtrs || primaryPart.utrNumber || null,
+            utrDate: primaryPart.utrDate || null,
+            utrFileUrl: primaryPart.utrDocUrl || primaryPart.paymentDocUrl || null,
+            utrFileName: primaryPart.utrDocName || primaryPart.paymentDocName || null,
+            tdsDeducted: totalTds > 0 ? 'Yes' : 'No',
+            tdsAmount: totalTds > 0 ? totalTds : null,
+            installments: paymentParts,
+            remarks: primaryPart.remarks || null,
+          }),
+        });
+
+        const json = await res.json();
+        if (json.success) {
+          toast.success(
+            `Recorded merged payment for ${selectedIds.length} invoices of ${paymentTargetInvoice.companyName} (${paymentTargetInvoice.month})!`
+          );
+          setIsPaymentModalOpen(false);
+          fetchOldInvoices({ background: true, keepExpandedCompany: paymentTargetInvoice.companyName });
+        } else {
+          toast.error(json.error || 'Failed to save merged payment details');
+        }
       } else {
-        toast.error(json.error || 'Failed to save payment details');
+        // SINGLE INVOICE SAVE
+        const res = await fetch(`/api/admin/old-invoices/${paymentTargetInvoice.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentsJson: JSON.stringify(paymentParts),
+            receiveAmount: totalRec > 0 ? totalRec : null,
+            payReceiveDate: primaryPart.payReceiveDate || null,
+            paymentMode: primaryPart.paymentMode || null,
+            utrNumber: allUtrs || primaryPart.utrNumber || null,
+            utrDate: primaryPart.utrDate || null,
+            utrFileUrl: primaryPart.utrDocUrl || primaryPart.paymentDocUrl || null,
+            utrFileName: primaryPart.utrDocName || primaryPart.paymentDocName || null,
+            tdsDeducted: totalTds > 0 ? 'Yes' : 'No',
+            tdsAmount: totalTds > 0 ? totalTds : null,
+          }),
+        });
+
+        const json = await res.json();
+        if (json.success) {
+          toast.success(
+            `Recorded payment entries for ${paymentTargetInvoice.companyName} (${paymentTargetInvoice.month})!`
+          );
+          setIsPaymentModalOpen(false);
+          fetchOldInvoices({ background: true, keepExpandedCompany: paymentTargetInvoice.companyName });
+        } else {
+          toast.error(json.error || 'Failed to save payment details');
+        }
       }
     } catch (err) {
       toast.error('Error saving payment details');
@@ -917,10 +1147,60 @@ export function OldInvoicesArchive({
     }
   };
 
-  // Clear / remove recorded payment details for an invoice
+  // Clear / remove recorded payment details for an invoice (handles single or unmerging)
   const handleClearPaymentDetails = async (targetId?: number) => {
     const target = targetId ? invoices.find((i) => i.id === targetId) : paymentTargetInvoice;
     if (!target) return;
+
+    // Check if target is part of a merged payment
+    let isMerged = false;
+    let parsedMerged: any = null;
+    if (target.paymentsJson) {
+      try {
+        const p = JSON.parse(target.paymentsJson);
+        if (p && typeof p === 'object' && !Array.isArray(p) && p.isMerged) {
+          isMerged = true;
+          parsedMerged = p;
+        }
+      } catch {}
+    }
+
+    if (isMerged || (mergedTargetInvoices.length > 1 && selectedMergeInvoiceIds.size > 0)) {
+      const idsToUnmerge = isMerged && Array.isArray(parsedMerged?.mergedInvoiceIds)
+        ? parsedMerged.mergedInvoiceIds
+        : Array.from(selectedMergeInvoiceIds);
+
+      const confirmed = window.confirm(
+        `This invoice is part of a merged payment covering ${idsToUnmerge.length} invoices for ${target.companyName} (${target.month}). Are you sure you want to unmerge and clear the payment for all ${idsToUnmerge.length} invoices?`
+      );
+      if (!confirmed) return;
+
+      try {
+        setSavingPayment(true);
+        const res = await fetch('/api/admin/old-invoices/merge-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'unmerge',
+            invoiceIds: idsToUnmerge,
+          }),
+        });
+
+        const json = await res.json();
+        if (json.success) {
+          toast.success(`Unmerged and cleared payment for ${idsToUnmerge.length} invoices!`);
+          setIsPaymentModalOpen(false);
+          fetchOldInvoices({ background: true, keepExpandedCompany: target.companyName });
+        } else {
+          toast.error(json.error || 'Failed to unmerge payment');
+        }
+      } catch (err) {
+        toast.error('Error unmerging payment');
+      } finally {
+        setSavingPayment(false);
+      }
+      return;
+    }
 
     const confirmed = window.confirm(
       `Are you sure you want to clear/delete the recorded payment data for ${target.companyName} (${target.month})? This will revert it back to pending.`
@@ -950,7 +1230,7 @@ export function OldInvoicesArchive({
       if (json.success) {
         toast.success(`Payment details removed for ${target.companyName} (${target.month})!`);
         setIsPaymentModalOpen(false);
-        fetchOldInvoices();
+        fetchOldInvoices({ background: true, keepExpandedCompany: target.companyName });
       } else {
         toast.error(json.error || 'Failed to clear payment details');
       }
@@ -1372,405 +1652,691 @@ export function OldInvoicesArchive({
                 </div>
 
                 {/* ── EXPANDED MULTI-MONTH INVOICES LIST ── */}
-                {isExpanded && (
-                  <div className="divide-y divide-gray-200">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-gray-100/60 text-gray-600 font-bold uppercase tracking-wider text-[10px] border-b border-gray-200">
-                          <tr>
-                            <th className="px-4 py-2.5 w-40">Billing Month</th>
-                            <th className="px-4 py-2.5 w-32">Invoice #</th>
-                            <th className="px-4 py-2.5 w-28">Invoice ₹</th>
-                            {/* PAYMENT RECEIVED & UTR (VISIBLE TO BOTH ACCOUNTANT & CM; EDITABLE ONLY BY ACCOUNTANT) */}
-                            <th className="px-4 py-2.5 min-w-[220px] bg-indigo-50/60 text-indigo-950">
-                              <div className="flex items-center gap-1">
-                                <Calculator size={11} className="text-indigo-600" />
-                                <span>Payment Received & UTR {roleView === 'CM' && <span className="text-[9px] text-gray-500 font-normal lowercase">(read-only)</span>}</span>
-                              </div>
-                            </th>
-                            <th className="px-4 py-2.5 w-24 bg-indigo-50/60 text-indigo-950">TDS</th>
-                            <th className="px-4 py-2.5 min-w-[180px]">Remarks / Notes</th>
-                            <th className="px-4 py-2.5 w-40">Uploaded By</th>
-                            <th className="px-4 py-2.5 w-52 text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 bg-white font-sans">
-                          {group.items.map((item) => (
-                            <tr key={item.id} className="hover:bg-teal-50/30 transition-colors">
-                              {/* BILLING MONTH */}
-                              <td className="px-4 py-3 font-bold text-gray-900">
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-900 border border-indigo-200 font-mono text-xs font-bold rounded">
-                                  <Calendar size={12} className="text-indigo-600" />
-                                  <span>{item.month}</span>
-                                </span>
-                              </td>
+                {isExpanded && (() => {
+                  // Group this company's invoices by month to detect multiple invoices in the same month
+                  const monthMap = new Map<string, OldInvoiceRecord[]>();
+                  for (const inv of group.items) {
+                    const mKey = (inv.month || '').trim();
+                    if (!monthMap.has(mKey)) monthMap.set(mKey, []);
+                    monthMap.get(mKey)!.push(inv);
+                  }
 
-                              {/* INVOICE NUMBER */}
-                              <td className="px-4 py-3 font-mono font-bold text-gray-800">
-                                {item.invoiceNo ? (
-                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded border border-gray-200">
-                                    {item.invoiceNo}
+                  const monthsWithMultiple = Array.from(monthMap.entries()).filter(
+                    ([, invs]) => invs.length > 1
+                  );
+
+                  return (
+                    <div className="divide-y divide-gray-200">
+                      {/* MULTIPLE INVOICES IN SAME MONTH BANNER (FOR ACCOUNTANT & CM) */}
+                      {monthsWithMultiple.length > 0 && (
+                        <div className="px-4 py-2.5 bg-indigo-50/70 border-b border-indigo-100 flex items-center justify-between gap-3 flex-wrap text-xs">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Link2 size={14} className="text-indigo-600 shrink-0" />
+                            <span className="font-bold text-indigo-950">
+                              Multiple invoices in same month:
+                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {monthsWithMultiple.map(([mName, mInvs]) => {
+                                const isMonthMerged = mInvs.some((i) => {
+                                  if (!i.paymentsJson) return false;
+                                  try {
+                                    const p = JSON.parse(i.paymentsJson);
+                                    return p && typeof p === 'object' && !Array.isArray(p) && p.isMerged;
+                                  } catch {
+                                    return false;
+                                  }
+                                });
+
+                                return (
+                                  <span
+                                    key={mName}
+                                    className={`px-2 py-0.5 rounded text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs ${
+                                      isMonthMerged
+                                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                        : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                                    }`}
+                                  >
+                                    <span>{mName} ({mInvs.length} Invoices)</span>
+                                    {isMonthMerged ? (
+                                      <CheckCircle2 size={11} className="text-emerald-700" />
+                                    ) : (
+                                      <Clock size={10} className="text-indigo-600" />
+                                    )}
                                   </span>
-                                ) : (
-                                  <span className="text-gray-400 italic">None</span>
-                                )}
-                              </td>
+                                );
+                              })}
+                            </div>
+                          </div>
 
-                              {/* AMOUNT */}
-                              <td className="px-4 py-3 font-mono font-bold text-emerald-800">
-                                {item.amount !== null && item.amount !== undefined ? (
-                                  `₹${Number(item.amount).toLocaleString('en-IN')}`
-                                ) : (
-                                  <span className="text-gray-400">—</span>
-                                )}
-                              </td>
-
-                              {/* ACCOUNTANT PAYMENT RECEIVED & UTR DETAILS (VISIBLE TO BOTH; EDITABLE BY ACCOUNTANT) */}
-                              <td className="px-4 py-3 bg-indigo-50/20">
-                                {(() => {
-                                  let parts: PaymentInstallment[] = [];
-                                  if (item.paymentsJson) {
-                                    try {
-                                      const p = JSON.parse(item.paymentsJson);
-                                      if (Array.isArray(p)) parts = p;
-                                    } catch {}
+                          {(roleView === 'ACCOUNTANT' || isSuperAdmin) && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {monthsWithMultiple.map(([mName, mInvs]) => {
+                                const isMonthMerged = mInvs.some((i) => {
+                                  if (!i.paymentsJson) return false;
+                                  try {
+                                    const p = JSON.parse(i.paymentsJson);
+                                    return p && typeof p === 'object' && !Array.isArray(p) && p.isMerged;
+                                  } catch {
+                                    return false;
                                   }
+                                });
 
-                                  if (parts.length > 0) {
-                                    const totalRec = parts.reduce((sum, p) => sum + (parseFloat(p.receiveAmount) || 0), 0);
-                                    const hasMultipleParts = parts.length > 1;
+                                return (
+                                  <button
+                                    key={mName}
+                                    type="button"
+                                    onClick={() => handleOpenMergePaymentModal(group.companyName, mName, mInvs, false)}
+                                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
+                                    title={`Record or edit single merged payment for all ${mInvs.length} invoices of ${mName}`}
+                                  >
+                                    <Link2 size={12} />
+                                    <span>{isMonthMerged ? `Edit Merged ${mName}` : `Merge ${mName} (${mInvs.length} Invs)`}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                                    return (
-                                      <div className="space-y-1.5">
-                                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 font-mono">
-                                          <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
-                                          <span>₹{totalRec.toLocaleString('en-IN')}</span>
-                                          {hasMultipleParts && (
-                                            <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-800 text-[9px] font-bold rounded">
-                                              {parts.length} Parts
-                                            </span>
-                                          )}
-                                        </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-gray-100/60 text-gray-600 font-bold uppercase tracking-wider text-[10px] border-b border-gray-200">
+                            <tr>
+                              <th className="px-4 py-2.5 w-44">Billing Month</th>
+                              <th className="px-4 py-2.5 w-32">Invoice #</th>
+                              <th className="px-4 py-2.5 w-28">Invoice ₹</th>
+                              {/* PAYMENT RECEIVED & UTR (VISIBLE TO BOTH ACCOUNTANT & CM; EDITABLE ONLY BY ACCOUNTANT) */}
+                              <th className="px-4 py-2.5 min-w-[260px] bg-indigo-50/60 text-indigo-950">
+                                <div className="flex items-center gap-1">
+                                  <Calculator size={11} className="text-indigo-600" />
+                                  <span>Payment Received & UTR {roleView === 'CM' && <span className="text-[9px] text-gray-500 font-normal lowercase">(read-only)</span>}</span>
+                                </div>
+                              </th>
+                              <th className="px-4 py-2.5 w-24 bg-indigo-50/60 text-indigo-950">TDS</th>
+                              <th className="px-4 py-2.5 min-w-[180px]">Remarks / Notes</th>
+                              <th className="px-4 py-2.5 w-40">Uploaded By</th>
+                              <th className="px-4 py-2.5 w-52 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 bg-white font-sans">
+                            {group.items.map((item) => {
+                              const sameMonthInvoices = monthMap.get((item.month || '').trim()) || [item];
+                              const hasMultipleInSameMonth = sameMonthInvoices.length > 1;
 
-                                        {/* LIST OF PAYMENT PARTS */}
-                                        <div className="space-y-1">
-                                          {parts.map((p, pIdx) => (
-                                            <div key={p.id || pIdx} className="text-[10px] bg-white p-1.5 border border-indigo-100 rounded space-y-1 font-mono">
-                                              <div className="flex items-center justify-between gap-1 text-gray-700">
-                                                <span className="font-bold text-indigo-950">
-                                                  {hasMultipleParts ? `Part ${pIdx + 1}: ` : ''}₹{parseFloat(p.receiveAmount || '0').toLocaleString('en-IN')}
-                                                </span>
-                                                <span className="text-gray-400 font-sans">{p.payReceiveDate}</span>
-                                              </div>
-                                              <div className="flex items-center gap-1 text-gray-600 flex-wrap">
-                                                <span className="px-1 bg-gray-100 rounded text-[9px]">{p.paymentMode || 'UTR'}</span>
-                                                {p.utrNumber && <span className="font-bold truncate max-w-[120px]">{p.utrNumber}</span>}
-                                              </div>
-
-                                              {/* ATTACHED DOCUMENTS */}
-                                              <div className="flex items-center gap-1 flex-wrap pt-0.5">
-                                                {p.paymentDocUrl && (
-                                                  <a
-                                                    href={p.paymentDocUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded text-[8px] font-bold"
-                                                    title="View Payment Received Document"
-                                                  >
-                                                    <Paperclip size={8} />
-                                                    <span>Bank Advice</span>
-                                                  </a>
-                                                )}
-                                                {p.utrDocUrl && (
-                                                  <a
-                                                    href={p.utrDocUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded text-[8px] font-bold"
-                                                    title="View UTR Proof Document"
-                                                  >
-                                                    <Paperclip size={8} />
-                                                    <span>UTR Proof</span>
-                                                  </a>
-                                                )}
-                                                {p.otherDocUrl && (
-                                                  <a
-                                                    href={p.otherDocUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[8px] font-bold"
-                                                    title="View Other Supporting Document"
-                                                  >
-                                                    <Paperclip size={8} />
-                                                    <span>Supporting Doc</span>
-                                                  </a>
-                                                )}
-                                              </div>
-                                            </div>
-                                          ))}
-                                        </div>
-
-                                        {/* QUICK ACTION BUTTONS */}
-                                        {roleView === 'ACCOUNTANT' || isSuperAdmin ? (
-                                          <div className="flex items-center gap-2 pt-1">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleOpenPaymentModal(item)}
-                                              className="text-[9px] font-bold text-indigo-600 hover:text-indigo-900 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                            >
-                                              <Edit3 size={9} />
-                                              <span>Edit Payment</span>
-                                            </button>
-                                            <span className="text-gray-300">|</span>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleClearPaymentDetails(item.id)}
-                                              className="text-[9px] font-bold text-red-500 hover:text-red-700 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                              title="Clear payment data and reset to pending"
-                                            >
-                                              <Trash2 size={9} />
-                                              <span>Clear</span>
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <div className="flex items-center gap-2 pt-1">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleOpenViewPaymentModal(item)}
-                                              className="text-[9.5px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 cursor-pointer"
-                                              title="View Uploaded Payment Details"
-                                            >
-                                              <Eye size={10} />
-                                              <span>View Payment Details</span>
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
+                              let isMerged = false;
+                              let mergedMeta: any = null;
+                              let parts: PaymentInstallment[] = [];
+                              if (item.paymentsJson) {
+                                try {
+                                  const parsed = JSON.parse(item.paymentsJson);
+                                  if (Array.isArray(parsed)) {
+                                    parts = parsed;
+                                  } else if (parsed && typeof parsed === 'object' && parsed.isMerged) {
+                                    isMerged = true;
+                                    mergedMeta = parsed;
+                                    if (Array.isArray(parsed.installments)) {
+                                      parts = parsed.installments;
+                                    }
                                   }
+                                } catch {}
+                              }
 
-                                  // Legacy single payment display
-                                  if (item.payReceiveDate || item.receiveAmount || item.utrNumber || item.utrFileUrl) {
-                                    return (
-                                      <div className="space-y-1">
-                                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 font-mono">
-                                          <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
-                                          <span>₹{Number(item.receiveAmount || item.amount || 0).toLocaleString('en-IN')}</span>
-                                          {item.payReceiveDate && (
-                                            <span className="text-[10px] text-gray-500 font-normal font-sans">
-                                              on {item.payReceiveDate}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-1.5 text-[10px] text-indigo-950 font-mono flex-wrap">
-                                          <span className="px-1.5 py-0.2 bg-indigo-100/70 border border-indigo-200 rounded font-bold">
-                                            {item.paymentMode || 'UTR'}
-                                          </span>
-                                          <span className="font-bold">{item.utrNumber || 'No Ref #'}</span>
-                                          {item.utrDate && (
-                                            <span className="text-gray-400">({item.utrDate})</span>
-                                          )}
-                                        </div>
-                                        {item.utrFileUrl && (
-                                          <a
-                                            href={item.utrFileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100/80 hover:bg-indigo-200 text-indigo-900 border border-indigo-300 rounded text-[9px] font-bold mt-0.5"
-                                          >
-                                            <Paperclip size={9} />
-                                            <span>UTR Proof Document</span>
-                                            <ExternalLink size={8} />
-                                          </a>
-                                        )}
-
-                                        {/* QUICK ACTION BUTTONS */}
-                                        {roleView === 'ACCOUNTANT' || isSuperAdmin ? (
-                                          <div className="flex items-center gap-2 pt-1">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleOpenPaymentModal(item)}
-                                              className="text-[9px] font-bold text-indigo-600 hover:text-indigo-900 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                            >
-                                              <Edit3 size={9} />
-                                              <span>Edit Payment</span>
-                                            </button>
-                                            <span className="text-gray-300">|</span>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleClearPaymentDetails(item.id)}
-                                              className="text-[9px] font-bold text-red-500 hover:text-red-700 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                              title="Clear payment data and reset to pending"
-                                            >
-                                              <Trash2 size={9} />
-                                              <span>Clear</span>
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <div className="flex items-center gap-2 pt-1">
-                                            <button
-                                              type="button"
-                                              onClick={() => handleOpenViewPaymentModal(item)}
-                                              className="text-[9.5px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 cursor-pointer"
-                                              title="View Uploaded Payment Details"
-                                            >
-                                              <Eye size={10} />
-                                              <span>View Payment Details</span>
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  }
-
-                                  return (
-                                    <div className="flex items-center gap-2">
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[10px] font-bold">
-                                        <Clock size={10} /> Pending Entry
+                              return (
+                                <tr key={item.id} className="hover:bg-teal-50/30 transition-colors">
+                                  {/* BILLING MONTH */}
+                                  <td className="px-4 py-3 font-bold text-gray-900">
+                                    <div className="space-y-1">
+                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-900 border border-indigo-200 font-mono text-xs font-bold rounded">
+                                        <Calendar size={12} className="text-indigo-600" />
+                                        <span>{item.month}</span>
                                       </span>
-                                      {roleView === 'ACCOUNTANT' || isSuperAdmin ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenPaymentModal(item)}
-                                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
-                                        >
-                                          + Add
-                                        </button>
+                                      {hasMultipleInSameMonth && (
+                                        <div className="text-[10px] font-sans">
+                                          {isMerged ? (
+                                            <span className="text-emerald-700 font-bold inline-flex items-center gap-0.5">
+                                              <Link2 size={10} /> Merged ({sameMonthInvoices.length} Invs)
+                                            </span>
+                                          ) : (
+                                            <span className="text-amber-700 font-medium">
+                                              {sameMonthInvoices.length} invoices in month
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* INVOICE NUMBER */}
+                                  <td className="px-4 py-3 font-mono font-bold text-gray-800">
+                                    {item.invoiceNo ? (
+                                      <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded border border-gray-200">
+                                        {item.invoiceNo}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400 italic">None</span>
+                                    )}
+                                  </td>
+
+                                  {/* AMOUNT */}
+                                  <td className="px-4 py-3 font-mono font-bold text-emerald-800">
+                                    {item.amount !== null && item.amount !== undefined ? (
+                                      `₹${Number(item.amount).toLocaleString('en-IN')}`
+                                    ) : (
+                                      <span className="text-gray-400">—</span>
+                                    )}
+                                  </td>
+
+                                  {/* ACCOUNTANT PAYMENT RECEIVED & UTR DETAILS (VISIBLE TO BOTH; EDITABLE BY ACCOUNTANT) */}
+                                  <td className="px-4 py-3 bg-indigo-50/20">
+                                    {(() => {
+                                      // 1. MERGED PAYMENT DISPLAY
+                                      if (isMerged && mergedMeta) {
+                                        return (
+                                          <div className="space-y-1.5">
+                                            {/* MERGED BADGE & COMBINED METRICS */}
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-600 text-white rounded text-[10px] font-bold shadow-2xs font-mono">
+                                                <Link2 size={11} /> Merged Payment ({mergedMeta.mergedInvoiceCount || sameMonthInvoices.length} Invs)
+                                              </span>
+                                              <span className="text-xs font-bold text-emerald-900 font-mono">
+                                                ₹{Number(mergedMeta.mergedTotalReceiveAmount || 0).toLocaleString('en-IN')} Total
+                                              </span>
+                                            </div>
+
+                                            <div className="text-[10px] text-gray-600 font-mono bg-indigo-50/60 p-1.5 border border-indigo-100 rounded flex items-center justify-between gap-2">
+                                              <span>This Inv Allocation:</span>
+                                              <strong className="text-emerald-800 font-bold">
+                                                ₹{Number(item.receiveAmount || 0).toLocaleString('en-IN')}
+                                              </strong>
+                                            </div>
+
+                                            {/* LIST OF PAYMENT PARTS */}
+                                            {parts.length > 0 && (
+                                              <div className="space-y-1">
+                                                {parts.map((p, pIdx) => (
+                                                  <div key={p.id || pIdx} className="text-[10px] bg-white p-1.5 border border-indigo-100 rounded space-y-1 font-mono">
+                                                    <div className="flex items-center justify-between gap-1 text-gray-700">
+                                                      <span className="font-bold text-indigo-950">
+                                                        {parts.length > 1 ? `Part ${pIdx + 1}: ` : ''}₹{parseFloat(p.receiveAmount || '0').toLocaleString('en-IN')}
+                                                      </span>
+                                                      <span className="text-gray-400 font-sans">{p.payReceiveDate}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-gray-600 flex-wrap">
+                                                      <span className="px-1 bg-gray-100 rounded text-[9px] font-bold">{p.paymentMode || 'UTR'}</span>
+                                                      {p.utrNumber && <span className="font-bold truncate max-w-[120px]">{p.utrNumber}</span>}
+                                                    </div>
+
+                                                    {/* ATTACHED DOCUMENTS */}
+                                                    <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                                      {p.paymentDocUrl && (
+                                                        <a
+                                                          href={p.paymentDocUrl}
+                                                          target="_blank"
+                                                          rel="noopener noreferrer"
+                                                          className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded text-[8px] font-bold"
+                                                          title="View Payment Received Document"
+                                                        >
+                                                          <Paperclip size={8} />
+                                                          <span>Bank Advice</span>
+                                                        </a>
+                                                      )}
+                                                      {p.utrDocUrl && (
+                                                        <a
+                                                          href={p.utrDocUrl}
+                                                          target="_blank"
+                                                          rel="noopener noreferrer"
+                                                          className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded text-[8px] font-bold"
+                                                          title="View UTR Proof Document"
+                                                        >
+                                                          <Paperclip size={8} />
+                                                          <span>UTR Proof</span>
+                                                        </a>
+                                                      )}
+                                                      {p.otherDocUrl && (
+                                                        <a
+                                                          href={p.otherDocUrl}
+                                                          target="_blank"
+                                                          rel="noopener noreferrer"
+                                                          className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[8px] font-bold"
+                                                          title="View Other Supporting Document"
+                                                        >
+                                                          <Paperclip size={8} />
+                                                          <span>Supporting Doc</span>
+                                                        </a>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+
+                                            {/* QUICK ACTION BUTTONS */}
+                                            {roleView === 'ACCOUNTANT' || isSuperAdmin ? (
+                                              <div className="flex items-center gap-2 pt-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleOpenMergePaymentModal(group.companyName, item.month, sameMonthInvoices, false)}
+                                                  className="text-[9.5px] font-bold text-indigo-600 hover:text-indigo-900 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                >
+                                                  <Edit3 size={9} />
+                                                  <span>Edit Merged Payment</span>
+                                                </button>
+                                                <span className="text-gray-300">|</span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleClearPaymentDetails(item.id)}
+                                                  className="text-[9.5px] font-bold text-red-500 hover:text-red-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                  title="Unmerge and clear payment data for this group"
+                                                >
+                                                  <Unlink size={9} />
+                                                  <span>Unmerge</span>
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-2 pt-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleOpenMergePaymentModal(group.companyName, item.month, sameMonthInvoices, true)}
+                                                  className="text-[9.5px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 cursor-pointer"
+                                                  title="View Merged Payment Details"
+                                                >
+                                                  <Eye size={10} />
+                                                  <span>View Merged Payment Details</span>
+                                                </button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+
+                                      // 2. STANDARD MULTI-PART PAYMENTS
+                                      if (parts.length > 0) {
+                                        const totalRec = parts.reduce((sum, p) => sum + (parseFloat(p.receiveAmount) || 0), 0);
+                                        const hasMultipleParts = parts.length > 1;
+
+                                        return (
+                                          <div className="space-y-1.5">
+                                            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 font-mono">
+                                              <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                                              <span>₹{totalRec.toLocaleString('en-IN')}</span>
+                                              {hasMultipleParts && (
+                                                <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-800 text-[9px] font-bold rounded">
+                                                  {parts.length} Parts
+                                                </span>
+                                              )}
+                                            </div>
+
+                                            {/* LIST OF PAYMENT PARTS */}
+                                            <div className="space-y-1">
+                                              {parts.map((p, pIdx) => (
+                                                <div key={p.id || pIdx} className="text-[10px] bg-white p-1.5 border border-indigo-100 rounded space-y-1 font-mono">
+                                                  <div className="flex items-center justify-between gap-1 text-gray-700">
+                                                    <span className="font-bold text-indigo-950">
+                                                      {hasMultipleParts ? `Part ${pIdx + 1}: ` : ''}₹{parseFloat(p.receiveAmount || '0').toLocaleString('en-IN')}
+                                                    </span>
+                                                    <span className="text-gray-400 font-sans">{p.payReceiveDate}</span>
+                                                  </div>
+                                                  <div className="flex items-center gap-1 text-gray-600 flex-wrap">
+                                                    <span className="px-1 bg-gray-100 rounded text-[9px]">{p.paymentMode || 'UTR'}</span>
+                                                    {p.utrNumber && <span className="font-bold truncate max-w-[120px]">{p.utrNumber}</span>}
+                                                  </div>
+
+                                                  {/* ATTACHED DOCUMENTS */}
+                                                  <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                                    {p.paymentDocUrl && (
+                                                      <a
+                                                        href={p.paymentDocUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded text-[8px] font-bold"
+                                                        title="View Payment Received Document"
+                                                      >
+                                                        <Paperclip size={8} />
+                                                        <span>Bank Advice</span>
+                                                      </a>
+                                                    )}
+                                                    {p.utrDocUrl && (
+                                                      <a
+                                                        href={p.utrDocUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded text-[8px] font-bold"
+                                                        title="View UTR Proof Document"
+                                                      >
+                                                        <Paperclip size={8} />
+                                                        <span>UTR Proof</span>
+                                                      </a>
+                                                    )}
+                                                    {p.otherDocUrl && (
+                                                      <a
+                                                        href={p.otherDocUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-[8px] font-bold"
+                                                        title="View Other Supporting Document"
+                                                      >
+                                                        <Paperclip size={8} />
+                                                        <span>Supporting Doc</span>
+                                                      </a>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+
+                                            {/* QUICK ACTION BUTTONS */}
+                                            {roleView === 'ACCOUNTANT' || isSuperAdmin ? (
+                                              <div className="flex items-center gap-2 pt-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleOpenPaymentModal(item)}
+                                                  className="text-[9px] font-bold text-indigo-600 hover:text-indigo-900 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                >
+                                                  <Edit3 size={9} />
+                                                  <span>Edit Payment</span>
+                                                </button>
+                                                <span className="text-gray-300">|</span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleClearPaymentDetails(item.id)}
+                                                  className="text-[9px] font-bold text-red-500 hover:text-red-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                  title="Clear payment data and reset to pending"
+                                                >
+                                                  <Trash2 size={9} />
+                                                  <span>Clear</span>
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-2 pt-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleOpenViewPaymentModal(item)}
+                                                  className="text-[9.5px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 cursor-pointer"
+                                                  title="View Uploaded Payment Details"
+                                                >
+                                                  <Eye size={10} />
+                                                  <span>View Payment Details</span>
+                                                </button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+
+                                      // 3. LEGACY SINGLE PAYMENT DISPLAY
+                                      if (item.payReceiveDate || item.receiveAmount || item.utrNumber || item.utrFileUrl) {
+                                        return (
+                                          <div className="space-y-1">
+                                            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 font-mono">
+                                              <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                                              <span>₹{Number(item.receiveAmount || item.amount || 0).toLocaleString('en-IN')}</span>
+                                              {item.payReceiveDate && (
+                                                <span className="text-[10px] text-gray-500 font-normal font-sans">
+                                                  on {item.payReceiveDate}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 text-[10px] text-indigo-950 font-mono flex-wrap">
+                                              <span className="px-1.5 py-0.2 bg-indigo-100/70 border border-indigo-200 rounded font-bold">
+                                                {item.paymentMode || 'UTR'}
+                                              </span>
+                                              <span className="font-bold">{item.utrNumber || 'No Ref #'}</span>
+                                              {item.utrDate && (
+                                                <span className="text-gray-400">({item.utrDate})</span>
+                                              )}
+                                            </div>
+                                            {item.utrFileUrl && (
+                                              <a
+                                                href={item.utrFileUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100/80 hover:bg-indigo-200 text-indigo-900 border border-indigo-300 rounded text-[9px] font-bold mt-0.5"
+                                              >
+                                                <Paperclip size={9} />
+                                                <span>UTR Proof Document</span>
+                                                <ExternalLink size={8} />
+                                              </a>
+                                            )}
+
+                                            {/* QUICK ACTION BUTTONS */}
+                                            {roleView === 'ACCOUNTANT' || isSuperAdmin ? (
+                                              <div className="flex items-center gap-2 pt-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleOpenPaymentModal(item)}
+                                                  className="text-[9px] font-bold text-indigo-600 hover:text-indigo-900 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                >
+                                                  <Edit3 size={9} />
+                                                  <span>Edit Payment</span>
+                                                </button>
+                                                <span className="text-gray-300">|</span>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleClearPaymentDetails(item.id)}
+                                                  className="text-[9px] font-bold text-red-500 hover:text-red-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                  title="Clear payment data and reset to pending"
+                                                >
+                                                  <Trash2 size={9} />
+                                                  <span>Clear</span>
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-2 pt-1">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleOpenViewPaymentModal(item)}
+                                                  className="text-[9.5px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 cursor-pointer"
+                                                  title="View Uploaded Payment Details"
+                                                >
+                                                  <Eye size={10} />
+                                                  <span>View Payment Details</span>
+                                                </button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+
+                                      // 4. PENDING ENTRY
+                                      return (
+                                        <div className="space-y-1.5">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[10px] font-bold">
+                                              <Clock size={10} /> Pending Entry
+                                            </span>
+                                            {hasMultipleInSameMonth && (roleView === 'ACCOUNTANT' || isSuperAdmin) && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleOpenMergePaymentModal(group.companyName, item.month, sameMonthInvoices, false)}
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 rounded text-[10px] font-bold cursor-pointer transition-colors shadow-2xs"
+                                                title={`Merge payment for all ${sameMonthInvoices.length} invoices of ${item.month}`}
+                                              >
+                                                <Link2 size={10} />
+                                                <span>Merge {sameMonthInvoices.length} Invs</span>
+                                              </button>
+                                            )}
+                                          </div>
+
+                                          {roleView === 'ACCOUNTANT' || isSuperAdmin ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenPaymentModal(item)}
+                                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer block"
+                                            >
+                                              {hasMultipleInSameMonth ? 'Or pay this invoice individually +' : '+ Add Payment'}
+                                            </button>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenViewPaymentModal(item)}
+                                              className="text-[9.5px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                            >
+                                              <Eye size={10} />
+                                              <span>View Details</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </td>
+
+                                  {/* TDS */}
+                                  <td className="px-4 py-3 bg-indigo-50/20">
+                                    {item.tdsDeducted === 'Yes' ? (
+                                      <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded text-[10px] font-mono font-bold">
+                                        Yes {item.tdsAmount ? `(₹${Number(item.tdsAmount).toLocaleString('en-IN')})` : ''}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400 text-[10px]">No</span>
+                                    )}
+                                  </td>
+
+                                  {/* REMARKS */}
+                                  <td className="px-4 py-3 text-gray-700">
+                                    {item.remarks ? (
+                                      <div className="flex items-start gap-1.5 max-w-md">
+                                        <span className="text-gray-800 text-xs">{item.remarks}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-400 italic text-[11px]">No remarks</span>
+                                    )}
+                                  </td>
+
+                                  {/* UPLOADED BY */}
+                                  <td className="px-4 py-3 text-[11px] text-gray-600">
+                                    <div className="flex items-center gap-1.5 font-medium text-gray-800">
+                                      <User size={12} className="text-gray-400 shrink-0" />
+                                      <span>{item.uploadedByName || 'Manager'}</span>
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                                      {new Date(item.createdAt).toLocaleDateString('en-IN', {
+                                        day: '2-digit',
+                                        month: 'short',
+                                        year: 'numeric',
+                                      })}
+                                    </div>
+                                  </td>
+
+                                  {/* ACTIONS */}
+                                  <td className="px-4 py-3 text-right">
+                                    <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                      {/* PAYMENT ACTION BUTTON (ACCOUNTANT: RECORD/EDIT; CM: VIEW PAYMENT DETAILS) */}
+                                      {isMerged ? (
+                                        roleView === 'ACCOUNTANT' || isSuperAdmin ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenMergePaymentModal(group.companyName, item.month, sameMonthInvoices, false)}
+                                            className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-600 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                                            title="Edit Merged Payment Details"
+                                          >
+                                            <Link2 size={11} />
+                                            <span>Merged</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenMergePaymentModal(group.companyName, item.month, sameMonthInvoices, true)}
+                                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                                            title="View Merged Payment Details"
+                                          >
+                                            <Eye size={11} />
+                                            <span>Merged</span>
+                                          </button>
+                                        )
+                                      ) : roleView === 'ACCOUNTANT' ? (
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenPaymentModal(item)}
+                                            className="px-2 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-300 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                                            title="Record / Edit Multi-Part Payment & UTR Proofs"
+                                          >
+                                            <CreditCard size={11} />
+                                            <span>Payment</span>
+                                          </button>
+                                          {hasMultipleInSameMonth && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenMergePaymentModal(group.companyName, item.month, sameMonthInvoices, false)}
+                                              className="p-1 bg-indigo-100 hover:bg-indigo-600 text-indigo-800 hover:text-white border border-indigo-300 rounded text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                                              title={`Merge payment for ${sameMonthInvoices.length} invoices of ${item.month}`}
+                                            >
+                                              <Link2 size={12} />
+                                            </button>
+                                          )}
+                                        </div>
                                       ) : (
                                         <button
                                           type="button"
                                           onClick={() => handleOpenViewPaymentModal(item)}
-                                          className="text-[9.5px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                          className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                                          title="View Uploaded Payment Details"
                                         >
-                                          <Eye size={10} />
-                                          <span>View Details</span>
+                                          <Eye size={11} />
+                                          <span>View Payment Details</span>
+                                        </button>
+                                      )}
+
+                                      {/* VIEW PDF */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setPreviewPdfUrl(item.invoiceUrl);
+                                          setPreviewPdfTitle(`${item.companyName} - ${item.month} Invoice`);
+                                        }}
+                                        className="p-1.5 bg-teal-50 hover:bg-[#1ab0bc] text-[#1ab0bc] hover:text-white border border-teal-200 hover:border-[#1ab0bc] rounded transition-colors cursor-pointer"
+                                        title="View Attached PDF Invoice"
+                                      >
+                                        <Eye size={13} />
+                                      </button>
+
+                                      {/* DOWNLOAD PDF */}
+                                      <a
+                                        href={item.invoiceUrl}
+                                        download={item.fileName || `${item.companyName}_${item.month}_Invoice.pdf`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded transition-colors"
+                                        title="Download PDF"
+                                      >
+                                        <Download size={13} />
+                                      </a>
+
+                                      {/* EDIT (CM OR SUPER ADMIN) */}
+                                      {(roleView === 'CM' || isSuperAdmin) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEditModal(item)}
+                                          className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded transition-colors cursor-pointer"
+                                          title="Edit Invoice Details"
+                                        >
+                                          <Edit3 size={13} />
+                                        </button>
+                                      )}
+
+                                      {/* DELETE INVOICE (CM OR SUPER ADMIN) */}
+                                      {(roleView === 'CM' || isSuperAdmin) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteInvoice(item.id, item.companyName, item.month)}
+                                          className="p-1.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 rounded transition-colors cursor-pointer"
+                                          title="Delete from Archive"
+                                        >
+                                          <Trash2 size={13} />
                                         </button>
                                       )}
                                     </div>
-                                  );
-                                })()}
-                              </td>
-
-                              {/* TDS */}
-                              <td className="px-4 py-3 bg-indigo-50/20">
-                                {item.tdsDeducted === 'Yes' ? (
-                                  <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded text-[10px] font-mono font-bold">
-                                    Yes {item.tdsAmount ? `(₹${Number(item.tdsAmount).toLocaleString('en-IN')})` : ''}
-                                  </span>
-                                ) : (
-                                  <span className="text-gray-400 text-[10px]">No</span>
-                                )}
-                              </td>
-
-                              {/* REMARKS */}
-                              <td className="px-4 py-3 text-gray-700">
-                                {item.remarks ? (
-                                  <div className="flex items-start gap-1.5 max-w-md">
-                                    <span className="text-gray-800 text-xs">{item.remarks}</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400 italic text-[11px]">No remarks</span>
-                                )}
-                              </td>
-
-                              {/* UPLOADED BY */}
-                              <td className="px-4 py-3 text-[11px] text-gray-600">
-                                <div className="flex items-center gap-1.5 font-medium text-gray-800">
-                                  <User size={12} className="text-gray-400 shrink-0" />
-                                  <span>{item.uploadedByName || 'Manager'}</span>
-                                </div>
-                                <div className="text-[10px] text-gray-400 font-mono mt-0.5">
-                                  {new Date(item.createdAt).toLocaleDateString('en-IN', {
-                                    day: '2-digit',
-                                    month: 'short',
-                                    year: 'numeric',
-                                  })}
-                                </div>
-                              </td>
-
-                              {/* ACTIONS */}
-                              <td className="px-4 py-3 text-right">
-                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                                  {/* PAYMENT ACTION BUTTON (ACCOUNTANT: RECORD/EDIT; CM: VIEW PAYMENT DETAILS) */}
-                                  {roleView === 'ACCOUNTANT' ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenPaymentModal(item)}
-                                      className="px-2 py-1 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-300 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
-                                      title="Record / Edit Multi-Part Payment & UTR Proofs"
-                                    >
-                                      <CreditCard size={11} />
-                                      <span>Payment</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenViewPaymentModal(item)}
-                                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
-                                      title="View Uploaded Payment Details"
-                                    >
-                                      <Eye size={11} />
-                                      <span>View Payment Details</span>
-                                    </button>
-                                  )}
-
-                                  {/* VIEW PDF */}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPreviewPdfUrl(item.invoiceUrl);
-                                      setPreviewPdfTitle(`${item.companyName} - ${item.month} Invoice`);
-                                    }}
-                                    className="p-1.5 bg-teal-50 hover:bg-[#1ab0bc] text-[#1ab0bc] hover:text-white border border-teal-200 hover:border-[#1ab0bc] rounded transition-colors cursor-pointer"
-                                    title="View Attached PDF Invoice"
-                                  >
-                                    <Eye size={13} />
-                                  </button>
-
-                                  {/* DOWNLOAD PDF */}
-                                  <a
-                                    href={item.invoiceUrl}
-                                    download={item.fileName || `${item.companyName}_${item.month}_Invoice.pdf`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded transition-colors"
-                                    title="Download PDF"
-                                  >
-                                    <Download size={13} />
-                                  </a>
-
-                                  {/* EDIT (CM OR SUPER ADMIN) */}
-                                  {(roleView === 'CM' || isSuperAdmin) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenEditModal(item)}
-                                      className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded transition-colors cursor-pointer"
-                                      title="Edit Invoice Details"
-                                    >
-                                      <Edit3 size={13} />
-                                    </button>
-                                  )}
-
-                                  {/* DELETE INVOICE (CM OR SUPER ADMIN) */}
-                                  {(roleView === 'CM' || isSuperAdmin) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteInvoice(item.id, item.companyName, item.month)}
-                                      className="p-1.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 rounded transition-colors cursor-pointer"
-                                      title="Delete from Archive"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}
@@ -2403,7 +2969,13 @@ export function OldInvoicesArchive({
             {isPaymentModalOpen &&
               paymentTargetInvoice &&
               (() => {
-                const totalInvAmount = Number(paymentTargetInvoice.amount || 0);
+                const isMergedMode = mergedTargetInvoices.length > 1;
+                const selectedInvoicesList = isMergedMode
+                  ? mergedTargetInvoices.filter((i) => selectedMergeInvoiceIds.has(i.id))
+                  : [paymentTargetInvoice];
+                const totalEffectiveInvAmount = isMergedMode
+                  ? selectedInvoicesList.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
+                  : Number(paymentTargetInvoice.amount || 0);
                 const totalRecAmount = paymentParts.reduce(
                   (sum, p) => sum + (parseFloat(p.receiveAmount) || 0),
                   0
@@ -2412,7 +2984,7 @@ export function OldInvoicesArchive({
                   (sum, p) => (p.tdsDeducted === 'Yes' ? sum + (parseFloat(p.tdsAmount) || 0) : sum),
                   0
                 );
-                const pendingBalance = Math.max(0, totalInvAmount - totalRecAmount - totalTdsDeducted);
+                const pendingBalance = Math.max(0, totalEffectiveInvAmount - totalRecAmount - totalTdsDeducted);
 
                 return (
                   <div
@@ -2430,13 +3002,20 @@ export function OldInvoicesArchive({
                       <div className={`px-6 py-3.5 ${isPaymentViewOnly ? 'bg-emerald-50 border-emerald-100' : 'bg-indigo-50 border-indigo-100'} border-b flex items-center justify-between shrink-0`}>
                         <div className="flex items-center gap-2.5">
                           <div className={`w-8 h-8 ${isPaymentViewOnly ? 'bg-emerald-700' : 'bg-indigo-600'} text-white flex items-center justify-center rounded`}>
-                            {isPaymentViewOnly ? <Eye size={18} /> : <CreditCard size={18} />}
+                            {isPaymentViewOnly ? (isMergedMode ? <Link2 size={18} /> : <Eye size={18} />) : (isMergedMode ? <Link2 size={18} /> : <CreditCard size={18} />)}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className={`font-bold text-sm ${isPaymentViewOnly ? 'text-emerald-950' : 'text-indigo-950'} uppercase tracking-tight`}>
-                                {isPaymentViewOnly ? 'Uploaded Payment Details' : 'Record Payment Received & UTR'}
+                                {isPaymentViewOnly
+                                  ? (isMergedMode ? 'Merged Payment Received Details' : 'Uploaded Payment Details')
+                                  : (isMergedMode ? 'Record Merged Payment & UTR' : 'Record Payment Received & UTR')}
                               </h3>
+                              {isMergedMode && (
+                                <span className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[9px] font-bold uppercase tracking-wider font-mono flex items-center gap-1 shadow-2xs">
+                                  <Link2 size={9} /> Merged Payment
+                                </span>
+                              )}
                               {isPaymentViewOnly && (
                                 <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-bold uppercase tracking-wider">
                                   Community Manager (Read-Only)
@@ -2445,6 +3024,7 @@ export function OldInvoicesArchive({
                             </div>
                             <p className={`text-[11px] ${isPaymentViewOnly ? 'text-emerald-700/80' : 'text-indigo-700/80'}`}>
                               {paymentTargetInvoice.companyName} • {paymentTargetInvoice.month}
+                              {isMergedMode && ` (${selectedInvoicesList.length} of ${mergedTargetInvoices.length} invoices selected)`}
                             </p>
                           </div>
                         </div>
@@ -2461,13 +3041,21 @@ export function OldInvoicesArchive({
                       {/* INVOICE SUMMARY BANNER & CALCULATIONS */}
                       <div className="px-6 py-2.5 bg-gray-50 border-b border-gray-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono shrink-0">
                         <div>
-                          <span className="text-gray-500 text-[10px] block uppercase">Invoice #</span>
-                          <strong className="text-gray-900">{paymentTargetInvoice.invoiceNo || 'N/A'}</strong>
+                          <span className="text-gray-500 text-[10px] block uppercase">
+                            {isMergedMode ? 'Merged Invoices' : 'Invoice #'}
+                          </span>
+                          <strong className="text-gray-900">
+                            {isMergedMode
+                              ? `${selectedInvoicesList.length} of ${mergedTargetInvoices.length} Invoices`
+                              : paymentTargetInvoice.invoiceNo || 'N/A'}
+                          </strong>
                         </div>
                         <div>
-                          <span className="text-gray-500 text-[10px] block uppercase">Invoice Amount</span>
+                          <span className="text-gray-500 text-[10px] block uppercase">
+                            {isMergedMode ? 'Combined Invoices ₹' : 'Invoice Amount'}
+                          </span>
                           <strong className="text-gray-900 font-bold">
-                            ₹{totalInvAmount.toLocaleString('en-IN')}
+                            ₹{totalEffectiveInvAmount.toLocaleString('en-IN')}
                           </strong>
                         </div>
                         <div>
@@ -2492,6 +3080,72 @@ export function OldInvoicesArchive({
                         /* READ-ONLY VIEW FOR COMMUNITY MANAGER */
                         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
                           <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 overscroll-contain">
+                            {/* MERGED INVOICES BREAKDOWN FOR CM */}
+                            {isMergedMode && (
+                              <div className="bg-white border border-emerald-200 rounded-lg p-3.5 space-y-2.5 shadow-2xs">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 text-emerald-950 font-bold text-xs uppercase tracking-tight">
+                                    <Link2 size={13} className="text-emerald-600" />
+                                    <span>Invoices Covered by this Merged Payment ({selectedInvoicesList.length})</span>
+                                  </div>
+                                  <span className="text-[11px] font-mono text-emerald-800 font-bold">
+                                    Combined: ₹{totalEffectiveInvAmount.toLocaleString('en-IN')}
+                                  </span>
+                                </div>
+                                <div className="border border-emerald-100 rounded overflow-hidden">
+                                  <table className="w-full text-left text-xs">
+                                    <thead className="bg-emerald-50/80 text-emerald-900 text-[10px] uppercase font-bold border-b border-emerald-100">
+                                      <tr>
+                                        <th className="px-3 py-1.5">Invoice #</th>
+                                        <th className="px-3 py-1.5">Month</th>
+                                        <th className="px-3 py-1.5">Invoice ₹</th>
+                                        <th className="px-3 py-1.5">Allocated Received ₹</th>
+                                        <th className="px-3 py-1.5">Remarks</th>
+                                        <th className="px-3 py-1.5 text-center">PDF</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-emerald-50/70 font-mono text-xs">
+                                      {selectedInvoicesList.map((inv) => (
+                                        <tr key={inv.id} className="hover:bg-emerald-50/20">
+                                          <td className="px-3 py-2 font-bold text-gray-900">
+                                            {inv.invoiceNo || 'None'}
+                                          </td>
+                                          <td className="px-3 py-2 font-sans text-gray-600">
+                                            {inv.month}
+                                          </td>
+                                          <td className="px-3 py-2 font-bold text-gray-800">
+                                            ₹{Number(inv.amount || 0).toLocaleString('en-IN')}
+                                          </td>
+                                          <td className="px-3 py-2 font-bold text-emerald-700">
+                                            ₹{Number(inv.receiveAmount || 0).toLocaleString('en-IN')}
+                                          </td>
+                                          <td className="px-3 py-2 font-sans text-gray-500 text-[11px] truncate max-w-[140px]">
+                                            {inv.remarks || '—'}
+                                          </td>
+                                          <td className="px-3 py-2 text-center font-sans">
+                                            {inv.invoiceUrl ? (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setPreviewPdfUrl(inv.invoiceUrl);
+                                                  setPreviewPdfTitle(`${inv.companyName} - ${inv.invoiceNo || inv.month}`);
+                                                }}
+                                                className="text-teal-600 hover:text-teal-800 hover:underline text-[11px] font-bold cursor-pointer"
+                                              >
+                                                View PDF
+                                              </button>
+                                            ) : (
+                                              '—'
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+
                             {paymentParts.length === 0 || (!paymentTargetInvoice.receiveAmount && !paymentTargetInvoice.payReceiveDate && !paymentTargetInvoice.utrNumber && !paymentTargetInvoice.paymentsJson) ? (
                               <div className="p-10 text-center bg-gray-50 border border-dashed border-gray-200 rounded-lg space-y-2">
                                 <Clock size={32} className="text-amber-500 mx-auto" />
@@ -2628,6 +3282,101 @@ export function OldInvoicesArchive({
                         /* FORM CONTAINER (ACCOUNTANT) */
                         <form onSubmit={handleSavePaymentDetails} className="flex flex-col flex-1 min-h-0 overflow-hidden">
                         <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 overscroll-contain">
+                          {/* INVOICE SELECTION CARD FOR MERGED PAYMENT */}
+                          {isMergedMode && (
+                            <div className="bg-indigo-50/40 border border-indigo-100 rounded-lg p-3.5 space-y-2.5 shadow-2xs">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Link2 size={15} className="text-indigo-600" />
+                                  <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-tight">
+                                    Select Invoices to Merge for {paymentTargetInvoice.month}
+                                  </h4>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedMergeInvoiceIds(new Set(mergedTargetInvoices.map((i) => i.id)))}
+                                    className="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline cursor-pointer"
+                                  >
+                                    Select All
+                                  </button>
+                                  <span className="text-gray-300">|</span>
+                                  <span className="text-[11px] text-gray-600 font-mono font-medium">
+                                    {selectedMergeInvoiceIds.size} of {mergedTargetInvoices.length} Selected
+                                  </span>
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-gray-600">
+                                Client paid for multiple invoices together in {paymentTargetInvoice.month}. Choose the invoices covered by this payment receipt and UTR proof:
+                              </p>
+                              <div className="border border-indigo-200/80 rounded bg-white overflow-hidden shadow-2xs">
+                                <table className="w-full text-left text-xs">
+                                  <thead className="bg-indigo-50/70 text-indigo-900 text-[10px] uppercase font-bold border-b border-indigo-200">
+                                    <tr>
+                                      <th className="px-3 py-2 w-12 text-center">Select</th>
+                                      <th className="px-3 py-2">Invoice #</th>
+                                      <th className="px-3 py-2">Month</th>
+                                      <th className="px-3 py-2">Invoice Amount</th>
+                                      <th className="px-3 py-2">Remarks</th>
+                                      <th className="px-3 py-2 text-center">PDF</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100 font-mono text-xs">
+                                    {mergedTargetInvoices.map((inv) => {
+                                      const isChecked = selectedMergeInvoiceIds.has(inv.id);
+                                      return (
+                                        <tr
+                                          key={inv.id}
+                                          onClick={() => handleToggleMergeInvoiceId(inv.id)}
+                                          className={`cursor-pointer transition-colors ${
+                                            isChecked ? 'bg-indigo-50/30' : 'bg-gray-50/60 text-gray-400'
+                                          }`}
+                                        >
+                                          <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                            <input
+                                              type="checkbox"
+                                              checked={isChecked}
+                                              onChange={() => handleToggleMergeInvoiceId(inv.id)}
+                                              className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                            />
+                                          </td>
+                                          <td className="px-3 py-2 font-bold text-gray-900">
+                                            {inv.invoiceNo || 'None'}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-600 font-sans">
+                                            {inv.month}
+                                          </td>
+                                          <td className="px-3 py-2 font-bold text-emerald-800">
+                                            ₹{Number(inv.amount || 0).toLocaleString('en-IN')}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-500 font-sans text-[11px] truncate max-w-[150px]">
+                                            {inv.remarks || '—'}
+                                          </td>
+                                          <td className="px-3 py-2 text-center font-sans" onClick={(e) => e.stopPropagation()}>
+                                            {inv.invoiceUrl ? (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setPreviewPdfUrl(inv.invoiceUrl);
+                                                  setPreviewPdfTitle(`${inv.companyName} - ${inv.invoiceNo || inv.month}`);
+                                                }}
+                                                className="text-teal-600 hover:text-teal-800 hover:underline text-[11px] font-bold cursor-pointer"
+                                              >
+                                                View PDF
+                                              </button>
+                                            ) : (
+                                              '—'
+                                            )}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
                           {/* MULTI-PART INSTALLMENTS */}
                           <div className="space-y-4">
                             {paymentParts.map((part, index) => (

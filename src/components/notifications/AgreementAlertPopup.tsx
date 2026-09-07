@@ -198,7 +198,6 @@ export function AgreementAlertPopup() {
                   </p>
                 </div>
               </div>
-
               {/* DISMISS (X) BUTTON */}
               <button
                 type="button"
@@ -220,22 +219,20 @@ export function AgreementAlertPopup() {
                 <button
                   type="button"
                   onClick={() => setActiveFilter('ALL')}
-                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                    activeFilter === 'ALL'
-                      ? 'bg-[#006064] text-white shadow-2xs'
-                      : 'bg-white text-gray-700 hover:bg-neutral-200 border border-neutral-300'
-                  }`}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${activeFilter === 'ALL'
+                    ? 'bg-[#006064] text-white shadow-2xs'
+                    : 'bg-white text-gray-700 hover:bg-neutral-200 border border-neutral-300'
+                    }`}
                 >
                   All ({totalCount})
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveFilter('AGREEMENT')}
-                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    activeFilter === 'AGREEMENT'
-                      ? 'bg-teal-700 text-white shadow-2xs'
-                      : 'bg-white text-gray-700 hover:bg-neutral-200 border border-neutral-300'
-                  }`}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${activeFilter === 'AGREEMENT'
+                    ? 'bg-teal-700 text-white shadow-2xs'
+                    : 'bg-white text-gray-700 hover:bg-neutral-200 border border-neutral-300'
+                    }`}
                 >
                   <FileText size={12} className={activeFilter === 'AGREEMENT' ? 'text-teal-200' : 'text-teal-600'} />
                   <span>2 Months Agreement End Date ({agreements.length})</span>
@@ -243,11 +240,10 @@ export function AgreementAlertPopup() {
                 <button
                   type="button"
                   onClick={() => setActiveFilter('LOCK_IN')}
-                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    activeFilter === 'LOCK_IN'
-                      ? 'bg-purple-700 text-white shadow-2xs'
-                      : 'bg-white text-gray-700 hover:bg-neutral-200 border border-neutral-300'
-                  }`}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${activeFilter === 'LOCK_IN'
+                    ? 'bg-purple-700 text-white shadow-2xs'
+                    : 'bg-white text-gray-700 hover:bg-neutral-200 border border-neutral-300'
+                    }`}
                 >
                   <Lock size={12} className={activeFilter === 'LOCK_IN' ? 'text-purple-200' : 'text-purple-600'} />
                   <span>Lock-in End Date ({lockins.length})</span>
@@ -298,13 +294,12 @@ export function AgreementAlertPopup() {
                   return (
                     <div
                       key={`${item.type}_${item.id}_${idx}`}
-                      className={`w-[320px] sm:w-[355px] shrink-0 bg-white rounded-xl border flex flex-col justify-between shadow-xs hover:shadow-md transition-shadow relative overflow-hidden ${
-                        isExpired
-                          ? 'border-red-300 border-l-[5px] border-l-red-600'
-                          : isUrgent
+                      className={`w-[320px] sm:w-[355px] shrink-0 bg-white rounded-xl border flex flex-col justify-between shadow-xs hover:shadow-md transition-shadow relative overflow-hidden ${isExpired
+                        ? 'border-red-300 border-l-[5px] border-l-red-600'
+                        : isUrgent
                           ? 'border-amber-300 border-l-[5px] border-l-amber-500'
                           : 'border-teal-200 border-l-[5px] border-l-[#006064]'
-                      }`}
+                        }`}
                     >
                       {/* CARD TOP HEADER */}
                       <div className="p-4 space-y-3 flex-1 flex flex-col">
