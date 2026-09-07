@@ -153,7 +153,7 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     tanNo: !isOneTime && willDeductTds && tanNo ? String(tanNo).trim() : null,
     tdsPdfUrl: !isOneTime && willDeductTds ? (tdsPdfUrl as string) || null : null,
     tdsPdfName: !isOneTime && willDeductTds ? (tdsPdfName as string) || null : null,
-    clientId: clientId ? String(clientId).trim() : null,
+    clientId: isOneTime ? null : (clientId ? String(clientId).trim() : null),
     hasBrokerCommission: Boolean(hasBrokerCommission),
     brokerCommissionPercent: hasBrokerCommission && brokerCommissionPercent
       ? Number(brokerCommissionPercent)

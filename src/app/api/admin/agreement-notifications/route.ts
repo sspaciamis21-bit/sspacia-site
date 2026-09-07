@@ -123,14 +123,14 @@ export async function GET(request: Request) {
         locationName,
       };
 
-      // 1. AGREEMENT END DATE ALERTS: 2 months prior (<= 60 days) or expired
+      // 1. AGREEMENT END DATE ALERTS: 2 months prior (<= 60 days) or recent expired (>= -180 days)
       if (entry.agreementEndDate) {
         const endDate = new Date(entry.agreementEndDate);
         const endDateMidnight = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
         const diffTime = endDateMidnight - todayMidnight;
         const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        if (daysRemaining <= 60) {
+        if (daysRemaining <= 60 && daysRemaining >= -180) {
           let statusTag: 'EXPIRED' | 'URGENT' | 'DUE_SOON';
           if (daysRemaining < 0) {
             statusTag = 'EXPIRED';
@@ -151,18 +151,18 @@ export async function GET(request: Request) {
         }
       }
 
-      // 2. LOCK-IN END DATE ALERTS: 15 days prior (<= 15 days) or expired
+      // 2. LOCK-IN END DATE ALERTS: up to 60 days prior or recent expired (>= -180 days)
       if (entry.lockinEndDate) {
         const lockinDate = new Date(entry.lockinEndDate);
         const lockinDateMidnight = new Date(lockinDate.getFullYear(), lockinDate.getMonth(), lockinDate.getDate()).getTime();
         const diffTime = lockinDateMidnight - todayMidnight;
         const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        if (daysRemaining <= 15) {
+        if (daysRemaining <= 60 && daysRemaining >= -180) {
           let statusTag: 'EXPIRED' | 'URGENT' | 'DUE_SOON';
           if (daysRemaining < 0) {
             statusTag = 'EXPIRED';
-          } else if (daysRemaining <= 5) {
+          } else if (daysRemaining <= 15) {
             statusTag = 'URGENT';
           } else {
             statusTag = 'DUE_SOON';

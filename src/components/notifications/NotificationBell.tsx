@@ -395,10 +395,24 @@ export function NotificationBell() {
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                  {!isAccountant && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        window.dispatchEvent(new CustomEvent('open-agreement-alert-popup'));
+                      }}
+                      className="px-2 py-1 bg-white/15 hover:bg-white/25 text-white text-[10px] font-bold rounded flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Open full horizontal popup screen view"
+                    >
+                      <ExternalLink size={11} />
+                      <span className="hidden sm:inline">Screen View</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={fetchNotifications}
-                    className="p-1.5 hover:bg-teal-700 text-teal-200 hover:text-white transition-colors"
+                    className="p-1.5 hover:bg-teal-700 text-teal-200 hover:text-white transition-colors cursor-pointer"
                     title="Refresh Alerts"
                   >
                     <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -406,7 +420,7 @@ export function NotificationBell() {
                   <button
                     type="button"
                     onClick={() => setIsOpen(false)}
-                    className="p-1.5 hover:bg-teal-700 text-teal-200 hover:text-white transition-colors"
+                    className="p-1.5 hover:bg-teal-700 text-teal-200 hover:text-white transition-colors cursor-pointer"
                   >
                     <X size={16} />
                   </button>
@@ -748,8 +762,8 @@ export function NotificationBell() {
                         </div>
 
                         {item.noticePeriodMonths && (
-                          <div className="text-[11px] text-amber-800 font-bold bg-amber-50 px-1.5 py-0.2 border border-amber-200">
-                            Notice: {item.noticePeriodMonths} Mon ({item.noticePeriodApplicable || 'Applicable'})
+                          <div className="text-[11px] text-teal-800 font-bold bg-teal-50 px-1.5 py-0.5 border border-teal-200">
+                            2 Months Agreement End Date
                           </div>
                         )}
 

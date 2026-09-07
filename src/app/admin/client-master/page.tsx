@@ -917,11 +917,12 @@ export default function ClientMasterRegistryPage() {
   const handleEditEntry = (entry: ClientMasterEntry) => {
     setEditingId(entry.id);
     setSrNoDisplay(entry.srNo);
-    setClientId(entry.clientId || DEFAULT_CLIENT_ID_PREFIX);
+    const isEntryOneTime = entry.clientType === 'ONE_TIME';
+    setClientId(isEntryOneTime ? '' : (entry.clientId || DEFAULT_CLIENT_ID_PREFIX));
     setClientType(
       entry.clientType === 'VIRTUAL_OFFICE'
         ? 'VIRTUAL_OFFICE'
-        : (entry.clientType === 'ONE_TIME' ? 'ONE_TIME' : 'DEFAULT')
+        : (isEntryOneTime ? 'ONE_TIME' : 'DEFAULT')
     );
     setHasBrokerCommission(Boolean(entry.hasBrokerCommission));
     setBrokerCommissionPercent(entry.brokerCommissionPercent ?? '');
@@ -1113,7 +1114,7 @@ export default function ClientMasterRegistryPage() {
     const finalGrandTotal = Math.round(escalatedSubtotal + grandGst);
 
     const payload = {
-      clientId: clientId.trim() || DEFAULT_CLIENT_ID_PREFIX,
+      clientId: isOneTime ? null : (clientId.trim() || DEFAULT_CLIENT_ID_PREFIX),
       clientType,
       hasBrokerCommission: isVO ? false : hasBrokerCommission,
       brokerCommissionPercent: !isVO && hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : null,
@@ -1766,7 +1767,11 @@ export default function ClientMasterRegistryPage() {
                         )}
 
                         <td className="p-3 font-mono font-bold text-neutral-700">
-                          {entry.clientId || 'N/A'}
+                          {entry.clientType === 'ONE_TIME' ? (
+                            <span className="text-neutral-400 font-sans font-normal text-xs">—</span>
+                          ) : (
+                            entry.clientId || 'N/A'
+                          )}
                         </td>
 
                         <td className="p-3 space-y-0.5">
@@ -2077,11 +2082,14 @@ export default function ClientMasterRegistryPage() {
                       Select "One-Time Client" for single day or hourly bookings without recurring monthly auto-invoices.
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         setClientType('DEFAULT');
+                        if (!clientId || clientId.trim() === '') {
+                          setClientId(DEFAULT_CLIENT_ID_PREFIX);
+                        }
                         if (clientStatus === 'One-Time') setClientStatus('Active');
                         setProductRows((prev) => {
                           const first = prev[0] || createEmptyProductRow();
@@ -2105,6 +2113,9 @@ export default function ClientMasterRegistryPage() {
                       type="button"
                       onClick={() => {
                         setClientType('VIRTUAL_OFFICE');
+                        if (!clientId || clientId.trim() === '') {
+                          setClientId(DEFAULT_CLIENT_ID_PREFIX);
+                        }
                         if (clientStatus === 'One-Time') setClientStatus('Active');
                         setProductRows((prev) => {
                           const first = prev[0] || createEmptyProductRow();
@@ -2134,6 +2145,7 @@ export default function ClientMasterRegistryPage() {
                       onClick={() => {
                         setClientType('ONE_TIME');
                         setClientStatus('One-Time');
+                        setClientId('');
                         setWillDeductTds(false);
                         setProductRows((prev) => {
                           const first = prev[0] || createEmptyProductRow();
@@ -2178,13 +2190,13 @@ export default function ClientMasterRegistryPage() {
                       </div>
                     </div>
 
-                    {/* 1. Client Identifier & Broker Details */}
+                    {/* 1. Client & Broker Details */}
                     <div className="bg-[#F8F9FA] p-4 sm:p-5 border border-[var(--outline-variant)]/60 space-y-4">
                       <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C] border-b border-neutral-200 pb-2">
-                        <Building2 size={16} className="text-[#006064]" /> 1. Client Identifier &amp; Broker Details
+                        <Building2 size={16} className="text-[#006064]" /> 1. Client &amp; Broker Details
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
                             Client / Company Name <span className="text-red-500">*</span>
@@ -2196,19 +2208,6 @@ export default function ClientMasterRegistryPage() {
                             onChange={(e) => setCompanyName(e.target.value)}
                             className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-medium"
                             required
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
-                            Client ID (Manual)
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="e.g. SSPACIA/AHD/CGM"
-                            value={clientId}
-                            onChange={(e) => setClientId(e.target.value)}
-                            className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-mono font-bold"
                           />
                         </div>
 
@@ -4500,15 +4499,17 @@ export default function ClientMasterRegistryPage() {
               </div>
 
               {/* Company & Address */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
+              <div className={`grid grid-cols-1 ${entryToViewDetails.clientType === 'ONE_TIME' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-4 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40`}>
                 <div>
                   <div className="font-bold uppercase text-[#616161] text-[10px]">Head Office (HO) Address</div>
                   <div className="font-medium text-[#1B1C1C] mt-0.5">{entryToViewDetails.hoAddress || 'N/A'}</div>
                 </div>
-                <div>
-                  <div className="font-bold uppercase text-[#616161] text-[10px]">Client ID</div>
-                  <div className="font-mono font-bold text-[#1B1C1C] mt-0.5">{entryToViewDetails.clientId || 'N/A'}</div>
-                </div>
+                {entryToViewDetails.clientType !== 'ONE_TIME' && (
+                  <div>
+                    <div className="font-bold uppercase text-[#616161] text-[10px]">Client ID</div>
+                    <div className="font-mono font-bold text-[#1B1C1C] mt-0.5">{entryToViewDetails.clientId || 'N/A'}</div>
+                  </div>
+                )}
                 <div>
                   <div className="font-bold uppercase text-[#616161] text-[10px]">GST Status & Number</div>
                   <div className="font-bold text-[#1B1C1C] mt-0.5">
