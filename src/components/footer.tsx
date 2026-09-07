@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Youtube, Instagram, Linkedin, Facebook, MapPin, Phone, Mail, Clock } from "lucide-react";
+import { Youtube, Instagram, Linkedin, Facebook, MapPin, Phone, Mail, Clock, Globe } from "lucide-react";
 
 export function Footer() {
   return (
@@ -75,6 +75,11 @@ export function Footer() {
               <li><Link href="/" className="hover:text-[#1ab0bc] transition-colors">Home</Link></li>
               <li><Link href="/coworking-spaces" className="hover:text-[#1ab0bc] transition-colors">All Workspaces</Link></li>
               <li><Link href="/guest-spaces" className="hover:text-[#1ab0bc] transition-colors">Guest Meeting Rooms</Link></li>
+              <li>
+                <Link href="/virtual-office" className="hover:text-[#1ab0bc] transition-colors">
+                  Virtual Office
+                </Link>
+              </li>
               <li><Link href="/about" className="hover:text-[#1ab0bc] transition-colors">About Us</Link></li>
               <li>
                 <Link
@@ -96,6 +101,12 @@ export function Footer() {
           <div className="space-y-4">
             <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-[#1ab0bc]">OUR SPACES</h4>
             <ul className="space-y-3 text-xs text-white/70">
+              <li>
+                <Link href="/virtual-office" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
+                  <Globe className="w-4 h-4 text-indigo-400 shrink-0 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-white group-hover:text-[#1ab0bc]">Virtual Office</span>
+                </Link>
+              </li>
               <li>
                 <Link href="/products#agarwal-complex" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
                   <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />

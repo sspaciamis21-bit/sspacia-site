@@ -37,9 +37,11 @@ export async function POST(request: Request) {
       clientStatus: 'Active',
     };
 
-    // Filter by explicitly selected Client Master IDs if provided
+    // Filter by explicitly selected Client Master IDs if provided; otherwise exclude ONE_TIME clients from bulk dispatch
     if (sendType === 'MANUAL' && Array.isArray(clientMasterIds) && clientMasterIds.length > 0) {
       where.id = { in: clientMasterIds.map(Number) };
+    } else {
+      where.clientType = { not: 'ONE_TIME' };
     }
 
     // Super Admin Node Filter: if locationId is passed

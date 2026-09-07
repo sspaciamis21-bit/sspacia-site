@@ -26,6 +26,8 @@ import {
   HelpCircle,
   Calendar,
   Clock,
+  Globe,
+  ArrowRight,
 } from "lucide-react";
 import { AvailabilityTimeline } from "@/components/ui/availability-timeline";
 import { StyledDatePicker } from "@/components/ui/styled-date-picker";
@@ -648,6 +650,29 @@ export default function ProductsClient({
           ))}
         </div>
       </div>
+
+      {/* ── Virtual Office Callout in Filter ── */}
+      <div className="pt-2 border-t border-[#CFD8DC]/40">
+        <Link
+          href="/virtual-office"
+          className="group block p-3.5 bg-gradient-to-br from-[#004D40]/5 via-[#006064]/10 to-teal-50 border border-[#006064]/20 rounded-xl hover:border-[#006064] hover:shadow-md transition-all"
+        >
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="p-1 bg-[#006064] text-white rounded-md">
+              <Globe className="w-3.5 h-3.5" />
+            </span>
+            <span className="text-[11px] font-black uppercase tracking-wider text-[#004D40]">Virtual Office</span>
+            <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded">GST NOC</span>
+          </div>
+          <p className="text-[11px] text-gray-600 leading-snug">
+            Need business address & GST only without physical cabin? Available across all 3 centres.
+          </p>
+          <div className="mt-2.5 flex items-center gap-1 text-[11px] font-bold text-[#006064] group-hover:translate-x-0.5 transition-transform">
+            <span>Explore Virtual Office</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </div>
+        </Link>
+      </div>
     </div>
   );
 
@@ -667,6 +692,45 @@ export default function ProductsClient({
             ? "Book premium meeting rooms, event spaces, and day passes on-demand."
             : "Flexible dedicated desks, shared offices, and private cabins across Ahmedabad."}
         </p>
+      </div>
+
+      {/* ── Virtual Office Dedicated Banner ── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#00382E] via-[#004D40] to-[#006064] p-5 sm:p-7 text-white shadow-xl border border-teal-500/30">
+        <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-teal-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-teal-400/20 border border-teal-300/30 rounded-full text-[11px] font-bold tracking-wider uppercase text-teal-200">
+              <Globe className="w-3.5 h-3.5" />
+              <span>Dedicated Virtual Office & GST Registration</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+              Need a Prestigious Ahmedabad Business Address & GST NOC?
+            </h2>
+            <p className="text-xs sm:text-sm text-teal-100/90 leading-relaxed">
+              Register your business across our 3 prime Ahmedabad centres (Agarwal Complex – CG Road, Mercado – CG Road & Premier House – SG Highway). 100% compliant for GST & MCA ROC incorporation with NOC & electricity bill.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-teal-200 font-medium">
+              <span className="flex items-center gap-1 bg-black/25 px-2.5 py-1 rounded-md border border-teal-500/20">
+                <MapPin className="w-3 h-3 text-teal-300" /> Agarwal Complex (CG Road)
+              </span>
+              <span className="flex items-center gap-1 bg-black/25 px-2.5 py-1 rounded-md border border-teal-500/20">
+                <MapPin className="w-3 h-3 text-teal-300" /> Mercado (CG Road)
+              </span>
+              <span className="flex items-center gap-1 bg-black/25 px-2.5 py-1 rounded-md border border-teal-500/20">
+                <MapPin className="w-3 h-3 text-teal-300" /> Premier House (SG Highway)
+              </span>
+            </div>
+          </div>
+          <div className="shrink-0 flex items-center pt-2 lg:pt-0">
+            <Link
+              href="/virtual-office"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-white hover:bg-teal-50 text-[#004D40] font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            >
+              <span>Explore 3 Centres & Book Virtual Office</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* ── Mobile Filter Bar ── */}

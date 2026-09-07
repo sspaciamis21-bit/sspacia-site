@@ -92,6 +92,9 @@ interface ClientMasterProductItem {
   escalationApplicable?: string | null;
   preEscalationRate?: number | null;
   postEscalationRate?: number | null;
+  sessionDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
 }
 
 interface ClientMasterEntry {
@@ -141,7 +144,7 @@ interface ClientMasterEntry {
   sdrPdfName?: string | null;
   paymentDueDay?: number | null;
   clientStatus: string | null;
-  clientType?: 'DEFAULT' | 'VIRTUAL_OFFICE' | null;
+  clientType?: 'DEFAULT' | 'VIRTUAL_OFFICE' | 'ONE_TIME' | null;
   isDispatchedToInvoices?: boolean;
   dispatchedMonths?: string[];
   targetBillingMonth?: string;
@@ -251,7 +254,7 @@ function getTerminationStageInfo(status: string | null | undefined, termination?
   return null;
 }
 
-const CLIENT_STATUS_OPTIONS = ['Active', 'Inactive', 'On Notice', 'Pending Renewal', 'Terminated'];
+const CLIENT_STATUS_OPTIONS = ['Active', 'One-Time', 'Inactive', 'On Notice', 'Pending Renewal', 'Terminated'];
 const NOTICE_APPLICABLE_OPTIONS = ['After Lock-in', 'Before Lock-in'];
 
 export default function ClientMasterRegistryPage() {
@@ -346,7 +349,7 @@ export default function ClientMasterRegistryPage() {
   // ---------------- FORM STATE ----------------
   const [srNoDisplay, setSrNoDisplay] = useState<number>(1);
   const [clientId, setClientId] = useState(DEFAULT_CLIENT_ID_PREFIX);
-  const [clientType, setClientType] = useState<'DEFAULT' | 'VIRTUAL_OFFICE'>('DEFAULT');
+  const [clientType, setClientType] = useState<'DEFAULT' | 'VIRTUAL_OFFICE' | 'ONE_TIME'>('DEFAULT');
 
   // Brokerage Commission Options
   const [hasBrokerCommission, setHasBrokerCommission] = useState(false);
@@ -915,7 +918,11 @@ export default function ClientMasterRegistryPage() {
     setEditingId(entry.id);
     setSrNoDisplay(entry.srNo);
     setClientId(entry.clientId || DEFAULT_CLIENT_ID_PREFIX);
-    setClientType(entry.clientType === 'VIRTUAL_OFFICE' ? 'VIRTUAL_OFFICE' : 'DEFAULT');
+    setClientType(
+      entry.clientType === 'VIRTUAL_OFFICE'
+        ? 'VIRTUAL_OFFICE'
+        : (entry.clientType === 'ONE_TIME' ? 'ONE_TIME' : 'DEFAULT')
+    );
     setHasBrokerCommission(Boolean(entry.hasBrokerCommission));
     setBrokerCommissionPercent(entry.brokerCommissionPercent ?? '');
     setInvoiceToBeRaised(entry.invoiceToBeRaised || 'CLIENT');
@@ -995,6 +1002,9 @@ export default function ClientMasterRegistryPage() {
           escalationApplicable: p.escalationApplicable ? new Date(p.escalationApplicable).toISOString().split('T')[0] : '',
           preEscalationRate: p.preEscalationRate ?? '',
           postEscalationRate: p.postEscalationRate ?? '',
+          sessionDate: p.sessionDate ? new Date(p.sessionDate).toISOString().split('T')[0] : (p.agreementStartDate ? new Date(p.agreementStartDate).toISOString().split('T')[0] : ''),
+          startTime: p.startTime || '',
+          endTime: p.endTime || '',
         }))
       );
     } else {
@@ -1024,6 +1034,9 @@ export default function ClientMasterRegistryPage() {
           escalationApplicable: '',
           preEscalationRate: '',
           postEscalationRate: '',
+          sessionDate: entry.agreementStartDate ? new Date(entry.agreementStartDate).toISOString().split('T')[0] : '',
+          startTime: '',
+          endTime: '',
         }
       ]);
     }
@@ -1047,6 +1060,9 @@ export default function ClientMasterRegistryPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const isVO = clientType === 'VIRTUAL_OFFICE';
+    const isOneTime = clientType === 'ONE_TIME';
+
     // Validations for Mobile & Email
     for (const cp of contactPersons) {
       if (cp.mobileNo && !validateMobile(cp.mobileNo)) {
@@ -1059,15 +1075,27 @@ export default function ClientMasterRegistryPage() {
       }
     }
 
-    if (paymentDueDay !== '' && (Number(paymentDueDay) < 1 || Number(paymentDueDay) > 31)) {
+    if (!isOneTime && paymentDueDay !== '' && (Number(paymentDueDay) < 1 || Number(paymentDueDay) > 31)) {
       toast.error('Payment Due Day must be between 1 and 31');
       return;
+    }
+
+    if (isOneTime) {
+      if (!companyName.trim()) {
+        toast.error('Please enter the Client / Company Name.');
+        return;
+      }
+      const hasInvalidSession = productRows.some((p) => !p.sessionDate || !p.amount || Number(p.amount) <= 0);
+      if (productRows.length === 0 || hasInvalidSession) {
+        toast.error('Please ensure all booking sessions have a valid Date and Amount specified.');
+        return;
+      }
     }
 
     setSubmitting(true);
 
     const rawAmount = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-    const effectiveEscPct = (applyEscalationToTotal && escalationPercent !== '' && Number(escalationPercent) > 0)
+    const effectiveEscPct = (!isOneTime && applyEscalationToTotal && escalationPercent !== '' && Number(escalationPercent) > 0)
       ? Number(escalationPercent)
       : 0;
 
@@ -1084,8 +1112,6 @@ export default function ClientMasterRegistryPage() {
 
     const finalGrandTotal = Math.round(escalatedSubtotal + grandGst);
 
-    const isVO = clientType === 'VIRTUAL_OFFICE';
-
     const payload = {
       clientId: clientId.trim() || DEFAULT_CLIENT_ID_PREFIX,
       clientType,
@@ -1093,7 +1119,7 @@ export default function ClientMasterRegistryPage() {
       brokerCommissionPercent: !isVO && hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : null,
       invoiceToBeRaised: !isVO && hasBrokerCommission ? invoiceToBeRaised : null,
 
-      companyName: companyName.trim() || 'Untitled Client',
+      companyName: companyName.trim() || (isOneTime ? 'One-Time Client' : 'Untitled Client'),
       hoAddressLine1: hoAddressLine1.trim() || null,
       hoAddressLine2: hoAddressLine2.trim() || null,
       hoCity: hoCity.trim() || null,
@@ -1109,35 +1135,43 @@ export default function ClientMasterRegistryPage() {
         pinCode: hoPinCode,
       }),
 
-      gstStatus,
+      gstStatus: gstStatus,
       gstNo: gstStatus === 'REGISTERED' ? gstNo.trim() : null,
       gstPdfUrl: gstStatus === 'REGISTERED' ? gstPdfUrl : null,
       gstPdfName: gstStatus === 'REGISTERED' ? gstPdfName : null,
 
       contactPersons: contactPersons.filter((cp) => cp.name.trim() !== '' || cp.mobileNo.trim() !== '' || cp.email.trim() !== ''),
 
-      agreementStartDate: agreementStartDate || null,
-      agreementEndDate: agreementEndDate || null,
-      agreementPdfUrl: agreementPdfUrl || null,
-      agreementPdfName: agreementPdfName || null,
-      lockinEndDate: lockinEndDate || null,
-      noticePeriodMonths: noticePeriodMonths !== '' ? Number(noticePeriodMonths) : null,
-      noticePeriodApplicable,
+      agreementStartDate: isOneTime ? (productRows[0]?.sessionDate || null) : (agreementStartDate || null),
+      agreementEndDate: isOneTime ? (productRows[productRows.length - 1]?.sessionDate || productRows[0]?.sessionDate || null) : (agreementEndDate || null),
+      agreementPdfUrl: isOneTime ? null : (agreementPdfUrl || null),
+      agreementPdfName: isOneTime ? null : (agreementPdfName || null),
+      lockinEndDate: isOneTime ? null : (lockinEndDate || null),
+      noticePeriodMonths: isOneTime ? null : (noticePeriodMonths !== '' ? Number(noticePeriodMonths) : null),
+      noticePeriodApplicable: isOneTime ? null : noticePeriodApplicable,
 
-      escalationPercent: isVO ? null : (escalationPercent !== '' ? Number(escalationPercent) : null),
-      escalationApplicable: isVO ? null : (escalationApplicable || null),
-      documentationCharges: isVO ? null : (documentationCharges !== '' ? Number(documentationCharges) : null),
+      escalationPercent: (isVO || isOneTime) ? null : (escalationPercent !== '' ? Number(escalationPercent) : null),
+      escalationApplicable: (isVO || isOneTime) ? null : (escalationApplicable || null),
+      documentationCharges: (isVO || isOneTime) ? null : (documentationCharges !== '' ? Number(documentationCharges) : null),
 
-      cabinName: isVO ? 'Virtual Office' : (productRows[0]?.cabinName?.trim() || null),
-      noOfSeats: isVO ? 0 : (productRows.reduce((sum, r) => sum + (Number(r.noOfSeats) || 0), 0)),
-      ratePerAgreement: isVO ? 0 : (productRows[0]?.ratePerAgreement !== '' ? Number(productRows[0]?.ratePerAgreement) : null),
+      cabinName: isVO
+        ? 'Virtual Office'
+        : (isOneTime
+            ? (productRows.map((r) => r.cabinName).filter(Boolean).join(', ') || 'Meeting Room')
+            : (productRows[0]?.cabinName?.trim() || null)),
+      noOfSeats: isVO ? 0 : (isOneTime ? 1 : (productRows.reduce((sum, r) => sum + (Number(r.noOfSeats) || 0), 0))),
+      ratePerAgreement: (isVO || isOneTime) ? 0 : (productRows[0]?.ratePerAgreement !== '' ? Number(productRows[0]?.ratePerAgreement) : null),
 
       amount: isVO
         ? (Number(productRows[0]?.amount) || 0)
-        : (effectiveEscPct > 0 ? escalatedSubtotal : rawAmount),
+        : (isOneTime
+            ? productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+            : (effectiveEscPct > 0 ? escalatedSubtotal : rawAmount)),
       totalAmount: isVO
         ? (Number(productRows[0]?.totalAmount) || 0)
-        : (effectiveEscPct > 0 ? finalGrandTotal : productRows.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0)),
+        : (isOneTime
+            ? productRows.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0)
+            : (effectiveEscPct > 0 ? finalGrandTotal : productRows.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0))),
 
       products: isVO
         ? [
@@ -1154,6 +1188,24 @@ export default function ClientMasterRegistryPage() {
               billingType: 'REGULAR',
             }
           ]
+        : isOneTime
+        ? productRows.map((p) => ({
+            cabinName: p.cabinName?.trim() || 'Meeting Room',
+            noOfSeats: 1,
+            ratePerAgreement: null,
+            amount: p.amount !== '' ? Number(p.amount) : null,
+            gstPercent: p.gstPercent !== '' ? Number(p.gstPercent) : 18,
+            totalAmount: p.totalAmount !== '' ? Number(p.totalAmount) : null,
+            paymentDuration: 'ONE_TIME',
+            paymentDueDay: null,
+            firstPaymentDate: p.sessionDate || null,
+            agreementStartDate: p.sessionDate || null,
+            agreementEndDate: p.sessionDate || null,
+            sessionDate: p.sessionDate || null,
+            startTime: p.startTime || null,
+            endTime: p.endTime || null,
+            billingType: 'ONE_TIME',
+          }))
         : productRows.map((p) => ({
             cabinName: p.cabinName.trim() || null,
             noOfSeats: p.noOfSeats !== '' ? Number(p.noOfSeats) : null,
@@ -1178,21 +1230,23 @@ export default function ClientMasterRegistryPage() {
             postEscalationRate: p.postEscalationRate !== '' ? Number(p.postEscalationRate) : null,
           })),
 
-      willDeductTds,
-      tanNo: willDeductTds ? tanNo.trim() : null,
-      tdsPdfUrl: willDeductTds ? tdsPdfUrl : null,
-      tdsPdfName: willDeductTds ? tdsPdfName : null,
+      willDeductTds: isOneTime ? false : willDeductTds,
+      tanNo: !isOneTime && willDeductTds ? tanNo.trim() : null,
+      tdsPdfUrl: !isOneTime && willDeductTds ? tdsPdfUrl : null,
+      tdsPdfName: !isOneTime && willDeductTds ? tdsPdfName : null,
 
-      sorAmount: sorAmount !== '' ? Number(sorAmount) : null,
-      sorRecdDate: sorRecdDate || null,
-      sdrAmount: sorAmount !== '' ? Number(sorAmount) : null,
-      sdrRecdDate: sorRecdDate || null,
-      sdrPdfUrl: sdrPdfUrl || null,
-      sdrPdfName: sdrPdfName || null,
-      paymentDueDay: isVO
-        ? (productRows[0]?.paymentDueDay !== '' ? Number(productRows[0]?.paymentDueDay) : (paymentDueDay !== '' ? Number(paymentDueDay) : 5))
-        : (paymentDueDay !== '' ? Number(paymentDueDay) : null),
-      clientStatus,
+      sorAmount: isOneTime ? null : (sorAmount !== '' ? Number(sorAmount) : null),
+      sorRecdDate: isOneTime ? null : (sorRecdDate || null),
+      sdrAmount: isOneTime ? null : (sorAmount !== '' ? Number(sorAmount) : null),
+      sdrRecdDate: isOneTime ? null : (sorRecdDate || null),
+      sdrPdfUrl: isOneTime ? null : (sdrPdfUrl || null),
+      sdrPdfName: isOneTime ? null : (sdrPdfName || null),
+      paymentDueDay: isOneTime
+        ? null
+        : (isVO
+            ? (productRows[0]?.paymentDueDay !== '' ? Number(productRows[0]?.paymentDueDay) : (paymentDueDay !== '' ? Number(paymentDueDay) : 5))
+            : (paymentDueDay !== '' ? Number(paymentDueDay) : null)),
+      clientStatus: isOneTime ? (clientStatus || 'One-Time') : clientStatus,
     };
 
     try {
@@ -1219,6 +1273,51 @@ export default function ClientMasterRegistryPage() {
       toast.error('An error occurred while saving client entry');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Generate on-demand invoice for a specific session of a One-Time client
+  const handleGenerateSessionInvoice = async (
+    sessionRow: ProductRow,
+    targetClientId?: number
+  ) => {
+    const cId = targetClientId || editingId;
+    if (!cId) {
+      toast.error('Please save the client entry first before generating an invoice.');
+      return;
+    }
+
+    const amt = Number(sessionRow.amount || 0);
+    if (amt <= 0) {
+      toast.error('Please specify a session amount before generating an invoice.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/client-master/${cId}/generate-invoice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: sessionRow.id,
+          sessionDate: sessionRow.sessionDate || sessionRow.agreementStartDate || new Date().toISOString().split('T')[0],
+          startTime: sessionRow.startTime || '',
+          endTime: sessionRow.endTime || '',
+          cabinName: sessionRow.cabinName || 'Meeting Room',
+          amount: amt,
+          gstPercent: sessionRow.gstPercent !== '' ? Number(sessionRow.gstPercent) : 18,
+          totalAmount: sessionRow.totalAmount !== '' ? Number(sessionRow.totalAmount) : Math.round(amt * 1.18),
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message || '✅ Session invoice generated successfully!');
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to generate session invoice');
+      }
+    } catch {
+      toast.error('Error generating session invoice');
     }
   };
 
@@ -1313,6 +1412,7 @@ export default function ClientMasterRegistryPage() {
 
       const matchesClientType =
         selectedClientTypeFilter === 'ALL' ||
+        (selectedClientTypeFilter === 'ONE_TIME' && e.clientType === 'ONE_TIME') ||
         (selectedClientTypeFilter === 'VIRTUAL_OFFICE' && e.clientType === 'VIRTUAL_OFFICE') ||
         (selectedClientTypeFilter === 'DEFAULT' && (!e.clientType || e.clientType === 'DEFAULT'));
 
@@ -1326,9 +1426,10 @@ export default function ClientMasterRegistryPage() {
     const activeClients = entries.filter((e) => e.clientStatus === 'Active').length;
     const onNotice = entries.filter((e) => e.clientStatus === 'On Notice').length;
     const virtualOfficeCount = entries.filter((e) => e.clientType === 'VIRTUAL_OFFICE').length;
-    const totalSeats = entries.reduce((acc, curr) => acc + (curr.clientType === 'VIRTUAL_OFFICE' ? 0 : (Number(curr.noOfSeats) || 0)), 0);
+    const oneTimeCount = entries.filter((e) => e.clientType === 'ONE_TIME').length;
+    const totalSeats = entries.reduce((acc, curr) => acc + ((curr.clientType === 'VIRTUAL_OFFICE' || curr.clientType === 'ONE_TIME') ? 0 : (Number(curr.noOfSeats) || 0)), 0);
     const totalRev = entries.reduce((acc, curr) => acc + (Number(curr.totalAmount) || 0), 0);
-    return { totalClients, activeClients, onNotice, virtualOfficeCount, totalSeats, totalRev };
+    return { totalClients, activeClients, onNotice, virtualOfficeCount, oneTimeCount, totalSeats, totalRev };
   }, [entries]);
 
   return (
@@ -1425,13 +1526,20 @@ export default function ClientMasterRegistryPage() {
           <div className="bg-white p-5 border border-[var(--outline-variant)]/40 shadow-xs">
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#616161]">Total Master Clients</div>
             <div className="text-2xl font-display font-black mt-1 text-[#1B1C1C]">{kpis.totalClients}</div>
-            <div className="text-[11px] text-[#616161] font-light flex items-center justify-between">
+            <div className="text-[11px] text-[#616161] font-light flex items-center justify-between flex-wrap gap-1">
               <span>All records in DB</span>
-              {kpis.virtualOfficeCount > 0 && (
-                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 border border-indigo-200">
-                  {kpis.virtualOfficeCount} Virtual
-                </span>
-              )}
+              <div className="flex items-center gap-1">
+                {kpis.virtualOfficeCount > 0 && (
+                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 border border-indigo-200">
+                    {kpis.virtualOfficeCount} Virtual
+                  </span>
+                )}
+                {kpis.oneTimeCount > 0 && (
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 border border-amber-300">
+                    {kpis.oneTimeCount} One-Time
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1528,6 +1636,7 @@ export default function ClientMasterRegistryPage() {
                 <option value="ALL">All Client Types</option>
                 <option value="DEFAULT">Default (Cabin / Seats)</option>
                 <option value="VIRTUAL_OFFICE">Virtual Office (Address Only)</option>
+                <option value="ONE_TIME">One-Time Client (1-Day / Hourly)</option>
               </select>
 
               <div className="flex items-center gap-1.5 text-xs font-bold text-purple-800 bg-purple-50 px-2.5 py-1.5 border border-purple-200">
@@ -1624,6 +1733,11 @@ export default function ClientMasterRegistryPage() {
                                 <Globe size={10} /> Virtual Office
                               </span>
                             )}
+                            {entry.clientType === 'ONE_TIME' && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap">
+                                <Clock size={10} /> One-Time Client
+                              </span>
+                            )}
                           </div>
                           {entry.hoAddress && (
                             <div className="text-[10px] text-[#616161] line-clamp-1" title={entry.hoAddress}>
@@ -1681,30 +1795,65 @@ export default function ClientMasterRegistryPage() {
                         </td>
 
                         <td className="p-3 text-[10px] space-y-0.5">
-                          {entry.agreementStartDate && (
-                            <div>
-                              Start: <span className="font-bold">{new Date(entry.agreementStartDate).toLocaleDateString('en-IN')}</span>
+                          {entry.clientType === 'ONE_TIME' ? (
+                            <div className="space-y-0.5">
+                              <div className="font-bold text-amber-900 flex items-center gap-1">
+                                <Clock size={10} className="text-amber-700" />
+                                {entry.products && entry.products.length > 1 ? `${entry.products.length} Sessions Booked` : 'Single Day Session'}
+                              </div>
+                              {entry.products && entry.products.length > 0 ? (
+                                entry.products.slice(0, 2).map((p, i) => (
+                                  <div key={i} className="text-[10px] text-neutral-600 font-medium">
+                                    {p.sessionDate ? new Date(p.sessionDate).toLocaleDateString('en-IN') : 'Date N/A'}
+                                    {p.startTime && p.endTime ? ` (${p.startTime} - ${p.endTime})` : ''}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-[10px] text-neutral-500">1-Day Booking</div>
+                              )}
+                              {entry.products && entry.products.length > 2 && (
+                                <div className="text-[9px] text-amber-700 font-bold">+{entry.products.length - 2} more sessions</div>
+                              )}
                             </div>
-                          )}
-                          {entry.agreementEndDate && (
-                            <div>
-                              End: <span className="font-bold">{new Date(entry.agreementEndDate).toLocaleDateString('en-IN')}</span>
-                            </div>
-                          )}
-                          {entry.agreementPdfUrl && (
-                            <a
-                              href={entry.agreementPdfUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[9px] text-[#006064] font-bold hover:underline flex items-center gap-0.5 mt-0.5"
-                            >
-                              <Paperclip size={9} /> Agreement PDF
-                            </a>
+                          ) : (
+                            <>
+                              {entry.agreementStartDate && (
+                                <div>
+                                  Start: <span className="font-bold">{new Date(entry.agreementStartDate).toLocaleDateString('en-IN')}</span>
+                                </div>
+                              )}
+                              {entry.agreementEndDate && (
+                                <div>
+                                  End: <span className="font-bold">{new Date(entry.agreementEndDate).toLocaleDateString('en-IN')}</span>
+                                </div>
+                              )}
+                              {entry.agreementPdfUrl && (
+                                <a
+                                  href={entry.agreementPdfUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[9px] text-[#006064] font-bold hover:underline flex items-center gap-0.5 mt-0.5"
+                                >
+                                  <Paperclip size={9} /> Agreement PDF
+                                </a>
+                              )}
+                            </>
                           )}
                         </td>
 
                         <td className="p-3">
-                          {entry.clientType === 'VIRTUAL_OFFICE' ? (
+                          {entry.clientType === 'ONE_TIME' ? (
+                            <div>
+                              <div className="font-bold text-neutral-900">
+                                {entry.products && entry.products.length > 0
+                                  ? entry.products.map((p) => p.cabinName).filter(Boolean).join(', ')
+                                  : (entry.cabinName || 'Meeting Room')}
+                              </div>
+                              <div className="text-[10px] text-amber-700 font-bold">
+                                Hourly / 1-Day Booking (0 Seats)
+                              </div>
+                            </div>
+                          ) : entry.clientType === 'VIRTUAL_OFFICE' ? (
                             <div>
                               <div className="font-bold text-indigo-900 flex items-center gap-1">
                                 <Globe size={12} className="text-indigo-700" /> Virtual Office
@@ -1806,7 +1955,28 @@ export default function ClientMasterRegistryPage() {
                               <Eye size={12} /> View Record
                             </button>
 
-                            {entry.isDispatchedToInvoices ? (
+                            {entry.clientType === 'ONE_TIME' ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const firstSession = entry.products?.[0] || {
+                                    id: undefined,
+                                    cabinName: entry.cabinName || 'Meeting Room',
+                                    amount: entry.amount,
+                                    gstPercent: entry.gstPercent ?? 18,
+                                    totalAmount: entry.totalAmount,
+                                    sessionDate: entry.agreementStartDate ? new Date(entry.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                    startTime: '',
+                                    endTime: '',
+                                  };
+                                  handleGenerateSessionInvoice(firstSession as any, entry.id);
+                                }}
+                                className="px-2 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                                title="Generate on-demand invoice for this booking session"
+                              >
+                                <FileText size={10} /> Generate Invoice
+                              </button>
+                            ) : entry.isDispatchedToInvoices ? (
                               <div className="w-full flex flex-col gap-1">
                                 <span
                                   className="px-2 py-1 bg-emerald-50 text-emerald-800 font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 border border-emerald-300 shadow-2xs"
@@ -1897,11 +2067,626 @@ export default function ClientMasterRegistryPage() {
 
               {/* Modal Form Scrollable Area */}
               <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-8 overflow-y-auto flex-1 text-xs">
-                {/* SECTION 1: Client ID & Broker Commission Options */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C] border-b border-neutral-200 pb-2">
-                    <Building2 size={16} className="text-[#006064]" /> 1. Client Identifier & Broker Details
+                {/* TOP CLIENT TYPE SELECTOR BAR */}
+                <div className="bg-neutral-50 p-4 border border-neutral-300 rounded-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                  <div>
+                    <label className="block text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-0.5">
+                      Client Type Mode:
+                    </label>
+                    <p className="text-[11px] text-neutral-500 font-normal">
+                      Select "One-Time Client" for single day or hourly bookings without recurring monthly auto-invoices.
+                    </p>
                   </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientType('DEFAULT');
+                        if (clientStatus === 'One-Time') setClientStatus('Active');
+                        setProductRows((prev) => {
+                          const first = prev[0] || createEmptyProductRow();
+                          return [{
+                            ...first,
+                            cabinName: first.cabinName === 'Virtual Office' ? '' : first.cabinName,
+                            noOfSeats: first.noOfSeats === 0 ? '' : first.noOfSeats,
+                            ratePerAgreement: first.ratePerAgreement === 0 ? '' : first.ratePerAgreement,
+                          }];
+                        });
+                      }}
+                      className={`px-3 py-2 text-xs font-bold uppercase tracking-wider rounded-xs border transition-all cursor-pointer ${
+                        clientType === 'DEFAULT'
+                          ? 'bg-[#006064] text-white border-[#006064] shadow-xs'
+                          : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100'
+                      }`}
+                    >
+                      🏢 Default (Cabin / Seats)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientType('VIRTUAL_OFFICE');
+                        if (clientStatus === 'One-Time') setClientStatus('Active');
+                        setProductRows((prev) => {
+                          const first = prev[0] || createEmptyProductRow();
+                          return [{
+                            ...first,
+                            cabinName: 'Virtual Office',
+                            noOfSeats: 0,
+                            ratePerAgreement: 0,
+                            gstPercent: first.gstPercent ?? 18,
+                            paymentDuration: first.paymentDuration || 'MONTHLY',
+                            paymentDueDay: first.paymentDueDay ?? 5,
+                            hasSeparateAgreement: false,
+                            billingType: 'REGULAR',
+                          }];
+                        });
+                      }}
+                      className={`px-3 py-2 text-xs font-bold uppercase tracking-wider rounded-xs border transition-all cursor-pointer ${
+                        clientType === 'VIRTUAL_OFFICE'
+                          ? 'bg-indigo-700 text-white border-indigo-700 shadow-xs'
+                          : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100'
+                      }`}
+                    >
+                      🌐 Virtual Office
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientType('ONE_TIME');
+                        setClientStatus('One-Time');
+                        setWillDeductTds(false);
+                        setProductRows((prev) => {
+                          const first = prev[0] || createEmptyProductRow();
+                          const today = new Date().toISOString().split('T')[0];
+                          return [{
+                            ...first,
+                            cabinName: first.cabinName && first.cabinName !== 'Virtual Office' ? first.cabinName : 'Meeting Room',
+                            sessionDate: first.sessionDate || today,
+                            startTime: first.startTime || '10:00',
+                            endTime: first.endTime || '18:00',
+                            amount: first.amount ?? '',
+                            gstPercent: first.gstPercent !== '' ? first.gstPercent : 18,
+                            totalAmount: first.totalAmount ?? '',
+                            billingType: 'ONE_TIME',
+                            paymentDuration: 'ONE_TIME',
+                          }];
+                        });
+                      }}
+                      className={`px-3 py-2 text-xs font-bold uppercase tracking-wider rounded-xs border transition-all cursor-pointer ${
+                        clientType === 'ONE_TIME'
+                          ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                          : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100'
+                      }`}
+                    >
+                      ⚡ One-Time Client (1-Day / Hourly)
+                    </button>
+                  </div>
+                </div>
+
+                {clientType === 'ONE_TIME' ? (
+                  <div className="space-y-6">
+                    {/* Notice Banner */}
+                    <div className="bg-amber-50 border border-amber-300 p-4 text-amber-950 flex items-start gap-3 shadow-2xs">
+                      <Clock size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-xs uppercase tracking-wider text-amber-900">
+                          One-Time Client Mode (Hourly &amp; Single Day Bookings)
+                        </div>
+                        <div className="text-[11px] text-amber-800 mt-1 leading-relaxed">
+                          This client booked for specific hours or single days (e.g. meeting rooms, event halls). Monthly recurring invoices will <strong>NOT</strong> be generated automatically. You can generate an on-demand invoice per booking session anytime. You can also add repeat bookings if this client returns (e.g. after 14–15 days).
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 1. Client Identifier & Broker Details */}
+                    <div className="bg-[#F8F9FA] p-4 sm:p-5 border border-[var(--outline-variant)]/60 space-y-4">
+                      <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C] border-b border-neutral-200 pb-2">
+                        <Building2 size={16} className="text-[#006064]" /> 1. Client Identifier &amp; Broker Details
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                            Client / Company Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Acme Corp / John Doe..."
+                            value={companyName}
+                            onChange={(e) => setCompanyName(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-medium"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                            Client ID (Manual)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. SSPACIA/AHD/CGM"
+                            value={clientId}
+                            onChange={(e) => setClientId(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-mono font-bold"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                            Broker Commission
+                          </label>
+                          <select
+                            value={hasBrokerCommission ? 'YES' : 'NO'}
+                            onChange={(e) => setHasBrokerCommission(e.target.value === 'YES')}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold"
+                          >
+                            <option value="NO">No</option>
+                            <option value="YES">Yes</option>
+                          </select>
+                        </div>
+
+                        {hasBrokerCommission && (
+                          <>
+                            <div>
+                              <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                                Broker Commission (%)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="e.g. 5.0"
+                                value={brokerCommissionPercent}
+                                onChange={(e) => setBrokerCommissionPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                                className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold"
+                              />
+                            </div>
+
+                            <div className="md:col-span-2">
+                              <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                                Invoice To Be Raised
+                              </label>
+                              <select
+                                value={invoiceToBeRaised}
+                                onChange={(e) => setInvoiceToBeRaised(e.target.value)}
+                                className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold"
+                              >
+                                <option value="CLIENT">Client</option>
+                                <option value="BROKER">Broker</option>
+                              </select>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. Head Office (HO) Address */}
+                    <div className="bg-[#F8F9FA] p-4 sm:p-5 border border-[var(--outline-variant)]/60 space-y-4">
+                      <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C] border-b border-neutral-200 pb-2">
+                        <MapPin size={16} className="text-[#006064]" /> 2. Head Office (HO) Address
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                            Address Line 1
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Building, Suite, Street..."
+                            value={hoAddressLine1}
+                            onChange={(e) => setHoAddressLine1(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                            Address Line 2
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Landmark, Area..."
+                            value={hoAddressLine2}
+                            onChange={(e) => setHoAddressLine2(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                            City
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Ahmedabad"
+                            value={hoCity}
+                            onChange={(e) => setHoCity(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                            State
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Gujarat"
+                            value={hoState}
+                            onChange={(e) => setHoState(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                            Country
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. India"
+                            value={hoCountry}
+                            onChange={(e) => setHoCountry(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                            Pin Code
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 380015"
+                            value={hoPinCode}
+                            onChange={(e) => setHoPinCode(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. Contact Information (Optional) */}
+                    <div className="bg-[#F8F9FA] p-4 sm:p-5 border border-[var(--outline-variant)]/60 space-y-4">
+                      <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C] border-b border-neutral-200 pb-2">
+                        <Users size={16} className="text-[#006064]" /> 3. Contact Information (Optional)
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                            Contact Person Name
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Full name..."
+                            value={contactPersons[0]?.name || ''}
+                            onChange={(e) => handleUpdateContactPerson(0, 'name', e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                            Mobile No. (10 digits)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="10 digit number..."
+                            value={contactPersons[0]?.mobileNo || ''}
+                            onChange={(e) => handleUpdateContactPerson(0, 'mobileNo', e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                            Email Address
+                          </label>
+                          <input
+                            type="email"
+                            placeholder="client@example.com"
+                            value={contactPersons[0]?.email || ''}
+                            onChange={(e) => handleUpdateContactPerson(0, 'email', e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. GST Details (Optional) */}
+                    <div className="bg-[#F8F9FA] p-4 sm:p-5 border border-[var(--outline-variant)]/60 space-y-4">
+                      <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C] border-b border-neutral-200 pb-2">
+                        <FileText size={16} className="text-[#006064]" /> 4. GST Details (Optional)
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                            GST Status
+                          </label>
+                          <select
+                            value={gstStatus}
+                            onChange={(e) => setGstStatus(e.target.value as 'REGISTERED' | 'UNREGISTERED')}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold"
+                          >
+                            <option value="UNREGISTERED">Unregistered</option>
+                            <option value="REGISTERED">Registered</option>
+                          </select>
+                        </div>
+
+                        {gstStatus === 'REGISTERED' && (
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                              GSTIN (15 Digits)
+                            </label>
+                            <input
+                              type="text"
+                              maxLength={15}
+                              placeholder="e.g. 24AAAAA0000A1Z5"
+                              value={gstNo}
+                              onChange={(e) => setGstNo(e.target.value.toUpperCase())}
+                              className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-mono font-bold"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Booking Sessions Section */}
+                    <div className="space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-200 pb-2.5 gap-2">
+                        <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C]">
+                          <Calendar size={16} className="text-amber-600" /> Booking Sessions ({productRows.length})
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProductRows((prev) => [
+                              ...prev,
+                              {
+                                ...createEmptyProductRow(),
+                                cabinName: prev[0]?.cabinName || 'Meeting Room',
+                                sessionDate: new Date().toISOString().split('T')[0],
+                                startTime: '10:00',
+                                endTime: '18:00',
+                                amount: '',
+                                gstPercent: 18,
+                                totalAmount: '',
+                                billingType: 'ONE_TIME',
+                                paymentDuration: 'ONE_TIME',
+                              }
+                            ]);
+                          }}
+                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-wider rounded-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                          <Plus size={14} /> Add Another Booking / Session (e.g. Return after 14-15 days)
+                        </button>
+                      </div>
+
+                      {/* Sessions List */}
+                      <div className="space-y-4">
+                        {productRows.map((row, idx) => {
+                          const amt = Number(row.amount) || 0;
+                          const gst = row.gstPercent !== '' ? Number(row.gstPercent) : 18;
+                          const tot = row.totalAmount !== '' ? Number(row.totalAmount) : Math.round(amt * (1 + gst / 100));
+
+                          return (
+                            <div
+                              key={idx}
+                              className="bg-[#F8F9FA] p-4 sm:p-5 border border-amber-300/80 rounded-xs space-y-4 shadow-xs"
+                            >
+                              <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+                                <span className="font-black text-xs uppercase text-amber-900 flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-amber-600"></span>
+                                  Session #{idx + 1}
+                                  {row.sessionDate && (
+                                    <span className="text-[11px] font-mono text-neutral-600 font-normal">
+                                      • {new Date(row.sessionDate).toLocaleDateString('en-IN')} {row.startTime && row.endTime ? `(${row.startTime} - ${row.endTime})` : ''}
+                                    </span>
+                                  )}
+                                </span>
+
+                                <div className="flex items-center gap-2">
+                                  {editingId && amt > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleGenerateSessionInvoice(row, editingId)}
+                                      className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-xs flex items-center gap-1 shadow-xs cursor-pointer"
+                                      title="Generate on-demand invoice for this session"
+                                    >
+                                      <FileText size={11} /> Generate Invoice for Session #{idx + 1}
+                                    </button>
+                                  )}
+
+                                  {productRows.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveProductRow(idx)}
+                                      className="text-neutral-400 hover:text-red-600 text-xs font-bold uppercase flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Trash2 size={13} /> Remove
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                                    Booking Date <span className="text-red-500">*</span>
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={row.sessionDate || ''}
+                                    onChange={(e) => handleUpdateProductRow(idx, 'sessionDate', e.target.value)}
+                                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold"
+                                    required
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                                    Start Time
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={row.startTime || ''}
+                                    onChange={(e) => handleUpdateProductRow(idx, 'startTime', e.target.value)}
+                                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-mono"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                                    End Time
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={row.endTime || ''}
+                                    onChange={(e) => handleUpdateProductRow(idx, 'endTime', e.target.value)}
+                                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-mono"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                                    Cabin / Space / Product
+                                  </label>
+                                  <input
+                                    type="text"
+                                    list="one-time-product-options"
+                                    placeholder="e.g. Meeting Room, Conference Room..."
+                                    value={row.cabinName || ''}
+                                    onChange={(e) => handleUpdateProductRow(idx, 'cabinName', e.target.value)}
+                                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-medium"
+                                  />
+                                  <datalist id="one-time-product-options">
+                                    {['Meeting Room', 'Conference Room', 'Boardroom', 'Day Pass Desk', 'Event Space', ...availableProducts].map((opt, i) => (
+                                      <option key={i} value={opt} />
+                                    ))}
+                                  </datalist>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 items-end pt-1">
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                                    Amount (₹) <span className="text-red-500">*</span>
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="e.g. 2500"
+                                    value={row.amount ?? ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value === '' ? '' : Number(e.target.value);
+                                      const currentGst = row.gstPercent !== '' ? Number(row.gstPercent) : 18;
+                                      const calculatedTotal = val === '' ? '' : Math.round(Number(val) * (1 + currentGst / 100));
+                                      handleUpdateProductRow(idx, 'amount', val);
+                                      handleUpdateProductRow(idx, 'totalAmount', calculatedTotal);
+                                    }}
+                                    className="w-full bg-amber-50/50 border border-amber-300 px-3 py-2 text-xs focus:outline-none font-bold text-right text-amber-950 font-mono"
+                                    required
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                                    GST (%)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={row.gstPercent ?? 18}
+                                    onChange={(e) => {
+                                      const gstVal = e.target.value === '' ? '' : Number(e.target.value);
+                                      handleUpdateProductRow(idx, 'gstPercent', gstVal);
+                                      if (row.amount !== '') {
+                                        const base = Number(row.amount) || 0;
+                                        const g = gstVal !== '' ? Number(gstVal) : 18;
+                                        handleUpdateProductRow(idx, 'totalAmount', Math.round(base * (1 + g / 100)));
+                                      }
+                                    }}
+                                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none text-center font-bold"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                                    Total Amt (₹)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    value={tot > 0 ? tot : (row.totalAmount ?? '')}
+                                    onChange={(e) => handleUpdateProductRow(idx, 'totalAmount', e.target.value === '' ? '' : Number(e.target.value))}
+                                    className="w-full bg-emerald-50 border border-emerald-300 px-3 py-2 text-xs focus:outline-none font-black text-right text-emerald-900 font-mono"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Grand Total Summary for One-Time Sessions */}
+                      {(() => {
+                        const totalSessions = productRows.length;
+                        const subtotalAmt = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                        const totalGst = productRows.reduce((sum, r) => {
+                          const b = Number(r.amount) || 0;
+                          const g = r.gstPercent !== '' ? Number(r.gstPercent) : 18;
+                          return sum + (b * g / 100);
+                        }, 0);
+                        const grandTotalAmt = Math.round(subtotalAmt + totalGst);
+
+                        return (
+                          <div className="bg-gradient-to-r from-amber-700 to-amber-900 p-4 sm:p-5 text-white rounded-xs shadow-md space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-4">
+                              <div>
+                                <div className="font-black text-xs uppercase tracking-widest text-amber-200">
+                                  Total for {totalSessions} Booking Session{totalSessions > 1 ? 's' : ''}
+                                </div>
+                                <div className="text-[11px] text-amber-100 font-light">
+                                  One-time payment breakdown (Excluded from recurring monthly auto-dispatch)
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                                <div className="text-center">
+                                  <div className="text-[9px] uppercase tracking-wider text-amber-200 mb-0.5">Subtotal Amount</div>
+                                  <div className="font-bold text-sm sm:text-base font-mono">₹{subtotalAmt.toLocaleString('en-IN')}</div>
+                                </div>
+
+                                <div className="text-center">
+                                  <div className="text-[9px] uppercase tracking-wider text-amber-200 mb-0.5">Total GST (18%)</div>
+                                  <div className="font-bold text-sm sm:text-base font-mono">₹{Math.round(totalGst).toLocaleString('en-IN')}</div>
+                                </div>
+
+                                <div className="text-center bg-white/20 px-4 py-2 rounded-xs border border-white/40 shadow-inner">
+                                  <div className="text-[9px] uppercase tracking-wider text-amber-100 mb-0.5">Grand Total</div>
+                                  <div className="font-black text-lg sm:text-xl font-mono">₹{grandTotalAmt.toLocaleString('en-IN')}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* SECTION 1: Client ID & Broker Commission Options */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C] border-b border-neutral-200 pb-2">
+                        <Building2 size={16} className="text-[#006064]" /> 1. Client Identifier & Broker Details
+                      </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/60">
                     <div>
@@ -2346,69 +3131,25 @@ export default function ClientMasterRegistryPage() {
                       <DollarSign size={16} className="text-[#006064]" /> 6. Cabin, Seats, Rates &amp; Billing Amounts
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3">
-                      {/* Client Type Dropdown */}
-                      <div className="flex items-center gap-1.5 bg-neutral-100 px-2.5 py-1 border border-neutral-300">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-neutral-600">Client Type:</span>
-                        <select
-                          value={clientType}
-                          onChange={(e) => {
-                            const newType = e.target.value as 'DEFAULT' | 'VIRTUAL_OFFICE';
-                            setClientType(newType);
-                            if (newType === 'VIRTUAL_OFFICE') {
-                              setProductRows((prev) => {
-                                const first = prev[0] || createEmptyProductRow();
-                                return [{
-                                  ...first,
-                                  cabinName: 'Virtual Office',
-                                  noOfSeats: 0,
-                                  ratePerAgreement: 0,
-                                  gstPercent: first.gstPercent ?? 18,
-                                  paymentDuration: first.paymentDuration || 'MONTHLY',
-                                  paymentDueDay: first.paymentDueDay ?? 5,
-                                  hasSeparateAgreement: false,
-                                  billingType: 'REGULAR',
-                                }];
-                              });
-                            } else {
-                              setProductRows((prev) => {
-                                const first = prev[0] || createEmptyProductRow();
-                                return [{
-                                  ...first,
-                                  cabinName: first.cabinName === 'Virtual Office' ? '' : first.cabinName,
-                                  noOfSeats: first.noOfSeats === 0 ? '' : first.noOfSeats,
-                                  ratePerAgreement: first.ratePerAgreement === 0 ? '' : first.ratePerAgreement,
-                                }];
-                              });
-                            }
-                          }}
-                          className="bg-white border border-neutral-300 text-xs font-bold text-[#006064] px-2.5 py-1 focus:outline-none cursor-pointer"
+                    {clientType === 'DEFAULT' && (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowAddProductModal(true)}
+                          className="text-xs text-blue-700 font-bold uppercase tracking-wider hover:underline flex items-center gap-1"
                         >
-                          <option value="DEFAULT">Default (Cabin / Seats)</option>
-                          <option value="VIRTUAL_OFFICE">Virtual Office (Address Only)</option>
-                        </select>
+                          <Sparkles size={14} /> Add Product Option
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleAddProductRow}
+                          className="text-xs text-[#006064] font-bold uppercase tracking-wider hover:underline flex items-center gap-1"
+                        >
+                          <Plus size={14} /> Add More Cabin / Product
+                        </button>
                       </div>
-
-                      {clientType === 'DEFAULT' && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setShowAddProductModal(true)}
-                            className="text-xs text-blue-700 font-bold uppercase tracking-wider hover:underline flex items-center gap-1"
-                          >
-                            <Sparkles size={14} /> Add Product Option
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={handleAddProductRow}
-                            className="text-xs text-[#006064] font-bold uppercase tracking-wider hover:underline flex items-center gap-1"
-                          >
-                            <Plus size={14} /> Add More Cabin / Product
-                          </button>
-                        </>
-                      )}
-                    </div>
+                    )}
                   </div>
 
                   {clientType === 'VIRTUAL_OFFICE' ? (
@@ -3598,6 +4339,8 @@ export default function ClientMasterRegistryPage() {
                     </div>
                   </div>
                 </div>
+                  </>
+                )}
 
                 {/* Submit Buttons Footer */}
                 <div className="pt-6 border-t border-neutral-200 flex items-center justify-end gap-4 shrink-0">
@@ -3737,6 +4480,11 @@ export default function ClientMasterRegistryPage() {
                         <Globe size={12} /> Virtual Office
                       </span>
                     )}
+                    {entryToViewDetails.clientType === 'ONE_TIME' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-300 text-xs font-black uppercase tracking-wider rounded-xs">
+                        <Clock size={12} /> One-Time Client
+                      </span>
+                    )}
                   </h3>
                   <p className="text-[#616161]">
                     Created by {entryToViewDetails.createdBy?.name || 'Community Manager'} on{' '}
@@ -3783,6 +4531,20 @@ export default function ClientMasterRegistryPage() {
                 </div>
               </div>
 
+              {entryToViewDetails.clientType === 'ONE_TIME' && (
+                <div className="bg-amber-50 border border-amber-300 p-3.5 text-amber-950 flex items-start gap-3 shadow-2xs">
+                  <Clock size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-xs uppercase tracking-wider text-amber-900">
+                      One-Time Booking Record (Single Day / Hourly)
+                    </div>
+                    <div className="text-[11px] text-amber-800 mt-0.5">
+                      This client is registered for hourly or single-day room/desk bookings. Excluded from monthly recurring auto-dispatch. Invoices can be generated on-demand per session below.
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {entryToViewDetails.clientType === 'VIRTUAL_OFFICE' && (
                 <div className="bg-indigo-50/80 border border-indigo-200 p-3.5 text-indigo-950 flex items-start gap-3 shadow-2xs">
                   <Globe size={18} className="text-indigo-600 shrink-0 mt-0.5" />
@@ -3825,71 +4587,174 @@ export default function ClientMasterRegistryPage() {
                 </div>
               </div>
 
-              {/* Agreement Dates & Terms */}
-              <div className="space-y-2">
-                <h4 className="font-bold uppercase tracking-wider text-[#1B1C1C] flex items-center gap-2">
-                  <Calendar size={14} className="text-[#006064]" /> Agreement Terms & Dates
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60">
-                  <div>
-                    <div className="text-[10px] font-bold uppercase text-[#616161]">Start Date</div>
-                    <div className="font-bold mt-0.5">
-                      {entryToViewDetails.agreementStartDate
-                        ? new Date(entryToViewDetails.agreementStartDate).toLocaleDateString('en-IN')
-                        : 'N/A'}
+              {/* Agreement Dates & Terms (Only for Default / VO clients) */}
+              {entryToViewDetails.clientType !== 'ONE_TIME' && (
+                <div className="space-y-2">
+                  <h4 className="font-bold uppercase tracking-wider text-[#1B1C1C] flex items-center gap-2">
+                    <Calendar size={14} className="text-[#006064]" /> Agreement Terms & Dates
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">Start Date</div>
+                      <div className="font-bold mt-0.5">
+                        {entryToViewDetails.agreementStartDate
+                          ? new Date(entryToViewDetails.agreementStartDate).toLocaleDateString('en-IN')
+                          : 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">End Date</div>
+                      <div className="font-bold mt-0.5">
+                        {entryToViewDetails.agreementEndDate
+                          ? new Date(entryToViewDetails.agreementEndDate).toLocaleDateString('en-IN')
+                          : 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">Lock-in End Date</div>
+                      <div className="font-bold text-amber-800 mt-0.5">
+                        {entryToViewDetails.lockinEndDate
+                          ? new Date(entryToViewDetails.lockinEndDate).toLocaleDateString('en-IN')
+                          : 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">Notice Period</div>
+                      <div className="font-bold mt-0.5">
+                        {entryToViewDetails.noticePeriodMonths ? `${entryToViewDetails.noticePeriodMonths} months` : 'N/A'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">Notice Applicable</div>
+                      <div className="font-bold mt-0.5">{entryToViewDetails.noticePeriodApplicable || 'N/A'}</div>
                     </div>
                   </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase text-[#616161]">End Date</div>
-                    <div className="font-bold mt-0.5">
-                      {entryToViewDetails.agreementEndDate
-                        ? new Date(entryToViewDetails.agreementEndDate).toLocaleDateString('en-IN')
-                        : 'N/A'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase text-[#616161]">Lock-in End Date</div>
-                    <div className="font-bold text-amber-800 mt-0.5">
-                      {entryToViewDetails.lockinEndDate
-                        ? new Date(entryToViewDetails.lockinEndDate).toLocaleDateString('en-IN')
-                        : 'N/A'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase text-[#616161]">Notice Period</div>
-                    <div className="font-bold mt-0.5">
-                      {entryToViewDetails.noticePeriodMonths ? `${entryToViewDetails.noticePeriodMonths} months` : 'N/A'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold uppercase text-[#616161]">Notice Applicable</div>
-                    <div className="font-bold mt-0.5">{entryToViewDetails.noticePeriodApplicable || 'N/A'}</div>
-                  </div>
-                </div>
 
-                {entryToViewDetails.agreementPdfUrl && (
-                  <div className="pt-1">
-                    <a
-                      href={entryToViewDetails.agreementPdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-[#006064] font-bold hover:underline flex items-center gap-1"
-                    >
-                      <Download size={12} /> Download Attached Agreement PDF ({entryToViewDetails.agreementPdfName || 'Agreement.pdf'})
-                    </a>
-                  </div>
-                )}
-              </div>
+                  {entryToViewDetails.agreementPdfUrl && (
+                    <div className="pt-1">
+                      <a
+                        href={entryToViewDetails.agreementPdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-[#006064] font-bold hover:underline flex items-center gap-1"
+                      >
+                        <Download size={12} /> Download Attached Agreement PDF ({entryToViewDetails.agreementPdfName || 'Agreement.pdf'})
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Cabins & Products Table */}
               <div className="space-y-2">
                 <h4 className="font-bold uppercase tracking-wider text-[#1B1C1C] flex items-center gap-2">
                   <DollarSign size={14} className="text-[#006064]" />{' '}
-                  {entryToViewDetails.clientType === 'VIRTUAL_OFFICE'
+                  {entryToViewDetails.clientType === 'ONE_TIME'
+                    ? 'One-Time Booking Sessions Breakdown'
+                    : entryToViewDetails.clientType === 'VIRTUAL_OFFICE'
                     ? 'Virtual Office Billing Details'
                     : 'Cabin / Product Breakdown'}
                 </h4>
-                {entryToViewDetails.clientType === 'VIRTUAL_OFFICE' ? (
+                {entryToViewDetails.clientType === 'ONE_TIME' ? (
+                  <div className="space-y-3">
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse border border-[var(--outline-variant)]/60 text-xs">
+                        <thead>
+                          <tr className="bg-[#F8F9FA] text-[#616161] uppercase text-[10px]">
+                            <th className="p-2 border border-neutral-200">Session</th>
+                            <th className="p-2 border border-neutral-200">Date</th>
+                            <th className="p-2 border border-neutral-200">Time Range</th>
+                            <th className="p-2 border border-neutral-200">Cabin / Space</th>
+                            <th className="p-2 border border-neutral-200 text-right">Amount (₹)</th>
+                            <th className="p-2 border border-neutral-200 text-center">GST %</th>
+                            <th className="p-2 border border-neutral-200 text-right">Total (₹)</th>
+                            <th className="p-2 border border-neutral-200 text-center">Invoice Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {entryToViewDetails.products && entryToViewDetails.products.length > 0 ? (
+                            entryToViewDetails.products.map((p, i) => (
+                              <tr key={i}>
+                                <td className="p-2 border border-neutral-200 font-bold text-amber-900">Session #{i + 1}</td>
+                                <td className="p-2 border border-neutral-200 font-bold">
+                                  {p.sessionDate ? new Date(p.sessionDate).toLocaleDateString('en-IN') : (p.agreementStartDate ? new Date(p.agreementStartDate).toLocaleDateString('en-IN') : 'N/A')}
+                                </td>
+                                <td className="p-2 border border-neutral-200 font-mono text-neutral-600">
+                                  {p.startTime && p.endTime ? `${p.startTime} - ${p.endTime}` : (p.startTime || p.endTime || 'Full Day')}
+                                </td>
+                                <td className="p-2 border border-neutral-200 font-medium">{p.cabinName || 'Meeting Room'}</td>
+                                <td className="p-2 border border-neutral-200 text-right font-mono font-bold">₹{Number(p.amount || 0).toLocaleString('en-IN')}</td>
+                                <td className="p-2 border border-neutral-200 text-center">{p.gstPercent ?? 18}%</td>
+                                <td className="p-2 border border-neutral-200 text-right font-mono font-black text-emerald-800">₹{Number(p.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                <td className="p-2 border border-neutral-200 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleGenerateSessionInvoice({
+                                        ...p,
+                                        sessionDate: p.sessionDate ? new Date(p.sessionDate).toISOString().split('T')[0] : (p.agreementStartDate ? new Date(p.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+                                        startTime: p.startTime || '',
+                                        endTime: p.endTime || '',
+                                        cabinName: p.cabinName || 'Meeting Room',
+                                        amount: p.amount ?? 0,
+                                        gstPercent: p.gstPercent ?? 18,
+                                        totalAmount: p.totalAmount ?? 0,
+                                      } as any, entryToViewDetails.id);
+                                    }}
+                                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase rounded-xs shadow-xs cursor-pointer inline-flex items-center gap-1"
+                                  >
+                                    <FileText size={10} /> Generate Invoice
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td className="p-2 border border-neutral-200 font-bold text-amber-900">Session #1</td>
+                              <td className="p-2 border border-neutral-200 font-bold">
+                                {entryToViewDetails.agreementStartDate ? new Date(entryToViewDetails.agreementStartDate).toLocaleDateString('en-IN') : 'N/A'}
+                              </td>
+                              <td className="p-2 border border-neutral-200 font-mono text-neutral-600">Full Day</td>
+                              <td className="p-2 border border-neutral-200 font-medium">{entryToViewDetails.cabinName || 'Meeting Room'}</td>
+                              <td className="p-2 border border-neutral-200 text-right font-mono font-bold">₹{Number(entryToViewDetails.amount || 0).toLocaleString('en-IN')}</td>
+                              <td className="p-2 border border-neutral-200 text-center">{entryToViewDetails.gstPercent ?? 18}%</td>
+                              <td className="p-2 border border-neutral-200 text-right font-mono font-black text-emerald-800">₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}</td>
+                              <td className="p-2 border border-neutral-200 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleGenerateSessionInvoice({
+                                      cabinName: entryToViewDetails.cabinName || 'Meeting Room',
+                                      amount: entryToViewDetails.amount ?? 0,
+                                      gstPercent: entryToViewDetails.gstPercent ?? 18,
+                                      totalAmount: entryToViewDetails.totalAmount ?? 0,
+                                      sessionDate: entryToViewDetails.agreementStartDate ? new Date(entryToViewDetails.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                      startTime: '',
+                                      endTime: '',
+                                    } as any, entryToViewDetails.id);
+                                  }}
+                                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase rounded-xs shadow-xs cursor-pointer inline-flex items-center gap-1"
+                                >
+                                  <FileText size={10} /> Generate Invoice
+                                </button>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Grand Total Bar */}
+                    <div className="bg-emerald-50 border border-emerald-300 p-3 text-emerald-950 flex items-center justify-between">
+                      <div className="text-xs font-bold uppercase tracking-wider">
+                        Total Amount for One-Time Booking:
+                      </div>
+                      <div className="text-base font-black font-mono text-emerald-900">
+                        ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+                ) : entryToViewDetails.clientType === 'VIRTUAL_OFFICE' ? (
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60">
                       <div className="text-[10px] font-bold uppercase text-[#616161]">Service Type</div>
@@ -3986,90 +4851,129 @@ export default function ClientMasterRegistryPage() {
                 )}
               </div>
 
-              {/* Escalation & Documentation */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3 border border-slate-200">
-                <div>
-                  <div className="text-[10px] font-bold uppercase text-[#616161]">Escalation %</div>
-                  <div className="font-bold text-[#1B1C1C] mt-0.5">{entryToViewDetails.escalationPercent ?? 0}%</div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold uppercase text-[#616161]">Escalation Applicable Date</div>
-                  <div className="font-bold text-[#1B1C1C] mt-0.5">
-                    {entryToViewDetails.escalationApplicable ? new Date(entryToViewDetails.escalationApplicable).toLocaleDateString('en-IN') : 'N/A'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold uppercase text-[#616161]">Documentation Charges</div>
-                  <div className="font-bold text-[#1B1C1C] mt-0.5">
-                    ₹{Number(entryToViewDetails.documentationCharges || 0).toLocaleString('en-IN')}
-                  </div>
-                </div>
-              </div>
-
-              {/* TDS & SDR Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
-                <div>
-                  <div className="font-bold uppercase text-[#616161] text-[10px]">TDS Deduction & TAT</div>
-                  <div className="font-bold text-[#1B1C1C] mt-0.5">
-                    {entryToViewDetails.willDeductTds ? (
-                      <span className="text-blue-800">TDS Yes - TAT: {entryToViewDetails.tanNo || 'N/A'}</span>
-                    ) : (
-                      <span className="text-neutral-500">TDS Deduction No</span>
-                    )}
-                  </div>
-                  {entryToViewDetails.tdsPdfUrl && (
-                    <a
-                      href={entryToViewDetails.tdsPdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-[#006064] font-bold hover:underline flex items-center gap-1 mt-1"
-                    >
-                      <Download size={10} /> Download TAT Certificate
-                    </a>
-                  )}
-                </div>
-
-                <div>
-                  <div className="font-bold uppercase text-[#616161] text-[10px]">Security Deposit (SDR) & Payment Due</div>
-                  <div className="font-bold text-[#1B1C1C] mt-0.5">
-                    Amount: ₹{Number(entryToViewDetails.sorAmount || entryToViewDetails.sdrAmount || 0).toLocaleString('en-IN')}
-                  </div>
-                  {(entryToViewDetails.sorRecdDate || entryToViewDetails.sdrRecdDate) && (
-                    <div className="text-neutral-600 text-[10px]">
-                      SDR Recd Date: {new Date(entryToViewDetails.sorRecdDate || entryToViewDetails.sdrRecdDate || '').toLocaleDateString('en-IN')}
+              {/* Escalation & Documentation (Only for Default / VO clients) */}
+              {entryToViewDetails.clientType !== 'ONE_TIME' && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3 border border-slate-200">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">Escalation %</div>
+                      <div className="font-bold text-[#1B1C1C] mt-0.5">{entryToViewDetails.escalationPercent ?? 0}%</div>
                     </div>
-                  )}
-                  {entryToViewDetails.sdrPdfUrl && (
-                    <a
-                      href={entryToViewDetails.sdrPdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] text-[#006064] font-bold hover:underline flex items-center gap-1 mt-1"
-                    >
-                      <Paperclip size={10} /> View SDR Receipt ({entryToViewDetails.sdrPdfName || 'Document'})
-                    </a>
-                  )}
-                  {entryToViewDetails.paymentDueDay && (
-                    <div className="text-emerald-800 font-bold text-[10px] mt-0.5">
-                      Master Due Day: {entryToViewDetails.paymentDueDay} of month
+                    <div>
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">Escalation Applicable Date</div>
+                      <div className="font-bold text-[#1B1C1C] mt-0.5">
+                        {entryToViewDetails.escalationApplicable ? new Date(entryToViewDetails.escalationApplicable).toLocaleDateString('en-IN') : 'N/A'}
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">Documentation Charges</div>
+                      <div className="font-bold text-[#1B1C1C] mt-0.5">
+                        ₹{Number(entryToViewDetails.documentationCharges || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* TDS & SDR Details */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
+                    <div>
+                      <div className="font-bold uppercase text-[#616161] text-[10px]">TDS Deduction & TAT</div>
+                      <div className="font-bold text-[#1B1C1C] mt-0.5">
+                        {entryToViewDetails.willDeductTds ? (
+                          <span className="text-blue-800">TDS Yes - TAT: {entryToViewDetails.tanNo || 'N/A'}</span>
+                        ) : (
+                          <span className="text-neutral-500">TDS Deduction No</span>
+                        )}
+                      </div>
+                      {entryToViewDetails.tdsPdfUrl && (
+                        <a
+                          href={entryToViewDetails.tdsPdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-[#006064] font-bold hover:underline flex items-center gap-1 mt-1"
+                        >
+                          <Download size={10} /> Download TAT Certificate
+                        </a>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="font-bold uppercase text-[#616161] text-[10px]">Security Deposit (SDR) & Payment Due</div>
+                      <div className="font-bold text-[#1B1C1C] mt-0.5">
+                        Amount: ₹{Number(entryToViewDetails.sorAmount || entryToViewDetails.sdrAmount || 0).toLocaleString('en-IN')}
+                      </div>
+                      {(entryToViewDetails.sorRecdDate || entryToViewDetails.sdrRecdDate) && (
+                        <div className="text-neutral-600 text-[10px]">
+                          SDR Recd Date: {new Date(entryToViewDetails.sorRecdDate || entryToViewDetails.sdrRecdDate || '').toLocaleDateString('en-IN')}
+                        </div>
+                      )}
+                      {entryToViewDetails.sdrPdfUrl && (
+                        <a
+                          href={entryToViewDetails.sdrPdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-[#006064] font-bold hover:underline flex items-center gap-1 mt-1"
+                        >
+                          <Paperclip size={10} /> View SDR Receipt ({entryToViewDetails.sdrPdfName || 'Document'})
+                        </a>
+                      )}
+                      {entryToViewDetails.paymentDueDay && (
+                        <div className="text-emerald-800 font-bold text-[10px] mt-0.5">
+                          Master Due Day: {entryToViewDetails.paymentDueDay} of month
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="flex items-center justify-between pt-4 border-t border-neutral-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = entryToViewDetails.id;
-                    setEntryToViewDetails(null);
-                    handleOpenDispatchModal([id], false);
-                  }}
-                  disabled={dispatching}
-                  className="px-5 py-2.5 bg-blue-600 text-white font-bold uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Send size={14} /> Send Record to Invoices Section
-                </button>
+                {entryToViewDetails.clientType === 'ONE_TIME' ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const firstSession = entryToViewDetails.products?.[0] || {
+                          id: undefined,
+                          cabinName: entryToViewDetails.cabinName || 'Meeting Room',
+                          amount: entryToViewDetails.amount,
+                          gstPercent: entryToViewDetails.gstPercent ?? 18,
+                          totalAmount: entryToViewDetails.totalAmount,
+                          sessionDate: entryToViewDetails.agreementStartDate ? new Date(entryToViewDetails.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                          startTime: '',
+                          endTime: '',
+                        };
+                        handleGenerateSessionInvoice(firstSession as any, entryToViewDetails.id);
+                      }}
+                      className="px-5 py-2.5 bg-amber-600 text-white font-bold uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1.5 cursor-pointer shadow-xs text-xs"
+                    >
+                      <FileText size={14} /> Generate Invoice for Session #1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ent = entryToViewDetails;
+                        setEntryToViewDetails(null);
+                        handleEditEntry(ent);
+                      }}
+                      className="px-4 py-2.5 bg-neutral-100 text-neutral-800 border border-neutral-300 font-bold uppercase tracking-wider hover:bg-neutral-200 flex items-center gap-1.5 cursor-pointer text-xs"
+                    >
+                      <Edit2 size={13} /> Edit / Add Repeat Session
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = entryToViewDetails.id;
+                      setEntryToViewDetails(null);
+                      handleOpenDispatchModal([id], false);
+                    }}
+                    disabled={dispatching}
+                    className="px-5 py-2.5 bg-blue-600 text-white font-bold uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Send size={14} /> Send Record to Invoices Section
+                  </button>
+                )}
 
                 <button
                   type="button"

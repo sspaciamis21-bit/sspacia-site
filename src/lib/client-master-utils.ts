@@ -169,6 +169,11 @@ export interface ProductRow {
   escalationApplicable?: string;
   preEscalationRate?: number | '';
   postEscalationRate?: number | '';
+
+  // One-Time Client Session Booking Options
+  sessionDate?: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 export function createEmptyProductRow(): ProductRow {
@@ -200,5 +205,8 @@ export function createEmptyProductRow(): ProductRow {
     escalationApplicable: '',
     preEscalationRate: '',
     postEscalationRate: '',
+    sessionDate: new Date().toISOString().split('T')[0],
+    startTime: '10:00 AM',
+    endTime: '02:00 PM',
   };
 }

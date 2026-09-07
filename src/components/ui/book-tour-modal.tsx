@@ -7,16 +7,23 @@ import { toast } from "sonner";
 interface BookTourModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialLocation?: string;
 }
 
-export function BookTourModal({ isOpen, onClose }: BookTourModalProps) {
+export function BookTourModal({ isOpen, onClose, initialLocation }: BookTourModalProps) {
   const [username, setUsername] = useState("");
   const [mobileNo, setMobileNo] = useState("");
   const [email, setEmail] = useState("");
-  const [locationName, setLocationName] = useState("Premier House (SG Highway)");
+  const [locationName, setLocationName] = useState(initialLocation || "Premier House (SG Highway)");
   const [preferredDate, setPreferredDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  React.useEffect(() => {
+    if (initialLocation) {
+      setLocationName(initialLocation);
+    }
+  }, [initialLocation, isOpen]);
 
   if (!isOpen) return null;
 

@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   Clock,
   Landmark,
+  ArrowUpDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -131,6 +132,14 @@ export function InvoicePaymentManagement({
   const [selectedLocation, setSelectedLocation] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
 
+  // Dynamic Locations & Sort State
+  const [locations, setLocations] = useState<{ id: number; name: string }[]>([]);
+  const [sortBy, setSortBy] = useState<'srNo' | 'companyName' | 'totalAmount' | 'receiveAmount' | 'balanceAmount' | 'billingMonth' | 'dueDate'>('srNo');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // CM Read-Only View Payment Modal State
+  const [viewingPaymentInvoice, setViewingPaymentInvoice] = useState<LiveApprovedInvoice | null>(null);
+
   // Multi-Part Payment Modal State
   const [editingInvoice, setEditingInvoice] = useState<LiveApprovedInvoice | null>(null);
   const [paymentParts, setPaymentParts] = useState<PaymentPartItem[]>([]);
@@ -154,6 +163,9 @@ export function InvoicePaymentManagement({
         if (json.availableBillingMonths) {
           setAvailableMonths(json.availableBillingMonths);
         }
+        if (json.locations && Array.isArray(json.locations)) {
+          setLocations(json.locations);
+        }
       } else {
         toast.error(json.error || 'Failed to load approved invoices');
       }
@@ -164,6 +176,54 @@ export function InvoicePaymentManagement({
       setLoading(false);
     }
   }, [selectedMonth, selectedLocation, selectedStatus, searchQuery]);
+
+  // Load locations fallback
+  useEffect(() => {
+    fetch('/api/admin/locations')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setLocations(data.map((l: any) => ({ id: l.id, name: l.name })));
+        } else if (data.data && Array.isArray(data.data)) {
+          setLocations(data.data.map((l: any) => ({ id: l.id, name: l.name })));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Sorted Invoices calculation
+  const sortedInvoices = useMemo(() => {
+    return [...invoices].sort((a, b) => {
+      let comp = 0;
+      if (sortBy === 'srNo') {
+        comp = (Number(a.srNo) || 0) - (Number(b.srNo) || 0);
+      } else if (sortBy === 'companyName') {
+        comp = (a.companyName || '').localeCompare(b.companyName || '');
+      } else if (sortBy === 'totalAmount') {
+        comp = (Number(a.totalAmount) || 0) - (Number(b.totalAmount) || 0);
+      } else if (sortBy === 'receiveAmount') {
+        comp = (Number(a.receiveAmount) || 0) - (Number(b.receiveAmount) || 0);
+      } else if (sortBy === 'balanceAmount') {
+        const balA = Math.max(0, (Number(a.totalAmount) || 0) - (Number(a.receiveAmount) || 0));
+        const balB = Math.max(0, (Number(b.totalAmount) || 0) - (Number(b.receiveAmount) || 0));
+        comp = balA - balB;
+      } else if (sortBy === 'billingMonth') {
+        comp = (a.billingMonth || '').localeCompare(b.billingMonth || '');
+      } else if (sortBy === 'dueDate') {
+        comp = (a.dueDate || '').localeCompare(b.dueDate || '');
+      }
+      return sortOrder === 'asc' ? comp : -comp;
+    });
+  }, [invoices, sortBy, sortOrder]);
+
+  const handleToggleSort = (field: typeof sortBy) => {
+    if (sortBy === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'LIVE_APPROVED') {
@@ -643,12 +703,13 @@ export function InvoicePaymentManagement({
                     className="bg-neutral-50 border border-neutral-300 px-2 py-1 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#006064] cursor-pointer"
                   >
                     <option value="ALL">All Centres (Global)</option>
-                    <option value="1">Mercado</option>
-                    <option value="2">Agarwal Complex</option>
-                    <option value="3">Premier House</option>
+                    {locations.map((loc) => (
+                      <option key={loc.id} value={String(loc.id)}>
+                        {loc.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
-
 
                 {/* Payment Status Filter */}
                 <div className="flex items-center gap-1.5 text-xs">
@@ -664,6 +725,32 @@ export function InvoicePaymentManagement({
                     <option value="BALANCE_PENDING">With Balance Pending</option>
                     <option value="RECEIVED">Payment Received (Settled)</option>
                   </select>
+                </div>
+
+                {/* Sort Controls (ASC / DESC option for Accountant) */}
+                <div className="flex items-center gap-1 text-xs bg-neutral-100 px-2 py-1 border border-neutral-300">
+                  <span className="text-gray-600 font-bold text-[10px] uppercase">Sort:</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="bg-white border border-neutral-300 px-1.5 py-0.5 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#006064] cursor-pointer"
+                  >
+                    <option value="srNo">Sr. No</option>
+                    <option value="companyName">Corporate Client</option>
+                    <option value="totalAmount">Invoice Sum</option>
+                    <option value="receiveAmount">Received</option>
+                    <option value="balanceAmount">Balance Due</option>
+                    <option value="billingMonth">Billing Cycle</option>
+                    <option value="dueDate">Due Date</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                    className="px-2 py-0.5 bg-white hover:bg-neutral-50 border border-neutral-300 text-xs font-bold text-[#006064] flex items-center gap-1 cursor-pointer transition-colors"
+                    title={`Toggle Sort: ${sortOrder === 'asc' ? 'Ascending (A-Z, 1-9)' : 'Descending (Z-A, 9-1)'}`}
+                  >
+                    <span>{sortOrder === 'asc' ? '▲ ASC' : '▼ DESC'}</span>
+                  </button>
                 </div>
               </div>
 
@@ -686,13 +773,49 @@ export function InvoicePaymentManagement({
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-neutral-100/80 border-b border-neutral-200 text-gray-700 font-bold uppercase tracking-wider text-[9.5px]">
-                      <th className="py-2 px-2 w-10 text-center">SR.</th>
-                      <th className="py-2 px-2.5 min-w-[160px]">Corporate Client</th>
+                      <th
+                        onClick={() => handleToggleSort('srNo')}
+                        className="py-2 px-2 w-10 text-center cursor-pointer select-none hover:bg-neutral-200/70"
+                        title="Click to sort by Sr. No"
+                      >
+                        SR. {sortBy === 'srNo' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                      </th>
+                      <th
+                        onClick={() => handleToggleSort('companyName')}
+                        className="py-2 px-2.5 min-w-[160px] cursor-pointer select-none hover:bg-neutral-200/70"
+                        title="Click to sort by Corporate Client"
+                      >
+                        Corporate Client {sortBy === 'companyName' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                      </th>
                       <th className="py-2 px-2 min-w-[90px]">Centre</th>
-                      <th className="py-2 px-2.5 min-w-[100px]">Billing Cycle</th>
-                      <th className="py-2 px-2 text-right">Invoice Sum</th>
-                      <th className="py-2 px-2 text-right">Received</th>
-                      <th className="py-2 px-2 text-right">Balance Due</th>
+                      <th
+                        onClick={() => handleToggleSort('billingMonth')}
+                        className="py-2 px-2.5 min-w-[100px] cursor-pointer select-none hover:bg-neutral-200/70"
+                        title="Click to sort by Billing Cycle"
+                      >
+                        Billing Cycle {sortBy === 'billingMonth' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                      </th>
+                      <th
+                        onClick={() => handleToggleSort('totalAmount')}
+                        className="py-2 px-2 text-right cursor-pointer select-none hover:bg-neutral-200/70"
+                        title="Click to sort by Invoice Sum"
+                      >
+                        Invoice Sum {sortBy === 'totalAmount' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                      </th>
+                      <th
+                        onClick={() => handleToggleSort('receiveAmount')}
+                        className="py-2 px-2 text-right cursor-pointer select-none hover:bg-neutral-200/70"
+                        title="Click to sort by Received Amount"
+                      >
+                        Received {sortBy === 'receiveAmount' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                      </th>
+                      <th
+                        onClick={() => handleToggleSort('balanceAmount')}
+                        className="py-2 px-2 text-right cursor-pointer select-none hover:bg-neutral-200/70"
+                        title="Click to sort by Balance Due"
+                      >
+                        Balance Due {sortBy === 'balanceAmount' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                      </th>
                       <th className="py-2 px-2 text-center">Status</th>
                       <th className="py-2 px-2.5 min-w-[140px]">Settlement Details</th>
                       <th className="py-2 px-2 text-center">Tally PDF</th>
@@ -708,7 +831,7 @@ export function InvoicePaymentManagement({
                           <span>Loading approved invoice payment records...</span>
                         </td>
                       </tr>
-                    ) : invoices.length === 0 ? (
+                    ) : sortedInvoices.length === 0 ? (
                       <tr>
                         <td colSpan={12} className="p-8 text-center text-gray-500 font-sans">
                           <CheckCircle2 size={28} className="text-gray-300 mx-auto mb-1.5" />
@@ -719,7 +842,7 @@ export function InvoicePaymentManagement({
                         </td>
                       </tr>
                     ) : (
-                      invoices.map((inv, idx) => {
+                      sortedInvoices.map((inv, idx) => {
                         const recAmt = Number(inv.receiveAmount || 0);
                         const invAmt = Number(inv.totalAmount || 0);
                         const balAmt = Math.max(0, invAmt - recAmt);
@@ -892,13 +1015,26 @@ export function InvoicePaymentManagement({
 
                             {/* Actions */}
                             <td className="py-2 px-2 text-right font-sans">
-                              <button
-                                onClick={() => handleOpenPaymentModal(inv)}
-                                className="px-2 py-1 bg-[#006064] hover:bg-[#004D40] text-white text-[10px] font-bold uppercase tracking-wider shadow-2xs transition-colors cursor-pointer inline-flex items-center gap-1"
-                              >
-                                <CreditCard size={11} />
-                                <span>{isSettled ? 'Edit' : 'Update'}</span>
-                              </button>
+                              {userRoleView === 'CM' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingPaymentInvoice(inv)}
+                                  className="px-2 py-1 bg-teal-50 hover:bg-teal-100 text-[#006064] border border-teal-300 text-[10px] font-bold uppercase tracking-wider shadow-2xs transition-colors cursor-pointer inline-flex items-center gap-1"
+                                  title="View Uploaded Payment Details"
+                                >
+                                  <Eye size={11} />
+                                  <span>View Payment Details</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenPaymentModal(inv)}
+                                  className="px-2 py-1 bg-[#006064] hover:bg-[#004D40] text-white text-[10px] font-bold uppercase tracking-wider shadow-2xs transition-colors cursor-pointer inline-flex items-center gap-1"
+                                >
+                                  <CreditCard size={11} />
+                                  <span>{isSettled ? 'Edit' : 'Update'}</span>
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );
@@ -1237,6 +1373,206 @@ export function InvoicePaymentManagement({
                     <span>Save Settlement Record</span>
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Community Manager Read-Only View Payment Details Modal ── */}
+      <AnimatePresence>
+        {viewingPaymentInvoice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white border border-neutral-300 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col"
+            >
+              {/* Header */}
+              <div className="p-4 sm:p-5 bg-gradient-to-r from-teal-800 to-[#006064] text-white flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-white/10 rounded-xs">
+                    <Receipt size={20} className="text-teal-200" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base sm:text-lg">Payment Settlement Details</h3>
+                    <p className="text-xs text-teal-100 font-sans">
+                      #{viewingPaymentInvoice.srNo} • {viewingPaymentInvoice.companyName} • {viewingPaymentInvoice.billingMonth}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingPaymentInvoice(null)}
+                  className="text-white/70 hover:text-white p-1 cursor-pointer transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-4 sm:p-6 space-y-5 text-xs text-gray-800 font-sans">
+                {/* Summary Metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-neutral-50 p-3.5 border border-neutral-200">
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-500 uppercase">Total Invoiced</div>
+                    <div className="font-mono font-bold text-sm text-gray-900 mt-0.5">
+                      ₹{viewingPaymentInvoice.totalAmount.toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-500 uppercase">Total Received</div>
+                    <div className="font-mono font-bold text-sm text-emerald-700 mt-0.5">
+                      ₹{viewingPaymentInvoice.receiveAmount.toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-500 uppercase">Balance Due</div>
+                    <div className="font-mono font-bold text-sm text-amber-700 mt-0.5">
+                      ₹{viewingPaymentInvoice.balanceAmount.toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-gray-500 uppercase">Status</div>
+                    <div className="mt-0.5">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase rounded-xs border ${
+                        viewingPaymentInvoice.paymentStatus === 'RECEIVED'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          : viewingPaymentInvoice.paymentStatus === 'PARTIAL'
+                          ? 'bg-blue-50 text-blue-800 border-blue-300'
+                          : 'bg-amber-50 text-amber-800 border-amber-300'
+                      }`}>
+                        {viewingPaymentInvoice.paymentStatus}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Breakdown / Parts */}
+                <div className="space-y-3">
+                  <div className="text-xs font-bold uppercase text-gray-700 tracking-wider flex items-center gap-1.5 border-b border-neutral-200 pb-1.5">
+                    <CreditCard size={14} className="text-[#006064]" />
+                    <span>Recorded Payment Transactions</span>
+                  </div>
+
+                  {(() => {
+                    let parts: any[] = [];
+                    if (viewingPaymentInvoice.paymentsJson) {
+                      try {
+                        const parsed = JSON.parse(viewingPaymentInvoice.paymentsJson);
+                        if (Array.isArray(parsed) && parsed.length > 0) parts = parsed;
+                      } catch {}
+                    }
+
+                    if (parts.length === 0 && (viewingPaymentInvoice.receiveAmount > 0 || viewingPaymentInvoice.utrNumber)) {
+                      parts = [{
+                        payReceiveDate: viewingPaymentInvoice.payReceiveDate,
+                        receiveAmount: viewingPaymentInvoice.receiveAmount,
+                        paymentMode: viewingPaymentInvoice.paymentMode || 'NEFT',
+                        utrNumber: viewingPaymentInvoice.utrNumber || 'N/A',
+                        utrDate: viewingPaymentInvoice.utrDate,
+                        tdsDeducted: viewingPaymentInvoice.tdsDeducted || 'No',
+                        tdsAmount: viewingPaymentInvoice.tdsAmount || 0,
+                        utrFileUrl: viewingPaymentInvoice.utrFileUrl,
+                        utrFileName: viewingPaymentInvoice.utrFileName,
+                        remarks: viewingPaymentInvoice.remarks,
+                      }];
+                    }
+
+                    if (parts.length === 0) {
+                      return (
+                        <div className="p-4 bg-amber-50/70 border border-amber-200 text-amber-900 text-center rounded-xs">
+                          <Clock size={20} className="mx-auto text-amber-600 mb-1" />
+                          <p className="font-bold">No payment recorded yet</p>
+                          <p className="text-[11px] text-amber-700 mt-0.5">
+                            This invoice is currently pending settlement by the accountant.
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-3">
+                        {parts.map((p, idx) => (
+                          <div key={idx} className="bg-neutral-50/70 border border-neutral-200 p-3.5 space-y-2.5">
+                            <div className="flex items-center justify-between border-b border-neutral-200 pb-1.5">
+                              <span className="text-xs font-bold text-gray-900">
+                                Part #{idx + 1}
+                              </span>
+                              <span className="font-mono font-bold text-emerald-800 text-sm">
+                                ₹{Number(p.receiveAmount || p.amount || 0).toLocaleString('en-IN')}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px]">
+                              <div>
+                                <span className="text-gray-500 font-semibold block text-[10px]">Receive Date</span>
+                                <span className="font-medium text-gray-800">
+                                  {p.payReceiveDate ? new Date(p.payReceiveDate).toLocaleDateString('en-IN') : 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 font-semibold block text-[10px]">Payment Mode</span>
+                                <span className="font-medium text-gray-800">{p.paymentMode || 'NEFT'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 font-semibold block text-[10px]">UTR / Ref #</span>
+                                <span className="font-mono font-bold text-gray-900 break-all">{p.utrNumber || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 font-semibold block text-[10px]">TDS Deducted</span>
+                                <span className="font-medium text-gray-800">
+                                  {p.tdsDeducted === 'Yes' ? `Yes (₹${Number(p.tdsAmount || 0).toLocaleString('en-IN')})` : 'No'}
+                                </span>
+                              </div>
+                              {p.utrDate && (
+                                <div>
+                                  <span className="text-gray-500 font-semibold block text-[10px]">UTR Date</span>
+                                  <span className="font-medium text-gray-800">
+                                    {new Date(p.utrDate).toLocaleDateString('en-IN')}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {p.remarks && (
+                              <div className="text-[11px] text-gray-600 bg-white p-2 border border-neutral-200">
+                                <span className="font-bold text-gray-500 text-[10px] block">Remarks:</span>
+                                <span>{p.remarks}</span>
+                              </div>
+                            )}
+
+                            {p.utrFileUrl && (
+                              <div className="pt-1">
+                                <a
+                                  href={p.utrFileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064] hover:bg-[#004D40] text-white text-[11px] font-bold rounded-xs transition-colors cursor-pointer"
+                                >
+                                  <Download size={13} />
+                                  <span>Download / View Uploaded UTR Proof</span>
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-3 bg-neutral-100 border-t border-neutral-200 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setViewingPaymentInvoice(null)}
+                  className="px-4 py-1.5 bg-neutral-200 hover:bg-neutral-300 text-gray-800 text-xs font-bold uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
+                >
+                  Close
+                </button>
               </div>
             </motion.div>
           </div>

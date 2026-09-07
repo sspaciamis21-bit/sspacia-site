@@ -8,6 +8,18 @@ const slugify = (text: string) => text.toLowerCase().replace(/ /g, '-').replace(
 
 export const GET = withPermission('settings', 'read', async () => {
   try {
+    await prisma.productType.upsert({
+      where: { name: 'VIRTUAL_OFFICE' },
+      update: {},
+      create: {
+        name: 'VIRTUAL_OFFICE',
+        displayName: 'Virtual Office',
+        slug: 'virtual-office',
+        sortOrder: 10,
+        isActive: true,
+      },
+    }).catch(() => {});
+
     const data = await prisma.productType.findMany({
       where: { isActive: true },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],

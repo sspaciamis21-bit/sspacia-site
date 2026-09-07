@@ -62,6 +62,8 @@ interface CareerApplication {
   qualification: string;
   experience: string;
   address: string | null;
+  cvUrl?: string | null;
+  cvFileName?: string | null;
   status: string;
   notes: string | null;
   createdAt: string;
@@ -403,6 +405,7 @@ export function HrPortalClient() {
       'Experience',
       'Applied Position',
       'Address',
+      'CV Link',
       'Status',
       'HR Notes',
     ];
@@ -418,6 +421,7 @@ export function HrPortalClient() {
       `"${a.experience.replace(/"/g, '""')}"`,
       `"${a.appliedPosition.replace(/"/g, '""')}"`,
       `"${(a.address || 'N/A').replace(/"/g, '""')}"`,
+      `"${(a.cvUrl || 'N/A').replace(/"/g, '""')}"`,
       `"${a.status}"`,
       `"${(a.notes || '').replace(/"/g, '""')}"`,
     ]);
@@ -859,6 +863,7 @@ export function HrPortalClient() {
                         <th className="py-3 px-3.5">Qualification</th>
                         <th className="py-3 px-3.5">Experience</th>
                         <th className="py-3 px-3.5">Applied Position</th>
+                        <th className="py-3 px-3.5 text-center">CV</th>
                         <th className="py-3 px-3.5 text-center">Status</th>
                         <th className="py-3 px-3.5 text-right">Actions</th>
                       </tr>
@@ -909,6 +914,23 @@ export function HrPortalClient() {
 
                             <td className="py-3 px-3.5 font-bold text-slate-900">
                               {app.appliedPosition}
+                            </td>
+
+                            <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                              {app.cvUrl ? (
+                                <a
+                                  href={app.cvUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300/80 rounded-md text-[11px] font-bold transition-colors shadow-2xs"
+                                  title={app.cvFileName || 'View CV'}
+                                >
+                                  <FileText className="w-3 h-3 text-emerald-600" />
+                                  <span>View CV</span>
+                                </a>
+                              ) : (
+                                <span className="text-slate-400 text-[11px]">-</span>
+                              )}
                             </td>
 
                             <td className="py-3 px-3.5 text-center">
@@ -1280,6 +1302,48 @@ export function HrPortalClient() {
                       <span className="text-slate-500 block mb-0.5">Address:</span>
                       <span className="text-slate-800">{selectedCandidate.address || 'Not Provided'}</span>
                     </div>
+                  </div>
+
+                  {/* Attached CV / Resume */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5">
+                    <div className="font-bold text-slate-800 text-[11px] uppercase tracking-wider flex items-center justify-between">
+                      <span>Attached Candidate CV</span>
+                      {selectedCandidate.cvUrl && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          Document Available
+                        </span>
+                      )}
+                    </div>
+
+                    {selectedCandidate.cvUrl ? (
+                      <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-lg flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-slate-900 truncate max-w-[190px]">
+                              {selectedCandidate.cvFileName || 'Candidate_Resume.pdf'}
+                            </div>
+                            <div className="text-[10px] text-emerald-700">Click button to open or download</div>
+                          </div>
+                        </div>
+
+                        <a
+                          href={selectedCandidate.cvUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors shrink-0 shadow-xs"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>View CV</span>
+                        </a>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-500 italic bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        No CV file was uploaded with this application.
+                      </p>
+                    )}
                   </div>
 
                   {/* HR Notes */}

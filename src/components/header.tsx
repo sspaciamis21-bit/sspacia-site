@@ -445,6 +445,22 @@ export function Header() {
                                   <Link href="/coworking-spaces" onClick={() => setIsOpen(false)} className="block hover:text-teal-800">• Executive VIP Suites</Link>
                                 </div>
                               </div>
+
+                              <div className="bg-indigo-50/70 p-2.5 rounded border border-indigo-200 space-y-1.5">
+                                <Link
+                                  href="/virtual-office"
+                                  onClick={() => setIsOpen(false)}
+                                  className="block text-xs font-bold text-indigo-900 hover:underline flex items-center justify-between"
+                                >
+                                  <span>🌐 Virtual Office (Address &amp; GST)</span>
+                                  <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-black uppercase">Buy</span>
+                                </Link>
+                                <div className="pl-2 space-y-1 text-[11px] text-indigo-800/80">
+                                  <Link href="/virtual-office" onClick={() => setIsOpen(false)} className="block hover:text-indigo-950">• GST &amp; MCA / ROC Registration</Link>
+                                  <Link href="/virtual-office" onClick={() => setIsOpen(false)} className="block hover:text-indigo-950">• Mail &amp; Courier Handling</Link>
+                                  <Link href="/virtual-office" onClick={() => setIsOpen(false)} className="block hover:text-indigo-950">• All 3 Prime Ahmedabad Centres</Link>
+                                </div>
+                              </div>
                             </div>
                           )}
                         </div>

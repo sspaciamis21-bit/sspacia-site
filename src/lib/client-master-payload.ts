@@ -63,18 +63,21 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
   const firstProduct = productList[0] || {};
 
   const isVirtualOffice = clientType === 'VIRTUAL_OFFICE';
+  const isOneTime = clientType === 'ONE_TIME';
 
   const resolvedCabinName = isVirtualOffice
     ? 'Virtual Office'
     : (productList.length > 0
         ? productList.map((p) => (p.cabinName ? String(p.cabinName).trim() : '')).filter(Boolean).join(', ')
-        : (cabinName ? String(cabinName).trim() : null));
+        : (cabinName ? String(cabinName).trim() : (isOneTime ? 'Meeting Room' : null)));
 
   const resolvedNoOfSeats = isVirtualOffice
     ? 0
-    : (productList.length > 0
-        ? productList.reduce((sum, p) => sum + (p.noOfSeats ? Number(p.noOfSeats) : 0), 0)
-        : (noOfSeats ? Number(noOfSeats) : null));
+    : (isOneTime
+        ? (noOfSeats ? Number(noOfSeats) : 1)
+        : (productList.length > 0
+            ? productList.reduce((sum, p) => sum + (p.noOfSeats ? Number(p.noOfSeats) : 0), 0)
+            : (noOfSeats ? Number(noOfSeats) : null)));
 
   const resolvedRate = isVirtualOffice
     ? 0
@@ -107,6 +110,16 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     pinCode: hoPinCode as string | undefined,
   });
 
+  const parsedSessionDate = (raw: unknown) => {
+    if (!raw) return null;
+    try {
+      const d = new Date(String(raw));
+      return isNaN(d.getTime()) ? null : d;
+    } catch {
+      return null;
+    }
+  };
+
   return {
     companyName: String(companyName || '').trim(),
     hoAddress: structuredAddress || (hoAddress ? String(hoAddress).trim() : null),
@@ -116,30 +129,30 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     hoState: hoState ? String(hoState).trim() : null,
     hoCountry: hoCountry ? String(hoCountry).trim() : null,
     hoPinCode: hoPinCode ? String(hoPinCode).trim() : null,
-    gstStatus: String(gstStatus),
+    gstStatus: String(gstStatus || 'UNREGISTERED'),
     gstNo: gstStatus === 'REGISTERED' && gstNo ? String(gstNo).trim() : null,
     gstPdfUrl: gstStatus === 'REGISTERED' ? (gstPdfUrl as string) || null : null,
     gstPdfName: gstStatus === 'REGISTERED' ? (gstPdfName as string) || null : null,
-    agreementStartDate: agreementStartDate ? new Date(String(agreementStartDate)) : null,
-    agreementEndDate: agreementEndDate ? new Date(String(agreementEndDate)) : null,
-    agreementPdfUrl: (agreementPdfUrl as string) || null,
-    agreementPdfName: (agreementPdfName as string) || null,
-    lockinEndDate: lockinEndDate ? new Date(String(lockinEndDate)) : null,
-    noticePeriodMonths: noticePeriodMonths ? Number(noticePeriodMonths) : null,
-    noticePeriodApplicable: noticePeriodApplicable ? String(noticePeriodApplicable) : null,
-    escalationPercent: escalationPercent ? Number(escalationPercent) : null,
-    escalationApplicable: escalationApplicable ? new Date(String(escalationApplicable)) : null,
-    documentationCharges: documentationCharges ? Number(documentationCharges) : null,
+    agreementStartDate: isOneTime ? (productList[0]?.sessionDate ? parsedSessionDate(productList[0].sessionDate) : null) : (agreementStartDate ? new Date(String(agreementStartDate)) : null),
+    agreementEndDate: isOneTime ? (productList[0]?.sessionDate ? parsedSessionDate(productList[0].sessionDate) : null) : (agreementEndDate ? new Date(String(agreementEndDate)) : null),
+    agreementPdfUrl: isOneTime ? null : ((agreementPdfUrl as string) || null),
+    agreementPdfName: isOneTime ? null : ((agreementPdfName as string) || null),
+    lockinEndDate: isOneTime ? null : (lockinEndDate ? new Date(String(lockinEndDate)) : null),
+    noticePeriodMonths: isOneTime ? null : (noticePeriodMonths ? Number(noticePeriodMonths) : null),
+    noticePeriodApplicable: isOneTime ? null : (noticePeriodApplicable ? String(noticePeriodApplicable) : null),
+    escalationPercent: isOneTime ? null : (escalationPercent ? Number(escalationPercent) : null),
+    escalationApplicable: isOneTime ? null : (escalationApplicable ? new Date(String(escalationApplicable)) : null),
+    documentationCharges: isOneTime ? null : (documentationCharges ? Number(documentationCharges) : null),
     cabinName: resolvedCabinName,
     noOfSeats: resolvedNoOfSeats,
     ratePerAgreement: resolvedRate,
     amount: resolvedAmount,
     gstPercent: resolvedGstPercent,
     totalAmount: resolvedTotalAmount,
-    willDeductTds: Boolean(willDeductTds),
-    tanNo: willDeductTds && tanNo ? String(tanNo).trim() : null,
-    tdsPdfUrl: willDeductTds ? (tdsPdfUrl as string) || null : null,
-    tdsPdfName: willDeductTds ? (tdsPdfName as string) || null : null,
+    willDeductTds: isOneTime ? false : Boolean(willDeductTds),
+    tanNo: !isOneTime && willDeductTds && tanNo ? String(tanNo).trim() : null,
+    tdsPdfUrl: !isOneTime && willDeductTds ? (tdsPdfUrl as string) || null : null,
+    tdsPdfName: !isOneTime && willDeductTds ? (tdsPdfName as string) || null : null,
     clientId: clientId ? String(clientId).trim() : null,
     hasBrokerCommission: Boolean(hasBrokerCommission),
     brokerCommissionPercent: hasBrokerCommission && brokerCommissionPercent
@@ -148,42 +161,48 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     invoiceToBeRaised: hasBrokerCommission && invoiceToBeRaised
       ? String(invoiceToBeRaised)
       : null,
-    sorAmount: resolvedSdrAmount,
-    sorRecdDate: resolvedSdrDate,
-    sdrAmount: resolvedSdrAmount,
-    sdrRecdDate: resolvedSdrDate,
-    sdrPdfUrl: sdrPdfUrl ? String(sdrPdfUrl).trim() : null,
-    sdrPdfName: sdrPdfName ? String(sdrPdfName).trim() : null,
-    paymentDueDay: paymentDueDay ? Number(paymentDueDay) : null,
-    clientStatus: clientStatus ? String(clientStatus) : 'Active',
-    clientType: clientType === 'VIRTUAL_OFFICE' ? 'VIRTUAL_OFFICE' : 'DEFAULT',
+    sorAmount: isOneTime ? null : resolvedSdrAmount,
+    sorRecdDate: isOneTime ? null : resolvedSdrDate,
+    sdrAmount: isOneTime ? null : resolvedSdrAmount,
+    sdrRecdDate: isOneTime ? null : resolvedSdrDate,
+    sdrPdfUrl: isOneTime ? null : (sdrPdfUrl ? String(sdrPdfUrl).trim() : null),
+    sdrPdfName: isOneTime ? null : (sdrPdfName ? String(sdrPdfName).trim() : null),
+    paymentDueDay: isOneTime ? null : (paymentDueDay ? Number(paymentDueDay) : null),
+    clientStatus: clientStatus ? String(clientStatus) : (isOneTime ? 'One-Time' : 'Active'),
+    clientType: clientType === 'VIRTUAL_OFFICE' ? 'VIRTUAL_OFFICE' : (clientType === 'ONE_TIME' ? 'ONE_TIME' : 'DEFAULT'),
     contactPersons: Array.isArray(contactPersons) ? contactPersons : [],
-    products: productList.map((p: Record<string, unknown>, idx: number) => ({
-      cabinName: p.cabinName ? String(p.cabinName).trim() : null,
-      noOfSeats: p.noOfSeats ? Number(p.noOfSeats) : null,
-      ratePerAgreement: p.ratePerAgreement ? Number(p.ratePerAgreement) : null,
-      amount: p.amount ? Number(p.amount) : null,
-      gstPercent: p.gstPercent ? Number(p.gstPercent) : null,
-      totalAmount: p.totalAmount ? Number(p.totalAmount) : null,
-      paymentDuration: p.paymentDuration ? String(p.paymentDuration).trim() : 'MONTHLY',
-      paymentDueDay: p.paymentDueDay ? Number(p.paymentDueDay) : null,
-      firstPaymentDate: p.firstPaymentDate ? new Date(String(p.firstPaymentDate)) : null,
-      agreementPdfUrl: p.agreementPdfUrl ? String(p.agreementPdfUrl) : null,
-      agreementPdfName: p.agreementPdfName ? String(p.agreementPdfName) : null,
-      agreementStartDate: p.agreementStartDate ? new Date(String(p.agreementStartDate)) : null,
-      agreementEndDate: p.agreementEndDate ? new Date(String(p.agreementEndDate)) : null,
-      lockinEndDate: p.lockinEndDate ? new Date(String(p.lockinEndDate)) : null,
-      billingType: p.billingType ? String(p.billingType) : 'REGULAR',
-      proratedStartDate: p.proratedStartDate ? new Date(String(p.proratedStartDate)) : null,
-      proratedEndDate: p.proratedEndDate ? new Date(String(p.proratedEndDate)) : null,
-      parentProductId: p.parentProductId ? Number(p.parentProductId) : null,
-      extraSeatsCount: p.extraSeatsCount ? Number(p.extraSeatsCount) : null,
-      extraSeatsDate: p.extraSeatsDate ? new Date(String(p.extraSeatsDate)) : null,
-      escalationPercent: p.escalationPercent ? Number(p.escalationPercent) : null,
-      escalationApplicable: p.escalationApplicable ? new Date(String(p.escalationApplicable)) : null,
-      preEscalationRate: p.preEscalationRate ? Number(p.preEscalationRate) : null,
-      postEscalationRate: p.postEscalationRate ? Number(p.postEscalationRate) : null,
-      sortOrder: idx,
-    })),
+    products: productList.map((p: Record<string, unknown>, idx: number) => {
+      const sDate = parsedSessionDate(p.sessionDate || p.agreementStartDate);
+      return {
+        cabinName: p.cabinName ? String(p.cabinName).trim() : null,
+        noOfSeats: isOneTime ? 1 : (p.noOfSeats ? Number(p.noOfSeats) : null),
+        ratePerAgreement: p.ratePerAgreement ? Number(p.ratePerAgreement) : null,
+        amount: p.amount ? Number(p.amount) : null,
+        gstPercent: p.gstPercent !== undefined && p.gstPercent !== null && p.gstPercent !== '' ? Number(p.gstPercent) : 18,
+        totalAmount: p.totalAmount ? Number(p.totalAmount) : null,
+        paymentDuration: isOneTime ? 'ONE_TIME' : (p.paymentDuration ? String(p.paymentDuration).trim() : 'MONTHLY'),
+        paymentDueDay: isOneTime ? null : (p.paymentDueDay ? Number(p.paymentDueDay) : null),
+        firstPaymentDate: isOneTime ? sDate : (p.firstPaymentDate ? new Date(String(p.firstPaymentDate)) : null),
+        agreementPdfUrl: isOneTime ? null : (p.agreementPdfUrl ? String(p.agreementPdfUrl) : null),
+        agreementPdfName: isOneTime ? null : (p.agreementPdfName ? String(p.agreementPdfName) : null),
+        agreementStartDate: sDate || (p.agreementStartDate ? new Date(String(p.agreementStartDate)) : null),
+        agreementEndDate: sDate || (p.agreementEndDate ? new Date(String(p.agreementEndDate)) : null),
+        lockinEndDate: isOneTime ? null : (p.lockinEndDate ? new Date(String(p.lockinEndDate)) : null),
+        billingType: isOneTime ? 'ONE_TIME' : (p.billingType ? String(p.billingType) : 'REGULAR'),
+        proratedStartDate: isOneTime ? null : (p.proratedStartDate ? new Date(String(p.proratedStartDate)) : null),
+        proratedEndDate: isOneTime ? null : (p.proratedEndDate ? new Date(String(p.proratedEndDate)) : null),
+        parentProductId: isOneTime ? null : (p.parentProductId ? Number(p.parentProductId) : null),
+        extraSeatsCount: isOneTime ? null : (p.extraSeatsCount ? Number(p.extraSeatsCount) : null),
+        extraSeatsDate: isOneTime ? null : (p.extraSeatsDate ? new Date(String(p.extraSeatsDate)) : null),
+        escalationPercent: isOneTime ? null : (p.escalationPercent ? Number(p.escalationPercent) : null),
+        escalationApplicable: isOneTime ? null : (p.escalationApplicable ? new Date(String(p.escalationApplicable)) : null),
+        preEscalationRate: isOneTime ? null : (p.preEscalationRate ? Number(p.preEscalationRate) : null),
+        postEscalationRate: isOneTime ? null : (p.postEscalationRate ? Number(p.postEscalationRate) : null),
+        sessionDate: sDate,
+        startTime: p.startTime ? String(p.startTime).trim() : null,
+        endTime: p.endTime ? String(p.endTime).trim() : null,
+        sortOrder: idx,
+      };
+    }),
   };
 }

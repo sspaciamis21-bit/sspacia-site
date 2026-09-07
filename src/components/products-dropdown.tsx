@@ -9,7 +9,8 @@ import {
   ChevronRight, 
   ArrowRight,
   MapPin,
-  Loader2
+  Loader2,
+  Globe
 } from "lucide-react";
 
 interface ProductsDropdownProps {
@@ -117,10 +118,25 @@ export function ProductsDropdown({ onLinkClick }: ProductsDropdownProps) {
               </div>
               <ChevronRight size={14} className={activeCategory === "coworking" ? "text-white" : "text-slate-300"} />
             </button>
+
+            {/* Category Option 3: Virtual Office */}
+            <Link
+              href="/virtual-office"
+              onClick={onLinkClick}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer bg-gradient-to-r from-indigo-50/80 to-purple-50 text-indigo-950 hover:bg-indigo-600 hover:text-white border border-indigo-200/80 group shadow-2xs"
+            >
+              <div className="flex items-center gap-2">
+                <Globe size={15} className="text-indigo-600 group-hover:text-amber-300 transition-colors" />
+                <span>Virtual Office</span>
+              </div>
+              <span className="text-[8.5px] font-black uppercase px-1.5 py-0.5 bg-indigo-600 text-white rounded group-hover:bg-white group-hover:text-indigo-950 transition-colors">
+                Address
+              </span>
+            </Link>
           </div>
 
           {/* Quick Hub Links */}
-          <div className="pt-3 mt-3 border-t border-slate-200 space-y-1.5">
+          <div className="pt-2.5 mt-2.5 border-t border-slate-200 space-y-1.5">
             <span className="text-[8.5px] font-black uppercase tracking-[0.18em] text-slate-400 block px-1">
               Direct Catalogs
             </span>
@@ -137,6 +153,14 @@ export function ProductsDropdown({ onLinkClick }: ProductsDropdownProps) {
               className="block text-[10.5px] font-bold text-[#006064] hover:text-[#004D40] hover:underline px-1 py-0.5"
             >
               🏢 Dedicated Private Cabins →
+            </Link>
+            <Link
+              href="/virtual-office"
+              onClick={onLinkClick}
+              className="block text-[10.5px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline px-1 py-0.5 flex items-center justify-between"
+            >
+              <span>🌐 Virtual Office &amp; GST →</span>
+              <span className="text-[8px] font-extrabold bg-indigo-100 text-indigo-800 px-1 py-0.5 rounded-2xs">3 Centres</span>
             </Link>
           </div>
         </div>

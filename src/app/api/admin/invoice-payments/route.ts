@@ -82,21 +82,12 @@ export async function GET(request: Request) {
 
     // Node-based data isolation
     if (currentUserId && !isSuperAdmin && !isAccountant) {
-      if (locationId && locationId !== 'ALL') {
-        const locationUserIds = await getUserIdsByLocation(parseInt(locationId, 10));
-        if (locationUserIds) {
-          where.createdById = { in: locationUserIds };
-        }
-      } else {
-        const scopedUserIds = await getNodeScopedUserIds(currentUserId);
-        if (scopedUserIds !== null) {
-          where.createdById = { in: scopedUserIds };
-        }
-      }
-    } else if (locationId && locationId !== 'ALL') {
-      const locationUserIds = await getUserIdsByLocation(parseInt(locationId, 10));
-      if (locationUserIds) {
-        where.createdById = { in: locationUserIds };
+      const scopedUserIds = await getNodeScopedUserIds(currentUserId);
+      if (scopedUserIds !== null) {
+        where.OR = [
+          { createdById: { in: scopedUserIds } },
+          { clientMaster: { createdById: { in: scopedUserIds } } },
+        ];
       }
     }
 
@@ -234,22 +225,33 @@ export async function GET(request: Request) {
       };
     });
 
+    // Location filter
+    if (locationId && locationId !== 'ALL') {
+      const targetLocId = Number(locationId);
+      transformed = transformed.filter((inv: any) => Number(inv.locationId) === targetLocId);
+    }
+
     // Apply Client-Side filters
     if (billingMonth && billingMonth !== 'ALL') {
-      const targetNorm = normalizeBillingMonth(billingMonth);
-      transformed = transformed.filter((inv: any) => normalizeBillingMonth(inv.billingMonth) === targetNorm);
+      const targetNorm = normalizeBillingMonth(billingMonth).toLowerCase();
+      transformed = transformed.filter((inv: any) => {
+        const invNorm = normalizeBillingMonth(inv.billingMonth).toLowerCase();
+        return invNorm === targetNorm || (inv.billingMonth && inv.billingMonth.toLowerCase() === billingMonth.toLowerCase());
+      });
     }
 
     if (search) {
       const q = search.toLowerCase();
       transformed = transformed.filter(
         (inv: any) =>
-          inv.companyName.toLowerCase().includes(q) ||
+          (inv.companyName && inv.companyName.toLowerCase().includes(q)) ||
           (inv.cabinName && inv.cabinName.toLowerCase().includes(q)) ||
           (inv.gstNo && inv.gstNo.toLowerCase().includes(q)) ||
           (inv.locationName && inv.locationName.toLowerCase().includes(q)) ||
           (inv.utrNumber && inv.utrNumber.toLowerCase().includes(q)) ||
-          (inv.remarks && inv.remarks.toLowerCase().includes(q))
+          (inv.remarks && inv.remarks.toLowerCase().includes(q)) ||
+          (inv.srNo && String(inv.srNo).includes(q)) ||
+          (inv.paymentsJson && inv.paymentsJson.toLowerCase().includes(q))
       );
     }
 
@@ -261,6 +263,10 @@ export async function GET(request: Request) {
       }
     }
 
+    const allLocations = await (prisma as any).location.findMany({
+      select: { id: true, name: true, slug: true },
+      orderBy: { id: 'asc' },
+    });
 
     // Summary Analytics
     const totalApprovedCount = transformed.length;
@@ -274,6 +280,7 @@ export async function GET(request: Request) {
       success: true,
       data: transformed,
       availableBillingMonths,
+      locations: allLocations,
       summary: {
         totalApprovedCount,
         totalInvoicedSum,

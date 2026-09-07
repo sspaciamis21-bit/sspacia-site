@@ -13,6 +13,8 @@ export interface HrApplicationPayload {
   experience: string;
   appliedPosition: string;
   address?: string | null;
+  cvUrl?: string | null;
+  cvFileName?: string | null;
   status?: string;
   createdAt?: string;
 }
@@ -62,6 +64,10 @@ export async function syncCandidateToHrSheet(payload: HrApplicationPayload) {
     appliedPosition: payload.appliedPosition,
     position: payload.appliedPosition,
     address: payload.address || 'N/A',
+    cvUrl: payload.cvUrl || 'N/A',
+    resumeUrl: payload.cvUrl || 'N/A',
+    cvFileName: payload.cvFileName || 'N/A',
+    resume: payload.cvUrl || 'N/A',
     status: payload.status || 'APPLIED',
   };
 

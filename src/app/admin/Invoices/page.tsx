@@ -1605,7 +1605,7 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
 
           </div>
 
-          {activeSection === 'ACTIVE_WORKFLOW' && canAccessCM && canAccessAccountant && (
+          {canAccessCM && canAccessAccountant && (
             <div className="flex items-center bg-[#F8F9FA] border border-[var(--outline-variant)] p-1 text-xs font-bold">
               <button
                 type="button"

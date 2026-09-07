@@ -35,7 +35,10 @@ import {
   CreditCard,
   Receipt,
   Lock,
-  Calculator
+  Calculator,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -164,6 +167,9 @@ export function OldInvoicesArchive({
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('ALL');
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('ALL');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'ALL' | 'PENDING' | 'PAID'>('ALL');
+  // Sort State (ASC to DESC / DESC to ASC)
+  const [sortBy, setSortBy] = useState<'company' | 'amount' | 'date'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // Expanded Company Cards State (Set of company names)
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
@@ -214,6 +220,7 @@ export function OldInvoicesArchive({
 
   // Payment Received Details Modal State (Multi-Part Payments with 3 Attachments each)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
+  const [isPaymentViewOnly, setIsPaymentViewOnly] = useState<boolean>(false);
   const [paymentTargetInvoice, setPaymentTargetInvoice] = useState<OldInvoiceRecord | null>(null);
   const [paymentParts, setPaymentParts] = useState<PaymentInstallment[]>([]);
   const [savingPayment, setSavingPayment] = useState<boolean>(false);
@@ -665,9 +672,10 @@ export function OldInvoicesArchive({
     }
   };
 
-  // Payment Details Handlers (Accountant View - Multi-Part Payments)
-  const handleOpenPaymentModal = (item: OldInvoiceRecord) => {
+  // Payment Details Handlers (Accountant View & CM Read-Only View)
+  const handleOpenPaymentModal = (item: OldInvoiceRecord, viewOnly: boolean = false) => {
     setPaymentTargetInvoice(item);
+    setIsPaymentViewOnly(viewOnly);
 
     if (item.paymentsJson) {
       try {
@@ -741,6 +749,10 @@ export function OldInvoicesArchive({
       },
     ]);
     setIsPaymentModalOpen(true);
+  };
+
+  const handleOpenViewPaymentModal = (item: OldInvoiceRecord) => {
+    handleOpenPaymentModal(item, true);
   };
 
   const handleAddPaymentPart = () => {
@@ -994,9 +1006,23 @@ export function OldInvoicesArchive({
       map.get(compKey)!.push(inv);
     }
 
-    return Array.from(map.entries()).map(([companyName, items]) => {
-      // Sort items by createdAt or month descending
-      const sortedItems = [...items].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const groups = Array.from(map.entries()).map(([companyName, items]) => {
+      // Sort items inside company by amount, month/company or createdAt
+      const sortedItems = [...items].sort((a, b) => {
+        if (sortBy === 'amount') {
+          const amtA = Number(a.amount || 0);
+          const amtB = Number(b.amount || 0);
+          return sortOrder === 'asc' ? amtA - amtB : amtB - amtA;
+        }
+        if (sortBy === 'company') {
+          const comp = (a.month || '').localeCompare(b.month || '');
+          return sortOrder === 'asc' ? comp : -comp;
+        }
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+      });
+
       const totalCompanyAmount = sortedItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
       const primaryLocation = sortedItems[0]?.locationName || 'Main Center';
 
@@ -1008,7 +1034,26 @@ export function OldInvoicesArchive({
         invoiceCount: sortedItems.length,
       };
     });
-  }, [invoices, searchQuery, paymentStatusFilter]);
+
+    // Sort company groups by chosen metric & order
+    groups.sort((a, b) => {
+      if (sortBy === 'company') {
+        const comp = a.companyName.localeCompare(b.companyName);
+        return sortOrder === 'asc' ? comp : -comp;
+      }
+      if (sortBy === 'amount') {
+        return sortOrder === 'asc'
+          ? a.totalCompanyAmount - b.totalCompanyAmount
+          : b.totalCompanyAmount - a.totalCompanyAmount;
+      }
+      // date (latest createdAt in items)
+      const dateA = a.items[0]?.createdAt ? new Date(a.items[0].createdAt).getTime() : 0;
+      const dateB = b.items[0]?.createdAt ? new Date(b.items[0].createdAt).getTime() : 0;
+      return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+    });
+
+    return groups;
+  }, [invoices, searchQuery, paymentStatusFilter, sortBy, sortOrder]);
 
   // Distinct Months for dropdown filter
   const uniqueMonths = useMemo(() => {
@@ -1188,6 +1233,30 @@ export function OldInvoicesArchive({
               </select>
             </div>
           )}
+
+          {/* SORT CONTROLS (ASC TO DESC / DESC TO ASC) */}
+          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-300 px-2 py-1">
+            <ArrowUpDown size={12} className="text-gray-500 shrink-0" />
+            <span className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mr-0.5">Sort:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-transparent text-xs text-gray-800 font-bold outline-none cursor-pointer"
+            >
+              <option value="date">Date</option>
+              <option value="company">Company</option>
+              <option value="amount">Amount</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+              className="ml-1 px-1.5 py-0.5 bg-white border border-gray-200 hover:border-gray-400 text-gray-800 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+              title={sortOrder === 'asc' ? 'Currently Ascending. Click to change to Descending' : 'Currently Descending. Click to change to Ascending'}
+            >
+              {sortOrder === 'asc' ? <ArrowUp size={11} className="text-emerald-600" /> : <ArrowDown size={11} className="text-blue-600" />}
+              <span>{sortOrder.toUpperCase()}</span>
+            </button>
+          </div>
         </div>
 
         {/* REFRESH BUTTON */}
@@ -1441,8 +1510,8 @@ export function OldInvoicesArchive({
                                           ))}
                                         </div>
 
-                                        {/* QUICK ACTION BUTTONS (ONLY FOR ACCOUNTANT VIEW OR SUPER ADMIN) */}
-                                        {(roleView === 'ACCOUNTANT' || isSuperAdmin) && (
+                                        {/* QUICK ACTION BUTTONS */}
+                                        {roleView === 'ACCOUNTANT' || isSuperAdmin ? (
                                           <div className="flex items-center gap-2 pt-1">
                                             <button
                                               type="button"
@@ -1461,6 +1530,18 @@ export function OldInvoicesArchive({
                                             >
                                               <Trash2 size={9} />
                                               <span>Clear</span>
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-2 pt-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenViewPaymentModal(item)}
+                                              className="text-[9.5px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 cursor-pointer"
+                                              title="View Uploaded Payment Details"
+                                            >
+                                              <Eye size={10} />
+                                              <span>View Payment Details</span>
                                             </button>
                                           </div>
                                         )}
@@ -1503,8 +1584,8 @@ export function OldInvoicesArchive({
                                           </a>
                                         )}
 
-                                        {/* QUICK ACTION BUTTONS (ONLY FOR ACCOUNTANT VIEW OR SUPER ADMIN) */}
-                                        {(roleView === 'ACCOUNTANT' || isSuperAdmin) && (
+                                        {/* QUICK ACTION BUTTONS */}
+                                        {roleView === 'ACCOUNTANT' || isSuperAdmin ? (
                                           <div className="flex items-center gap-2 pt-1">
                                             <button
                                               type="button"
@@ -1525,6 +1606,18 @@ export function OldInvoicesArchive({
                                               <span>Clear</span>
                                             </button>
                                           </div>
+                                        ) : (
+                                          <div className="flex items-center gap-2 pt-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenViewPaymentModal(item)}
+                                              className="text-[9.5px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 cursor-pointer"
+                                              title="View Uploaded Payment Details"
+                                            >
+                                              <Eye size={10} />
+                                              <span>View Payment Details</span>
+                                            </button>
+                                          </div>
                                         )}
                                       </div>
                                     );
@@ -1535,13 +1628,22 @@ export function OldInvoicesArchive({
                                       <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[10px] font-bold">
                                         <Clock size={10} /> Pending Entry
                                       </span>
-                                      {(roleView === 'ACCOUNTANT' || isSuperAdmin) && (
+                                      {roleView === 'ACCOUNTANT' || isSuperAdmin ? (
                                         <button
                                           type="button"
                                           onClick={() => handleOpenPaymentModal(item)}
                                           className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
                                         >
                                           + Add
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenViewPaymentModal(item)}
+                                          className="text-[9.5px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                        >
+                                          <Eye size={10} />
+                                          <span>View Details</span>
                                         </button>
                                       )}
                                     </div>
@@ -1589,8 +1691,8 @@ export function OldInvoicesArchive({
                               {/* ACTIONS */}
                               <td className="px-4 py-3 text-right">
                                 <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                                  {/* RECORD PAYMENT DETAILS BUTTON (ONLY FOR ACCOUNTANT VIEW) */}
-                                  {roleView === 'ACCOUNTANT' && (
+                                  {/* PAYMENT ACTION BUTTON (ACCOUNTANT: RECORD/EDIT; CM: VIEW PAYMENT DETAILS) */}
+                                  {roleView === 'ACCOUNTANT' ? (
                                     <button
                                       type="button"
                                       onClick={() => handleOpenPaymentModal(item)}
@@ -1599,6 +1701,16 @@ export function OldInvoicesArchive({
                                     >
                                       <CreditCard size={11} />
                                       <span>Payment</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenViewPaymentModal(item)}
+                                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 rounded text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                                      title="View Uploaded Payment Details"
+                                    >
+                                      <Eye size={11} />
+                                      <span>View Payment Details</span>
                                     </button>
                                   )}
 
@@ -2315,16 +2427,23 @@ export function OldInvoicesArchive({
                       className="bg-white border border-gray-200 shadow-2xl rounded-xl w-full max-w-3xl my-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] overflow-hidden font-sans flex flex-col"
                     >
                       {/* MODAL HEADER */}
-                      <div className="px-6 py-3.5 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between shrink-0">
+                      <div className={`px-6 py-3.5 ${isPaymentViewOnly ? 'bg-emerald-50 border-emerald-100' : 'bg-indigo-50 border-indigo-100'} border-b flex items-center justify-between shrink-0`}>
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 bg-indigo-600 text-white flex items-center justify-center rounded">
-                            <CreditCard size={18} />
+                          <div className={`w-8 h-8 ${isPaymentViewOnly ? 'bg-emerald-700' : 'bg-indigo-600'} text-white flex items-center justify-center rounded`}>
+                            {isPaymentViewOnly ? <Eye size={18} /> : <CreditCard size={18} />}
                           </div>
                           <div>
-                            <h3 className="font-bold text-sm text-indigo-950 uppercase tracking-tight">
-                              Record Payment Received & UTR
-                            </h3>
-                            <p className="text-[11px] text-indigo-700/80">
+                            <div className="flex items-center gap-2">
+                              <h3 className={`font-bold text-sm ${isPaymentViewOnly ? 'text-emerald-950' : 'text-indigo-950'} uppercase tracking-tight`}>
+                                {isPaymentViewOnly ? 'Uploaded Payment Details' : 'Record Payment Received & UTR'}
+                              </h3>
+                              {isPaymentViewOnly && (
+                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-bold uppercase tracking-wider">
+                                  Community Manager (Read-Only)
+                                </span>
+                              )}
+                            </div>
+                            <p className={`text-[11px] ${isPaymentViewOnly ? 'text-emerald-700/80' : 'text-indigo-700/80'}`}>
                               {paymentTargetInvoice.companyName} • {paymentTargetInvoice.month}
                             </p>
                           </div>
@@ -2333,7 +2452,7 @@ export function OldInvoicesArchive({
                         <button
                           type="button"
                           onClick={() => setIsPaymentModalOpen(false)}
-                          className="p-1 hover:bg-indigo-100 text-gray-500 hover:text-gray-800 rounded cursor-pointer"
+                          className={`p-1 ${isPaymentViewOnly ? 'hover:bg-emerald-100' : 'hover:bg-indigo-100'} text-gray-500 hover:text-gray-800 rounded cursor-pointer`}
                         >
                           <X size={18} />
                         </button>
@@ -2369,8 +2488,145 @@ export function OldInvoicesArchive({
                         </div>
                       </div>
 
-                      {/* FORM CONTAINER */}
-                      <form onSubmit={handleSavePaymentDetails} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                      {isPaymentViewOnly ? (
+                        /* READ-ONLY VIEW FOR COMMUNITY MANAGER */
+                        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                          <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 overscroll-contain">
+                            {paymentParts.length === 0 || (!paymentTargetInvoice.receiveAmount && !paymentTargetInvoice.payReceiveDate && !paymentTargetInvoice.utrNumber && !paymentTargetInvoice.paymentsJson) ? (
+                              <div className="p-10 text-center bg-gray-50 border border-dashed border-gray-200 rounded-lg space-y-2">
+                                <Clock size={32} className="text-amber-500 mx-auto" />
+                                <h4 className="text-sm font-bold text-gray-800">No Payment Details Uploaded Yet</h4>
+                                <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                                  Payment received entries, installments, and UTR proofs have not yet been recorded by the accounts department for this invoice.
+                                </p>
+                              </div>
+                            ) : (
+                              paymentParts.map((part, index) => (
+                                <div
+                                  key={part.id}
+                                  className="bg-white border border-emerald-200/70 rounded-lg p-4 space-y-3 shadow-2xs"
+                                >
+                                  {/* PART HEADER */}
+                                  <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-2 py-0.5 bg-emerald-700 text-white font-mono font-bold text-xs rounded">
+                                        Installment #{index + 1}
+                                      </span>
+                                      <span className="text-xs text-gray-500 font-medium">
+                                        Mode: <strong className="text-gray-900">{part.paymentMode || 'NEFT'}</strong>
+                                      </span>
+                                    </div>
+                                    <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">
+                                      ₹{Number(part.receiveAmount || 0).toLocaleString('en-IN')}
+                                    </span>
+                                  </div>
+
+                                  {/* PART METRICS */}
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-sans">
+                                    <div className="p-2 bg-gray-50 rounded">
+                                      <span className="text-[10px] text-gray-500 block uppercase font-medium">Receive Date</span>
+                                      <strong className="font-mono text-gray-900">{part.payReceiveDate || '—'}</strong>
+                                    </div>
+                                    <div className="p-2 bg-gray-50 rounded">
+                                      <span className="text-[10px] text-gray-500 block uppercase font-medium">UTR / Ref #</span>
+                                      <strong className="font-mono text-gray-900 break-all">{part.utrNumber || '—'}</strong>
+                                    </div>
+                                    <div className="p-2 bg-gray-50 rounded">
+                                      <span className="text-[10px] text-gray-500 block uppercase font-medium">UTR Date</span>
+                                      <strong className="font-mono text-gray-900">{part.utrDate || '—'}</strong>
+                                    </div>
+                                    <div className="p-2 bg-gray-50 rounded">
+                                      <span className="text-[10px] text-gray-500 block uppercase font-medium">TDS Deducted</span>
+                                      <strong className="font-mono text-gray-900">
+                                        {part.tdsDeducted === 'Yes'
+                                          ? `Yes ${part.tdsAmount ? '(₹' + Number(part.tdsAmount).toLocaleString('en-IN') + ')' : ''}`
+                                          : 'No'}
+                                      </strong>
+                                    </div>
+                                  </div>
+
+                                  {part.remarks && (
+                                    <div className="p-2.5 bg-gray-50 rounded text-xs text-gray-700">
+                                      <span className="text-[10px] text-gray-500 block uppercase font-bold mb-0.5">Remarks</span>
+                                      <span>{part.remarks}</span>
+                                    </div>
+                                  )}
+
+                                  {/* ATTACHED DOCUMENTS */}
+                                  <div className="pt-2 border-t border-gray-100">
+                                    <span className="text-[10px] text-gray-500 block uppercase font-bold mb-1.5">
+                                      Uploaded Proof Documents
+                                    </span>
+                                    <div className="flex flex-wrap gap-2">
+                                      {part.paymentDocUrl && (
+                                        <a
+                                          href={part.paymentDocUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded text-xs font-bold transition-colors"
+                                          title="View Payment Receipt"
+                                        >
+                                          <Paperclip size={12} />
+                                          <span>Payment Receipt</span>
+                                          <ExternalLink size={10} />
+                                        </a>
+                                      )}
+
+                                      {part.utrDocUrl && (
+                                        <a
+                                          href={part.utrDocUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded text-xs font-bold transition-colors"
+                                          title="View UTR Proof Document"
+                                        >
+                                          <Paperclip size={12} />
+                                          <span>UTR Slip / Advice</span>
+                                          <ExternalLink size={10} />
+                                        </a>
+                                      )}
+
+                                      {part.otherDocUrl && (
+                                        <a
+                                          href={part.otherDocUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-xs font-bold transition-colors"
+                                          title="View Supporting Document"
+                                        >
+                                          <Paperclip size={12} />
+                                          <span>Supporting Doc</span>
+                                          <ExternalLink size={10} />
+                                        </a>
+                                      )}
+
+                                      {!part.paymentDocUrl && !part.utrDocUrl && !part.otherDocUrl && (
+                                        <span className="text-xs text-gray-400 italic">No proof documents attached for this entry</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                          {/* READ ONLY FOOTER */}
+                          <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-3 shrink-0">
+                            <div className="text-xs font-mono text-gray-500">
+                              Total Entries: <strong className="text-gray-900">{paymentParts.length}</strong>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setIsPaymentModalOpen(false)}
+                              className="px-5 py-2 bg-gray-800 hover:bg-black text-white font-bold text-xs uppercase tracking-wider rounded cursor-pointer transition-colors shadow-2xs"
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* FORM CONTAINER (ACCOUNTANT) */
+                        <form onSubmit={handleSavePaymentDetails} className="flex flex-col flex-1 min-h-0 overflow-hidden">
                         <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1 overscroll-contain">
                           {/* MULTI-PART INSTALLMENTS */}
                           <div className="space-y-4">
@@ -2762,6 +3018,7 @@ export function OldInvoicesArchive({
                           </div>
                         </div>
                       </form>
+                    )}
                     </motion.div>
                   </div>
                 );

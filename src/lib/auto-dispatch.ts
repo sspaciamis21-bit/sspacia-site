@@ -35,9 +35,12 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
 
     console.log(`[Auto-Dispatch] 🗓️ Last day of month detected (${today}/${currentMonthIndex + 1}/${currentYear}). Preparing invoices for: "${currentBillingMonth}"`);
 
-    // Fetch all active clients with their products
+    // Fetch all active clients with their products (exclude ONE_TIME clients from recurring monthly invoices)
     const clientsToDispatch = await (prisma as any).clientMaster.findMany({
-      where: { clientStatus: 'Active' },
+      where: {
+        clientStatus: 'Active',
+        clientType: { not: 'ONE_TIME' },
+      },
       include: {
         products: { orderBy: { sortOrder: 'asc' } },
       },

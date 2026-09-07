@@ -23,6 +23,10 @@ import {
   Share2,
   HeartHandshake,
   Check,
+  UploadCloud,
+  FileText,
+  Trash2,
+  Paperclip,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -66,6 +70,10 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
   const [submittedCandidateName, setSubmittedCandidateName] = useState('');
   const [submittedJobTitle, setSubmittedJobTitle] = useState('');
 
+  // CV Upload State
+  const [cvFile, setCvFile] = useState<File | null>(null);
+  const [cvError, setCvError] = useState<string | null>(null);
+
   // Form Fields
   const [formData, setFormData] = useState({
     fullName: '',
@@ -78,6 +86,17 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
     customExperience: '',
     address: '',
   });
+
+  const handleCvFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCvError(null);
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    if (file.size > 15 * 1024 * 1024) {
+      setCvError('File size exceeds 15MB limit. Please choose a smaller file.');
+      return;
+    }
+    setCvFile(file);
+  };
 
   // 4-Second Auto-Closing Timer for Success Popup
   useEffect(() => {
@@ -126,7 +145,26 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
     }
 
     if (selectedGender !== 'ALL') {
-      list = list.filter((p) => p.gender.toLowerCase().includes(selectedGender.toLowerCase()));
+      list = list.filter((p) => {
+        const jobGender = (p.gender || '').toLowerCase().trim();
+        // If job is "Male / Female" or "Any" or includes both, it matches both Male and Female
+        if (
+          jobGender === 'all' ||
+          jobGender === 'any' ||
+          jobGender.includes('both') ||
+          (jobGender.includes('male') && jobGender.includes('female'))
+        ) {
+          return true;
+        }
+        if (selectedGender === 'Female') {
+          return jobGender.includes('female');
+        }
+        if (selectedGender === 'Male') {
+          // Strictly male (must not contain female)
+          return jobGender.includes('male') && !jobGender.includes('female');
+        }
+        return true;
+      });
     }
 
     setFilteredPositions(list);
@@ -135,12 +173,24 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
   const handleOpenApply = (job: JobPosition) => {
     setSelectedJob(job);
     setShowSuccessPopup(false);
+    setCvFile(null);
+    setCvError(null);
+
+    // If job requires Female, default to Female; if Male, default to Male
+    let defaultGender = 'Male';
+    const reqGender = (job.gender || '').toLowerCase();
+    if (reqGender.includes('female') && !reqGender.includes('male / female') && !reqGender.includes('male/female')) {
+      defaultGender = 'Female';
+    } else if (reqGender.includes('female')) {
+      defaultGender = 'Female';
+    }
+
     setFormData({
       fullName: '',
       email: '',
       mobileNo: '',
       age: '',
-      gender: 'Male',
+      gender: defaultGender,
       qualification: '',
       experience: 'Fresher',
       customExperience: '',
@@ -154,6 +204,8 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
     setIsApplyModalOpen(false);
     setSelectedJob(null);
     setShowSuccessPopup(false);
+    setCvFile(null);
+    setCvError(null);
   };
 
   const handleSubmitApplication = async (e: React.FormEvent) => {
@@ -211,23 +263,31 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
       return;
     }
 
+    if (!cvFile) {
+      toast.error('Please attach your CV / Resume before submitting');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const applyData = new FormData();
+      applyData.append('jobPositionId', String(selectedJob.id));
+      applyData.append('appliedPosition', selectedJob.title);
+      applyData.append('fullName', formData.fullName.trim());
+      applyData.append('email', formData.email.trim().toLowerCase());
+      applyData.append('mobileNo', cleanMobile);
+      applyData.append('age', String(numAge));
+      applyData.append('gender', formData.gender);
+      applyData.append('qualification', formData.qualification.trim());
+      applyData.append('experience', finalExp);
+      applyData.append('address', formData.address.trim());
+      if (cvFile) {
+        applyData.append('cv', cvFile);
+      }
+
       const res = await fetch('/api/careers/apply', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobPositionId: selectedJob.id,
-          appliedPosition: selectedJob.title,
-          fullName: formData.fullName.trim(),
-          email: formData.email.trim().toLowerCase(),
-          mobileNo: cleanMobile,
-          age: numAge,
-          gender: formData.gender,
-          qualification: formData.qualification.trim(),
-          experience: finalExp,
-          address: formData.address.trim(),
-        }),
+        body: applyData,
       });
 
       const data = await res.json();
@@ -558,16 +618,23 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Gender <span className="text-red-500 font-bold">*</span>
+                    <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                      <span>
+                        Gender <span className="text-red-500 font-bold">*</span>
+                      </span>
+                      {selectedJob?.gender && (
+                        <span className="text-[10px] font-bold text-[#006064] bg-teal-50 px-2 py-0.5 rounded border border-teal-200/60">
+                          Role: {selectedJob.gender}
+                        </span>
+                      )}
                     </label>
                     <select
                       value={formData.gender}
                       onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base sm:text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white transition-all shadow-2xs cursor-pointer"
                     >
-                      <option value="Male">Male</option>
                       <option value="Female">Female</option>
+                      <option value="Male">Male</option>
                     </select>
                   </div>
                 </div>
@@ -622,7 +689,63 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
                   )}
                 </div>
 
-                {/* 8. Address / Current Location (Optional) */}
+                {/* 8. Attach CV / Resume (Mandatory, placed right after Experience *) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Paperclip className="w-3.5 h-3.5 text-[#006064]" />
+                      <span>
+                        Attach CV / Resume <span className="text-red-500 font-bold">*</span>
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-red-600 font-semibold bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                      Mandatory • PDF, DOC, DOCX
+                    </span>
+                  </label>
+
+                  {!cvFile ? (
+                    <div className="relative">
+                      <input
+                        type="file"
+                        id="cv-upload"
+                        required
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        onChange={handleCvFileChange}
+                        className="w-full text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl file:mr-3 file:py-2 file:px-3.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#006064] file:text-white hover:file:bg-[#004D40] file:cursor-pointer p-1.5 cursor-pointer shadow-2xs focus:outline-hidden"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl shadow-2xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="text-xs font-bold text-slate-800 truncate">
+                          {cvFile.name}
+                        </span>
+                        <span className="text-[10px] text-emerald-700 font-mono shrink-0">
+                          ({(cvFile.size / (1024 * 1024)).toFixed(2)} MB)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCvFile(null);
+                          const el = document.getElementById('cv-upload') as HTMLInputElement;
+                          if (el) el.value = '';
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                        title="Remove attached CV"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {cvError && (
+                    <p className="text-[11px] text-red-500 font-medium mt-1">{cvError}</p>
+                  )}
+                </div>
+
+                {/* 9. Address / Current Location (Optional) */}
                 <div>
                   <label className="block text-xs font-bold text-slate-800 mb-1">
                     Address / Current Location <span className="text-slate-400 font-normal">(Optional)</span>

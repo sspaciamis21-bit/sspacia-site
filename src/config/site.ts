@@ -34,9 +34,11 @@ export const siteConfig = {
       href: "/products",
       subItems: [
         { label: "Guest Spaces", href: "/guest-spaces" },
-        { label: "Co-working Spaces", href: "/coworking-spaces" }
+        { label: "Co-working Spaces", href: "/coworking-spaces" },
+        { label: "Virtual Office", href: "/virtual-office" }
       ]
     },
+    { label: "Virtual Office", href: "/virtual-office", subItems: undefined },
     { label: "Blog", href: "/blog", subItems: undefined },
     { label: "Gallery", href: "/gallery", subItems: undefined },
     // { label: "Careers", href: "/careers", subItems: undefined }
