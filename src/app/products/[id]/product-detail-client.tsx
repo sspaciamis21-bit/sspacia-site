@@ -20,6 +20,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { AuthModal } from "@/components/ui/auth-modal";
+import { AvailabilityTimeline } from "@/components/ui/availability-timeline";
+import { StyledDatePicker } from "@/components/ui/styled-date-picker";
 
 // For demo purposes since actual DB images are empty []
 const fallbackImages = [
@@ -28,9 +30,65 @@ const fallbackImages = [
   "/IMAGES_SSPACIA/AGARWAL IMAGES/Meeting_Room_1.jpg",
 ];
 
+// Helper to format hour (e.g. 13 -> "1 PM", 15 -> "3 PM")
+function formatHour12(hour24: number): string {
+  const period = hour24 >= 12 && hour24 < 24 ? "PM" : "AM";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12} ${period}`;
+}
+
+// Helper to format slot range (e.g. ["13:00"] -> "1 PM to 2 PM", ["13:00", "14:00"] -> "1 PM to 3 PM")
+function formatSlotTimeRange(slots: string[]): string {
+  if (!slots || slots.length === 0) return "";
+  const sorted = [...slots].sort();
+  const slotHours = sorted.map(s => {
+    const [h] = s.split(':').map(Number);
+    return h;
+  });
+
+  const ranges: { start: number; end: number }[] = [];
+  let currentRange: { start: number; end: number } | null = null;
+
+  for (const h of slotHours) {
+    if (!currentRange) {
+      currentRange = { start: h, end: h + 1 };
+    } else if (h === currentRange.end) {
+      currentRange.end = h + 1;
+    } else {
+      ranges.push(currentRange);
+      currentRange = { start: h, end: h + 1 };
+    }
+  }
+  if (currentRange) ranges.push(currentRange);
+
+  return ranges
+    .map(r => `${formatHour12(r.start)} to ${formatHour12(r.end)}`)
+    .join(", ");
+}
+
+// Helper to format date (e.g. "2026-09-05" -> "5 Sep 2026")
+function formatDateForSlot(dateStr?: string): string {
+  let d: Date;
+  if (dateStr && dateStr.includes('-')) {
+    const parts = dateStr.split('-').map(Number);
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      d = new Date(parts[0], parts[1] - 1, parts[2]);
+    } else {
+      d = new Date();
+    }
+  } else {
+    d = new Date();
+  }
+  const day = d.getDate();
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
+}
+
 const TIME_SLOTS = [
   "08:00", "09:00", "10:00", "11:00", "12:00",
-  "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"
+  "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"
 ];
 
 export default function ProductDetailClient({ product }: { product: any }) {
@@ -79,56 +137,16 @@ export default function ProductDetailClient({ product }: { product: any }) {
   const handlePrevImage = () => setCurrentImageIndex((p) => (p - 1 + images.length) % images.length);
 
   /**
-   * Logic to ensure only consecutive time slots can be selected.
-   * If a non-adjacent slot is clicked, it resets the selection to that new slot.
+   * Logic to allow selecting any combination of time slots (hourly).
    */
   const toggleTimeSlot = (slot: string) => {
-    const slotIndex = TIME_SLOTS.indexOf(slot);
-
-    // 1. Initial selection
-    if (selectedTimeSlots.length === 0) {
-      setSelectedTimeSlots([slot]);
-      return;
-    }
-
-    // Get current min and max indices of selected slots
-    const selectedIndices = selectedTimeSlots
-      .map((s) => TIME_SLOTS.indexOf(s))
-      .sort((a, b) => a - b);
-
-    const minIndex = selectedIndices[0];
-    const maxIndex = selectedIndices[selectedIndices.length - 1];
-
-    // 2. Deselection logic
-    if (selectedTimeSlots.includes(slot)) {
-      // If clicking the only selected slot, remove it
-      if (selectedTimeSlots.length === 1) {
-        setSelectedTimeSlots([]);
-        return;
+    setSelectedTimeSlots((prev) => {
+      if (prev.includes(slot)) {
+        return prev.filter((s) => s !== slot);
+      } else {
+        return [...prev, slot].sort((a, b) => TIME_SLOTS.indexOf(a) - TIME_SLOTS.indexOf(b));
       }
-
-      // Can only remove from edges (min or max) to maintain continuity
-      if (slotIndex === minIndex) {
-        setSelectedTimeSlots(selectedTimeSlots.filter((s) => s !== slot));
-        return;
-      }
-      if (slotIndex === maxIndex) {
-        setSelectedTimeSlots(selectedTimeSlots.filter((s) => s !== slot));
-        return;
-      }
-
-      // If clicked inside the range, reset to just this slot
-      setSelectedTimeSlots([slot]);
-      return;
-    }
-
-    // 3. Selection logic (must be adjacent to min or max)
-    if (slotIndex === minIndex - 1 || slotIndex === maxIndex + 1) {
-      setSelectedTimeSlots([...selectedTimeSlots, slot].sort((a, b) => TIME_SLOTS.indexOf(a) - TIME_SLOTS.indexOf(b)));
-    } else {
-      // Non-adjacent click resets selection to single slot
-      setSelectedTimeSlots([slot]);
-    }
+    });
   };
 
   /**
@@ -195,15 +213,9 @@ export default function ProductDetailClient({ product }: { product: any }) {
       productId: product.id.toString(),
       date: selectedDate,
       slots: selectedTimeSlots.join(','),
-      basePrice: totalPrice.toString()
+      basePrice: hourlyRate.toString()
     });
     const targetUrl = `/checkout?${params.toString()}`;
-
-    if (!isLoggedIn) {
-      setPendingAction(targetUrl);
-      setIsAuthModalOpen(true);
-      return;
-    }
 
     router.push(targetUrl);
   };
@@ -388,86 +400,53 @@ export default function ProductDetailClient({ product }: { product: any }) {
           {isGuestSpace ? (
             <div className="space-y-8">
               {/* Date Selection */}
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-tertiary flex items-center gap-2">
                   <Calendar className="h-3 w-3" /> Select Date
                 </label>
-                <input
-                  type="date"
+                <StyledDatePicker
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full bg-surface-high border-b-2 border-outline-variant/30 px-4 py-4 text-sm font-bold text-on-surface transition-all focus:border-primary focus:outline-none"
+                  onChange={(newDate) => {
+                    setSelectedDate(newDate);
+                    setSelectedTimeSlots([]);
+                  }}
+                  className="w-full"
+                  triggerClassName="w-full h-12 justify-between"
                 />
               </div>
 
               {/* Time Slots */}
               {selectedDate && (
                 <div className="space-y-3">
-                  <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-tertiary flex items-center gap-2">
-                    <Clock className="h-3 w-3" /> Select Time Slots (Hourly)
-                  </label>
-                  <p className="text-[9px] text-tertiary italic">* Only consecutive hours can be booked together</p>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-2 border border-outline-variant/10 p-4 bg-surface-high relative">
-                    {isFetchingSlots && (
-                      <div className="absolute inset-0 bg-black/5 flex items-center justify-center z-10 backdrop-blur-[1px]">
-                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                      </div>
-                    )}
-                    {TIME_SLOTS.map(slot => {
-                      const disabled = isSlotDisabled(slot);
-                      const isMine = myBookedSlots.includes(slot);
-                      const isBooked = bookedSlots.includes(slot);
-                      
-                      return (
-                        <button
-                          key={slot}
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => toggleTimeSlot(slot)}
-                          title={
-                            isMine 
-                              ? "🔒 Booked by You — You have already reserved this slot" 
-                              : isBooked 
-                              ? "🔒 Already Reserved — This time slot is booked by another customer" 
-                              : disabled 
-                              ? "Time Passed" 
-                              : `Available - Click to select ${slot}`
-                          }
-                          className={`py-2 text-[10px] font-bold transition-all border relative flex flex-col items-center justify-center gap-0.5 ${selectedTimeSlots.includes(slot)
-                            ? 'bg-[#1ab0bc] border-[#1ab0bc] text-white shadow-md'
-                            : isMine
-                              ? 'bg-blue-50 border-blue-200 text-blue-700 cursor-not-allowed opacity-90 shadow-xs'
-                              : isBooked
-                                ? 'bg-rose-50 border-rose-200 text-rose-600 cursor-not-allowed opacity-90 shadow-xs'
-                                : disabled
-                                  ? 'bg-outline-variant/10 border-outline-variant/30 text-outline cursor-not-allowed grayscale opacity-60'
-                                  : 'bg-white border-outline-variant/20 text-tertiary hover:border-[#1ab0bc]/50 hover:text-[#1ab0bc]'
-                            }`}
-                        >
-                          <span>{slot}</span>
-                          {isMine ? (
-                            <span className="text-[7.5px] leading-[1] text-blue-700 uppercase font-black tracking-tight">Booked by You</span>
-                          ) : isBooked ? (
-                            <span className="text-[7.5px] leading-[1] text-rose-600 uppercase font-black tracking-tight">Reserved</span>
-                          ) : disabled ? (
-                            <span className="text-[7px] leading-[1] opacity-60 uppercase font-bold">Passed</span>
-                          ) : null}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <AvailabilityTimeline
+                    productId={product.id}
+                    selectedDate={selectedDate}
+                    selectedSlots={selectedTimeSlots}
+                    onToggleSlot={toggleTimeSlot}
+                    layout="wrap"
+                    title="SELECT TIME SLOTS (HOURLY)"
+                  />
+                  <p className="text-[9px] text-tertiary italic">* Click any time slot to select or modify your reserved hours</p>
                 </div>
               )}
 
               {/* Price Summary */}
               {selectedTimeSlots.length > 0 && (
-                <div className="border-t border-outline-variant/20 pt-6 space-y-2">
-                  <div className="flex justify-between text-sm text-tertiary">
-                    <span>{selectedTimeSlots.length} Hours × ₹{hourlyRate}</span>
-                    <span>₹{totalPrice.toLocaleString()}</span>
+                <div className="border-t border-outline-variant/20 pt-6 space-y-3">
+                  <div className="p-3 bg-teal-50/70 border border-teal-200/80 rounded-sm space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#006064] flex-wrap">
+                      <Calendar className="w-3.5 h-3.5 text-[#006064] shrink-0" />
+                      <span>{formatDateForSlot(selectedDate)}</span>
+                      <span className="text-slate-300 font-normal">•</span>
+                      <Clock className="w-3.5 h-3.5 text-[#006064] shrink-0" />
+                      <span>{formatSlotTimeRange(selectedTimeSlots)}</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 font-mono">
+                      {selectedTimeSlots.length} {selectedTimeSlots.length === 1 ? 'hour' : 'hours'} @ ₹{hourlyRate.toLocaleString()}/hr
+                    </p>
                   </div>
-                  <div className="flex justify-between items-end">
+                  <div className="flex justify-between items-end pt-1">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface">Total Amount</span>
                     <span className="font-display text-2xl font-bold text-primary">₹{totalPrice.toLocaleString()}</span>
                   </div>

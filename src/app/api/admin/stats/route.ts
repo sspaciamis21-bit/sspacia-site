@@ -203,10 +203,14 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           const allClientsList: any[] = [];
 
           clientMasters.forEach((c: any) => {
+            const isVO = c.clientType === 'VIRTUAL_OFFICE';
             let clientSeats = 0;
             let clientVal = 0;
 
-            if (Array.isArray(c.products) && c.products.length > 0) {
+            if (isVO) {
+              clientSeats = 0;
+              clientVal = Number(c.totalAmount || c.amount || 0);
+            } else if (Array.isArray(c.products) && c.products.length > 0) {
               c.products.forEach((p: any) => {
                 clientSeats += Number(p.noOfSeats || 0);
                 clientVal += Number(p.totalAmount || p.amount || 0);
@@ -251,11 +255,12 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
               id: c.id,
               companyName: c.companyName,
               clientId: c.clientId,
-              cabinName: c.cabinName,
-              noOfSeats: clientSeats || c.noOfSeats || 1,
+              cabinName: isVO ? 'Virtual Office' : c.cabinName,
+              noOfSeats: isVO ? 0 : (clientSeats || c.noOfSeats || 1),
               monthlyAmount: clientVal,
               sdrAmount: sdr,
               clientStatus: c.clientStatus || 'Active',
+              clientType: c.clientType || 'DEFAULT',
               centreName: locName,
               centreId: locId,
               agreementStartDate: c.agreementStartDate || c.createdAt,
@@ -271,6 +276,7 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           clientMasterStats.totalAllocatedSeats = seatsSum;
           clientMasterStats.totalMonthlyAgreementValue = valueSum;
           (clientMasterStats as any).allClients = allClientsList;
+          (clientMasterStats as any).virtualOfficeClients = clientMasters.filter((c: any) => c.clientType === 'VIRTUAL_OFFICE').length;
 
           sdrAnalytics.totalSdr = totalSdrSum;
           sdrAnalytics.totalCompaniesCount = clientMasters.length;

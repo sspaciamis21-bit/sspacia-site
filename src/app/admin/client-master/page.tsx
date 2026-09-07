@@ -31,7 +31,8 @@ import {
   Paperclip,
   Sparkles,
   AlertTriangle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Globe
 } from 'lucide-react';
 import { ClientTerminationModal } from '@/components/admin/client-termination-modal';
 import { toast } from 'sonner';
@@ -140,6 +141,7 @@ interface ClientMasterEntry {
   sdrPdfName?: string | null;
   paymentDueDay?: number | null;
   clientStatus: string | null;
+  clientType?: 'DEFAULT' | 'VIRTUAL_OFFICE' | null;
   isDispatchedToInvoices?: boolean;
   dispatchedMonths?: string[];
   targetBillingMonth?: string;
@@ -285,6 +287,7 @@ export default function ClientMasterRegistryPage() {
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClientStatusFilter, setSelectedClientStatusFilter] = useState('ALL');
+  const [selectedClientTypeFilter, setSelectedClientTypeFilter] = useState('ALL');
 
   // Node/Location filter (Admin only)
   const [locations, setLocations] = useState<LocationOption[]>([]);
@@ -343,6 +346,7 @@ export default function ClientMasterRegistryPage() {
   // ---------------- FORM STATE ----------------
   const [srNoDisplay, setSrNoDisplay] = useState<number>(1);
   const [clientId, setClientId] = useState(DEFAULT_CLIENT_ID_PREFIX);
+  const [clientType, setClientType] = useState<'DEFAULT' | 'VIRTUAL_OFFICE'>('DEFAULT');
 
   // Brokerage Commission Options
   const [hasBrokerCommission, setHasBrokerCommission] = useState(false);
@@ -853,6 +857,7 @@ export default function ClientMasterRegistryPage() {
   const resetForm = () => {
     setEditingId(null);
     setClientId(DEFAULT_CLIENT_ID_PREFIX);
+    setClientType('DEFAULT');
     setHasBrokerCommission(false);
     setBrokerCommissionPercent('');
     setInvoiceToBeRaised('CLIENT');
@@ -910,6 +915,7 @@ export default function ClientMasterRegistryPage() {
     setEditingId(entry.id);
     setSrNoDisplay(entry.srNo);
     setClientId(entry.clientId || DEFAULT_CLIENT_ID_PREFIX);
+    setClientType(entry.clientType === 'VIRTUAL_OFFICE' ? 'VIRTUAL_OFFICE' : 'DEFAULT');
     setHasBrokerCommission(Boolean(entry.hasBrokerCommission));
     setBrokerCommissionPercent(entry.brokerCommissionPercent ?? '');
     setInvoiceToBeRaised(entry.invoiceToBeRaised || 'CLIENT');
@@ -1078,11 +1084,14 @@ export default function ClientMasterRegistryPage() {
 
     const finalGrandTotal = Math.round(escalatedSubtotal + grandGst);
 
+    const isVO = clientType === 'VIRTUAL_OFFICE';
+
     const payload = {
       clientId: clientId.trim() || DEFAULT_CLIENT_ID_PREFIX,
-      hasBrokerCommission,
-      brokerCommissionPercent: hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : null,
-      invoiceToBeRaised: hasBrokerCommission ? invoiceToBeRaised : null,
+      clientType,
+      hasBrokerCommission: isVO ? false : hasBrokerCommission,
+      brokerCommissionPercent: !isVO && hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : null,
+      invoiceToBeRaised: !isVO && hasBrokerCommission ? invoiceToBeRaised : null,
 
       companyName: companyName.trim() || 'Untitled Client',
       hoAddressLine1: hoAddressLine1.trim() || null,
@@ -1115,36 +1124,59 @@ export default function ClientMasterRegistryPage() {
       noticePeriodMonths: noticePeriodMonths !== '' ? Number(noticePeriodMonths) : null,
       noticePeriodApplicable,
 
-      escalationPercent: escalationPercent !== '' ? Number(escalationPercent) : null,
-      escalationApplicable: escalationApplicable || null,
-      documentationCharges: documentationCharges !== '' ? Number(documentationCharges) : null,
+      escalationPercent: isVO ? null : (escalationPercent !== '' ? Number(escalationPercent) : null),
+      escalationApplicable: isVO ? null : (escalationApplicable || null),
+      documentationCharges: isVO ? null : (documentationCharges !== '' ? Number(documentationCharges) : null),
 
-      amount: effectiveEscPct > 0 ? escalatedSubtotal : rawAmount,
-      totalAmount: effectiveEscPct > 0 ? finalGrandTotal : productRows.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0),
+      cabinName: isVO ? 'Virtual Office' : (productRows[0]?.cabinName?.trim() || null),
+      noOfSeats: isVO ? 0 : (productRows.reduce((sum, r) => sum + (Number(r.noOfSeats) || 0), 0)),
+      ratePerAgreement: isVO ? 0 : (productRows[0]?.ratePerAgreement !== '' ? Number(productRows[0]?.ratePerAgreement) : null),
 
-      products: productRows.map((p) => ({
-        cabinName: p.cabinName.trim() || null,
-        noOfSeats: p.noOfSeats !== '' ? Number(p.noOfSeats) : null,
-        ratePerAgreement: p.ratePerAgreement !== '' ? Number(p.ratePerAgreement) : null,
-        amount: p.amount !== '' ? Number(p.amount) : null,
-        gstPercent: p.gstPercent !== '' ? Number(p.gstPercent) : 18,
-        totalAmount: p.totalAmount !== '' ? Number(p.totalAmount) : null,
-        paymentDuration: p.paymentDuration || 'MONTHLY',
-        paymentDueDay: p.paymentDueDay !== '' ? Number(p.paymentDueDay) : null,
-        firstPaymentDate: p.firstPaymentDate || null,
-        agreementPdfUrl: p.hasSeparateAgreement && p.agreementPdfUrl ? p.agreementPdfUrl : null,
-        agreementPdfName: p.hasSeparateAgreement && p.agreementPdfName ? p.agreementPdfName : null,
-        agreementStartDate: p.hasSeparateAgreement && p.agreementStartDate ? p.agreementStartDate : null,
-        agreementEndDate: p.hasSeparateAgreement && p.agreementEndDate ? p.agreementEndDate : null,
-        lockinEndDate: p.hasSeparateAgreement && p.lockinEndDate ? p.lockinEndDate : null,
-        billingType: p.billingType || 'REGULAR',
-        proratedStartDate: p.proratedStartDate || null,
-        proratedEndDate: p.proratedEndDate || null,
-        escalationPercent: p.escalationPercent !== '' ? Number(p.escalationPercent) : null,
-        escalationApplicable: p.escalationApplicable || null,
-        preEscalationRate: p.preEscalationRate !== '' ? Number(p.preEscalationRate) : null,
-        postEscalationRate: p.postEscalationRate !== '' ? Number(p.postEscalationRate) : null,
-      })),
+      amount: isVO
+        ? (Number(productRows[0]?.amount) || 0)
+        : (effectiveEscPct > 0 ? escalatedSubtotal : rawAmount),
+      totalAmount: isVO
+        ? (Number(productRows[0]?.totalAmount) || 0)
+        : (effectiveEscPct > 0 ? finalGrandTotal : productRows.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0)),
+
+      products: isVO
+        ? [
+            {
+              cabinName: 'Virtual Office',
+              noOfSeats: 0,
+              ratePerAgreement: 0,
+              amount: productRows[0]?.amount !== '' ? Number(productRows[0]?.amount) : 0,
+              gstPercent: productRows[0]?.gstPercent !== '' ? Number(productRows[0]?.gstPercent) : 18,
+              totalAmount: productRows[0]?.totalAmount !== '' ? Number(productRows[0]?.totalAmount) : 0,
+              paymentDuration: productRows[0]?.paymentDuration || 'MONTHLY',
+              paymentDueDay: productRows[0]?.paymentDueDay !== '' ? Number(productRows[0]?.paymentDueDay) : (paymentDueDay !== '' ? Number(paymentDueDay) : 5),
+              firstPaymentDate: productRows[0]?.firstPaymentDate || null,
+              billingType: 'REGULAR',
+            }
+          ]
+        : productRows.map((p) => ({
+            cabinName: p.cabinName.trim() || null,
+            noOfSeats: p.noOfSeats !== '' ? Number(p.noOfSeats) : null,
+            ratePerAgreement: p.ratePerAgreement !== '' ? Number(p.ratePerAgreement) : null,
+            amount: p.amount !== '' ? Number(p.amount) : null,
+            gstPercent: p.gstPercent !== '' ? Number(p.gstPercent) : 18,
+            totalAmount: p.totalAmount !== '' ? Number(p.totalAmount) : null,
+            paymentDuration: p.paymentDuration || 'MONTHLY',
+            paymentDueDay: p.paymentDueDay !== '' ? Number(p.paymentDueDay) : null,
+            firstPaymentDate: p.firstPaymentDate || null,
+            agreementPdfUrl: p.hasSeparateAgreement && p.agreementPdfUrl ? p.agreementPdfUrl : null,
+            agreementPdfName: p.hasSeparateAgreement && p.agreementPdfName ? p.agreementPdfName : null,
+            agreementStartDate: p.hasSeparateAgreement && p.agreementStartDate ? p.agreementStartDate : null,
+            agreementEndDate: p.hasSeparateAgreement && p.agreementEndDate ? p.agreementEndDate : null,
+            lockinEndDate: p.hasSeparateAgreement && p.lockinEndDate ? p.lockinEndDate : null,
+            billingType: p.billingType || 'REGULAR',
+            proratedStartDate: p.proratedStartDate || null,
+            proratedEndDate: p.proratedEndDate || null,
+            escalationPercent: p.escalationPercent !== '' ? Number(p.escalationPercent) : null,
+            escalationApplicable: p.escalationApplicable || null,
+            preEscalationRate: p.preEscalationRate !== '' ? Number(p.preEscalationRate) : null,
+            postEscalationRate: p.postEscalationRate !== '' ? Number(p.postEscalationRate) : null,
+          })),
 
       willDeductTds,
       tanNo: willDeductTds ? tanNo.trim() : null,
@@ -1157,7 +1189,9 @@ export default function ClientMasterRegistryPage() {
       sdrRecdDate: sorRecdDate || null,
       sdrPdfUrl: sdrPdfUrl || null,
       sdrPdfName: sdrPdfName || null,
-      paymentDueDay: paymentDueDay !== '' ? Number(paymentDueDay) : null,
+      paymentDueDay: isVO
+        ? (productRows[0]?.paymentDueDay !== '' ? Number(productRows[0]?.paymentDueDay) : (paymentDueDay !== '' ? Number(paymentDueDay) : 5))
+        : (paymentDueDay !== '' ? Number(paymentDueDay) : null),
       clientStatus,
     };
 
@@ -1277,18 +1311,24 @@ export default function ClientMasterRegistryPage() {
       const matchesClientStatus =
         selectedClientStatusFilter === 'ALL' || e.clientStatus === selectedClientStatusFilter;
 
-      return matchesSearch && matchesClientStatus;
+      const matchesClientType =
+        selectedClientTypeFilter === 'ALL' ||
+        (selectedClientTypeFilter === 'VIRTUAL_OFFICE' && e.clientType === 'VIRTUAL_OFFICE') ||
+        (selectedClientTypeFilter === 'DEFAULT' && (!e.clientType || e.clientType === 'DEFAULT'));
+
+      return matchesSearch && matchesClientStatus && matchesClientType;
     });
-  }, [entries, searchTerm, selectedClientStatusFilter]);
+  }, [entries, searchTerm, selectedClientStatusFilter, selectedClientTypeFilter]);
 
   // KPIs
   const kpis = useMemo(() => {
     const totalClients = entries.length;
     const activeClients = entries.filter((e) => e.clientStatus === 'Active').length;
     const onNotice = entries.filter((e) => e.clientStatus === 'On Notice').length;
-    const totalSeats = entries.reduce((acc, curr) => acc + (Number(curr.noOfSeats) || 0), 0);
+    const virtualOfficeCount = entries.filter((e) => e.clientType === 'VIRTUAL_OFFICE').length;
+    const totalSeats = entries.reduce((acc, curr) => acc + (curr.clientType === 'VIRTUAL_OFFICE' ? 0 : (Number(curr.noOfSeats) || 0)), 0);
     const totalRev = entries.reduce((acc, curr) => acc + (Number(curr.totalAmount) || 0), 0);
-    return { totalClients, activeClients, onNotice, totalSeats, totalRev };
+    return { totalClients, activeClients, onNotice, virtualOfficeCount, totalSeats, totalRev };
   }, [entries]);
 
   return (
@@ -1385,7 +1425,14 @@ export default function ClientMasterRegistryPage() {
           <div className="bg-white p-5 border border-[var(--outline-variant)]/40 shadow-xs">
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#616161]">Total Master Clients</div>
             <div className="text-2xl font-display font-black mt-1 text-[#1B1C1C]">{kpis.totalClients}</div>
-            <div className="text-[11px] text-[#616161] font-light">All records in database</div>
+            <div className="text-[11px] text-[#616161] font-light flex items-center justify-between">
+              <span>All records in DB</span>
+              {kpis.virtualOfficeCount > 0 && (
+                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 border border-indigo-200">
+                  {kpis.virtualOfficeCount} Virtual
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="bg-white p-5 border border-emerald-200 bg-emerald-50/20 shadow-xs">
@@ -1468,6 +1515,19 @@ export default function ClientMasterRegistryPage() {
                     {st}
                   </option>
                 ))}
+              </select>
+
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[#616161]">
+                <Globe size={14} className="text-indigo-600" /> Client Type:
+              </div>
+              <select
+                value={selectedClientTypeFilter}
+                onChange={(e) => setSelectedClientTypeFilter(e.target.value)}
+                className="bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-medium text-indigo-950 font-bold"
+              >
+                <option value="ALL">All Client Types</option>
+                <option value="DEFAULT">Default (Cabin / Seats)</option>
+                <option value="VIRTUAL_OFFICE">Virtual Office (Address Only)</option>
               </select>
 
               <div className="flex items-center gap-1.5 text-xs font-bold text-purple-800 bg-purple-50 px-2.5 py-1.5 border border-purple-200">
@@ -1557,7 +1617,14 @@ export default function ClientMasterRegistryPage() {
                         </td>
 
                         <td className="p-3">
-                          <div className="font-bold text-[#1B1C1C] text-sm">{entry.companyName}</div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="font-bold text-[#1B1C1C] text-sm">{entry.companyName}</div>
+                            {entry.clientType === 'VIRTUAL_OFFICE' && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap">
+                                <Globe size={10} /> Virtual Office
+                              </span>
+                            )}
+                          </div>
                           {entry.hoAddress && (
                             <div className="text-[10px] text-[#616161] line-clamp-1" title={entry.hoAddress}>
                               HO: {entry.hoAddress}
@@ -1637,14 +1704,27 @@ export default function ClientMasterRegistryPage() {
                         </td>
 
                         <td className="p-3">
-                          <div className="font-bold">
-                            {entry.products && entry.products.length > 1
-                              ? `${entry.products.length} Products (${entry.products.map((p) => p.cabinName).filter(Boolean).join(', ')})`
-                              : entry.cabinName || 'N/A'}
-                          </div>
-                          <div className="text-[10px] text-[#616161]">
-                            {entry.noOfSeats || 0} seats @ ₹{Number(entry.ratePerAgreement || 0).toLocaleString('en-IN')}
-                          </div>
+                          {entry.clientType === 'VIRTUAL_OFFICE' ? (
+                            <div>
+                              <div className="font-bold text-indigo-900 flex items-center gap-1">
+                                <Globe size={12} className="text-indigo-700" /> Virtual Office
+                              </div>
+                              <div className="text-[10px] text-neutral-500">
+                                Address &amp; Mailing Only (0 Seats)
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="font-bold">
+                                {entry.products && entry.products.length > 1
+                                  ? `${entry.products.length} Products (${entry.products.map((p) => p.cabinName).filter(Boolean).join(', ')})`
+                                  : entry.cabinName || 'N/A'}
+                              </div>
+                              <div className="text-[10px] text-[#616161]">
+                                {entry.noOfSeats || 0} seats @ ₹{Number(entry.ratePerAgreement || 0).toLocaleString('en-IN')}
+                              </div>
+                            </>
+                          )}
                         </td>
 
                         <td className="p-3 text-right font-bold text-[#1B1C1C]">
@@ -2261,32 +2341,225 @@ export default function ClientMasterRegistryPage() {
 
                 {/* SECTION 6: Cabin, Seats, Rates & Billing Amounts (Multi-Product & Add More Products) */}
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-neutral-200 pb-2.5 gap-3">
                     <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C]">
-                      <DollarSign size={16} className="text-[#006064]" /> 6. Cabin, Seats, Rates & Billing Amounts
+                      <DollarSign size={16} className="text-[#006064]" /> 6. Cabin, Seats, Rates &amp; Billing Amounts
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setShowAddProductModal(true)}
-                        className="text-xs text-blue-700 font-bold uppercase tracking-wider hover:underline flex items-center gap-1"
-                      >
-                        <Sparkles size={14} /> Add Product Option
-                      </button>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Client Type Dropdown */}
+                      <div className="flex items-center gap-1.5 bg-neutral-100 px-2.5 py-1 border border-neutral-300">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-neutral-600">Client Type:</span>
+                        <select
+                          value={clientType}
+                          onChange={(e) => {
+                            const newType = e.target.value as 'DEFAULT' | 'VIRTUAL_OFFICE';
+                            setClientType(newType);
+                            if (newType === 'VIRTUAL_OFFICE') {
+                              setProductRows((prev) => {
+                                const first = prev[0] || createEmptyProductRow();
+                                return [{
+                                  ...first,
+                                  cabinName: 'Virtual Office',
+                                  noOfSeats: 0,
+                                  ratePerAgreement: 0,
+                                  gstPercent: first.gstPercent ?? 18,
+                                  paymentDuration: first.paymentDuration || 'MONTHLY',
+                                  paymentDueDay: first.paymentDueDay ?? 5,
+                                  hasSeparateAgreement: false,
+                                  billingType: 'REGULAR',
+                                }];
+                              });
+                            } else {
+                              setProductRows((prev) => {
+                                const first = prev[0] || createEmptyProductRow();
+                                return [{
+                                  ...first,
+                                  cabinName: first.cabinName === 'Virtual Office' ? '' : first.cabinName,
+                                  noOfSeats: first.noOfSeats === 0 ? '' : first.noOfSeats,
+                                  ratePerAgreement: first.ratePerAgreement === 0 ? '' : first.ratePerAgreement,
+                                }];
+                              });
+                            }
+                          }}
+                          className="bg-white border border-neutral-300 text-xs font-bold text-[#006064] px-2.5 py-1 focus:outline-none cursor-pointer"
+                        >
+                          <option value="DEFAULT">Default (Cabin / Seats)</option>
+                          <option value="VIRTUAL_OFFICE">Virtual Office (Address Only)</option>
+                        </select>
+                      </div>
 
-                      <button
-                        type="button"
-                        onClick={handleAddProductRow}
-                        className="text-xs text-[#006064] font-bold uppercase tracking-wider hover:underline flex items-center gap-1"
-                      >
-                        <Plus size={14} /> Add More Cabin / Product
-                      </button>
+                      {clientType === 'DEFAULT' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddProductModal(true)}
+                            className="text-xs text-blue-700 font-bold uppercase tracking-wider hover:underline flex items-center gap-1"
+                          >
+                            <Sparkles size={14} /> Add Product Option
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleAddProductRow}
+                            className="text-xs text-[#006064] font-bold uppercase tracking-wider hover:underline flex items-center gap-1"
+                          >
+                            <Plus size={14} /> Add More Cabin / Product
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  {/* Product Rows */}
-                  <div className="space-y-4">
+                  {clientType === 'VIRTUAL_OFFICE' ? (
+                    <div className="space-y-4">
+                      {/* Virtual Office Explanatory Notice */}
+                      <div className="bg-indigo-50/80 border border-indigo-200 p-3.5 text-indigo-950 flex items-start gap-3 shadow-2xs">
+                        <Globe size={18} className="text-indigo-600 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-xs uppercase tracking-wider text-indigo-900">
+                            Virtual Office Plan Selected (Address &amp; Mailing Only)
+                          </div>
+                          <div className="text-[11px] text-indigo-700 mt-0.5">
+                            This client only utilizes the centre address for business/tax/postal registration. Physical cabins, seats, and mid-month calculators are not required.
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Virtual Office Item #1 Card */}
+                      <div className="bg-[#F8F9FA] p-4 sm:p-5 border border-[var(--outline-variant)]/70 space-y-4 shadow-xs">
+                        <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+                          <span className="font-bold text-xs uppercase text-[#006064] flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-[#006064]"></span>
+                            Item #1 • Virtual Office Service Fee
+                          </span>
+                          <span className="text-[10px] font-bold uppercase bg-indigo-100 text-indigo-800 px-2 py-0.5">
+                            Address Only
+                          </span>
+                        </div>
+
+                        {/* Amount, GST, Total Amt */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                              Amount (₹) <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              placeholder="Enter service fee..."
+                              value={productRows[0]?.amount ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? '' : Number(e.target.value);
+                                const gst = productRows[0]?.gstPercent !== '' ? Number(productRows[0]?.gstPercent ?? 18) : 18;
+                                const total = val === '' ? '' : Math.round(Number(val) * (1 + gst / 100));
+                                handleUpdateProductRow(0, 'amount', val);
+                                handleUpdateProductRow(0, 'totalAmount', total);
+                              }}
+                              className="w-full bg-blue-50 border border-blue-200 px-3 py-2 text-xs focus:outline-none font-bold text-right text-blue-900"
+                              required
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-[#616161] mb-1">
+                              GST (%)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="any"
+                              placeholder="18"
+                              value={productRows[0]?.gstPercent ?? 18}
+                              onChange={(e) => {
+                                const gstVal = e.target.value === '' ? '' : Number(e.target.value);
+                                const amt = Number(productRows[0]?.amount || 0);
+                                const gstPct = gstVal !== '' ? Number(gstVal) : 18;
+                                const total = amt > 0 ? Math.round(amt * (1 + gstPct / 100)) : '';
+                                handleUpdateProductRow(0, 'gstPercent', gstVal);
+                                handleUpdateProductRow(0, 'totalAmount', total);
+                              }}
+                              className="w-full bg-amber-50 border border-amber-200 px-3 py-2 text-xs focus:outline-none font-bold text-right text-amber-900"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-[10px] font-bold uppercase text-[#1B1C1C]">
+                                Total Amt (Amt+GST) (₹)
+                              </label>
+                            </div>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              placeholder="0"
+                              value={productRows[0]?.totalAmount ?? ''}
+                              onChange={(e) =>
+                                handleUpdateProductRow(0, 'totalAmount', e.target.value === '' ? '' : Number(e.target.value))
+                              }
+                              className="w-full bg-emerald-50 border border-emerald-300 px-3 py-2 text-xs focus:outline-none font-black text-right text-emerald-800"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Payment Duration Type, Payment Due Day, First Payment Date */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-neutral-200/80 bg-white/70 p-3">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-[#006064] mb-1">
+                              Payment Duration Type
+                            </label>
+                            <select
+                              value={productRows[0]?.paymentDuration || 'MONTHLY'}
+                              onChange={(e) => handleUpdateProductRow(0, 'paymentDuration', e.target.value)}
+                              className="w-full bg-white border border-[#006064]/30 px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold text-[#006064]"
+                            >
+                              <option value="MONTHLY">Monthly (1 Month)</option>
+                              <option value="QUARTERLY">Quarterly (3 Months)</option>
+                              <option value="HALF_YEARLY">Half-Yearly (6 Months)</option>
+                              <option value="YEARLY">Yearly (12 Months)</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-[#006064] mb-1">
+                              Payment Due Day (1 – 31)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              placeholder="e.g. 5"
+                              value={productRows[0]?.paymentDueDay ?? 5}
+                              onChange={(e) => {
+                                const d = e.target.value === '' ? '' : Number(e.target.value);
+                                handleUpdateProductRow(0, 'paymentDueDay', d);
+                                setPaymentDueDay(d);
+                              }}
+                              className="w-full bg-white border border-[#006064]/30 px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold text-[#1B1C1C]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-[#006064] mb-1">
+                              First Payment Date (Optional)
+                            </label>
+                            <input
+                              type="date"
+                              value={productRows[0]?.firstPaymentDate || ''}
+                              onChange={(e) => handleUpdateProductRow(0, 'firstPaymentDate', e.target.value)}
+                              className="w-full bg-white border border-[#006064]/30 px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-medium text-[#1B1C1C]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Product Rows */}
+                      <div className="space-y-4">
                     {productRows.map((row, idx) => {
                       const isParking = isParkingProduct(row.cabinName);
                       const isDocCharges = isDocumentationChargesProduct(row.cabinName);
@@ -3074,6 +3347,8 @@ export default function ClientMasterRegistryPage() {
                       </div>
                     );
                   })()}
+                    </>
+                  )}
                 </div>
 
                 {/* SECTION 7: TDS Deduction Options */}
@@ -3455,8 +3730,13 @@ export default function ClientMasterRegistryPage() {
                       );
                     })()}
                   </div>
-                  <h3 className="text-xl font-bold text-[#1B1C1C] mt-1">
-                    {entryToViewDetails.companyName}
+                  <h3 className="text-xl font-bold text-[#1B1C1C] mt-1 flex items-center gap-2 flex-wrap">
+                    <span>{entryToViewDetails.companyName}</span>
+                    {entryToViewDetails.clientType === 'VIRTUAL_OFFICE' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-black uppercase tracking-wider rounded-xs">
+                        <Globe size={12} /> Virtual Office
+                      </span>
+                    )}
                   </h3>
                   <p className="text-[#616161]">
                     Created by {entryToViewDetails.createdBy?.name || 'Community Manager'} on{' '}
@@ -3502,6 +3782,20 @@ export default function ClientMasterRegistryPage() {
                   )}
                 </div>
               </div>
+
+              {entryToViewDetails.clientType === 'VIRTUAL_OFFICE' && (
+                <div className="bg-indigo-50/80 border border-indigo-200 p-3.5 text-indigo-950 flex items-start gap-3 shadow-2xs">
+                  <Globe size={18} className="text-indigo-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-xs uppercase tracking-wider text-indigo-900">
+                      Virtual Office Agreement (Address &amp; Postal Registration Only)
+                    </div>
+                    <div className="text-[11px] text-indigo-700 mt-0.5">
+                      Client is registered to use the centre address for official/tax registration. No physical cabin, desk, or seat allocation is assigned.
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Broker Details */}
               {entryToViewDetails.hasBrokerCommission && (
@@ -3590,9 +3884,43 @@ export default function ClientMasterRegistryPage() {
               {/* Cabins & Products Table */}
               <div className="space-y-2">
                 <h4 className="font-bold uppercase tracking-wider text-[#1B1C1C] flex items-center gap-2">
-                  <DollarSign size={14} className="text-[#006064]" /> Cabin / Product Breakdown
+                  <DollarSign size={14} className="text-[#006064]" />{' '}
+                  {entryToViewDetails.clientType === 'VIRTUAL_OFFICE'
+                    ? 'Virtual Office Billing Details'
+                    : 'Cabin / Product Breakdown'}
                 </h4>
-                {entryToViewDetails.products && entryToViewDetails.products.length > 0 ? (
+                {entryToViewDetails.clientType === 'VIRTUAL_OFFICE' ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60">
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">Service Type</div>
+                      <div className="font-bold mt-0.5 text-indigo-900 flex items-center gap-1">
+                        <Globe size={13} className="text-indigo-600" /> Virtual Office
+                      </div>
+                    </div>
+                    <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60">
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">Payment Duration</div>
+                      <div className="font-bold mt-0.5 text-[#006064]">
+                        {entryToViewDetails.products?.[0]?.paymentDuration ? String(entryToViewDetails.products[0].paymentDuration).replace('_', ' ') : 'MONTHLY'}
+                      </div>
+                    </div>
+                    <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60">
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">Service Amount</div>
+                      <div className="font-bold mt-0.5">
+                        ₹{Number(entryToViewDetails.amount || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                    <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60">
+                      <div className="text-[10px] font-bold uppercase text-[#616161]">GST %</div>
+                      <div className="font-bold mt-0.5">{entryToViewDetails.gstPercent ?? 18}%</div>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-300 p-3 text-emerald-900 col-span-2 sm:col-span-1">
+                      <div className="text-[10px] font-black uppercase">Total Amount</div>
+                      <div className="font-black text-base text-emerald-800 mt-0.5">
+                        ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+                ) : entryToViewDetails.products && entryToViewDetails.products.length > 0 ? (
                   <table className="w-full border-collapse border border-[var(--outline-variant)]/60 text-xs">
                     <thead>
                       <tr className="bg-[#F8F9FA] text-[#616161] uppercase text-[10px]">

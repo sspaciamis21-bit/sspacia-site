@@ -33,7 +33,10 @@ export function FilterDropdown({
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = options.find(opt => opt.id === selectedId);
+  const isSelectedValid = selectedId !== undefined && selectedId !== null && selectedId !== "" && !Number.isNaN(selectedId);
+  const selectedOption = isSelectedValid
+    ? options.find(opt => String(opt.id).toLowerCase() === String(selectedId).toLowerCase())
+    : undefined;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -53,24 +56,25 @@ export function FilterDropdown({
       
       <div className="relative">
         <button
+          type="button"
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
-          className={`w-full flex items-center justify-between bg-surface-lowest px-4 py-3 text-xs sm:text-sm transition-all border-b-2 h-12 ${
+          className={`w-full flex items-center justify-between bg-surface-lowest px-4 py-3 text-xs sm:text-sm transition-all border-b-2 h-12 cursor-pointer ${
             disabled ? "opacity-40 grayscale cursor-not-allowed border-outline-variant/10" :
             isOpen ? "border-primary shadow-2xl bg-surface-high" : "border-outline-variant/20 hover:border-primary/50"
           }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
             {icon && <span className="text-primary/60 shrink-0">{icon}</span>}
-            <span className={`truncate ${selectedOption ? "text-on-surface font-medium" : "text-tertiary"}`}>
+            <span className={`truncate ${selectedOption ? "text-on-surface font-semibold" : "text-tertiary"}`}>
               {selectedOption ? selectedOption.name : placeholder}
             </span>
           </div>
           
           <div className="flex items-center gap-2 shrink-0">
-            {selectedId && (
+            {isSelectedValid && (
               <X 
-                className="h-3 w-3 text-tertiary hover:text-primary transition-colors cursor-pointer" 
+                className="h-3.5 w-3.5 text-tertiary hover:text-primary transition-colors cursor-pointer" 
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelect(undefined);
@@ -93,20 +97,24 @@ export function FilterDropdown({
               {options.length === 0 ? (
                 <div className="px-6 py-4 text-xs text-tertiary italic">No options available</div>
               ) : (
-                options.map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => {
-                      onSelect(option.id);
-                      setIsOpen(false);
-                    }}
-                    className={`w-full text-left px-6 py-4 text-sm transition-colors hover:bg-surface-high ${
-                      selectedId === option.id ? "text-primary font-bold bg-primary/5" : "text-on-surface"
-                    }`}
-                  >
-                    {option.name}
-                  </button>
-                ))
+                options.map((option) => {
+                  const isOptSelected = isSelectedValid && String(option.id).toLowerCase() === String(selectedId).toLowerCase();
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => {
+                        onSelect(option.id);
+                        setIsOpen(false);
+                      }}
+                      className={`w-full text-left px-6 py-3.5 text-xs sm:text-sm transition-colors hover:bg-surface-high cursor-pointer ${
+                        isOptSelected ? "text-[#006064] font-bold bg-[#006064]/10" : "text-on-surface"
+                      }`}
+                    >
+                      {option.name}
+                    </button>
+                  );
+                })
               )}
             </motion.div>
           )}

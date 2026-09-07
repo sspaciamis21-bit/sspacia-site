@@ -61,6 +61,13 @@ export function Header() {
               <div key={item.label} className="relative group">
                 <Link
                   href={item.href}
+                  onClick={() => {
+                    if (item.href === "/products" && typeof window !== "undefined") {
+                      try {
+                        sessionStorage.removeItem("sspacia_active_filters");
+                      } catch {}
+                    }
+                  }}
                   className="relative transition-all hover:text-primary py-2 flex items-center gap-1 whitespace-nowrap"
                 >
                   <span className="relative z-10">{item.label}</span>

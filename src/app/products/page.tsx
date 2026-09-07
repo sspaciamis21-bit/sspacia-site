@@ -96,7 +96,7 @@ async function getCategories() {
     return await prisma.spaceCategory.findMany({
       where: { isActive: true },
       orderBy: { sortOrder: "asc" },
-      select: { id: true, name: true, displayName: true }
+      select: { id: true, name: true, displayName: true, slug: true }
     });
   } catch (err) {
     console.error("[ProductsPage] Category fetch error:", err);
@@ -109,7 +109,7 @@ async function getProductTypes() {
     return await prisma.productType.findMany({
       where: { isActive: true },
       orderBy: { sortOrder: "asc" },
-      select: { id: true, name: true, displayName: true }
+      select: { id: true, name: true, displayName: true, slug: true }
     });
   } catch (err) {
     console.error("[ProductsPage] ProductType fetch error:", err);
@@ -206,8 +206,8 @@ export default async function ProductsPage() {
           products={products} 
           cities={cities} 
           amenities={amenities} 
-          categories={categories.map(c => ({ id: c.id, name: c.displayName }))}
-          productTypes={productTypes.map(t => ({ id: t.id, name: t.displayName }))}
+          categories={categories.map(c => ({ id: c.id, name: c.displayName, slug: c.slug }))}
+          productTypes={productTypes.map(t => ({ id: t.id, name: t.displayName, slug: t.slug }))}
         />
       </Suspense>
     </>

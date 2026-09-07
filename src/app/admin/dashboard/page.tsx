@@ -97,6 +97,7 @@ interface DashboardStats {
     totalMonthlyAgreementValue: number;
     dispatchedForSelectedMonth?: number;
     pendingDispatchForSelectedMonth?: number;
+    virtualOfficeClients?: number;
   };
   sdrAnalytics?: {
     totalSdr: number;
@@ -724,7 +725,14 @@ export default function AdminDashboardPage() {
                   <span className="text-lg font-bold text-[#1B1C1C] mt-0.5 block">
                     {totalClients}
                   </span>
-                  <span className="text-[10px] text-emerald-600 font-semibold">{activeAgreements} Active</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-emerald-600 font-semibold">{activeAgreements} Active</span>
+                    {Boolean(stats?.clientMaster?.virtualOfficeClients && stats.clientMaster.virtualOfficeClients > 0) && (
+                      <span className="text-[10px] text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 border border-indigo-200 rounded-xs">
+                        {stats?.clientMaster?.virtualOfficeClients} Virtual
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="bg-neutral-50 p-3 border border-neutral-100">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">

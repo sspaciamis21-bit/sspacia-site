@@ -11,9 +11,10 @@ import {
   Calendar, 
   Briefcase, 
   ArrowRight,
-  Loader2
+  Loader2,
+  Check
 } from "lucide-react";
-import { LocationArea } from "@/config/locations-nav";
+import { LocationArea, locationsNavData } from "@/config/locations-nav";
 
 interface LocationsDropdownProps {
   onLinkClick?: () => void;
@@ -21,9 +22,11 @@ interface LocationsDropdownProps {
 
 export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
   const router = useRouter();
-  const [areasData, setAreasData] = useState<LocationArea[]>([]);
+  const [areasData, setAreasData] = useState<LocationArea[]>(locationsNavData);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Ahmedabad is always pre-selected city
+  const [activeCityId, setActiveCityId] = useState<string>("ahmedabad");
   const [activeAreaId, setActiveAreaId] = useState<string | null>(null);
   const [activeCenterId, setActiveCenterId] = useState<string | null>(null);
   const [activeCategoryType, setActiveCategoryType] = useState<"guest" | "coworking" | null>(null);
@@ -35,7 +38,7 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
       try {
         const res = await fetch("/api/nav/catalog", { cache: "no-store" });
         const data = await res.json();
-        if (isMounted && data.success && Array.isArray(data.locationsDropdownData)) {
+        if (isMounted && data.success && Array.isArray(data.locationsDropdownData) && data.locationsDropdownData.length > 0) {
           setAreasData(data.locationsDropdownData);
         }
       } catch (err) {
@@ -65,10 +68,37 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
         setActiveCategoryType(null);
       }}
     >
-      {/* ── TIER 1: LOCATIONS (w-44 = 176px) ── */}
-      <div className="w-44 bg-white shadow-2xl rounded-sm border border-gray-200/90 py-1.5 z-[120] text-left font-sans shrink-0">
+      {/* ── TIER 1: CITY (w-36 = 144px) ── */}
+      <div className="w-36 bg-white shadow-2xl rounded-l-sm border border-gray-200/90 py-1.5 z-[120] text-left font-sans shrink-0">
         <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 flex items-center justify-between">
-          <span>Locations</span>
+          <span>City</span>
+          <Building2 size={11} className="text-[#006064]" />
+        </div>
+
+        <div className="py-1">
+          <div
+            className="relative flex items-center justify-between px-3 py-2 text-[11px] font-extrabold uppercase tracking-wider cursor-pointer transition-colors bg-[#006064] text-white shadow-xs"
+          >
+            <Link
+              href="/products?city=1"
+              onClick={onLinkClick}
+              className="flex items-center gap-1.5 flex-1"
+            >
+              <Building2 className="w-3.5 h-3.5 text-amber-300" />
+              <span>Ahmedabad</span>
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5 text-white" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── TIER 2: AREA (w-40 = 160px) ── */}
+      <div 
+        className="w-40 bg-white shadow-2xl border border-gray-200/90 py-1.5 z-[121] text-left font-sans shrink-0"
+        style={{ marginLeft: "1px" }}
+      >
+        <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 flex items-center justify-between">
+          <span>Area</span>
           <MapPin size={11} className="text-[#006064]" />
         </div>
 
@@ -96,7 +126,7 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
                   }`}
                 >
                   <Link
-                    href={`/products?area=${encodeURIComponent(area.name)}`}
+                    href={`/products?city=1&area=${encodeURIComponent(area.name)}`}
                     onClick={onLinkClick}
                     className="flex items-center gap-1.5 flex-1"
                   >
@@ -111,10 +141,10 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
         </div>
       </div>
 
-      {/* ── TIER 2: CENTRES IN SELECTED AREA (w-48 = 192px) ── */}
+      {/* ── TIER 3: CENTRES IN SELECTED AREA (w-48 = 192px) ── */}
       {activeArea && (
         <div 
-          className="w-48 bg-white shadow-2xl rounded-sm border border-gray-200/90 py-1.5 z-[121] text-left font-sans shrink-0 animate-in fade-in slide-in-from-left-1 duration-150"
+          className="w-48 bg-white shadow-2xl border border-gray-200/90 py-1.5 z-[122] text-left font-sans shrink-0 animate-in fade-in slide-in-from-left-1 duration-150"
           style={{ marginLeft: "1px" }}
         >
           <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100 flex items-center justify-between">
@@ -139,7 +169,7 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
                   }`}
                 >
                   <Link
-                    href={`/products?centre=${center.id}`}
+                    href={`/products?city=1&area=${encodeURIComponent(activeArea.name)}&centre=${center.locationId || center.id}`}
                     onClick={onLinkClick}
                     className="flex items-center gap-1.5 flex-1 min-w-0"
                   >
@@ -159,10 +189,10 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
         </div>
       )}
 
-      {/* ── TIER 3: SPACE TYPES (w-44 = 176px) ── */}
-      {activeCenter && (
+      {/* ── TIER 4: SPACE TYPES (w-44 = 176px) ── */}
+      {activeCenter && activeArea && (
         <div 
-          className="w-44 bg-white shadow-2xl rounded-sm border border-gray-200/90 py-1.5 z-[122] text-left font-sans shrink-0 animate-in fade-in slide-in-from-left-1 duration-150"
+          className="w-44 bg-white shadow-2xl border border-gray-200/90 py-1.5 z-[123] text-left font-sans shrink-0 animate-in fade-in slide-in-from-left-1 duration-150"
           style={{ marginLeft: "1px" }}
         >
           <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 border-b border-gray-100">
@@ -180,7 +210,7 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
               }`}
             >
               <Link
-                href={`/guest-spaces?centre=${activeCenter.id}`}
+                href={`/guest-spaces?centre=${activeCenter.locationId || activeCenter.id}`}
                 onClick={onLinkClick}
                 className="flex items-center gap-1.5 flex-1"
               >
@@ -205,7 +235,7 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
               }`}
             >
               <Link
-                href={`/coworking-spaces?centre=${activeCenter.id}`}
+                href={`/coworking-spaces?centre=${activeCenter.locationId || activeCenter.id}`}
                 onClick={onLinkClick}
                 className="flex items-center gap-1.5 flex-1"
               >
@@ -223,7 +253,7 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
 
           <div className="p-1.5 border-t border-slate-100 bg-slate-50/70 mt-1">
             <Link
-              href={`/products?centre=${activeCenter.id}`}
+              href={`/products?city=1&area=${encodeURIComponent(activeArea.name)}&centre=${activeCenter.locationId || activeCenter.id}`}
               onClick={onLinkClick}
               className="text-[9px] font-bold text-[#006064] hover:text-[#004D40] hover:underline flex items-center justify-center gap-1 uppercase tracking-wider py-0.5"
             >
@@ -233,10 +263,10 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
         </div>
       )}
 
-      {/* ── TIER 4: AVAILABLE PRODUCTS MINI TABLE WITH IMAGES (w-[500px]) ── */}
-      {activeCategory && activeCenter && (
+      {/* ── TIER 5: AVAILABLE PRODUCTS MINI TABLE WITHOUT AMENITIES (w-[380px]) ── */}
+      {activeCategory && activeCenter && activeArea && (
         <div 
-          className="w-[500px] max-w-[calc(100vw-24px)] bg-white/98 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.22)] rounded-lg border border-slate-200/90 z-[123] text-left font-sans shrink-0 animate-in fade-in slide-in-from-left-1 duration-150 overflow-hidden"
+          className="w-[380px] max-w-[calc(100vw-24px)] bg-white/98 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.22)] rounded-r-lg border border-slate-200/90 z-[124] text-left font-sans shrink-0 animate-in fade-in slide-in-from-left-1 duration-150 overflow-hidden"
           style={{ marginLeft: "1px" }}
         >
           {/* Header */}
@@ -259,15 +289,14 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
             </Link>
           </div>
 
-          {/* Table view with Large Thumbnail Images */}
+          {/* Table view without Amenities/Facilities text */}
           <div className="p-2">
             <div className="max-h-[340px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200">
               <table className="w-full text-left border-collapse">
                 <thead className="sticky top-0 bg-white z-10">
                   <tr className="border-b border-slate-200 text-[9px] font-black uppercase tracking-wider text-slate-400">
-                    <th className="py-1.5 px-2.5 w-[52%]">Space / Workspace</th>
-                    <th className="py-1.5 px-2.5">Facilities & Setup</th>
-                    <th className="py-1.5 px-1 w-6 text-right"></th>
+                    <th className="py-1.5 px-2.5">Space / Workspace</th>
+                    <th className="py-1.5 px-2.5 text-right w-24">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
@@ -277,19 +306,19 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
                       className="group hover:bg-teal-50/70 transition-colors cursor-pointer"
                     >
                       {/* Product Thumbnail + Name & Badge */}
-                      <td className="py-2 px-2.5 align-middle">
+                      <td className="py-2.5 px-2.5 align-middle">
                         <Link 
                           href={prod.href}
                           onClick={onLinkClick}
                           className="flex items-center gap-2.5"
                         >
-                          {/* Larger Photo Thumbnail (84px x 54px) */}
-                          <div className="relative w-[84px] h-[54px] rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-2xs group-hover:border-[#006064] group-hover:shadow-md transition-all">
+                          {/* Photo Thumbnail (72px x 48px) */}
+                          <div className="relative w-[72px] h-[48px] rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-2xs group-hover:border-[#006064] group-hover:shadow-md transition-all">
                             <Image
                               src={prod.image}
                               alt={prod.name}
                               fill
-                              sizes="84px"
+                              sizes="72px"
                               className="object-cover group-hover:scale-108 transition-transform duration-300"
                             />
                           </div>
@@ -297,34 +326,19 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
                             <span className="font-bold text-xs text-slate-900 group-hover:text-[#006064] transition-colors leading-tight">
                               {prod.name}
                             </span>
-                            {prod.badge && (
-                              <span className="w-fit text-[8px] font-bold text-teal-800 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded">
-                                {prod.badge}
-                              </span>
-                            )}
                           </div>
                         </Link>
                       </td>
 
-                      {/* Amenities / Facilities */}
-                      <td className="py-2 px-2.5 align-middle text-[10px] text-slate-500 font-normal leading-snug">
+                      {/* Explore Button */}
+                      <td className="py-2.5 px-2.5 text-right align-middle">
                         <Link 
                           href={prod.href}
                           onClick={onLinkClick}
-                          className="block text-slate-500 group-hover:text-slate-800 transition-colors line-clamp-2"
+                          className="inline-flex items-center gap-1 text-[9.5px] font-bold text-[#006064] group-hover:text-[#004D40] bg-teal-50/80 group-hover:bg-teal-100 px-2.5 py-1 rounded transition-colors uppercase tracking-wider"
                         >
-                          {prod.description}
-                        </Link>
-                      </td>
-
-                      {/* Action Chevron */}
-                      <td className="py-2 px-1 text-right align-middle">
-                        <Link 
-                          href={prod.href}
-                          onClick={onLinkClick}
-                          className="text-slate-300 group-hover:text-[#006064] transition-colors inline-block"
-                        >
-                          <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                          <span>Explore</span>
+                          <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
                         </Link>
                       </td>
                     </tr>
@@ -341,7 +355,7 @@ export function LocationsDropdown({ onLinkClick }: LocationsDropdownProps) {
               onClick={onLinkClick}
               className="font-bold text-[#006064] hover:text-[#004D40] flex items-center gap-1 uppercase tracking-wider group"
             >
-              <span>Explore All {activeCategory.title} in {activeCenter.name}</span>
+              <span>Explore All in {activeCenter.name}</span>
               <ArrowRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
             </Link>
           </div>

@@ -24,7 +24,7 @@ interface ProductDetail {
   badgeColor?: string;
   centreName?: string;
   image: string;
-  facilities: string;
+  facilities?: string;
   href: string;
 }
 
@@ -72,8 +72,8 @@ export function ProductsDropdown({ onLinkClick }: ProductsDropdownProps) {
 
   return (
     <div className="relative font-sans text-left select-none pt-1">
-      {/* ── UNIFIED MEGA PANEL CONTAINER (840px width with rich visuals) ── */}
-      <div className="w-[840px] max-w-[calc(100vw-24px)] bg-white/98 backdrop-blur-xl rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] border border-[#006064]/25 overflow-hidden flex flex-col md:flex-row">
+      {/* ── UNIFIED MEGA PANEL CONTAINER (720px width without cluttered amenities) ── */}
+      <div className="w-[720px] max-w-[calc(100vw-24px)] bg-white/98 backdrop-blur-xl rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] border border-[#006064]/25 overflow-hidden flex flex-col md:flex-row">
         
         {/* ── LEFT SIDEBAR: CATEGORY & QUICK ACTIONS (~200px) ── */}
         <div className="w-full md:w-[200px] bg-slate-50/95 border-b md:border-b-0 md:border-r border-slate-200 p-3.5 flex flex-col justify-between shrink-0">
@@ -188,7 +188,7 @@ export function ProductsDropdown({ onLinkClick }: ProductsDropdownProps) {
             })}
           </div>
 
-          {/* Mini Table Body (Scrollable) */}
+          {/* Mini Table Body (Scrollable, Clean without amenities) */}
           <div className="p-2 flex-1 min-h-[220px]">
             {isLoading && centresData.length === 0 ? (
               <div className="flex items-center justify-center h-48 text-slate-400 text-xs gap-2">
@@ -204,9 +204,8 @@ export function ProductsDropdown({ onLinkClick }: ProductsDropdownProps) {
                 <table className="w-full text-left border-collapse">
                   <thead className="sticky top-0 bg-white z-10">
                     <tr className="border-b border-slate-200 text-[9px] font-black uppercase tracking-wider text-slate-400">
-                      <th className="py-1.5 px-2.5 w-[52%]">Workspace / Room</th>
-                      <th className="py-1.5 px-2.5">Facilities & Setup</th>
-                      <th className="py-1.5 px-1 w-6 text-right"></th>
+                      <th className="py-1.5 px-2.5">Workspace / Room</th>
+                      <th className="py-1.5 px-2.5 text-right w-24">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
@@ -216,19 +215,19 @@ export function ProductsDropdown({ onLinkClick }: ProductsDropdownProps) {
                         className="group hover:bg-teal-50/70 transition-colors cursor-pointer"
                       >
                         {/* Product Thumbnail + Name & Badge */}
-                        <td className="py-2 px-2.5 align-middle">
+                        <td className="py-2.5 px-2.5 align-middle">
                           <Link 
                             href={prod.href}
                             onClick={onLinkClick}
                             className="flex items-center gap-3"
                           >
-                            {/* Larger Photo Thumbnail (90px x 58px) */}
-                            <div className="relative w-[90px] h-[58px] rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-xs group-hover:border-[#006064] group-hover:shadow-md transition-all">
+                            {/* Photo Thumbnail (84px x 54px) */}
+                            <div className="relative w-[84px] h-[54px] rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-xs group-hover:border-[#006064] group-hover:shadow-md transition-all">
                               <Image
                                 src={prod.image}
                                 alt={prod.name}
                                 fill
-                                sizes="90px"
+                                sizes="84px"
                                 className="object-cover group-hover:scale-108 transition-transform duration-300"
                               />
                             </div>
@@ -236,41 +235,24 @@ export function ProductsDropdown({ onLinkClick }: ProductsDropdownProps) {
                               <span className="font-bold text-xs text-slate-900 group-hover:text-[#006064] transition-colors leading-tight">
                                 {prod.name}
                               </span>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {prod.centreName && (
-                                  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-[#006064] border border-teal-200 shrink-0">
-                                    📍 {prod.centreName}
-                                  </span>
-                                )}
-                                {prod.badge && (
-                                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded border ${prod.badgeColor || "bg-slate-100 text-slate-700 border-slate-200"}`}>
-                                    {prod.badge}
-                                  </span>
-                                )}
-                              </div>
+                              {prod.centreName && (
+                                <span className="w-fit text-[8px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-[#006064] border border-teal-200 shrink-0">
+                                  📍 {prod.centreName}
+                                </span>
+                              )}
                             </div>
                           </Link>
                         </td>
 
-                        {/* Amenities / Facilities (clean typography) */}
-                        <td className="py-2 px-2.5 align-middle text-[10px] text-slate-500 font-medium leading-snug">
+                        {/* Action Button */}
+                        <td className="py-2.5 px-2.5 text-right align-middle">
                           <Link 
                             href={prod.href}
                             onClick={onLinkClick}
-                            className="block text-slate-500 group-hover:text-slate-800 transition-colors line-clamp-2"
+                            className="inline-flex items-center gap-1 text-[9.5px] font-bold text-[#006064] group-hover:text-[#004D40] bg-teal-50/80 group-hover:bg-teal-100 px-2.5 py-1 rounded transition-colors uppercase tracking-wider"
                           >
-                            {prod.facilities}
-                          </Link>
-                        </td>
-
-                        {/* Action Chevron */}
-                        <td className="py-2 px-1 text-right align-middle">
-                          <Link 
-                            href={prod.href}
-                            onClick={onLinkClick}
-                            className="text-slate-300 group-hover:text-[#006064] transition-colors inline-block"
-                          >
-                            <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                            <span>Explore</span>
+                            <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
                           </Link>
                         </td>
                       </tr>
@@ -287,7 +269,7 @@ export function ProductsDropdown({ onLinkClick }: ProductsDropdownProps) {
               <MapPin size={12} /> {selectedCenterId === "all" ? "Showing all workspaces across Ahmedabad" : `Showing ${currentCenter?.name || ''} (${currentCenter?.shortName || ''})`}
             </span>
             <Link
-              href={selectedCenterId === "all" ? (activeCategory === "guest" ? "/guest-spaces" : "/coworking-spaces") : `/products?centre=${currentCenter?.locationId || selectedCenterId}`}
+              href={selectedCenterId === "all" ? (activeCategory === "guest" ? "/guest-spaces" : "/coworking-spaces") : `/products?city=1&area=${encodeURIComponent(currentCenter?.shortName || '')}&centre=${currentCenter?.locationId || selectedCenterId}`}
               onClick={onLinkClick}
               className="font-bold text-[#006064] hover:text-[#004D40] flex items-center gap-1 uppercase tracking-wider group"
             >

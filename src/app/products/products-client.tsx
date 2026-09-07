@@ -24,8 +24,11 @@ import {
   MapPin,
   CheckCircle,
   HelpCircle,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import { AvailabilityTimeline } from "@/components/ui/availability-timeline";
+import { StyledDatePicker } from "@/components/ui/styled-date-picker";
 
 import type { Product, City, Amenity } from "./page";
 
@@ -44,6 +47,234 @@ const fallbackImages = [
   "/IMAGES_SSPACIA/AGARWAL IMAGES/Meeting_Room_1.jpg",
 ];
 
+// Helper to format hour (e.g. 13 -> "1 PM", 15 -> "3 PM")
+function formatHour12(hour24: number): string {
+  const period = hour24 >= 12 && hour24 < 24 ? "PM" : "AM";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12} ${period}`;
+}
+
+// Helper to format slot range (e.g. ["13:00"] -> "1 PM to 2 PM", ["13:00", "14:00"] -> "1 PM to 3 PM")
+function formatSlotTimeRange(slots: string[]): string {
+  if (!slots || slots.length === 0) return "";
+  const sorted = [...slots].sort();
+  const slotHours = sorted.map(s => {
+    const [h] = s.split(':').map(Number);
+    return h;
+  });
+
+  const ranges: { start: number; end: number }[] = [];
+  let currentRange: { start: number; end: number } | null = null;
+
+  for (const h of slotHours) {
+    if (!currentRange) {
+      currentRange = { start: h, end: h + 1 };
+    } else if (h === currentRange.end) {
+      currentRange.end = h + 1;
+    } else {
+      ranges.push(currentRange);
+      currentRange = { start: h, end: h + 1 };
+    }
+  }
+  if (currentRange) ranges.push(currentRange);
+
+  return ranges
+    .map(r => `${formatHour12(r.start)} to ${formatHour12(r.end)}`)
+    .join(", ");
+}
+
+// Helper to format date (e.g. "2026-09-05" -> "5 Sep 2026")
+function formatDateForSlot(dateStr?: string): string {
+  let d: Date;
+  if (dateStr && dateStr.includes('-')) {
+    const parts = dateStr.split('-').map(Number);
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      d = new Date(parts[0], parts[1] - 1, parts[2]);
+    } else {
+      d = new Date();
+    }
+  } else {
+    d = new Date();
+  }
+  const day = d.getDate();
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
+}
+
+// Helper to resolve filters from URL query parameters & product associations
+function resolveInitialFilters(
+  searchParams: URLSearchParams | { get: (k: string) => string | null } | null,
+  products: Product[],
+  cities: City[],
+  categories: { id: number; name: string; slug?: string }[],
+  productTypes: { id: number; name: string; slug?: string }[],
+  initialCategoryId?: number
+) {
+  let cityId: number | undefined = undefined;
+  let area: string | undefined = undefined;
+  let locationId: number | undefined = undefined;
+  let categoryId: number | undefined = initialCategoryId;
+  let typeId: number | undefined = undefined;
+  let amenityIds: number[] = [];
+
+  const defaultCity = cities.find(c => c.name.toLowerCase().includes('ahmedabad')) || cities[0];
+  const defaultCityId = defaultCity?.id || 1;
+
+  if (!searchParams) {
+    return {
+      cityId: defaultCityId,
+      area: undefined,
+      locationId: undefined,
+      categoryId: initialCategoryId,
+      typeId: undefined,
+      amenityIds: []
+    };
+  }
+
+  // 1. Check product param if passed
+  const pProd = searchParams.get('product');
+  let matchedProduct: Product | undefined;
+  if (pProd) {
+    const prodNum = Number(pProd);
+    if (!isNaN(prodNum) && prodNum > 0) {
+      matchedProduct = products.find(p => p.id === prodNum);
+    } else {
+      const prodSlug = pProd.toLowerCase().replace(/[^a-z0-9]/g, '');
+      matchedProduct = products.find(p => p.slug?.toLowerCase().replace(/[^a-z0-9]/g, '') === prodSlug);
+    }
+  }
+
+  // 2. Resolve Centre / Location
+  const pCentre = searchParams.get('centre') || searchParams.get('location');
+  if (pCentre) {
+    const locNum = Number(pCentre);
+    if (!isNaN(locNum) && locNum > 0) {
+      locationId = locNum;
+    } else {
+      const norm = pCentre.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const found = products.find(prod => {
+        const s = prod.location?.slug?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+        const n = prod.location?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+        return s === norm || n.includes(norm) || norm.includes(s);
+      });
+      if (found?.location?.id) locationId = found.location.id;
+    }
+  } else if (matchedProduct?.location?.id) {
+    locationId = matchedProduct.location.id;
+  }
+
+  // 3. Resolve Area
+  const pArea = searchParams.get('area');
+  if (pArea) {
+    const norm = pArea.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const found = products.find(prod => prod.location?.area && prod.location.area.toLowerCase().replace(/[^a-z0-9]/g, '') === norm);
+    area = found?.location?.area || pArea;
+  } else if (locationId) {
+    const prodWithLoc = products.find(p => p.location?.id === locationId);
+    if (prodWithLoc?.location?.area) {
+      area = prodWithLoc.location.area;
+    }
+  } else if (matchedProduct?.location?.area) {
+    area = matchedProduct.location.area;
+  }
+
+  // 4. Resolve City
+  const pCity = searchParams.get('city');
+  if (pCity) {
+    const cityNum = Number(pCity);
+    if (!isNaN(cityNum) && cityNum > 0) {
+      cityId = cityNum;
+    } else {
+      const norm = pCity.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const foundCity = cities.find(c => c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(norm) || c.slug?.toLowerCase().replace(/[^a-z0-9]/g, '') === norm);
+      if (foundCity) cityId = foundCity.id;
+    }
+  } else if (locationId) {
+    const prodWithLoc = products.find(p => p.location?.id === locationId);
+    if (prodWithLoc?.location?.cityId) {
+      cityId = prodWithLoc.location.cityId;
+    }
+  } else if (matchedProduct?.location?.cityId) {
+    cityId = matchedProduct.location.cityId;
+  }
+  // Default to Ahmedabad if city is not set
+  if (!cityId) {
+    cityId = defaultCityId;
+  }
+
+  // 5. Resolve Type safely (without NaN)
+  const pType = searchParams.get('type');
+  if (pType) {
+    const typeNum = Number(pType);
+    if (!isNaN(typeNum) && typeNum > 0) {
+      typeId = typeNum;
+    } else {
+      const norm = pType.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const matchedType = productTypes.find(t => {
+        const s = (t as any).slug?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+        const n = t.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return s === norm || n === norm || n.includes(norm) || norm.includes(n);
+      });
+      if (matchedType) {
+        typeId = matchedType.id;
+      } else {
+        const foundProd = products.find(p => {
+          const s = (p.type as any)?.slug?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+          const n = (p.type as any)?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+          const d = (p.type as any)?.displayName?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+          return s === norm || n === norm || d === norm || p.slug.toLowerCase().replace(/[^a-z0-9]/g, '').includes(norm);
+        });
+        if (foundProd?.typeId) {
+          typeId = foundProd.typeId;
+        }
+      }
+    }
+  } else if (matchedProduct?.typeId) {
+    typeId = matchedProduct.typeId;
+  }
+
+  // 6. Resolve Category
+  const pCat = searchParams.get('category');
+  if (pCat) {
+    const catNum = Number(pCat);
+    if (!isNaN(catNum) && catNum > 0) {
+      categoryId = catNum;
+    } else {
+      const norm = pCat.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const matchedCat = categories.find(c => {
+        const s = (c as any).slug?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+        const n = c.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return s === norm || n === norm || n.includes(norm) || norm.includes(n);
+      });
+      if (matchedCat) categoryId = matchedCat.id;
+    }
+  } else if (matchedProduct?.categoryId) {
+    categoryId = matchedProduct.categoryId;
+  } else if (typeId) {
+    const prodWithType = products.find(p => p.typeId === typeId);
+    if (prodWithType?.categoryId) {
+      categoryId = prodWithType.categoryId;
+    }
+  }
+
+  // 7. Resolve Amenities
+  const pAmenities = searchParams.get('amenities');
+  if (pAmenities) {
+    amenityIds = pAmenities.split(',').map(Number).filter(n => !isNaN(n) && n > 0);
+  }
+
+  return {
+    cityId,
+    area,
+    locationId,
+    categoryId,
+    typeId,
+    amenityIds
+  };
+}
+
 export default function ProductsClient({ 
   products = [], 
   cities = [], 
@@ -61,139 +292,77 @@ export default function ProductsClient({
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [pendingRedirectUrl, setPendingRedirectUrl] = useState<string | null>(null);
 
-  // ─── Filter States (Restores from URL search params on mount) ─────────────────
-  const [selectedCityId, setSelectedCityId] = useState<number | undefined>(() => {
-    const p = searchParams?.get('city');
-    return p ? Number(p) : undefined;
-  });
-  const [selectedArea, setSelectedArea] = useState<string | undefined>(() => {
-    const p = searchParams?.get('area');
-    if (!p) return undefined;
-    const norm = p.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const found = products.find(prod => prod.location?.area && prod.location.area.toLowerCase().replace(/[^a-z0-9]/g, '') === norm);
-    return found?.location?.area || p;
-  });
-  const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>(() => {
-    const p = searchParams?.get('centre') || searchParams?.get('location');
-    if (!p) return undefined;
-    const num = Number(p);
-    if (!isNaN(num) && num > 0) return num;
-    const norm = p.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const found = products.find(prod => {
-      const slug = prod.location?.slug?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
-      const name = prod.location?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
-      return slug === norm || name.includes(norm) || norm.includes(slug);
-    });
-    return found?.location?.id;
-  });
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(() => {
-    const p = searchParams?.get('category');
-    if (p) return Number(p);
-    return initialCategoryId;
-  });
-  const [selectedTypeId, setSelectedTypeId] = useState<number | undefined>(() => {
-    const p = searchParams?.get('type');
-    return p ? Number(p) : undefined;
-  });
-  const [selectedAmenityIds, setSelectedAmenityIds] = useState<number[]>(() => {
-    const p = searchParams?.get('amenities');
-    if (p) return p.split(',').map(Number).filter(Boolean);
-    return [];
-  });
+  // Initial Filter Resolution
+  const initialResolved = useMemo(() => {
+    return resolveInitialFilters(searchParams, products, cities, categories, productTypes, initialCategoryId);
+  }, []);
+
+  // ─── Filter States ─────────────────
+  const [selectedCityId, setSelectedCityId] = useState<number | undefined>(initialResolved.cityId);
+  const [selectedArea, setSelectedArea] = useState<string | undefined>(initialResolved.area);
+  const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>(initialResolved.locationId);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>(initialResolved.categoryId);
+  const [selectedTypeId, setSelectedTypeId] = useState<number | undefined>(initialResolved.typeId);
+  const [selectedAmenityIds, setSelectedAmenityIds] = useState<number[]>(initialResolved.amenityIds);
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const p = searchParams?.get('date');
     return p || new Date().toISOString().split('T')[0];
   });
 
-  // Watch for searchParams changes (e.g. from navbar navigation)
+  // Watch for searchParams changes (e.g. when navigating from Navbar Locations/Products dropdowns)
   useEffect(() => {
     if (!searchParams) return;
-    const pArea = searchParams.get('area');
-    if (pArea) {
-      const norm = pArea.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const found = products.find(prod => prod.location?.area && prod.location.area.toLowerCase().replace(/[^a-z0-9]/g, '') === norm);
-      setSelectedArea(found?.location?.area || pArea);
-    }
-    const pCentre = searchParams.get('centre') || searchParams.get('location');
-    if (pCentre) {
-      const num = Number(pCentre);
-      if (!isNaN(num) && num > 0) {
-        setSelectedLocationId(num);
-      } else {
-        const norm = pCentre.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const found = products.find(prod => {
-          const slug = prod.location?.slug?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
-          const name = prod.location?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
-          return slug === norm || name.includes(norm) || norm.includes(slug);
-        });
-        if (found?.location?.id) setSelectedLocationId(found.location.id);
+    const hasParams = Array.from(searchParams.keys()).length > 0;
+    
+    // When navigating to /products without query parameters, reset filters to show ALL workspaces
+    if (!hasParams) {
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.removeItem('sspacia_active_filters');
+        } catch {}
       }
+      setSelectedArea(undefined);
+      setSelectedLocationId(undefined);
+      setSelectedCategoryId(initialCategoryId || undefined);
+      setSelectedTypeId(undefined);
+      setSelectedAmenityIds([]);
+      return;
     }
-    const pCat = searchParams.get('category');
-    if (pCat) {
-      const num = Number(pCat);
-      if (!isNaN(num)) setSelectedCategoryId(num);
-    }
-    const pType = searchParams.get('type');
-    if (pType) {
-      const num = Number(pType);
-      if (!isNaN(num)) setSelectedTypeId(num);
-    }
-  }, [searchParams, products]);
 
-  // Restore saved filters from sessionStorage if URL has no search params
-  useEffect(() => {
-    const hasParams = searchParams && Array.from(searchParams.keys()).length > 0;
-    if (!hasParams && typeof window !== 'undefined') {
-      try {
-        const saved = sessionStorage.getItem('sspacia_active_filters');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.cityId) setSelectedCityId(parsed.cityId);
-          if (parsed.area) setSelectedArea(parsed.area);
-          if (parsed.locationId) setSelectedLocationId(parsed.locationId);
-          if (parsed.categoryId && !initialCategoryId) setSelectedCategoryId(parsed.categoryId);
-          if (parsed.typeId) setSelectedTypeId(parsed.typeId);
-          if (parsed.amenityIds?.length) setSelectedAmenityIds(parsed.amenityIds);
-          if (parsed.date) setSelectedDate(parsed.date);
-        }
-      } catch {}
-    }
-  }, []);
+    // Only apply filters when specific query parameters are present in the URL
+    const resolved = resolveInitialFilters(searchParams, products, cities, categories, productTypes, initialCategoryId);
+    if (resolved.cityId !== undefined) setSelectedCityId(resolved.cityId);
+    setSelectedArea(resolved.area);
+    setSelectedLocationId(resolved.locationId);
+    setSelectedCategoryId(resolved.categoryId);
+    setSelectedTypeId(resolved.typeId);
+    setSelectedAmenityIds(resolved.amenityIds);
+  }, [searchParams, products, cities, categories, productTypes, initialCategoryId]);
 
-  // Synchronize URL and sessionStorage when filters change
+  // Synchronize URL when filters are manually adjusted by the user
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const params = new URLSearchParams();
-    if (selectedCityId) params.set('city', selectedCityId.toString());
+    if (selectedCityId && !isNaN(selectedCityId)) params.set('city', selectedCityId.toString());
     if (selectedArea) params.set('area', selectedArea);
-    if (selectedLocationId) params.set('centre', selectedLocationId.toString());
-    if (selectedCategoryId && selectedCategoryId !== initialCategoryId) {
+    if (selectedLocationId && !isNaN(selectedLocationId)) params.set('centre', selectedLocationId.toString());
+    if (selectedCategoryId && !isNaN(selectedCategoryId) && selectedCategoryId !== initialCategoryId) {
       params.set('category', selectedCategoryId.toString());
     }
-    if (selectedTypeId) params.set('type', selectedTypeId.toString());
+    if (selectedTypeId && !isNaN(selectedTypeId)) params.set('type', selectedTypeId.toString());
     if (selectedAmenityIds.length > 0) params.set('amenities', selectedAmenityIds.join(','));
-    if (selectedDate && selectedDate !== new Date().toISOString().split('T')[0]) {
-      params.set('date', selectedDate);
-    }
 
     const queryString = params.toString();
-    const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
-    window.history.replaceState(null, '', newUrl);
+    const hasActiveFilters = selectedArea || selectedLocationId || (selectedCategoryId && selectedCategoryId !== initialCategoryId) || selectedTypeId || selectedAmenityIds.length > 0;
 
-    try {
-      sessionStorage.setItem('sspacia_active_filters', JSON.stringify({
-        cityId: selectedCityId,
-        area: selectedArea,
-        locationId: selectedLocationId,
-        categoryId: selectedCategoryId,
-        typeId: selectedTypeId,
-        amenityIds: selectedAmenityIds,
-        date: selectedDate
-      }));
-    } catch {}
-  }, [selectedCityId, selectedArea, selectedLocationId, selectedCategoryId, selectedTypeId, selectedAmenityIds, selectedDate, pathname, initialCategoryId]);
+    if (hasActiveFilters && queryString) {
+      const newUrl = `${pathname}?${queryString}`;
+      window.history.replaceState(null, '', newUrl);
+    } else if (!hasActiveFilters && !queryString) {
+      window.history.replaceState(null, '', pathname);
+    }
+  }, [selectedCityId, selectedArea, selectedLocationId, selectedCategoryId, selectedTypeId, selectedAmenityIds, pathname, initialCategoryId]);
 
   // ─── Slot selections & Lightbox gallery state ─────────────────────────────────────────
   const [selectedSlotsByProduct, setSelectedSlotsByProduct] = useState<Record<number, string[]>>({});
@@ -370,7 +539,8 @@ export default function ProductsClient({
           options={cities}
           selectedId={selectedCityId}
           onSelect={(val: any) => {
-            setSelectedCityId(val ? Number(val) : undefined);
+            const cId = val && !isNaN(Number(val)) ? Number(val) : undefined;
+            setSelectedCityId(cId);
             setSelectedArea(undefined);
             setSelectedLocationId(undefined);
           }}
@@ -384,8 +554,14 @@ export default function ProductsClient({
           options={availableAreas}
           selectedId={selectedArea}
           onSelect={(val: any) => {
-            setSelectedArea(val ? String(val) : undefined);
-            setSelectedLocationId(undefined);
+            const areaVal = val ? String(val) : undefined;
+            setSelectedArea(areaVal);
+            if (selectedLocationId && areaVal) {
+              const prod = products.find(p => p.location?.id === selectedLocationId);
+              if (prod?.location?.area && prod.location.area.toLowerCase() !== areaVal.toLowerCase()) {
+                setSelectedLocationId(undefined);
+              }
+            }
           }}
           placeholder="Select Area"
           disabled={availableAreas.length === 0}
@@ -397,7 +573,19 @@ export default function ProductsClient({
           label="CENTRE"
           options={availableLocations}
           selectedId={selectedLocationId}
-          onSelect={(val: any) => setSelectedLocationId(val ? Number(val) : undefined)}
+          onSelect={(val: any) => {
+            const locId = val && !isNaN(Number(val)) ? Number(val) : undefined;
+            setSelectedLocationId(locId);
+            if (locId) {
+              const prod = products.find(p => p.location?.id === locId);
+              if (prod?.location?.area) {
+                setSelectedArea(prod.location.area);
+              }
+              if (prod?.location?.cityId) {
+                setSelectedCityId(prod.location.cityId);
+              }
+            }
+          }}
           placeholder="Select Centre"
           disabled={availableLocations.length === 0}
         />
@@ -408,7 +596,16 @@ export default function ProductsClient({
           label="SPACE CATEGORY"
           options={categories}
           selectedId={selectedCategoryId}
-          onSelect={(val: any) => setSelectedCategoryId(val ? Number(val) : undefined)}
+          onSelect={(val: any) => {
+            const catId = val && !isNaN(Number(val)) ? Number(val) : undefined;
+            setSelectedCategoryId(catId);
+            if (catId && selectedTypeId) {
+              const prodWithType = products.find(p => p.typeId === selectedTypeId);
+              if (prodWithType?.categoryId && prodWithType.categoryId !== catId) {
+                setSelectedTypeId(undefined);
+              }
+            }
+          }}
           placeholder="All Categories"
         />
       </div>
@@ -418,18 +615,17 @@ export default function ProductsClient({
           label="SPACE TYPE"
           options={productTypes}
           selectedId={selectedTypeId}
-          onSelect={(val: any) => setSelectedTypeId(val ? Number(val) : undefined)}
+          onSelect={(val: any) => {
+            const tId = val && !isNaN(Number(val)) ? Number(val) : undefined;
+            setSelectedTypeId(tId);
+            if (tId) {
+              const prodWithType = products.find(p => p.typeId === tId);
+              if (prodWithType?.categoryId) {
+                setSelectedCategoryId(prodWithType.categoryId);
+              }
+            }
+          }}
           placeholder="All Space Types"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-[10px] font-sans font-bold text-primary uppercase tracking-[0.4em] ml-1">DATE</label>
-        <input 
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="w-full h-14 bg-surface-lowest px-4 text-sm border-b-2 border-outline-variant/20 focus:border-primary outline-none transition-all font-mono"
         />
       </div>
 
@@ -575,7 +771,7 @@ export default function ProductsClient({
                       return (
                         <div
                           key={gs.id}
-                          className="group bg-white rounded-none overflow-hidden border border-outline-variant/10 shadow-[0_20px_50px_rgba(27,28,28,0.03)] hover:shadow-[0_40px_80px_rgba(0,105,111,0.08)] transition-all duration-500 flex flex-col lg:flex-row items-stretch min-w-0"
+                          className="group bg-white rounded-none overflow-visible border border-outline-variant/10 shadow-[0_20px_50px_rgba(27,28,28,0.03)] hover:shadow-[0_40px_80px_rgba(0,105,111,0.08)] transition-all duration-500 flex flex-col lg:flex-row items-stretch min-w-0 relative focus-within:z-30 hover:z-20"
                         >
                            {/* Multi-Image Carousel Component */}
                            <ProductCardCarousel
@@ -591,8 +787,8 @@ export default function ProductsClient({
                                       <h3 className="font-display text-base sm:text-lg md:text-xl font-bold tracking-tight text-on-surface leading-tight">
                                         {gs.name} @ {gs.location.name}
                                       </h3>
-                                      <div className="bg-surface-container-low px-2.5 py-1 rounded-none border border-outline-variant/10 whitespace-nowrap shrink-0">
-                                          <span className="text-[8px] font-bold uppercase tracking-widest text-primary">{gs.capacity} SEATER</span>
+                                      <div className="bg-[#E0F7FA] px-3.5 py-1.5 rounded-sm border border-[#006064]/30 shadow-xs whitespace-nowrap shrink-0">
+                                          <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#006064] font-mono">{gs.capacity} SEATER</span>
                                       </div>
                                   </div>
                                   
@@ -602,36 +798,50 @@ export default function ProductsClient({
                                           selectedDate={selectedDate} 
                                           selectedSlots={selectedSlotsByProduct[gs.id] || []}
                                           onToggleSlot={(slot) => handleToggleSlot(gs.id, slot)}
+                                          onDateChange={(newDate) => {
+                                            setSelectedDate(newDate);
+                                            setSelectedSlotsByProduct({});
+                                          }}
                                       />
                                   </div>
                               </div>
 
                               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-4 sm:pt-6 border-t border-outline-variant/10">
-                                   <div className="space-y-1">
-                                      <span className="text-[9px] font-bold text-tertiary/40 uppercase tracking-widest block">Total Price</span>
-                                      <div className="text-xl sm:text-2xl font-display font-black text-secondary leading-none">
-                                          {(() => {
-                                              const numSelected = selectedSlotsByProduct[gs.id]?.length || 0;
-                                              const basePrice = parseFloat(gs.pricingPlans.find((p: any) => p.type?.toLowerCase().includes("hour"))?.price || gs.pricingPlans[0]?.price || "0");
-                                              const displayPrice = numSelected > 0 ? numSelected * basePrice : basePrice;
-                                              return formatPrice(displayPrice);
-                                          })()}
-                                      </div>
-                                      {selectedSlotsByProduct[gs.id]?.length > 0 && (
-                                          <span className="text-[8px] font-bold text-primary/60 uppercase tracking-widest">{selectedSlotsByProduct[gs.id].length} slots selected</span>
-                                      )}
-                                   </div>
+                                  <div className="space-y-1.5 min-w-0">
+                                       <span className="text-[9px] font-bold text-tertiary/40 uppercase tracking-widest block">Total Price</span>
+                                       <div className="text-xl sm:text-2xl font-display font-black text-secondary leading-none">
+                                           {(() => {
+                                               const numSelected = selectedSlotsByProduct[gs.id]?.length || 0;
+                                               const basePrice = parseFloat(gs.pricingPlans.find((p: any) => p.type?.toLowerCase().includes("hour"))?.price || gs.pricingPlans[0]?.price || "0");
+                                               const displayPrice = numSelected > 0 ? numSelected * basePrice : basePrice;
+                                               return formatPrice(displayPrice);
+                                           })()}
+                                       </div>
+                                       {selectedSlotsByProduct[gs.id]?.length > 0 ? (
+                                           <div className="flex flex-col gap-0.5 pt-0.5">
+                                             <div className="flex items-center gap-1.5 text-[10.5px] font-extrabold text-[#006064] flex-wrap">
+                                               <Calendar className="w-3.5 h-3.5 text-[#006064] shrink-0" />
+                                               <span>{formatDateForSlot(selectedDate)}</span>
+                                               <span className="text-slate-300 font-normal">•</span>
+                                               <Clock className="w-3.5 h-3.5 text-[#006064] shrink-0" />
+                                               <span>{formatSlotTimeRange(selectedSlotsByProduct[gs.id])}</span>
+                                             </div>
+                                             <span className="text-[9px] font-bold text-teal-700/80 uppercase tracking-wider font-mono">
+                                               ({selectedSlotsByProduct[gs.id].length} {selectedSlotsByProduct[gs.id].length === 1 ? 'slot' : 'slots'} selected)
+                                             </span>
+                                           </div>
+                                       ) : (
+                                           <span className="text-[9px] font-medium text-gray-400 block pt-0.5">
+                                             Per hour • Select time slots above
+                                           </span>
+                                       )}
+                                  </div>
                                    <button 
-                                       onClick={(e) => {
+                                       onClick={() => {
                                          const targetUrl = selectedSlotsByProduct[gs.id]?.length > 0 
                                            ? `/checkout?productId=${gs.id}&slots=${selectedSlotsByProduct[gs.id].join(',')}&date=${selectedDate}`
                                            : `/products/${gs.id}?date=${selectedDate}`;
-                                         if (!isLoggedIn) {
-                                           setPendingRedirectUrl(targetUrl);
-                                           setIsAuthModalOpen(true);
-                                         } else {
-                                           router.push(targetUrl);
-                                         }
+                                         router.push(targetUrl);
                                        }}
                                        className="bg-[#006064] hover:bg-[#004D40] text-white px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] shadow-md hover:shadow-lg transition-all text-center block w-full sm:w-auto rounded-xs cursor-pointer"
                                    >
@@ -675,7 +885,9 @@ export default function ProductsClient({
                               <div className="space-y-3">
                                   <div className="flex justify-between items-start gap-2">
                                       <h3 className="font-display text-lg sm:text-xl font-bold tracking-tight text-on-surface">{ws.name}</h3>
-                                      <span className="text-[8px] font-bold uppercase tracking-widest text-primary bg-primary/5 px-2 py-1 shrink-0">{ws.capacity} SEATS</span>
+                                      <div className="bg-[#E0F7FA] px-3 py-1 rounded-sm border border-[#006064]/30 shadow-xs whitespace-nowrap shrink-0">
+                                          <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#006064] font-mono">{ws.capacity} {ws.capacity === 1 ? 'SEAT' : 'SEATS'}</span>
+                                      </div>
                                   </div>
                                   <p className="text-xs text-gray-500 line-clamp-2">{ws.description || "Premium dedicated office workspace with enterprise features."}</p>
                               </div>

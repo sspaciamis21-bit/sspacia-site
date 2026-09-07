@@ -48,6 +48,13 @@ export async function GET() {
         else badgeColor = 'bg-emerald-50 text-emerald-800 border-emerald-200';
       }
 
+      const cityId = loc.cityId || loc.city?.id || 1;
+      const areaName = (loc.area || '').trim();
+      const catId = p.categoryId || p.category?.id || (isGuest ? 2 : 1);
+      const typeId = p.typeId || p.type?.id || '';
+
+      const href = `/products?city=${cityId}&area=${encodeURIComponent(areaName)}&centre=${loc.id}&category=${catId}&type=${typeId}&product=${p.id}`;
+
       return {
         id: p.id,
         name: p.name,
@@ -58,7 +65,7 @@ export async function GET() {
         image: primaryImg,
         facilities: facilitiesText,
         description: facilitiesText,
-        href: `/products?centre=${loc.id}&type=${p.type?.slug || p.slug}`,
+        href,
       };
     };
 
@@ -120,13 +127,15 @@ export async function GET() {
         .filter((p) => p.category?.name !== 'GUEST_SPACE' && !['MEETING_ROOM', 'BOARD_ROOM', 'EVENT_ROOM'].includes(p.type?.name))
         .map((p) => formatProduct(p, loc));
 
+      const cityId = loc.cityId || loc.city?.id || 1;
+
       areasMap.get(areaId).centres.push({
         id: loc.slug || String(loc.id),
         locationId: loc.id,
         name: loc.name,
         shortName: loc.area || loc.name,
         address: loc.address || `${loc.name}, Ahmedabad`,
-        href: `/products?centre=${loc.id}`,
+        href: `/products?city=${cityId}&area=${encodeURIComponent(areaKey)}&centre=${loc.id}`,
         guestSpaces: {
           title: 'Guest Spaces',
           type: 'guest',

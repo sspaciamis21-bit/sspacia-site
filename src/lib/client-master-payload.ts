@@ -47,6 +47,7 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     sdrPdfName,
     paymentDueDay,
     clientStatus = 'Active',
+    clientType = 'DEFAULT',
     contactPersons = [],
   } = body;
 
@@ -61,17 +62,25 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
   const productList = Array.isArray(products) ? products : [];
   const firstProduct = productList[0] || {};
 
-  const resolvedCabinName = productList.length > 0
-    ? productList.map((p) => (p.cabinName ? String(p.cabinName).trim() : '')).filter(Boolean).join(', ')
-    : (cabinName ? String(cabinName).trim() : null);
+  const isVirtualOffice = clientType === 'VIRTUAL_OFFICE';
 
-  const resolvedNoOfSeats = productList.length > 0
-    ? productList.reduce((sum, p) => sum + (p.noOfSeats ? Number(p.noOfSeats) : 0), 0)
-    : (noOfSeats ? Number(noOfSeats) : null);
+  const resolvedCabinName = isVirtualOffice
+    ? 'Virtual Office'
+    : (productList.length > 0
+        ? productList.map((p) => (p.cabinName ? String(p.cabinName).trim() : '')).filter(Boolean).join(', ')
+        : (cabinName ? String(cabinName).trim() : null));
 
-  const resolvedRate = productList.length > 0
-    ? (firstProduct.ratePerAgreement ? Number(firstProduct.ratePerAgreement) : null)
-    : (ratePerAgreement ? Number(ratePerAgreement) : null);
+  const resolvedNoOfSeats = isVirtualOffice
+    ? 0
+    : (productList.length > 0
+        ? productList.reduce((sum, p) => sum + (p.noOfSeats ? Number(p.noOfSeats) : 0), 0)
+        : (noOfSeats ? Number(noOfSeats) : null));
+
+  const resolvedRate = isVirtualOffice
+    ? 0
+    : (productList.length > 0
+        ? (firstProduct.ratePerAgreement ? Number(firstProduct.ratePerAgreement) : null)
+        : (ratePerAgreement ? Number(ratePerAgreement) : null));
 
   const resolvedAmount = amount !== undefined && amount !== null && amount !== ''
     ? Number(amount)
@@ -147,6 +156,7 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     sdrPdfName: sdrPdfName ? String(sdrPdfName).trim() : null,
     paymentDueDay: paymentDueDay ? Number(paymentDueDay) : null,
     clientStatus: clientStatus ? String(clientStatus) : 'Active',
+    clientType: clientType === 'VIRTUAL_OFFICE' ? 'VIRTUAL_OFFICE' : 'DEFAULT',
     contactPersons: Array.isArray(contactPersons) ? contactPersons : [],
     products: productList.map((p: Record<string, unknown>, idx: number) => ({
       cabinName: p.cabinName ? String(p.cabinName).trim() : null,

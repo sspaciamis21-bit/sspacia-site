@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const clientStatus = searchParams.get('clientStatus');
+    const clientType = searchParams.get('clientType');
     const status = searchParams.get('status');
     const locationId = searchParams.get('locationId'); // Admin filter by node
 
@@ -44,6 +45,10 @@ export async function GET(request: Request) {
 
     if (clientStatus && clientStatus !== 'ALL') {
       where.clientStatus = clientStatus;
+    }
+
+    if (clientType && clientType !== 'ALL') {
+      where.clientType = clientType;
     }
 
     // ── Node-based data isolation ────────────────────────────────

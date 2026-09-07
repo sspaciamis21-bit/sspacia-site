@@ -1006,6 +1006,7 @@ model ClientMaster {
   sdrPdfName             String?
   paymentDueDay          Int?
   clientStatus           String?                @default("Active") // "Active" | "Inactive" | "On Notice" | "Terminated"
+  clientType             String?                @default("DEFAULT") // "DEFAULT" | "VIRTUAL_OFFICE"
   createdById            Int
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
@@ -1019,6 +1020,7 @@ model ClientMaster {
   @@index([createdById])
   @@index([companyName])
   @@index([clientStatus])
+  @@index([clientType])
 }
 
 model ClientMasterProduct {

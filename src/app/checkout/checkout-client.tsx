@@ -30,15 +30,18 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { AuthModal } from "@/components/ui/auth-modal";
+import { AvailabilityTimeline } from "@/components/ui/availability-timeline";
+import { StyledDatePicker } from "@/components/ui/styled-date-picker";
 
 interface Product {
   id: number;
   name: string;
   location: { name: string; address?: string };
-  pricingPlans: Array<{ type: string; price: string; [key: string]: unknown }>;
+  pricingPlans: Array<{ type: string; price: string;[key: string]: unknown }>;
   images: Array<{ url: string;[key: string]: unknown }>;
   capacity?: string | number;
   accessTime?: string;
+  category?: { name: string;[key: string]: unknown };
   amenities?: Array<{
     amenity: {
       id: number;
@@ -46,6 +49,67 @@ interface Product {
       icon?: string;
     };
   }>;
+}
+
+const TIME_SLOTS = [
+  "08:00", "09:00", "10:00", "11:00", "12:00", "13:00",
+  "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"
+];
+
+// Helper to format hour (e.g. 13 -> "1 PM", 15 -> "3 PM")
+function formatHour12(hour24: number): string {
+  const period = hour24 >= 12 && hour24 < 24 ? "PM" : "AM";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12} ${period}`;
+}
+
+// Helper to format slot range (e.g. ["13:00"] -> "1 PM to 2 PM", ["13:00", "14:00"] -> "1 PM to 3 PM")
+function formatSlotTimeRange(slots: string[]): string {
+  if (!slots || slots.length === 0) return "No slots selected";
+  const sorted = [...slots].sort();
+  const slotHours = sorted.map(s => {
+    const [h] = s.split(':').map(Number);
+    return h;
+  });
+
+  const ranges: { start: number; end: number }[] = [];
+  let currentRange: { start: number; end: number } | null = null;
+
+  for (const h of slotHours) {
+    if (!currentRange) {
+      currentRange = { start: h, end: h + 1 };
+    } else if (h === currentRange.end) {
+      currentRange.end = h + 1;
+    } else {
+      ranges.push(currentRange);
+      currentRange = { start: h, end: h + 1 };
+    }
+  }
+  if (currentRange) ranges.push(currentRange);
+
+  return ranges
+    .map(r => `${formatHour12(r.start)} to ${formatHour12(r.end)}`)
+    .join(", ");
+}
+
+// Helper to format date (e.g. "2026-09-05" -> "5 Sep 2026")
+function formatDateForSlot(dateStr?: string): string {
+  let d: Date;
+  if (dateStr && dateStr.includes('-')) {
+    const parts = dateStr.split('-').map(Number);
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      d = new Date(parts[0], parts[1] - 1, parts[2]);
+    } else {
+      d = new Date();
+    }
+  } else {
+    d = new Date();
+  }
+  const day = d.getDate();
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
 }
 
 export default function CheckoutClient() {
@@ -58,13 +122,32 @@ export default function CheckoutClient() {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [customerInfo, setCustomerInfo] = useState({ name: "", email: "", phone: "" });
 
-  // URL Params
+  // URL Params & Dynamic Slot/Date selection state
   const productId = searchParams?.get("productId") || null;
-  const date = searchParams?.get("date") || null;
-  const slotsFromUri = searchParams?.get("slots")?.split(",") || [];
-  const slots = slotsFromUri.filter(Boolean);
+  const initialDateFromUri = searchParams?.get("date") || "";
+  const initialSlotsFromUri = searchParams?.get("slots")?.split(",").map(decodeURIComponent).filter(Boolean) || [];
+
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    if (initialDateFromUri) return decodeURIComponent(initialDateFromUri);
+    const now = new Date();
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  });
+
+  const [selectedSlots, setSelectedSlots] = useState<string[]>(initialSlotsFromUri);
+
+  // Synchronize slots and date from URL search parameters on mount or navigation
+  useEffect(() => {
+    const rawSlots = searchParams?.get("slots");
+    if (rawSlots) {
+      const parsed = rawSlots.split(",").map(decodeURIComponent).filter(Boolean);
+      setSelectedSlots(parsed);
+    }
+    const rawDate = searchParams?.get("date");
+    if (rawDate) {
+      setSelectedDate(decodeURIComponent(rawDate));
+    }
+  }, [searchParams]);
 
   // Extract all valid image URLs for the product
   const productImages: string[] = useMemo(() => {
@@ -92,21 +175,14 @@ export default function CheckoutClient() {
     return () => clearInterval(interval);
   }, [productImages.length, isHoveredImg, isImageModalOpen]);
 
-  // Format Duration string e.g. "15:00 - 16:00 (1 hr)" instead of "15:00 - 15:00 (1hrs)"
-  const formatDuration = (slotList: string[]) => {
-    if (!slotList || slotList.length === 0) return "Not Selected";
-    const startSlot = slotList[0];
-    const lastSlot = slotList[slotList.length - 1];
-
-    const [lastHourStr, lastMinStr] = lastSlot.split(":");
-    const lastHour = parseInt(lastHourStr, 10);
-    const lastMin = lastMinStr || "00";
-
-    const endHour = (lastHour + 1) % 24;
-    const formattedEnd = `${String(endHour).padStart(2, "0")}:${lastMin}`;
-
-    const hrsText = slotList.length === 1 ? "1 hr" : `${slotList.length} hrs`;
-    return `${startSlot} - ${formattedEnd} (${hrsText})`;
+  const handleToggleSlot = (slot: string) => {
+    setSelectedSlots((prev) => {
+      if (prev.includes(slot)) {
+        return prev.filter((s) => s !== slot);
+      } else {
+        return [...prev, slot].sort((a, b) => TIME_SLOTS.indexOf(a) - TIME_SLOTS.indexOf(b));
+      }
+    });
   };
 
   useEffect(() => {
@@ -123,16 +199,6 @@ export default function CheckoutClient() {
         });
     }
   }, [productId]);
-
-  useEffect(() => {
-    if (user) {
-      setCustomerInfo({
-        name: user.name || "",
-        email: user.email || "",
-        phone: user.phone || user.contactNumber || ""
-      });
-    }
-  }, [user]);
 
   useEffect(() => {
     const script = document.createElement("script");
@@ -216,8 +282,8 @@ export default function CheckoutClient() {
       return;
     }
 
-    if (!customerInfo.name || !customerInfo.email) {
-      toast.error("Please fill in your billing information (Name & Email)");
+    if (selectedSlots.length === 0) {
+      toast.error("Please select at least one time slot to proceed");
       return;
     }
 
@@ -234,12 +300,12 @@ export default function CheckoutClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productId,
-          date,
-          slots,
+          date: selectedDate,
+          slots: selectedSlots,
           discountCode: discountCode.toUpperCase(),
-          customerName: customerInfo.name.trim(),
-          customerEmail: customerInfo.email.trim(),
-          customerPhone: customerInfo.phone.trim(),
+          customerName: user.name?.trim() || user.email?.split('@')[0] || "Customer",
+          customerEmail: user.email?.trim() || "",
+          customerPhone: (user.phone || (user as any).contactNumber || "").trim(),
           remarks: remarks.trim(),
           screenshotData: screenshotData || null,
         }),
@@ -262,11 +328,11 @@ export default function CheckoutClient() {
   };
 
   const subTotal = useMemo(() => {
-    if (!product || !slots.length) return 0;
+    if (!product || !selectedSlots.length) return 0;
     const hourlyPlan = product.pricingPlans.find(p => p.type?.toLowerCase().includes("hour")) || product.pricingPlans[0];
     const hourlyRate = parseFloat(hourlyPlan?.price || "0");
-    return hourlyRate * slots.length;
-  }, [product, slots]);
+    return hourlyRate * selectedSlots.length;
+  }, [product, selectedSlots]);
 
   const sgst = subTotal * 0.09;
   const cgst = subTotal * 0.09;
@@ -295,18 +361,19 @@ export default function CheckoutClient() {
           transition={{ duration: 0.6 }}
         >
 
-          <div className="lg:col-span-8 space-y-8">
-            <section className="bg-white border border-outline-variant/10 p-6 sm:p-8 shadow-xs transition-shadow">
-              <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tighter text-[#1b1c1c] mb-5">
+          <div className="lg:col-span-8 space-y-8 min-w-0 w-full overflow-visible">
+            <section className="bg-white border border-outline-variant/10 p-5 sm:p-7 shadow-xs rounded-xs space-y-6 overflow-visible relative">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tighter text-[#1b1c1c]">
                 Confirm your Booking
               </h1>
 
-              <div className="flex flex-col md:flex-row gap-6 md:gap-8 pb-6 border-b border-outline-variant/10 mb-6">
+              {/* ── Space Info Header Row ── */}
+              <div className="flex flex-col sm:flex-row gap-5 pb-6 border-b border-outline-variant/10">
                 {/* ── AUTO-SLIDING MULTI-IMAGE CAROUSEL + EYE PREVIEW ── */}
-                <div 
+                <div
                   onMouseEnter={() => setIsHoveredImg(true)}
                   onMouseLeave={() => setIsHoveredImg(false)}
-                  className="relative w-full md:w-60 aspect-[4/3] overflow-hidden border border-outline-variant/15 rounded-xs shrink-0 group bg-gray-100"
+                  className="relative w-full sm:w-48 aspect-[4/3] overflow-hidden border border-outline-variant/15 rounded-xs shrink-0 group bg-gray-100"
                 >
                   <Image
                     src={productImages[currentImageIdx] || "/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"}
@@ -324,9 +391,8 @@ export default function CheckoutClient() {
                           key={idx}
                           type="button"
                           onClick={() => setCurrentImageIdx(idx)}
-                          className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                            idx === currentImageIdx ? "w-3 bg-[#1ab0bc]" : "w-1.5 bg-white/60 hover:bg-white"
-                          }`}
+                          className={`h-1.5 rounded-full transition-all cursor-pointer ${idx === currentImageIdx ? "w-3 bg-[#1ab0bc]" : "w-1.5 bg-white/60 hover:bg-white"
+                            }`}
                           title={`Image ${idx + 1}`}
                         />
                       ))}
@@ -344,71 +410,55 @@ export default function CheckoutClient() {
                   </button>
                 </div>
 
-                <div className="flex-1 space-y-4 md:space-y-5">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-display font-bold text-[#1b1c1c] tracking-tighter">{product.name}</h2>
-                    <p className="text-xs sm:text-sm text-tertiary flex items-center gap-2 mt-1.5">
-                      <MapPin className="h-4 w-4 text-primary shrink-0" /> {product.location.name}
-                    </p>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-3.5">
-                    <div className="bg-surface-low/50 p-3.5 border border-outline-variant/10 flex items-center gap-3">
-                      <div className="h-9 w-9 bg-white flex items-center justify-center shadow-xs shrink-0 rounded-xs">
-                        <Calendar className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-tertiary tracking-widest">Date</p>
-                        <p className="text-xs font-bold text-[#1b1c1c]">{date || "Not Selected"}</p>
-                      </div>
+                <div className="flex-1 space-y-3 min-w-0">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="min-w-0">
+                      <h2 className="text-lg sm:text-xl font-display font-bold text-[#1b1c1c] tracking-tight truncate">{product.name}</h2>
+                      <p className="text-xs text-tertiary flex items-center gap-1.5 mt-1">
+                        <MapPin className="h-3.5 w-3.5 text-primary shrink-0" /> {product.location.name}
+                      </p>
                     </div>
-                    <div className="bg-surface-low/50 p-3.5 border border-outline-variant/10 flex items-center gap-3">
-                      <div className="h-9 w-9 bg-white flex items-center justify-center shadow-xs shrink-0 rounded-xs">
-                        <Clock className="h-4 w-4 text-primary" />
+                    {product.capacity && (
+                      <div className="bg-[#E0F7FA] px-3 py-1 rounded-sm border border-[#006064]/30 shadow-xs whitespace-nowrap shrink-0">
+                        <span className="text-xs font-black uppercase tracking-wider text-[#006064] font-mono">{product.capacity} {Number(product.capacity) === 1 ? 'SEAT' : 'SEATS'}</span>
                       </div>
-                      <div>
-                        <p className="text-[9px] uppercase font-bold text-tertiary tracking-widest">Duration</p>
-                        <p className="text-xs font-bold text-[#1b1c1c]">
-                          {formatDuration(slots)}
-                        </p>
-                      </div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Space Amenities */}
-                  <div className="pt-3 border-t border-outline-variant/10">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#006064] flex items-center gap-1.5 mb-2.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#1ab0bc]" />
-                      <span>Included Space Amenities</span>
+                  <div className="space-y-1.5 pt-1">
+                    <p className="text-[9.5px] font-bold uppercase tracking-[0.2em] text-[#006064] flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3 text-[#1ab0bc]" />
+                      <span>Included Amenities</span>
                     </p>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5">
                       {product.amenities && product.amenities.length > 0 ? (
                         product.amenities.map((item, idx) => (
                           <span
                             key={idx}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-xs font-semibold rounded-xs"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-[10px] font-semibold rounded-xs"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                            <CheckCircle2 className="w-3 h-3 text-[#1ab0bc]" />
                             <span>{item.amenity.name}</span>
                           </span>
                         ))
                       ) : (
                         <>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-xs font-semibold rounded-xs">
-                            <Wifi className="w-3.5 h-3.5 text-[#1ab0bc]" />
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-[10px] font-semibold rounded-xs">
+                            <Wifi className="w-3 h-3 text-[#1ab0bc]" />
                             <span>High-Speed Wi-Fi</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-xs font-semibold rounded-xs">
-                            <Wind className="w-3.5 h-3.5 text-[#1ab0bc]" />
-                            <span>Full Air Conditioning</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-[10px] font-semibold rounded-xs">
+                            <Wind className="w-3 h-3 text-[#1ab0bc]" />
+                            <span>Air Conditioning</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-xs font-semibold rounded-xs">
-                            <Coffee className="w-3.5 h-3.5 text-[#1ab0bc]" />
-                            <span>Beverages &amp; Water</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-[10px] font-semibold rounded-xs">
+                            <Coffee className="w-3 h-3 text-[#1ab0bc]" />
+                            <span>Beverages</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-xs font-semibold rounded-xs">
-                            <ShieldCheck className="w-3.5 h-3.5 text-[#1ab0bc]" />
-                            <span>24/7 Security &amp; Reception Support</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#006064]/5 border border-[#006064]/15 text-[#004D40] text-[10px] font-semibold rounded-xs">
+                            <ShieldCheck className="w-3 h-3 text-[#1ab0bc]" />
+                            <span>24/7 Security</span>
                           </span>
                         </>
                       )}
@@ -417,43 +467,79 @@ export default function CheckoutClient() {
                 </div>
               </div>
 
-              <div className="space-y-6">
-                <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-tertiary">Billing Information</h3>
-                <div className="grid sm:grid-cols-3 gap-4 sm:gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-tertiary uppercase ml-1">Full Name *</label>
-                    <input 
-                      type="text" 
-                      value={customerInfo.name}
-                      onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
-                      className="w-full bg-surface-low/30 border border-outline-variant/20 px-4 py-3 text-xs sm:text-sm outline-none focus:border-primary/30 focus:bg-white font-medium" 
-                      placeholder="John Doe" 
-                      required
+              {/* ── Date & Time Slot Selection Row (Full Width of Card) ── */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="bg-surface-low/50 p-3 border border-outline-variant/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="h-8 w-8 bg-white flex items-center justify-center shadow-xs shrink-0 rounded-xs">
+                        <Calendar className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] uppercase font-bold text-tertiary tracking-widest">Select Date</p>
+                        <p className="text-xs font-bold text-[#1b1c1c] truncate">{formatDateForSlot(selectedDate)}</p>
+                      </div>
+                    </div>
+                    <StyledDatePicker
+                      value={selectedDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(newDate) => {
+                        setSelectedDate(newDate);
+                        setSelectedSlots([]);
+                      }}
+                      align="right"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-tertiary uppercase ml-1">Email Address *</label>
-                    <input 
-                      type="email" 
-                      value={customerInfo.email}
-                      onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
-                      className="w-full bg-surface-low/30 border border-outline-variant/20 px-4 py-3 text-xs sm:text-sm outline-none focus:border-primary/30 focus:bg-white font-medium" 
-                      placeholder="john@example.com" 
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-tertiary uppercase ml-1">Mobile (+91)</label>
-                    <input 
-                      type="tel" 
-                      value={customerInfo.phone}
-                      onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
-                      className="w-full bg-surface-low/30 border border-outline-variant/20 px-4 py-3 text-xs sm:text-sm outline-none focus:border-primary/30 focus:bg-white font-mono" 
-                      placeholder="+91 98765 43210" 
-                    />
+
+                  <div className="bg-surface-low/50 p-3 border border-outline-variant/10 flex items-center gap-2.5 min-w-0">
+                    <div className="h-8 w-8 bg-white flex items-center justify-center shadow-xs shrink-0 rounded-xs">
+                      <Clock className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[9px] uppercase font-bold text-tertiary tracking-widest">Duration &amp; Time</p>
+                      <p className="text-xs font-bold text-[#1b1c1c] leading-snug break-words">
+                        {formatSlotTimeRange(selectedSlots)}
+                      </p>
+                      {selectedSlots.length > 0 && (
+                        <span className="text-[9px] font-bold text-teal-700 font-mono block">
+                          ({selectedSlots.length} {selectedSlots.length === 1 ? 'slot' : 'slots'} selected)
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* Interactive Time Slots Timeline in Checkout */}
+                <div className="bg-teal-50/40 border border-teal-100/80 p-3.5 rounded-xs space-y-1.5 overflow-hidden min-w-0">
+                  <AvailabilityTimeline
+                    productId={Number(productId)}
+                    selectedDate={selectedDate}
+                    selectedSlots={selectedSlots}
+                    onToggleSlot={handleToggleSlot}
+                    layout="scroll"
+                    title="SELECT / ADJUST TIME SLOTS (08:00 TO 20:00)"
+                  />
+                  <p className="text-[9px] text-gray-500 italic">* Click any time slot to select or modify your reserved hours</p>
+                </div>
               </div>
+
+              {/* ── Customer Account Status Badge ── */}
+              {user && (
+                <div className="pt-4 border-t border-outline-variant/10 flex items-center justify-between bg-teal-50/50 p-3.5 rounded-xs border border-teal-200/50">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-[#006064] text-white flex items-center justify-center font-bold text-xs">
+                      {user.name ? user.name.charAt(0).toUpperCase() : user.email?.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-[#1b1c1c]">{user.name || "Customer"}</p>
+                      <p className="text-[11px] text-gray-500">{user.email}</p>
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-mono font-bold text-teal-700 bg-white px-2.5 py-1 rounded-xs border border-teal-200 uppercase">
+                    Verified Account
+                  </span>
+                </div>
+              )}
             </section>
 
             {/* ── ICICI QR CODE PAYMENT SECTION ── */}
@@ -477,8 +563,8 @@ export default function CheckoutClient() {
               <div className="grid md:grid-cols-2 gap-8 items-center bg-neutral-50/70 p-6 sm:p-8 border border-neutral-200/80 rounded-sm">
                 <div className="flex flex-col items-center justify-center text-center space-y-3">
                   <div className="bg-white p-3 border-2 border-[#1ab0bc] shadow-md rounded-md">
-                    <img 
-                      src="/qr-codes/sspacia-icici-qr.jpg" 
+                    <img
+                      src="/qr-codes/sspacia-icici-qr.jpg"
                       alt="SSPACIA ICICI UPI QR Code"
                       className="w-60 sm:w-64 h-auto object-contain"
                     />
@@ -546,7 +632,7 @@ export default function CheckoutClient() {
                     </span>
                     <span className="text-[10px] text-gray-400 font-normal lowercase">Optional</span>
                   </label>
-                  
+
                   <div className="flex items-center gap-4">
                     <label className="cursor-pointer bg-white border border-gray-300 hover:border-[#1ab0bc] hover:bg-teal-50/40 text-gray-700 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm transition-all flex items-center gap-2 shadow-xs">
                       <Upload className="w-4 h-4 text-[#1ab0bc]" />
@@ -676,7 +762,7 @@ export default function CheckoutClient() {
                   </p>
                 </div>
 
-                <button 
+                <button
                   onClick={handlePayment}
                   disabled={isProcessing}
                   className="w-full bg-[#1ab0bc] text-white py-4 sm:py-5 text-xs sm:text-[11px] font-black uppercase tracking-[0.2em] hover:bg-teal-600 transition-all shadow-xl shadow-[#1ab0bc]/20 active:scale-[0.98] cursor-pointer mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
@@ -695,19 +781,19 @@ export default function CheckoutClient() {
 
       {/* ── HIGH-RESOLUTION IMAGE LIGHTBOX PREVIEW MODAL ── */}
       {isImageModalOpen && (
-        <div 
+        <div
           onClick={() => setIsImageModalOpen(false)}
           className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="relative max-w-4xl w-full max-h-[85vh] aspect-[16/10] bg-black rounded-lg overflow-hidden flex items-center justify-center shadow-2xl border border-white/10"
           >
-            <Image 
-              src={productImages[currentImageIdx] || "/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"} 
-              alt={product.name} 
-              fill 
-              className="object-contain" 
+            <Image
+              src={productImages[currentImageIdx] || "/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"}
+              alt={product.name}
+              fill
+              className="object-contain"
               priority
             />
 

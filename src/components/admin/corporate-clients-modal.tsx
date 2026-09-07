@@ -28,6 +28,7 @@ export interface CorporateClientItem {
   monthlyAmount: number;
   sdrAmount: number;
   clientStatus: string | null;
+  clientType?: string | null;
   centreName: string;
   centreId: number | null;
   agreementStartDate?: string | null;
@@ -40,7 +41,7 @@ interface CorporateClientsModalProps {
   onClose: () => void;
   clients: CorporateClientItem[];
   initialCentre?: string;
-  initialStatusTab?: "ALL" | "ACTIVE" | "ON_NOTICE";
+  initialStatusTab?: "ALL" | "ACTIVE" | "ON_NOTICE" | "VIRTUAL_OFFICE";
 }
 
 export function CorporateClientsModal({
@@ -52,7 +53,7 @@ export function CorporateClientsModal({
 }: CorporateClientsModalProps) {
   const [mounted, setMounted] = useState(false);
   const [selectedCentre, setSelectedCentre] = useState<string>(initialCentre);
-  const [statusTab, setStatusTab] = useState<"ALL" | "ACTIVE" | "ON_NOTICE">(initialStatusTab);
+  const [statusTab, setStatusTab] = useState<"ALL" | "ACTIVE" | "ON_NOTICE" | "VIRTUAL_OFFICE">(initialStatusTab);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<"SEATS_DESC" | "VALUE_DESC" | "NAME_ASC">("VALUE_DESC");
 
@@ -124,6 +125,8 @@ export function CorporateClientsModal({
       list = list.filter((c) => c.clientStatus !== "Terminated" && c.clientStatus !== "Inactive" && c.clientStatus !== "On Notice");
     } else if (statusTab === "ON_NOTICE") {
       list = list.filter((c) => c.clientStatus === "On Notice");
+    } else if (statusTab === "VIRTUAL_OFFICE") {
+      list = list.filter((c) => c.clientType === "VIRTUAL_OFFICE");
     }
 
     // Centre Filter
@@ -286,7 +289,7 @@ export function CorporateClientsModal({
             </div>
 
             {/* ── 2. STATUS SUMMARY TABS ── */}
-            <div className="px-5 py-3 bg-neutral-100/70 border-b border-neutral-200 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="px-5 py-3 bg-neutral-100/70 border-b border-neutral-200 grid grid-cols-2 sm:grid-cols-4 gap-3">
               <button
                 type="button"
                 onClick={() => setStatusTab("ALL")}
@@ -297,7 +300,7 @@ export function CorporateClientsModal({
                 }`}
               >
                 <div className="text-[10px] font-black uppercase tracking-wider text-neutral-500">
-                  1. All Registered Clients
+                  1. All Clients
                 </div>
                 <div className="text-lg font-black text-neutral-900 font-display mt-0.5">
                   {clients.length} Companies
@@ -344,6 +347,26 @@ export function CorporateClientsModal({
                 </div>
                 <div className="text-[10px] text-amber-700 font-medium mt-0.5">
                   Scheduled Exit / Relocation
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatusTab("VIRTUAL_OFFICE")}
+                className={`p-3 text-left border transition-all cursor-pointer ${
+                  statusTab === "VIRTUAL_OFFICE"
+                    ? "bg-indigo-50/90 border-indigo-500 shadow-xs ring-1 ring-indigo-500/40"
+                    : "bg-white/80 border-neutral-200 hover:bg-white"
+                }`}
+              >
+                <div className="text-[10px] font-black uppercase tracking-wider text-indigo-800">
+                  4. Virtual Office
+                </div>
+                <div className="text-lg font-black text-indigo-950 font-display mt-0.5">
+                  {clients.filter((c) => c.clientType === "VIRTUAL_OFFICE").length} Companies
+                </div>
+                <div className="text-[10px] text-indigo-700 font-medium mt-0.5">
+                  Address &amp; Mailing Only
                 </div>
               </button>
             </div>
@@ -458,8 +481,15 @@ export function CorporateClientsModal({
                         <td className="py-3 px-4 font-mono font-bold text-[11px] text-neutral-600 text-left truncate">
                           {c.clientId || `#CL-${c.id}`}
                         </td>
-                        <td className="py-3 px-4 font-bold text-neutral-900 text-left truncate">
-                          {c.companyName}
+                        <td className="py-3 px-4 font-bold text-neutral-900 text-left">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="truncate">{c.companyName}</span>
+                            {c.clientType === "VIRTUAL_OFFICE" && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 text-[8.5px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap">
+                                Virtual Office
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 font-semibold text-neutral-700 text-left truncate">
                           <div className="flex items-center gap-1.5 truncate">
@@ -468,10 +498,14 @@ export function CorporateClientsModal({
                           </div>
                         </td>
                         <td className="py-3 px-4 text-neutral-600 font-medium text-left truncate">
-                          {c.cabinName || "Dedicated Space"}
+                          {c.clientType === "VIRTUAL_OFFICE" ? (
+                            <span className="text-indigo-700 font-bold">Address Only (Virtual)</span>
+                          ) : (
+                            c.cabinName || "Dedicated Space"
+                          )}
                         </td>
                         <td className="py-3 px-4 text-center font-black text-neutral-800 font-mono">
-                          {c.noOfSeats || 1}
+                          {c.clientType === "VIRTUAL_OFFICE" ? "—" : (c.noOfSeats || 1)}
                         </td>
                         <td className="py-3 px-4 text-right font-black text-[#006064] font-mono text-xs whitespace-nowrap">
                           {formatINR(c.monthlyAmount)}
