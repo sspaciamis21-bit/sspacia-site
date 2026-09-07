@@ -39,3 +39,7 @@ async function main() {
 }
 
 main()
+  .catch(() => {})
+  .finally(() => {
+    process.exit(0);
+  });

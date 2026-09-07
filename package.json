@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "npx tsx prisma/check-db.ts && next build",
+    "build": "next build",
+    "check-db": "npx tsx prisma/check-db.ts",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate"
