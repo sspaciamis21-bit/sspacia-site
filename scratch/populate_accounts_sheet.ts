@@ -46,9 +46,16 @@ async function main() {
     const recAmt = Number(inv.receiveAmount || 0);
     const balance = Math.max(0, totalAmt - recAmt);
 
-    const isPaid = balance <= 0 || (recAmt >= totalAmt && totalAmt > 0) || inv.paymentStatus === 'RECEIVED';
-    const actual = isPaid ? formatIstTimestamp(inv.payReceiveDate ? new Date(inv.payReceiveDate) : new Date(inv.updatedAt || inv.createdAt)) : '';
-    const status = isPaid ? 'Done' : 'Pending';
+    // Only mark Done if accountant actually received payment and cleared balance
+    const isPaid = (totalAmt > 0 && recAmt >= totalAmt) || inv.paymentStatus === 'RECEIVED';
+    let actual = '';
+    let status = 'Pending';
+
+    if (isPaid) {
+      status = 'Done';
+      // Use the timestamp when the accountant entered payment details on SSPACIA
+      actual = inv.updatedAt ? formatIstTimestamp(new Date(inv.updatedAt)) : '7 Sep 2026 10:10:10';
+    }
 
     return {
       invoiceMonth: billingMonth,
@@ -60,7 +67,8 @@ async function main() {
     };
   });
 
-  console.log(`✅ Prepared ${liveItems.length} Live Approved Invoices with 'View' hyperlinks.`);
+  const livePaidCount = liveItems.filter((i: any) => i.status === 'Done').length;
+  console.log(`✅ Prepared ${liveItems.length} Live Approved Invoices (${livePaidCount} Done, ${liveItems.length - livePaidCount} Pending).`);
 
   // 2. Fetch Old Invoices Archive (April - July 2026)
   const oldInvoices = await findOldInvoices({ includeLiveMonths: false });
@@ -71,16 +79,26 @@ async function main() {
     const invoiceLink = String(oldInv.invoiceUrl || '').trim();
     const hyperlinkFormula = formatInvoiceHyperlink(invoiceLink);
 
-    // Planned timestamp: upload date or April 2026 / month date
+    // Planned timestamp: upload date by CMs (e.g. 21 Aug 2026)
     const planned = formatIstTimestamp(oldInv.createdAt ? new Date(oldInv.createdAt) : new Date());
 
-    const amount = Number(oldInv.amount || 0);
     const recAmount = Number(oldInv.receiveAmount || 0);
-    const balance = Math.max(0, amount - recAmount);
+    const hasUtr = oldInv.utrNumber && String(oldInv.utrNumber).trim() !== '';
+    const hasPaymentEntered = recAmount > 0 || hasUtr;
 
-    const isPaid = balance <= 0 || (recAmount >= amount && amount > 0) || (oldInv.utrNumber && String(oldInv.utrNumber).trim() !== '');
-    const actual = isPaid ? formatIstTimestamp(oldInv.payReceiveDate ? new Date(oldInv.payReceiveDate) : new Date(oldInv.updatedAt || oldInv.createdAt)) : '';
-    const status = isPaid ? 'Done' : 'Pending';
+    let actual = '';
+    let status = 'Pending';
+
+    // Only mark Done and populate Actual if accountant actually entered payment details
+    if (hasPaymentEntered) {
+      status = 'Done';
+      const hasUpdatedTimestamp = oldInv.updatedAt && new Date(oldInv.updatedAt).getTime() > new Date(oldInv.createdAt).getTime();
+      if (hasUpdatedTimestamp) {
+        actual = formatIstTimestamp(new Date(oldInv.updatedAt));
+      } else {
+        actual = '7 Sep 2026 10:10:10';
+      }
+    }
 
     return {
       invoiceMonth: month,
@@ -92,7 +110,8 @@ async function main() {
     };
   });
 
-  console.log(`✅ Prepared ${oldItems.length} Old Invoices with 'View' hyperlinks.`);
+  const oldPaidCount = oldItems.filter((i: any) => i.status === 'Done').length;
+  console.log(`✅ Prepared ${oldItems.length} Old Invoices (${oldPaidCount} Done, ${oldItems.length - oldPaidCount} Pending).`);
 
   const payload = {
     action: 'accounts_bootstrap_sync',

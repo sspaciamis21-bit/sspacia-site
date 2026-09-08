@@ -129,8 +129,8 @@ export async function PATCH(
       data: updateData,
     });
 
-    // ── Synchronize to Google Sheets 'Accounts' Tab (Live Actual) ──
-    syncLiveInvoiceActual(invoiceId, updateData.payReceiveDate).catch((fmsErr) => {
+    // ── Synchronize to Google Sheets 'Accounts' Tab (Live Actual: Dipendra payment entry) ──
+    syncLiveInvoiceActual(invoiceId).catch((fmsErr) => {
       console.warn('[Invoice Payment] Accounts FMS Sync notice:', fmsErr);
     });
 

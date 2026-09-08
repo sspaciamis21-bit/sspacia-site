@@ -214,7 +214,8 @@ export async function syncLiveInvoiceActual(invoiceId: number, customActualDate?
       return;
     }
 
-    const actualDateObj = customActualDate ? new Date(customActualDate) : (inv.payReceiveDate ? new Date(inv.payReceiveDate) : new Date());
+    // Use current operational timestamp when accountant marks payment on SSPACIA
+    const actualDateObj = customActualDate instanceof Date ? customActualDate : new Date();
     const actualTimestamp = formatIstTimestamp(actualDateObj);
 
     const payload = {
@@ -246,17 +247,16 @@ export async function syncOldInvoiceActual(oldInvoiceId: number, customActualDat
     const companyName = String(oldInv.companyName || '').trim();
     const month = String(oldInv.month || '').trim();
 
-    const amount = Number(oldInv.amount || 0);
     const recAmount = Number(oldInv.receiveAmount || 0);
-    const balance = Math.max(0, amount - recAmount);
+    const hasUtr = oldInv.utrNumber && String(oldInv.utrNumber).trim() !== '';
+    const hasPaymentEntered = recAmount > 0 || hasUtr;
 
-    const isPaid = balance <= 0 || (recAmount >= amount && amount > 0) || (oldInv.utrNumber && String(oldInv.utrNumber).trim() !== '');
-
-    if (!isPaid && !customActualDate) {
+    if (!hasPaymentEntered && !customActualDate) {
       return;
     }
 
-    const actualDateObj = customActualDate ? new Date(customActualDate) : (oldInv.payReceiveDate ? new Date(oldInv.payReceiveDate) : new Date());
+    // Use current operational timestamp when accountant enters payment on SSPACIA
+    const actualDateObj = customActualDate instanceof Date ? customActualDate : new Date();
     const actualTimestamp = formatIstTimestamp(actualDateObj);
 
     const payload = {
