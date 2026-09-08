@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { sendInvoiceApprovalEmail } from '@/lib/invoice-email-service';
+import { syncLiveInvoicePlanned } from '@/lib/accountsFmsSync';
 
 export async function PATCH(
   request: Request,
@@ -48,6 +49,11 @@ export async function PATCH(
         }
       }).catch((err) => {
         console.error(`[Invoice Status] ❌ Async email error on Invoice #${invoiceRecordId}:`, err);
+      });
+
+      // ── Synchronize to Google Sheets 'Accounts' Tab (Live Planned) ──
+      syncLiveInvoicePlanned(invoiceRecordId).catch((fmsErr) => {
+        console.warn('[Invoice Status] Accounts FMS Sync notice:', fmsErr);
       });
 
 

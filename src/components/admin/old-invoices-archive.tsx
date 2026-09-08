@@ -516,9 +516,9 @@ export function OldInvoicesArchive({
     setFormLocationId(currentUserLocationId ? String(currentUserLocationId) : (locations[0]?.id ? String(locations[0].id) : ''));
     setFormLocationName(currentUserLocationName || locations[0]?.name || '');
 
-    // Smart default: If company already has April, suggest May; otherwise use current month
-    let defaultMonth = MONTH_NAMES[new Date().getMonth()] || 'April';
-    let defaultYear = new Date().getFullYear();
+    // Smart default: For old archives, suggest past month like July or April
+    let defaultMonth = 'July';
+    let defaultYear = 2026;
 
     if (prefillCompany) {
       const existingInvoices = invoices.filter(

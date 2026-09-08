@@ -554,7 +554,7 @@ export function InvoicePaymentManagement({
                 <FolderArchive size={13} className="text-amber-600" />
                 <span>Old Invoices Archive</span>
                 <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 rounded text-[9px] font-bold">
-                  Apr–Aug 2026
+                  Past Archives
                 </span>
               </button>
             </div>

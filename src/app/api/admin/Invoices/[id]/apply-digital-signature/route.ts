@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { stampPdfWithDigitalSignature } from '@/lib/digital-signature';
+import { syncLiveInvoicePlanned } from '@/lib/accountsFmsSync';
 import fs from 'fs';
 import path from 'path';
 
@@ -153,6 +154,11 @@ export async function POST(
         signedByName: activeSigner,
         status: 'APPROVED', // Once signed, invoice is approved and client-ready
       },
+    });
+
+    // ── Synchronize to Google Sheets 'Accounts' Tab (Live Planned) ──
+    syncLiveInvoicePlanned(invoiceRecordId).catch((fmsErr) => {
+      console.warn('[Apply Digital Signature] Accounts FMS Sync notice:', fmsErr);
     });
 
     return NextResponse.json({

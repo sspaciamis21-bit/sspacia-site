@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 import { stampPdfWithDigitalSignature } from '@/lib/digital-signature';
+import { syncLiveInvoicePlanned } from '@/lib/accountsFmsSync';
 
 export async function POST(
   request: Request,
@@ -72,6 +73,11 @@ export async function POST(
         signedByName: signerName || 'PRAVEEN DILIPKUMAR AGARWAL',
         status: 'APPROVED',
       },
+    });
+
+    // ── Synchronize to Google Sheets 'Accounts' Tab (Live Planned) ──
+    syncLiveInvoicePlanned(invoiceRecordId).catch((fmsErr) => {
+      console.warn('[Save USB Signed] Accounts FMS Sync notice:', fmsErr);
     });
 
     return NextResponse.json({

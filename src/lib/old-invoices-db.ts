@@ -36,9 +36,15 @@ export async function findOldInvoices(filter: {
   locationId?: number | null;
   locationIds?: number[] | null;
   uploadedByIds?: number[] | null;
+  includeLiveMonths?: boolean;
 }) {
   let query = 'SELECT * FROM `OldInvoiceHistory` WHERE 1=1';
   const params: any[] = [];
+
+  // Exclude August 2026 and September 2026 which are live billing cycles managed in Live Approved
+  if (!filter.includeLiveMonths && (!filter.month || filter.month === 'ALL')) {
+    query += " AND `month` NOT LIKE '%August 2026%' AND `month` NOT LIKE '%September 2026%'";
+  }
 
   if (filter.search) {
     const s = `%${filter.search}%`;
@@ -151,9 +157,12 @@ export async function deleteOldInvoice(id: number) {
   return true;
 }
 
-export async function getArchivedCompanyNames(): Promise<string[]> {
-  const rows = await (prisma.$queryRawUnsafe(
-    'SELECT DISTINCT `companyName` FROM `OldInvoiceHistory` WHERE `companyName` IS NOT NULL ORDER BY `companyName` ASC'
-  ) as Promise<any[]>);
+export async function getArchivedCompanyNames(includeLiveMonths: boolean = false): Promise<string[]> {
+  let query = 'SELECT DISTINCT `companyName` FROM `OldInvoiceHistory` WHERE `companyName` IS NOT NULL';
+  if (!includeLiveMonths) {
+    query += " AND `month` NOT LIKE '%August 2026%' AND `month` NOT LIKE '%September 2026%'";
+  }
+  query += ' ORDER BY `companyName` ASC';
+  const rows = await (prisma.$queryRawUnsafe(query) as Promise<any[]>);
   return (rows || []).map((r) => r.companyName);
 }

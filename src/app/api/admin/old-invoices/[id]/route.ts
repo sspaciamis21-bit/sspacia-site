@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
 import { findOldInvoiceById, updateOldInvoice, deleteOldInvoice } from '@/lib/old-invoices-db';
+import { syncOldInvoiceActual } from '@/lib/accountsFmsSync';
 
 export const dynamic = 'force-dynamic';
 
@@ -100,6 +101,11 @@ export async function PUT(
     }
 
     const updated = await updateOldInvoice(id, data);
+
+    // ── Synchronize to Google Sheets 'Accounts' Tab (Old Actual) ──
+    syncOldInvoiceActual(id, data.payReceiveDate).catch((fmsErr) => {
+      console.warn('[Old Invoice Payment] Accounts FMS Sync notice:', fmsErr);
+    });
 
     return NextResponse.json({
       success: true,

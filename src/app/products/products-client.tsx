@@ -323,22 +323,25 @@ export default function ProductsClient({
           sessionStorage.removeItem('sspacia_active_filters');
         } catch {}
       }
-      setSelectedArea(undefined);
-      setSelectedLocationId(undefined);
-      setSelectedCategoryId(initialCategoryId || undefined);
-      setSelectedTypeId(undefined);
-      setSelectedAmenityIds([]);
+      setSelectedArea((prev) => prev !== undefined ? undefined : prev);
+      setSelectedLocationId((prev) => prev !== undefined ? undefined : prev);
+      setSelectedCategoryId((prev) => prev !== (initialCategoryId || undefined) ? (initialCategoryId || undefined) : prev);
+      setSelectedTypeId((prev) => prev !== undefined ? undefined : prev);
+      setSelectedAmenityIds((prev) => prev.length > 0 ? [] : prev);
       return;
     }
 
     // Only apply filters when specific query parameters are present in the URL
     const resolved = resolveInitialFilters(searchParams, products, cities, categories, productTypes, initialCategoryId);
-    if (resolved.cityId !== undefined) setSelectedCityId(resolved.cityId);
-    setSelectedArea(resolved.area);
-    setSelectedLocationId(resolved.locationId);
-    setSelectedCategoryId(resolved.categoryId);
-    setSelectedTypeId(resolved.typeId);
-    setSelectedAmenityIds(resolved.amenityIds);
+    setSelectedCityId((prev) => (resolved.cityId !== prev ? resolved.cityId : prev));
+    setSelectedArea((prev) => (resolved.area !== prev ? resolved.area : prev));
+    setSelectedLocationId((prev) => (resolved.locationId !== prev ? resolved.locationId : prev));
+    setSelectedCategoryId((prev) => (resolved.categoryId !== prev ? resolved.categoryId : prev));
+    setSelectedTypeId((prev) => (resolved.typeId !== prev ? resolved.typeId : prev));
+    setSelectedAmenityIds((prev) => {
+      const isSame = prev.length === resolved.amenityIds.length && prev.every((val, i) => val === resolved.amenityIds[i]);
+      return isSame ? prev : resolved.amenityIds;
+    });
   }, [searchParams, products, cities, categories, productTypes, initialCategoryId]);
 
   // Synchronize URL when filters are manually adjusted by the user
@@ -356,12 +359,24 @@ export default function ProductsClient({
     if (selectedAmenityIds.length > 0) params.set('amenities', selectedAmenityIds.join(','));
 
     const queryString = params.toString();
+    const currentQuery = window.location.search.replace(/^\?/, '');
+
+    // Normalize and compare both query sets to prevent recursive history.replaceState loops & navigation throttling
+    const currentParams = new URLSearchParams(currentQuery);
+    currentParams.sort();
+    const newParams = new URLSearchParams(queryString);
+    newParams.sort();
+
+    if (currentParams.toString() === newParams.toString()) {
+      return;
+    }
+
     const hasActiveFilters = selectedArea || selectedLocationId || (selectedCategoryId && selectedCategoryId !== initialCategoryId) || selectedTypeId || selectedAmenityIds.length > 0;
 
     if (hasActiveFilters && queryString) {
       const newUrl = `${pathname}?${queryString}`;
       window.history.replaceState(null, '', newUrl);
-    } else if (!hasActiveFilters && !queryString) {
+    } else if (!hasActiveFilters && currentQuery) {
       window.history.replaceState(null, '', pathname);
     }
   }, [selectedCityId, selectedArea, selectedLocationId, selectedCategoryId, selectedTypeId, selectedAmenityIds, pathname, initialCategoryId]);
@@ -680,56 +695,27 @@ export default function ProductsClient({
     <div className="min-h-screen bg-surface font-sans text-on-surface antialiased">
       <div className="space-y-6 sm:space-y-8 py-6 sm:py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* ── Compact Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pb-4 border-b border-[#CFD8DC]/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#CFD8DC]/60">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#006064]">SSPACIA // AHMEDABAD</span>
           <h1 className="text-2xl sm:text-3xl font-display font-black text-[#004D40] tracking-tight uppercase">
             {initialCategoryId === 2 ? "Guest Spaces" : initialCategoryId === 1 ? "Coworking Spaces" : "All Workspaces"}
           </h1>
+          <p className="text-xs text-gray-500 max-w-md mt-0.5">
+            {initialCategoryId === 2 
+              ? "Book premium meeting rooms, event spaces, and day passes on-demand."
+              : "Flexible dedicated desks, shared offices, and private cabins across Ahmedabad."}
+          </p>
         </div>
-        <p className="text-xs text-gray-500 max-w-md">
-          {initialCategoryId === 2 
-            ? "Book premium meeting rooms, event spaces, and day passes on-demand."
-            : "Flexible dedicated desks, shared offices, and private cabins across Ahmedabad."}
-        </p>
-      </div>
-
-      {/* ── Virtual Office Dedicated Banner ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#00382E] via-[#004D40] to-[#006064] p-5 sm:p-7 text-white shadow-xl border border-teal-500/30">
-        <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-teal-400/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div className="space-y-2.5 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-teal-400/20 border border-teal-300/30 rounded-full text-[11px] font-bold tracking-wider uppercase text-teal-200">
-              <Globe className="w-3.5 h-3.5" />
-              <span>Dedicated Virtual Office & GST Registration</span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-              Need a Prestigious Ahmedabad Business Address & GST NOC?
-            </h2>
-            <p className="text-xs sm:text-sm text-teal-100/90 leading-relaxed">
-              Register your business across our 3 prime Ahmedabad centres (Agarwal Complex – CG Road, Mercado – CG Road & Premier House – SG Highway). 100% compliant for GST & MCA ROC incorporation with NOC & electricity bill.
-            </p>
-            <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-teal-200 font-medium">
-              <span className="flex items-center gap-1 bg-black/25 px-2.5 py-1 rounded-md border border-teal-500/20">
-                <MapPin className="w-3 h-3 text-teal-300" /> Agarwal Complex (CG Road)
-              </span>
-              <span className="flex items-center gap-1 bg-black/25 px-2.5 py-1 rounded-md border border-teal-500/20">
-                <MapPin className="w-3 h-3 text-teal-300" /> Mercado (CG Road)
-              </span>
-              <span className="flex items-center gap-1 bg-black/25 px-2.5 py-1 rounded-md border border-teal-500/20">
-                <MapPin className="w-3 h-3 text-teal-300" /> Premier House (SG Highway)
-              </span>
-            </div>
-          </div>
-          <div className="shrink-0 flex items-center pt-2 lg:pt-0">
-            <Link
-              href="/virtual-office"
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-white hover:bg-teal-50 text-[#004D40] font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-            >
-              <span>Explore 3 Centres & Book Virtual Office</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
+        <div className="shrink-0">
+          <Link
+            href="/virtual-office"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#006064] hover:bg-[#004D40] text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm hover:shadow-md transition-all cursor-pointer"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>Virtual Office</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
       </div>
 
@@ -956,11 +942,7 @@ export default function ProductsClient({
                                   <p className="text-xs text-gray-500 line-clamp-2">{ws.description || "Premium dedicated office workspace with enterprise features."}</p>
                               </div>
 
-                              <div className="flex items-center justify-between pt-4 sm:pt-6 border-t border-outline-variant/10">
-                                  <div>
-                                      <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest block">Monthly Rent</span>
-                                      <span className="text-lg sm:text-xl font-display font-black text-[#006064]">{formatPrice(ws.pricingPlans[0]?.price || 0)}</span>
-                                  </div>
+                              <div className="flex items-center justify-end pt-4 sm:pt-6 border-t border-outline-variant/10">
                                   <Link
                                       href={`/products/${ws.id}`}
                                       className="bg-[#006064] hover:bg-[#004D40] text-white px-5 py-2.5 text-[9px] font-black uppercase tracking-[0.2em] shadow-md hover:shadow-lg transition-all rounded-xs cursor-pointer"

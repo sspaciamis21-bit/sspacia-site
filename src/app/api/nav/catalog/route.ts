@@ -59,6 +59,7 @@ export async function GET() {
         id: p.id,
         name: p.name,
         slug: p.slug,
+        type: p.type?.name || '',
         badge: `${p.capacity || 1} Seater`,
         badgeColor,
         centreName: loc.name,

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { getNodeScopedUserIds } from '@/lib/auth/getNodeScopedUserIds';
+import { syncLiveInvoiceActual } from '@/lib/accountsFmsSync';
 
 // PATCH /api/admin/invoice-payments/[id] — Update payment receive details for an approved invoice
 export async function PATCH(
@@ -126,6 +127,11 @@ export async function PATCH(
     const updated = await (prisma as any).invoiceRecord.update({
       where: { id: invoiceId },
       data: updateData,
+    });
+
+    // ── Synchronize to Google Sheets 'Accounts' Tab (Live Actual) ──
+    syncLiveInvoiceActual(invoiceId, updateData.payReceiveDate).catch((fmsErr) => {
+      console.warn('[Invoice Payment] Accounts FMS Sync notice:', fmsErr);
     });
 
     return NextResponse.json({

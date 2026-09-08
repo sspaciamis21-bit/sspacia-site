@@ -25,6 +25,7 @@ export interface CentreComparison {
   locationName: string;
   area: string;
   revenue: number;
+  invoicedAmount?: number;
   expenses: number;
   grossProfit: number;
   grossMarginPercent: number;
@@ -42,6 +43,9 @@ interface GrossProfitModalProps {
   onClose: () => void;
   kpi: {
     totalRevenue: number;
+    paymentReceived?: number;
+    invoicesRaised?: number;
+    contractedRevenue?: number;
     totalExpenses: number;
     grossProfit: number;
     grossProfitMargin: number;
@@ -175,7 +179,7 @@ export function GrossProfitModal({
                   </div>
                   <p className="text-xs text-neutral-300 font-light mt-0.5 flex items-center gap-2">
                     <span>
-                      Formula: <strong>Revenue ({formatINR(kpi.totalRevenue)})</strong> − <strong>Expenses ({formatINR(kpi.totalExpenses)})</strong> = <strong className="text-teal-300 font-bold font-mono">{kpi.grossProfit >= 0 ? "+" : ""}{formatINR(kpi.grossProfit)}</strong>
+                      Formula: <strong>Payment Received ({formatINR(kpi.paymentReceived !== undefined ? kpi.paymentReceived : kpi.totalRevenue)})</strong> − <strong>Expenses ({formatINR(kpi.totalExpenses)})</strong> = <strong className="text-teal-300 font-bold font-mono">{kpi.grossProfit >= 0 ? "+" : ""}{formatINR(kpi.grossProfit)}</strong>
                     </span>
                     {periodInfo && (
                       <>
@@ -224,13 +228,13 @@ export function GrossProfitModal({
               {/* REVENUE */}
               <div className="bg-white p-3.5 border border-emerald-200 shadow-2xs">
                 <div className="text-[10px] font-black uppercase text-emerald-900 tracking-wider">
-                  Total Inflow Revenue
+                  Payment Received (Realized Topline)
                 </div>
                 <div className="text-xl font-black text-emerald-950 font-mono mt-1">
-                  {formatINR(kpi.totalRevenue)}
+                  {formatINR(kpi.paymentReceived !== undefined ? kpi.paymentReceived : kpi.totalRevenue)}
                 </div>
                 <div className="text-[10px] text-emerald-700 mt-0.5">
-                  100% Operational Topline
+                  Confirmed Bank Collections {kpi.invoicesRaised ? `(Invoiced: ${formatINR(kpi.invoicesRaised)})` : ''}
                 </div>
               </div>
 
@@ -253,7 +257,7 @@ export function GrossProfitModal({
               }`}>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black uppercase text-[#004D40] tracking-wider">
-                    Net Margin / P&amp;L
+                    Realized Gross Profit (P&amp;L)
                   </span>
                   <span className={`text-[9.5px] font-bold px-1.5 py-0.2 border ${
                     kpi.isProfitable ? "bg-teal-100 text-teal-800 border-teal-300" : "bg-rose-100 text-rose-800 border-rose-300"
@@ -267,7 +271,7 @@ export function GrossProfitModal({
                   {kpi.grossProfit >= 0 ? "+" : ""}{formatINR(kpi.grossProfit)}
                 </div>
                 <div className="text-[10px] font-bold text-[#006064] mt-0.5">
-                  {kpi.grossProfitMargin}% Profit Margin
+                  {kpi.grossProfitMargin}% Margin (Cash Realized)
                 </div>
               </div>
             </div>
@@ -280,8 +284,8 @@ export function GrossProfitModal({
                 <div className="px-4 py-3 bg-neutral-100/70 border-b border-neutral-200 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Building2 size={15} className="text-[#006064]" />
-                    <span className="text-xs font-black uppercase text-neutral-800 tracking-wider">
-                      Centre-by-Centre Contribution Breakdown
+                    <span className="text-xs font-black uppercase tracking-wider text-neutral-800">
+                      Centre-Wise Financial Performance Matrix
                     </span>
                   </div>
                   <span className="text-[11px] text-neutral-500 font-medium">
@@ -290,18 +294,20 @@ export function GrossProfitModal({
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse table-fixed min-w-[650px]">
+                  <table className="w-full text-left border-collapse table-fixed min-w-[700px]">
                     <colgroup>
-                      <col className="w-[180px]" />
-                      <col className="w-[120px]" />
-                      <col className="w-[120px]" />
-                      <col className="w-[130px]" />
-                      <col className="w-[100px]" />
+                      <col className="w-[170px]" />
+                      <col className="w-[110px]" />
+                      <col className="w-[110px]" />
+                      <col className="w-[110px]" />
+                      <col className="w-[110px]" />
+                      <col className="w-[90px]" />
                     </colgroup>
                     <thead className="bg-neutral-50 text-[10px] font-black uppercase text-neutral-600 border-b border-neutral-200">
                       <tr>
                         <th className="py-2.5 px-4 text-left">Centre</th>
-                        <th className="py-2.5 px-4 text-right">Revenue (₹)</th>
+                        <th className="py-2.5 px-4 text-right">Received (₹)</th>
+                        <th className="py-2.5 px-4 text-right">Invoiced (₹)</th>
                         <th className="py-2.5 px-4 text-right">Expenses (₹)</th>
                         <th className="py-2.5 px-4 text-right">Gross Profit (₹)</th>
                         <th className="py-2.5 px-4 text-center">Margin</th>
@@ -319,6 +325,9 @@ export function GrossProfitModal({
                           </td>
                           <td className="py-3 px-4 text-right font-semibold text-emerald-800 font-mono">
                             {formatINR(c.revenue)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-semibold text-neutral-700 font-mono">
+                            {formatINR(c.invoicedAmount || 0)}
                           </td>
                           <td className="py-3 px-4 text-right font-semibold text-rose-800 font-mono">
                             {formatINR(c.expenses)}

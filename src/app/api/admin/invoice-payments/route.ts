@@ -129,15 +129,6 @@ export async function GET(request: Request) {
       }
     });
 
-    const now = new Date();
-    const monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
-    monthSet.add(`${monthNames[now.getMonth()]} ${now.getFullYear()}`);
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    monthSet.add(`${monthNames[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`);
-
     const availableBillingMonths = Array.from(monthSet).sort((a, b) => {
       const da = new Date(`1 ${a}`);
       const db = new Date(`1 ${b}`);

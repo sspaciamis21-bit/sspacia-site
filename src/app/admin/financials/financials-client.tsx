@@ -35,6 +35,7 @@ interface LocationComparison {
   locationName: string;
   area: string;
   revenue: number;
+  invoicedAmount?: number;
   expenses: number;
   grossProfit: number;
   grossMarginPercent: number;
@@ -71,12 +72,15 @@ interface FinancialData {
   selectedLocationId: string;
   kpi: {
     totalRevenue: number;
+    contractedRevenue?: number;
     invoicesRaised?: number;
     paymentReceived?: number;
     balancePayment?: number;
+    collectionRate?: number;
     totalExpenses: number;
     grossProfit: number;
     grossProfitMargin: number;
+    invoicedGrossProfit?: number;
     isProfitable: boolean;
     transactionCount: number;
     expenseCount: number;
@@ -431,7 +435,7 @@ export function FinancialsClient() {
           <div
             onClick={() => handleOpenInvoicesModal("APPROVED")}
             className="bg-white p-4 sm:p-5 border border-emerald-200 shadow-xs flex flex-col justify-between hover:border-emerald-400 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group relative overflow-hidden"
-            title="Click to view collected / approved payments in dynamic popup"
+            title="Click to view collected payments with UTR details in dynamic popup"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -452,9 +456,9 @@ export function FinancialsClient() {
               </div>
             </div>
             <div className="text-[10px] text-emerald-700 font-medium flex items-center justify-between pt-2 border-t border-emerald-100">
-              <span>Invoices Approved</span>
+              <span>Bank Collections</span>
               <span className="font-bold text-emerald-700 flex items-center gap-0.5 group-hover:underline">
-                <span>{data?.kpi.invoicesRaised ? Math.round(((data.kpi.paymentReceived || 0) / data.kpi.invoicesRaised) * 100) : 100}% Collection</span>
+                <span>{data?.kpi.collectionRate !== undefined ? `${data.kpi.collectionRate}% Realized` : `${data?.kpi.invoicesRaised ? Math.round(((data.kpi.paymentReceived || 0) / data.kpi.invoicesRaised) * 100) : 0}% Realized`}</span>
                 <ArrowUpRight size={11} />
               </span>
             </div>
@@ -464,7 +468,7 @@ export function FinancialsClient() {
           <div
             onClick={() => handleOpenInvoicesModal("PENDING")}
             className="bg-white p-4 sm:p-5 border border-amber-200 shadow-xs flex flex-col justify-between hover:border-amber-400 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group relative overflow-hidden"
-            title="Click to view pending invoice pipeline in dynamic popup"
+            title="Click to view pending balance pipeline in dynamic popup"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -485,9 +489,9 @@ export function FinancialsClient() {
               </div>
             </div>
             <div className="text-[10px] text-amber-700 font-medium flex items-center justify-between pt-2 border-t border-amber-100">
-              <span>Pending Review</span>
+              <span>Awaiting Collection</span>
               <span className="font-bold text-amber-700 flex items-center gap-0.5 group-hover:underline">
-                <span>In Pipeline</span>
+                <span>Pending Realization</span>
                 <ArrowUpRight size={11} />
               </span>
             </div>
@@ -766,6 +770,9 @@ export function FinancialsClient() {
           onClose={() => setIsGrossProfitModalOpen(false)}
           kpi={{
             totalRevenue: data.kpi.totalRevenue,
+            paymentReceived: data.kpi.paymentReceived,
+            invoicesRaised: data.kpi.invoicesRaised,
+            contractedRevenue: data.kpi.contractedRevenue,
             totalExpenses: data.kpi.totalExpenses,
             grossProfit: data.kpi.grossProfit,
             grossProfitMargin: data.kpi.grossProfitMargin,

@@ -458,6 +458,13 @@ export async function GET(req: NextRequest) {
     let invoicesRaised = 0;
     let paymentReceived = 0;
     let invoiceCount = 0;
+    const invoicesRaisedByLocation: Record<number, number> = {};
+    const paymentReceivedByLocation: Record<number, number> = {};
+
+    locations.forEach((loc) => {
+      invoicesRaisedByLocation[loc.id] = 0;
+      paymentReceivedByLocation[loc.id] = 0;
+    });
 
     try {
       const allInvoices = await (prisma as any).invoiceRecord.findMany({
@@ -472,9 +479,28 @@ export async function GET(req: NextRequest) {
           gstPercent: true,
           status: true,
           billingMonth: true,
+          sendType: true,
           dueDate: true,
           createdAt: true,
           sentAt: true,
+          receiveAmount: true,
+          paymentStatus: true,
+          paymentMode: true,
+          utrNumber: true,
+          utrDate: true,
+          utrFileUrl: true,
+          utrFileName: true,
+          tdsDeducted: true,
+          tdsAmount: true,
+          payReceiveDate: true,
+          paymentsJson: true,
+          attachedInvoice: {
+            select: {
+              id: true,
+              fileName: true,
+              fileUrl: true,
+            },
+          },
         },
       });
 
@@ -531,10 +557,29 @@ export async function GET(req: NextRequest) {
           const taxableAmt = parseAmount(inv.amount || totalAmt);
           invoicesRaised += totalAmt;
           invoiceCount++;
+          
           const isApproved = inv.status === 'APPROVED' || inv.status === 'CONFIRMED' || inv.status === 'PAID';
-          if (isApproved) {
-            paymentReceived += totalAmt;
+          
+          // Actual Payment Realized: Consider strictly payment receive details entered by accountant via Live Approved
+          const invRecAmt = parseAmount(inv.receiveAmount || 0);
+          paymentReceived += invRecAmt;
+          
+          invoicesRaisedByLocation[invLocId] = (invoicesRaisedByLocation[invLocId] || 0) + totalAmt;
+          paymentReceivedByLocation[invLocId] = (paymentReceivedByLocation[invLocId] || 0) + invRecAmt;
+
+          const invBalanceAmt = Math.max(0, totalAmt - invRecAmt);
+
+          let payStatus = inv.paymentStatus || 'PENDING';
+          if (!inv.paymentStatus || inv.paymentStatus === 'PENDING') {
+            if (invRecAmt >= totalAmt && totalAmt > 0) {
+              payStatus = 'RECEIVED';
+            } else if (invRecAmt > 0 && invRecAmt < totalAmt) {
+              payStatus = 'PARTIAL';
+            } else if (inv.utrNumber && String(inv.utrNumber).trim() !== '') {
+              payStatus = 'RECEIVED';
+            }
           }
+
           const locName = locations.find((l) => l.id === invLocId)?.name || `Centre #${invLocId}`;
 
           itemizedInvoiceList.push({
@@ -548,10 +593,29 @@ export async function GET(req: NextRequest) {
             taxableAmount: taxableAmt,
             gstPercent: parseAmount(inv.gstPercent || 18),
             totalAmount: totalAmt,
+            receiveAmount: invRecAmt,
+            balanceAmount: invBalanceAmt,
+            paymentStatus: payStatus,
+            paymentMode: inv.paymentMode || null,
+            utrNumber: inv.utrNumber || null,
+            utrDate: inv.utrDate ? formatLocalDate(new Date(inv.utrDate)) : null,
+            utrFileUrl: inv.utrFileUrl || null,
+            utrFileName: inv.utrFileName || null,
+            tdsDeducted: inv.tdsDeducted || 'No',
+            tdsAmount: parseAmount(inv.tdsAmount || 0),
+            paymentsJson: inv.paymentsJson || null,
+            payReceiveDate: inv.payReceiveDate ? formatLocalDate(new Date(inv.payReceiveDate)) : null,
             status: inv.status || 'PENDING_CM_REVIEW',
+            sendType: inv.sendType || 'AUTOMATIC_MONTH_END',
             billingMonth: inv.billingMonth || 'August 2026',
             dueDate: inv.dueDate ? formatLocalDate(new Date(inv.dueDate)) : null,
+            sentAt: inv.sentAt ? formatLocalDate(new Date(inv.sentAt)) : null,
             createdAt: inv.createdAt ? formatLocalDate(new Date(inv.createdAt)) : null,
+            attachedInvoice: inv.attachedInvoice ? {
+              id: inv.attachedInvoice.id,
+              fileName: inv.attachedInvoice.fileName,
+              fileUrl: inv.attachedInvoice.fileUrl,
+            } : null,
             isApproved,
           });
         }
@@ -563,33 +627,41 @@ export async function GET(req: NextRequest) {
     const balancePayment = Math.max(0, invoicesRaised - paymentReceived);
 
     // ── 5. Calculate Grand Totals & Gross Profit ──
-    let totalRevenue = 0;
+    // Operational expenses across target centres
     let totalExpenses = 0;
-
     targetLocationIds.forEach((locId) => {
-      totalRevenue += revenueByLocation[locId] || 0;
       totalExpenses += expensesByLocation[locId] || 0;
     });
 
-    // Core Formula: Gross Profit = Revenue - Expenses
-    const grossProfit = totalRevenue - totalExpenses;
+    // Contracted Topline (from active client agreements & bookings)
+    let contractedRevenue = 0;
+    targetLocationIds.forEach((locId) => {
+      contractedRevenue += revenueByLocation[locId] || 0;
+    });
+
+    // Core Formula (Cash Realized Basis): Gross Profit = Payment Received - Operational Expenses
+    const grossProfit = paymentReceived - totalExpenses;
     const grossProfitMargin =
-      totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(2) : '0.00';
+      paymentReceived > 0 ? ((grossProfit / paymentReceived) * 100).toFixed(2) : '0.00';
+
+    const invoicedGrossProfit = invoicesRaised - totalExpenses;
 
     // ── 6. Build Centre Comparison Matrix ──
     const centreComparison = locations
       .filter((loc) => locationParam === 'ALL' || targetLocationIds.includes(loc.id))
       .map((loc) => {
-        const rev = revenueByLocation[loc.id] || 0;
+        const received = paymentReceivedByLocation[loc.id] || 0;
+        const invoiced = invoicesRaisedByLocation[loc.id] || 0;
         const exp = expensesByLocation[loc.id] || 0;
-        const profit = rev - exp;
-        const margin = rev > 0 ? ((profit / rev) * 100).toFixed(1) : '0.0';
+        const profit = received - exp;
+        const margin = received > 0 ? ((profit / received) * 100).toFixed(1) : '0.0';
 
         return {
           locationId: loc.id,
           locationName: loc.name,
           area: loc.area || '',
-          revenue: rev,
+          revenue: received, // Cash Realized Revenue
+          invoicedAmount: invoiced,
           expenses: exp,
           grossProfit: profit,
           grossMarginPercent: parseFloat(margin),
@@ -610,13 +682,16 @@ export async function GET(req: NextRequest) {
       },
       selectedLocationId: locationParam,
       kpi: {
-        totalRevenue,
-        invoicesRaised: invoicesRaised > 0 ? invoicesRaised : totalRevenue,
+        totalRevenue: paymentReceived,
+        contractedRevenue,
+        invoicesRaised: invoicesRaised > 0 ? invoicesRaised : contractedRevenue,
         paymentReceived,
         balancePayment,
+        collectionRate: parseFloat(invoicesRaised > 0 ? ((paymentReceived / invoicesRaised) * 100).toFixed(1) : '0.0'),
         totalExpenses,
         grossProfit,
         grossProfitMargin: parseFloat(grossProfitMargin),
+        invoicedGrossProfit,
         isProfitable: grossProfit >= 0,
         transactionCount: invoiceCount > 0 ? invoiceCount : clientAgreementCount + bookings.length + qrBookings.length,
         expenseCount: itemizedExpenseList.length,
@@ -625,7 +700,7 @@ export async function GET(req: NextRequest) {
       revenueBreakdown: Object.entries(revenueCategoryMap).map(([category, amount]) => ({
         category,
         amount,
-        percentage: totalRevenue > 0 ? ((amount / totalRevenue) * 100).toFixed(1) : '0.0',
+        percentage: contractedRevenue > 0 ? ((amount / contractedRevenue) * 100).toFixed(1) : '0.0',
       })),
       expenseBreakdown: Object.entries(expenseCategoryMap)
         .sort((a, b) => b[1] - a[1])

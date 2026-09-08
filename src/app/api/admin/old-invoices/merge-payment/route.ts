@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findOldInvoiceById, updateOldInvoice } from '@/lib/old-invoices-db';
+import { syncOldInvoiceActual } from '@/lib/accountsFmsSync';
 
 export const dynamic = 'force-dynamic';
 
@@ -147,6 +148,11 @@ export async function POST(request: Request) {
         tdsDeducted: tdsDeducted === 'Yes' ? 'Yes' : 'No',
         tdsAmount: parsedTdsAmount,
         paymentsJson: paymentsJsonString,
+      });
+
+      // ── Synchronize to Google Sheets 'Accounts' Tab (Old Actual) ──
+      syncOldInvoiceActual(inv.id, payReceiveDate).catch((fmsErr) => {
+        console.warn('[Merged Old Invoice Payment] Accounts FMS Sync notice:', fmsErr);
       });
     }
 

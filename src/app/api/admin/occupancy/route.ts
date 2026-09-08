@@ -6,6 +6,51 @@ import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatOccupancyDate(dateVal?: string | Date | null): string {
+  if (!dateVal || dateVal === 'N/A' || dateVal === 'null' || dateVal === 'undefined') {
+    return 'N/A';
+  }
+
+  if (typeof dateVal === 'string') {
+    const s = dateVal.trim();
+    if (/^\d{1,2}-[A-Za-z]{3}-\d{4}$/.test(s)) {
+      const [d, m, y] = s.split('-');
+      return `${parseInt(d, 10)}-${m.charAt(0).toUpperCase() + m.slice(1).toLowerCase()}-${y}`;
+    }
+    const slashMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (slashMatch) {
+      const day = parseInt(slashMatch[1], 10);
+      const monthIdx = parseInt(slashMatch[2], 10) - 1;
+      const year = parseInt(slashMatch[3], 10);
+      if (!isNaN(day) && monthIdx >= 0 && monthIdx < 12 && !isNaN(year)) {
+        return `${day}-${MONTHS_SHORT[monthIdx]}-${year}`;
+      }
+    }
+    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      const year = parseInt(isoMatch[1], 10);
+      const monthIdx = parseInt(isoMatch[2], 10) - 1;
+      const day = parseInt(isoMatch[3], 10);
+      if (!isNaN(day) && monthIdx >= 0 && monthIdx < 12 && !isNaN(year)) {
+        return `${day}-${MONTHS_SHORT[monthIdx]}-${year}`;
+      }
+    }
+  }
+
+  try {
+    const d = typeof dateVal === 'string' ? new Date(dateVal) : dateVal;
+    if (isNaN(d.getTime())) return typeof dateVal === 'string' ? dateVal : 'N/A';
+    const day = d.getDate();
+    const month = MONTHS_SHORT[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch {
+    return typeof dateVal === 'string' ? dateVal : 'N/A';
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     // ── 1. Super Admin Authentication Check ──────────────────────
@@ -386,16 +431,16 @@ export async function GET(req: NextRequest) {
                 sdrDeposit: Number(assignedClient.sdrAmount || assignedClient.sorAmount || 0),
                 status: assignedClient.clientStatus || 'Active',
                 agreementStartDate: assignedClient.agreementStartDate
-                  ? new Date(assignedClient.agreementStartDate).toLocaleDateString('en-GB')
+                  ? formatOccupancyDate(assignedClient.agreementStartDate)
                   : 'N/A',
                 agreementEndDate: assignedClient.agreementEndDate
-                  ? new Date(assignedClient.agreementEndDate).toLocaleDateString('en-GB')
+                  ? formatOccupancyDate(assignedClient.agreementEndDate)
                   : 'N/A',
                 lockinEndDate: assignedClient.lockinEndDate
-                  ? new Date(assignedClient.lockinEndDate).toLocaleDateString('en-GB')
+                  ? formatOccupancyDate(assignedClient.lockinEndDate)
                   : null,
                 lockInPeriod: assignedClient.lockinEndDate
-                  ? `${new Date(assignedClient.lockinEndDate).toLocaleDateString('en-GB')} (${assignedClient.lockInPeriodMonths || 11}M)`
+                  ? `${formatOccupancyDate(assignedClient.lockinEndDate)} (${assignedClient.lockInPeriodMonths || 11}M)`
                   : `${assignedClient.lockInPeriodMonths || 11} Months`,
                 noticeMonths: assignedClient.noticePeriodMonths || 1,
               }

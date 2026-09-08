@@ -38,10 +38,14 @@ export const siteConfig = {
         { label: "Virtual Office", href: "/virtual-office" }
       ]
     },
-    { label: "Virtual Office", href: "/virtual-office", subItems: undefined },
+    { 
+      label: "Book Online Meeting Room", 
+      href: "/guest-spaces", 
+      isMeetingRoomsMenu: true,
+      subItems: undefined 
+    },
     { label: "Blog", href: "/blog", subItems: undefined },
     { label: "Gallery", href: "/gallery", subItems: undefined },
-    // { label: "Careers", href: "/careers", subItems: undefined }
   ],
   hero: {
     heading: "TOP Coworking Spaces",

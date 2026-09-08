@@ -193,6 +193,78 @@ export function OccupancyClient() {
     }).format(val || 0);
   };
 
+  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  const formatOccupancyDate = (dateVal?: string | Date | null): string => {
+    if (!dateVal || dateVal === "N/A" || dateVal === "null" || dateVal === "undefined") {
+      return "N/A";
+    }
+
+    if (typeof dateVal === "string") {
+      const s = dateVal.trim();
+      if (/^\d{1,2}-[A-Za-z]{3}-\d{4}$/.test(s)) {
+        const [d, m, y] = s.split("-");
+        return `${parseInt(d, 10)}-${m.charAt(0).toUpperCase() + m.slice(1).toLowerCase()}-${y}`;
+      }
+      const slashMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (slashMatch) {
+        const day = parseInt(slashMatch[1], 10);
+        const monthIdx = parseInt(slashMatch[2], 10) - 1;
+        const year = parseInt(slashMatch[3], 10);
+        if (!isNaN(day) && monthIdx >= 0 && monthIdx < 12 && !isNaN(year)) {
+          return `${day}-${MONTH_NAMES[monthIdx]}-${year}`;
+        }
+      }
+      const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) {
+        const year = parseInt(isoMatch[1], 10);
+        const monthIdx = parseInt(isoMatch[2], 10) - 1;
+        const day = parseInt(isoMatch[3], 10);
+        if (!isNaN(day) && monthIdx >= 0 && monthIdx < 12 && !isNaN(year)) {
+          return `${day}-${MONTH_NAMES[monthIdx]}-${year}`;
+        }
+      }
+    }
+
+    try {
+      const d = typeof dateVal === "string" ? new Date(dateVal) : dateVal;
+      if (isNaN(d.getTime())) return typeof dateVal === "string" ? dateVal : "N/A";
+      const day = d.getDate();
+      const month = MONTH_NAMES[d.getMonth()];
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
+    } catch {
+      return typeof dateVal === "string" ? dateVal : "N/A";
+    }
+  };
+
+  const formatLockInPeriod = (val?: string | number | null): string => {
+    if (!val) return "11 Months";
+    const str = String(val).trim();
+    if (!str || str === "N/A") return "11 Months";
+
+    const match = str.match(/^([^\(]+)\s*(\(\d+M\))$/);
+    if (match) {
+      const rawDate = match[1].trim();
+      const suffix = match[2].trim();
+      const formattedDate = formatOccupancyDate(rawDate);
+      if (formattedDate !== "N/A") {
+        return `${formattedDate} ${suffix}`;
+      }
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}/.test(str) || /^\d{1,2}\/\d{1,2}\/\d{4}/.test(str)) {
+      const formatted = formatOccupancyDate(str);
+      if (formatted !== "N/A") return formatted;
+    }
+
+    if (/^\d+$/.test(str)) {
+      return `${str} Months`;
+    }
+
+    return str;
+  };
+
   // Active Centre or Grand Totals metrics
   const activeMetrics = useMemo(() => {
     if (!data) return null;
@@ -1017,21 +1089,21 @@ export function OccupancyClient() {
                             <div className="flex items-center justify-between">
                               <span className="text-neutral-500">Agreement Start Date:</span>
                               <span className="font-mono font-black text-neutral-900">
-                                {inspected.occupant?.agreementStartDate || "N/A"}
+                                {formatOccupancyDate(inspected.occupant?.agreementStartDate)}
                               </span>
                             </div>
 
                             <div className="flex items-center justify-between">
                               <span className="text-neutral-500">Agreement End Date:</span>
                               <span className="font-mono font-black text-neutral-900">
-                                {inspected.occupant?.agreementEndDate || "N/A"}
+                                {formatOccupancyDate(inspected.occupant?.agreementEndDate)}
                               </span>
                             </div>
 
                             <div className="flex items-center justify-between">
                               <span className="text-neutral-500">Lock-In Period / Date:</span>
                               <span className="font-black text-[#006064] font-mono">
-                                {inspected.occupant?.lockInPeriod || "11 Months"}
+                                {formatLockInPeriod(inspected.occupant?.lockInPeriod)}
                               </span>
                             </div>
 
@@ -1743,21 +1815,21 @@ export function OccupancyClient() {
                             <div className="flex items-center justify-between">
                               <span className="text-neutral-500">Agreement Start Date:</span>
                               <span className="font-mono font-black text-neutral-900">
-                                {inspected.occupant?.agreementStartDate || "N/A"}
+                                {formatOccupancyDate(inspected.occupant?.agreementStartDate)}
                               </span>
                             </div>
 
                             <div className="flex items-center justify-between">
                               <span className="text-neutral-500">Agreement End Date:</span>
                               <span className="font-mono font-black text-neutral-900">
-                                {inspected.occupant?.agreementEndDate || "N/A"}
+                                {formatOccupancyDate(inspected.occupant?.agreementEndDate)}
                               </span>
                             </div>
 
                             <div className="flex items-center justify-between">
                               <span className="text-neutral-500">Lock-In Period / Date:</span>
                               <span className="font-black text-[#006064] font-mono">
-                                {inspected.occupant?.lockInPeriod || "11 Months"}
+                                {formatLockInPeriod(inspected.occupant?.lockInPeriod)}
                               </span>
                             </div>
 
