@@ -39,7 +39,14 @@ export default function ManagerExpensesPage() {
   const [activeLocationId, setActiveLocationId] = useState<number | null>(null);
 
   const userEmail = user?.email?.toLowerCase() || '';
-  const isAccountant = userEmail === ACCOUNTANT_EMAIL || user?.name?.toLowerCase() === 'accounts';
+  const userRoleUpper = user?.role?.toUpperCase() || '';
+  const isAccountant =
+    userEmail === ACCOUNTANT_EMAIL ||
+    user?.name?.toLowerCase() === 'accounts' ||
+    userRoleUpper === 'ACCOUNTS' ||
+    userRoleUpper === 'ACCOUNTANT' ||
+    isRole('ACCOUNTS') ||
+    isRole('ACCOUNTANT');
   const isAdmin = isRole('ADMIN');
   const userRoleView: 'CM' | 'ACCOUNTANT' = isAccountant ? 'ACCOUNTANT' : 'CM';
 

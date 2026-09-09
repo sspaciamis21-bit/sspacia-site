@@ -234,6 +234,21 @@ export function OldInvoicesArchive({
   const [mergedTargetInvoices, setMergedTargetInvoices] = useState<OldInvoiceRecord[]>([]);
   const [selectedMergeInvoiceIds, setSelectedMergeInvoiceIds] = useState<Set<number>>(new Set());
 
+  // Auto-hide left navigation sidebar when payment settlement modal, upload modal, or PDF preview is open
+  useEffect(() => {
+    if (isPaymentModalOpen || isModalOpen || previewPdfUrl) {
+      window.dispatchEvent(new Event('hide-manager-sidebar'));
+      document.body.classList.add('hide-manager-sidebar');
+    } else {
+      window.dispatchEvent(new Event('show-manager-sidebar'));
+      document.body.classList.remove('hide-manager-sidebar');
+    }
+    return () => {
+      window.dispatchEvent(new Event('show-manager-sidebar'));
+      document.body.classList.remove('hide-manager-sidebar');
+    };
+  }, [isPaymentModalOpen, isModalOpen, previewPdfUrl]);
+
   // Multi-Item Management Handlers
   const handleAddUploadItem = () => {
     const lastItem = uploadItems[uploadItems.length - 1];
@@ -968,7 +983,16 @@ export function OldInvoicesArchive({
 
   const handleUpdatePaymentPart = (partId: string, field: keyof PaymentInstallment, value: any) => {
     setPaymentParts((prev) =>
-      prev.map((p) => (p.id === partId ? { ...p, [field]: value } : p))
+      prev.map((p) => {
+        if (p.id === partId) {
+          const updated = { ...p, [field]: value };
+          if (field === 'payReceiveDate') {
+            updated.utrDate = value;
+          }
+          return updated;
+        }
+        return p;
+      })
     );
   };
 

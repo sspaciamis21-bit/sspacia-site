@@ -1126,6 +1126,7 @@ model InvoiceRecord {
   tdsDeducted            String?                @default("No")
   tdsAmount              Decimal?               @default(0) @db.Decimal(12, 2)
   paymentsJson           String?                @db.Text
+  dailyChecksJson        String?                @db.Text
   paymentStatus          String?                @default("PENDING")
   createdById            Int
   createdAt              DateTime               @default(now())

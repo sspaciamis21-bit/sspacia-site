@@ -92,7 +92,12 @@ export async function POST(
 
     const timeRangeStr = startTime && endTime ? ` (${startTime} - ${endTime})` : (startTime ? ` (${startTime})` : '');
     const cabinSummary = `${cabinName} • ${dateStr}${timeRangeStr}`;
-    const billingMonth = `One-Time: ${dateStr}`;
+
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const billingMonth = `${monthNames[validSessionDate.getMonth()]} ${validSessionDate.getFullYear()}`;
 
     const items = [
       {

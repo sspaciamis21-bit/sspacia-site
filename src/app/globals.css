@@ -377,5 +377,18 @@ input::-webkit-credentials-auto-fill-button {
   display: none !important;
   pointer-events: none;
 }
+/* ── AUTO-HIDE MANAGER SIDEBAR WHEN SETTLEMENT PORTAL OR FULLSCREEN MODAL IS OPEN ── */
+body.hide-manager-sidebar aside {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 
-
+body.hide-manager-sidebar main {
+  width: 100% !important;
+  max-width: 100vw !important;
+  margin-left: 0 !important;
+}

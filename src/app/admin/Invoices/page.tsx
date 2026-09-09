@@ -214,6 +214,11 @@ export default function AdminInvoicesWorkflowPage() {
   const [selectedDueDayFilter, setSelectedDueDayFilter] = useState('ALL');
   const [selectedBillingMonthFilter, setSelectedBillingMonthFilter] = useState('ALL');
 
+  // Accountant Quick Arrival Filter ('ALL' | 'TODAY' | 'YESTERDAY' | 'TWO_DAYS_AGO' | 'PENDING_ATTACH')
+  const [accountantArrivalFilter, setAccountantArrivalFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'TWO_DAYS_AGO' | 'PENDING_ATTACH'>('ALL');
+  const [showArrivalBanner, setShowArrivalBanner] = useState(false);
+  const [hasShownArrivalBanner, setHasShownArrivalBanner] = useState(false);
+
   // Node/Location Filter for Admin
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('ALL');
@@ -276,6 +281,32 @@ export default function AdminInvoicesWorkflowPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Auto-hide left navigation sidebar when any full-screen workflow modal is open
+  const isAnyWorkflowModalOpen = Boolean(
+    entryToAttachInvoice ||
+    entryToReviewInvoice ||
+    targetInvoiceToSign ||
+    showApplySignatureModal ||
+    showSignatureSettingsModal ||
+    entryToViewDetails ||
+    waiveModalInvoice ||
+    splitModalInvoice
+  );
+
+  useEffect(() => {
+    if (isAnyWorkflowModalOpen) {
+      window.dispatchEvent(new Event('hide-manager-sidebar'));
+      document.body.classList.add('hide-manager-sidebar');
+    } else {
+      window.dispatchEvent(new Event('show-manager-sidebar'));
+      document.body.classList.remove('hide-manager-sidebar');
+    }
+    return () => {
+      window.dispatchEvent(new Event('show-manager-sidebar'));
+      document.body.classList.remove('hide-manager-sidebar');
+    };
+  }, [isAnyWorkflowModalOpen]);
 
   // Edit Invoice Record Modal State
   interface EditInvoiceItem {
@@ -1405,14 +1436,24 @@ export default function AdminInvoicesWorkflowPage() {
     }));
   }, [invoices, selectedCompanyFilter]);
 
-// Month Normalization Helper
+// Month Normalization Helper - Ensures dropdown only ever contains calendar months (e.g. September 2026)
 const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
   if (!monthStr) return '';
-  const trimmed = monthStr.trim();
+  let trimmed = monthStr.trim();
+  if (trimmed.toLowerCase().includes('one-time')) {
+    trimmed = trimmed.replace(/^one-time:?\s*/i, '').trim();
+  }
   const parts = trimmed.split(/\s+/);
-  if (parts.length < 2) return trimmed;
-  const m = parts[0].toLowerCase();
-  const year = parts[1];
+  if (parts.length === 0) return '';
+
+  let monthPart = parts[0];
+  let yearPart = parts[1] || String(new Date().getFullYear());
+  if (/^\d{1,2}$/.test(parts[0]) && parts.length >= 2) {
+    monthPart = parts[1];
+    yearPart = parts[2] || String(new Date().getFullYear());
+  }
+
+  const m = (monthPart || '').toLowerCase();
   const map: Record<string, string> = {
     jan: 'January', january: 'January',
     feb: 'February', february: 'February',
@@ -1427,8 +1468,44 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
     nov: 'November', november: 'November',
     dec: 'December', december: 'December',
   };
-  const standardMonth = map[m] || (parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase());
-  return `${standardMonth} ${year}`;
+  const standardMonth = map[m] || (monthPart ? monthPart.charAt(0).toUpperCase() + monthPart.slice(1).toLowerCase() : '');
+  if (!standardMonth) return '';
+  return `${standardMonth} ${yearPart}`;
+};
+
+// Formatter to show "One-Time: 9 Sept 2026" in the table cell
+const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
+  if (inv.billingMonth && inv.billingMonth.toLowerCase().includes('one-time')) {
+    return inv.billingMonth;
+  }
+  let sessionDateStr = '';
+  if (inv.itemsJson) {
+    try {
+      const items = JSON.parse(inv.itemsJson);
+      if (items[0]?.sessionDate) {
+        const d = new Date(items[0].sessionDate);
+        if (!isNaN(d.getTime())) {
+          const day = d.getDate();
+          const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
+          const year = d.getFullYear();
+          sessionDateStr = `${day} ${monthShort} ${year}`;
+        }
+      }
+    } catch {}
+  }
+  if (!sessionDateStr && inv.dueDate) {
+    const d = new Date(inv.dueDate);
+    if (!isNaN(d.getTime())) {
+      const day = d.getDate();
+      const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
+      const year = d.getFullYear();
+      sessionDateStr = `${day} ${monthShort} ${year}`;
+    }
+  }
+  if (!sessionDateStr) {
+    sessionDateStr = normalizeBillingMonth(inv.billingMonth) || 'Session';
+  }
+  return `One-Time: ${sessionDateStr}`;
 };
 
   const billingMonthOptions = useMemo(() => {
@@ -1455,8 +1532,60 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
     });
   }, [invoices]);
 
+  // Accountant Arrival counts & auto 5s banner trigger
+  const accountantArrivalCounts = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
+
+    let todayCount = 0;
+    let yesterdayCount = 0;
+    let twoDaysCount = 0;
+    let pendingAttachCount = 0;
+
+    invoices.forEach((inv) => {
+      const invArrivalDate = inv.sentAt
+        ? new Date(inv.sentAt).toISOString().split('T')[0]
+        : (inv.createdAt ? new Date(inv.createdAt).toISOString().split('T')[0] : '');
+      if (invArrivalDate === todayStr) todayCount++;
+      if (invArrivalDate === yesterdayStr) yesterdayCount++;
+      if (invArrivalDate >= twoDaysAgoStr) twoDaysCount++;
+      if (inv.status === 'SENT_TO_ACCOUNTANT' || inv.status === 'REJECTED_WITH_REMARKS') {
+        pendingAttachCount++;
+      }
+    });
+
+    return { todayCount, yesterdayCount, twoDaysCount, pendingAttachCount };
+  }, [invoices]);
+
+  // Trigger 5-second one-time arrival notification for accountant
+  useEffect(() => {
+    if (userRoleView === 'ACCOUNTANT' && invoices.length > 0 && !hasShownArrivalBanner) {
+      if (accountantArrivalCounts.pendingAttachCount > 0) {
+        setShowArrivalBanner(true);
+        setHasShownArrivalBanner(true);
+        const timer = setTimeout(() => {
+          setShowArrivalBanner(false);
+        }, 5000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [userRoleView, invoices, hasShownArrivalBanner, accountantArrivalCounts.pendingAttachCount]);
+
   // Filtered entries for CM View vs Accountant View
   const filteredInvoices = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
+
     return invoices.filter((e) => {
       const matchesSearch =
         e.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1466,6 +1595,24 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
       let matchesRoleFilter = true;
       if (userRoleView === 'ACCOUNTANT') {
         matchesRoleFilter = ['SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS', 'INVOICE_ATTACHED', 'APPROVED'].includes(e.status);
+      }
+
+      // Accountant Quick Arrival filter
+      let matchesArrivalFilter = true;
+      if (userRoleView === 'ACCOUNTANT' && accountantArrivalFilter !== 'ALL') {
+        const invArrivalDate = e.sentAt
+          ? new Date(e.sentAt).toISOString().split('T')[0]
+          : (e.createdAt ? new Date(e.createdAt).toISOString().split('T')[0] : '');
+
+        if (accountantArrivalFilter === 'TODAY') {
+          matchesArrivalFilter = invArrivalDate === todayStr;
+        } else if (accountantArrivalFilter === 'YESTERDAY') {
+          matchesArrivalFilter = invArrivalDate === yesterdayStr;
+        } else if (accountantArrivalFilter === 'TWO_DAYS_AGO') {
+          matchesArrivalFilter = invArrivalDate >= twoDaysAgoStr;
+        } else if (accountantArrivalFilter === 'PENDING_ATTACH') {
+          matchesArrivalFilter = e.status === 'SENT_TO_ACCOUNTANT' || e.status === 'REJECTED_WITH_REMARKS';
+        }
       }
 
       const matchesStatus =
@@ -1485,9 +1632,9 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
         selectedBillingMonthFilter === 'ALL' ||
         normalizeBillingMonth(e.billingMonth) === normalizeBillingMonth(selectedBillingMonthFilter);
 
-      return matchesSearch && matchesRoleFilter && matchesStatus && matchesCompany && matchesCycle && matchesDueDay && matchesBillingMonth;
+      return matchesSearch && matchesRoleFilter && matchesArrivalFilter && matchesStatus && matchesCompany && matchesCycle && matchesDueDay && matchesBillingMonth;
     });
-  }, [invoices, searchTerm, userRoleView, selectedStatusFilter, selectedCompanyFilter, selectedCycleFilter, selectedDueDayFilter, selectedBillingMonthFilter]);
+  }, [invoices, searchTerm, userRoleView, accountantArrivalFilter, selectedStatusFilter, selectedCompanyFilter, selectedCycleFilter, selectedDueDayFilter, selectedBillingMonthFilter]);
 
   const groupedInvoicesByCompany = useMemo(() => {
     const map = new Map<string, InvoiceRecord[]>();
@@ -1703,7 +1850,128 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
 
       {/* TABLE WORKFLOW */}
       <FadeUp delay={0.2}>
-        <div className="bg-white border border-[var(--outline-variant)]/40 p-6 space-y-6 shadow-xs">
+        <div className="bg-white border border-[var(--outline-variant)]/40 p-6 space-y-4 shadow-xs">
+          {/* 5-SECOND ONE-TIME NOTIFICATION BANNER FOR ACCOUNTANT */}
+          <AnimatePresence>
+            {showArrivalBanner && userRoleView === 'ACCOUNTANT' && accountantArrivalCounts.pendingAttachCount > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -10, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden"
+              >
+                <div className="p-3 bg-gradient-to-r from-blue-700 via-teal-700 to-emerald-700 text-white rounded-xs shadow-md flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 bg-white/20 rounded-full animate-bounce shrink-0">
+                      <Sparkles size={16} className="text-amber-300" />
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-xs uppercase tracking-wide">
+                        🔔 New Invoices Arrived from CM!
+                      </div>
+                      <div className="text-[11px] text-white/90">
+                        {accountantArrivalCounts.pendingAttachCount} client invoice{accountantArrivalCounts.pendingAttachCount > 1 ? 's' : ''} waiting for Tally PDF attachment. (Alert auto-dismisses in 5s)
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAccountantArrivalFilter('PENDING_ATTACH');
+                        setShowArrivalBanner(false);
+                      }}
+                      className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-neutral-900 font-extrabold text-[10px] uppercase tracking-wider rounded-xs shadow-xs cursor-pointer"
+                    >
+                      Attach PDF Now →
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowArrivalBanner(false)}
+                      className="text-white/80 hover:text-white p-1 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Quick Arrival Shortcuts for Accountant */}
+          {userRoleView === 'ACCOUNTANT' && (
+            <div className="flex items-center gap-1.5 flex-wrap p-2.5 bg-blue-50/70 border border-blue-200 text-xs">
+              <div className="flex items-center gap-1 font-bold text-blue-950 uppercase tracking-wider text-[10px] mr-1">
+                <Sparkles size={12} className="text-blue-700" />
+                <span>Quick Arrival Filter:</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAccountantArrivalFilter('ALL')}
+                className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer ${
+                  accountantArrivalFilter === 'ALL'
+                    ? 'bg-[#006064] text-white border-[#006064] shadow-2xs'
+                    : 'bg-white hover:bg-neutral-100 text-gray-700 border-neutral-300'
+                }`}
+              >
+                All ({invoices.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountantArrivalFilter('TODAY')}
+                className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${
+                  accountantArrivalFilter === 'TODAY'
+                    ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
+                    : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
+                }`}
+                title="Filter to invoices that arrived today from CM"
+              >
+                <span>📅 Today&apos;s Arrived</span>
+                <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.todayCount}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountantArrivalFilter('YESTERDAY')}
+                className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${
+                  accountantArrivalFilter === 'YESTERDAY'
+                    ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
+                    : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
+                }`}
+                title="Filter to invoices that arrived yesterday from CM"
+              >
+                <span>Yesterday&apos;s Arrived</span>
+                <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.yesterdayCount}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountantArrivalFilter('TWO_DAYS_AGO')}
+                className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${
+                  accountantArrivalFilter === 'TWO_DAYS_AGO'
+                    ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
+                    : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
+                }`}
+                title="Filter to invoices that arrived within the last 2-3 days"
+              >
+                <span>2-3 Days Ago</span>
+                <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.twoDaysCount}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountantArrivalFilter('PENDING_ATTACH')}
+                className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${
+                  accountantArrivalFilter === 'PENDING_ATTACH'
+                    ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+                }`}
+                title="Filter to all invoices waiting for Tally PDF attachment"
+              >
+                <span>⚡ Pending Tally PDF</span>
+                <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.pendingAttachCount}</span>
+              </button>
+            </div>
+          )}
+
           {/* Search & Filter Bar - 2-Tier Structured Layout */}
           <div className="bg-[#F8F9FA] border border-[var(--outline-variant)]/60 p-4 space-y-3.5 shadow-xs">
             {/* Tier 1: Primary Dimensions & Action Button */}
@@ -2039,7 +2307,19 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
                       </td>
 
                       <td className="p-3 font-bold text-neutral-700">
-                        {invoice.billingMonth || 'N/A'}
+                        {invoice.paymentDuration === 'ONE_TIME' || invoice.productGroupKey === 'ONE_TIME_SESSION' || invoice.billingMonth?.toLowerCase().includes('one-time') ? (
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-300 rounded text-[10px] font-bold">
+                              <Clock size={10} className="text-amber-700 shrink-0" />
+                              <span>{formatOneTimeBillingMonth(invoice)}</span>
+                            </span>
+                            <div className="text-[9px] text-neutral-400 font-sans font-normal">
+                              Month: {normalizeBillingMonth(invoice.billingMonth)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span>{invoice.billingMonth || 'N/A'}</span>
+                        )}
                       </td>
 
                       <td className="p-3 text-right">

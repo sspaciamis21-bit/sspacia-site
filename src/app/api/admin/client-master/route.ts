@@ -129,7 +129,7 @@ export async function GET(request: Request) {
 
     const dataWithInvoiceStatus = entries.map((entry: any) => {
       const months = clientMonthMap.get(entry.id) || [];
-      const isDispatched = months.includes(targetBillingMonth!);
+      const isDispatched = entry.clientType === 'ONE_TIME' ? months.length > 0 : months.includes(targetBillingMonth!);
       return {
         ...entry,
         isDispatchedToInvoices: isDispatched,

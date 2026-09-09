@@ -1961,26 +1961,57 @@ export default function ClientMasterRegistryPage() {
                             </button>
 
                             {entry.clientType === 'ONE_TIME' ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const firstSession = entry.products?.[0] || {
-                                    id: undefined,
-                                    cabinName: entry.cabinName || 'Meeting Room',
-                                    amount: entry.amount,
-                                    gstPercent: entry.gstPercent ?? 18,
-                                    totalAmount: entry.totalAmount,
-                                    sessionDate: entry.agreementStartDate ? new Date(entry.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                                    startTime: '',
-                                    endTime: '',
-                                  };
-                                  handleGenerateSessionInvoice(firstSession as any, entry.id);
-                                }}
-                                className="px-2 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 shadow-xs cursor-pointer"
-                                title="Generate on-demand invoice for this booking session"
-                              >
-                                <FileText size={10} /> Generate Invoice
-                              </button>
+                              entry.isDispatchedToInvoices ? (
+                                <div className="w-full flex flex-col gap-1">
+                                  <span
+                                    className="px-2 py-1 bg-emerald-50 text-emerald-800 font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 border border-emerald-300 shadow-2xs"
+                                    title={`Invoice for ${entry.companyName} session has been sent to Invoices section`}
+                                  >
+                                    <CheckCircle2 size={10} className="text-emerald-600 shrink-0" /> Sent to Invoice
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const firstSession = entry.products?.[0] || {
+                                        id: undefined,
+                                        cabinName: entry.cabinName || 'Meeting Room',
+                                        amount: entry.amount,
+                                        gstPercent: entry.gstPercent ?? 18,
+                                        totalAmount: entry.totalAmount,
+                                        sessionDate: entry.agreementStartDate ? new Date(entry.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                        startTime: '',
+                                        endTime: '',
+                                      };
+                                      handleGenerateSessionInvoice(firstSession as any, entry.id);
+                                    }}
+                                    className="text-[9px] text-amber-800 hover:text-amber-950 font-bold uppercase tracking-wider underline text-center cursor-pointer"
+                                    title="Re-send / Re-dispatch session invoice"
+                                  >
+                                    + Re-send / Re-dispatch
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const firstSession = entry.products?.[0] || {
+                                      id: undefined,
+                                      cabinName: entry.cabinName || 'Meeting Room',
+                                      amount: entry.amount,
+                                      gstPercent: entry.gstPercent ?? 18,
+                                      totalAmount: entry.totalAmount,
+                                      sessionDate: entry.agreementStartDate ? new Date(entry.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                      startTime: '',
+                                      endTime: '',
+                                    };
+                                    handleGenerateSessionInvoice(firstSession as any, entry.id);
+                                  }}
+                                  className="px-2 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                                  title="Generate on-demand invoice for this booking session"
+                                >
+                                  <FileText size={10} /> Generate Invoice
+                                </button>
+                              )
                             ) : entry.isDispatchedToInvoices ? (
                               <div className="w-full flex flex-col gap-1">
                                 <span
@@ -2491,14 +2522,30 @@ export default function ClientMasterRegistryPage() {
 
                                 <div className="flex items-center gap-2">
                                   {editingId && amt > 0 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleGenerateSessionInvoice(row, editingId)}
-                                      className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-xs flex items-center gap-1 shadow-xs cursor-pointer"
-                                      title="Generate on-demand invoice for this session"
-                                    >
-                                      <FileText size={11} /> Generate Invoice for Session #{idx + 1}
-                                    </button>
+                                    entries.find((e) => e.id === editingId)?.isDispatchedToInvoices ? (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                                          <CheckCircle2 size={11} className="text-emerald-700" /> Sent to Invoice
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleGenerateSessionInvoice(row, editingId)}
+                                          className="px-2 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[10px] font-bold uppercase tracking-wider rounded-xs flex items-center gap-1 cursor-pointer"
+                                          title="Re-send / Re-generate session invoice to Invoices section"
+                                        >
+                                          + Re-send / Re-dispatch
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleGenerateSessionInvoice(row, editingId)}
+                                        className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-xs flex items-center gap-1 shadow-xs cursor-pointer"
+                                        title="Generate on-demand invoice for this session"
+                                      >
+                                        <FileText size={11} /> Generate Invoice for Session #{idx + 1}
+                                      </button>
+                                    )
                                   )}
 
                                   {productRows.length > 1 && (

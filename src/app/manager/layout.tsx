@@ -45,6 +45,19 @@ export default function ManagerLayout({
   const pathname = usePathname();
   const [isVisitorChatOpen, setIsVisitorChatOpen] = useState(false);
   const router = useRouter();
+  const [isSidebarTemporarilyHidden, setIsSidebarTemporarilyHidden] = useState(false);
+
+  // Listen for global hide/show manager sidebar events (triggered by modals like Accountant Payment Settlement Portal)
+  useEffect(() => {
+    const handleHide = () => setIsSidebarTemporarilyHidden(true);
+    const handleShow = () => setIsSidebarTemporarilyHidden(false);
+    window.addEventListener('hide-manager-sidebar', handleHide);
+    window.addEventListener('show-manager-sidebar', handleShow);
+    return () => {
+      window.removeEventListener('hide-manager-sidebar', handleHide);
+      window.removeEventListener('show-manager-sidebar', handleShow);
+    };
+  }, []);
 
   const isAccountant =
     user?.email?.toLowerCase() === 'ssinfrazone21@gmail.com' ||
@@ -210,19 +223,26 @@ export default function ManagerLayout({
       </AnimatePresence>
 
       <aside 
-        className={`fixed md:relative top-0 bottom-0 left-0 ${
+        className={`${isSidebarTemporarilyHidden ? 'hidden' : 'flex'} fixed md:relative top-0 bottom-0 left-0 ${
           isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0'
         } ${
-          isSidebarOpen ? 'md:w-80' : 'md:w-24'
-        } bg-[var(--surface-lowest)] border-r border-[var(--outline-variant)]/30 transition-all duration-300 ease-in-out flex flex-col z-50 md:z-40`}
+          isSidebarOpen
+            ? isAccountant
+              ? 'md:w-64 lg:w-72'
+              : 'md:w-80'
+            : 'md:w-20 lg:w-24'
+        } bg-[var(--surface-lowest)] border-r border-[var(--outline-variant)]/30 transition-all duration-300 ease-in-out flex-col z-50 md:z-40`}
       >
         {/* Desktop Toggle Button */}
-        <button 
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="hidden md:flex absolute -right-3.5 top-10 h-7 w-7 bg-[var(--surface-lowest)] border border-[var(--outline-variant)] text-[var(--primary)] shadow-sm hover:bg-[var(--primary)] hover:text-white transition-all z-[60] items-center justify-center rounded-none"
-        >
-          {isSidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-        </button>
+        {!isSidebarTemporarilyHidden && (
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="hidden md:flex absolute -right-3.5 top-10 h-7 w-7 bg-[var(--surface-lowest)] border border-[var(--outline-variant)] text-[var(--primary)] shadow-sm hover:bg-[var(--primary)] hover:text-white transition-all z-[60] items-center justify-center rounded-none cursor-pointer"
+            title={isSidebarOpen ? 'Collapse Navigation' : 'Expand Navigation'}
+          >
+            {isSidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+          </button>
+        )}
 
         {/* Mobile Close Button */}
         <button

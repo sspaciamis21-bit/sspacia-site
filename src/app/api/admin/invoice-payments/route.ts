@@ -8,11 +8,21 @@ export const dynamic = 'force-dynamic';
 
 const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
   if (!monthStr) return '';
-  const trimmed = monthStr.trim();
+  let trimmed = monthStr.trim();
+  if (trimmed.toLowerCase().includes('one-time')) {
+    trimmed = trimmed.replace(/^one-time:?\s*/i, '').trim();
+  }
   const parts = trimmed.split(/\s+/);
-  if (parts.length < 2) return trimmed;
-  const m = parts[0].toLowerCase();
-  const year = parts[1];
+  if (parts.length === 0) return '';
+
+  let monthPart = parts[0];
+  let yearPart = parts[1] || String(new Date().getFullYear());
+  if (/^\d{1,2}$/.test(parts[0]) && parts.length >= 2) {
+    monthPart = parts[1];
+    yearPart = parts[2] || String(new Date().getFullYear());
+  }
+
+  const m = (monthPart || '').toLowerCase();
   const map: Record<string, string> = {
     jan: 'January', january: 'January',
     feb: 'February', february: 'February',
@@ -27,8 +37,9 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
     nov: 'November', november: 'November',
     dec: 'December', december: 'December',
   };
-  const standardMonth = map[m] || (parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase());
-  return `${standardMonth} ${year}`;
+  const standardMonth = map[m] || (monthPart ? monthPart.charAt(0).toUpperCase() + monthPart.slice(1).toLowerCase() : '');
+  if (!standardMonth) return '';
+  return `${standardMonth} ${yearPart}`;
 };
 
 // GET /api/admin/invoice-payments — Fetch only APPROVED live invoices for payment settlement management
@@ -207,6 +218,7 @@ export async function GET(request: Request) {
         tdsDeducted: inv.tdsDeducted || 'No',
         tdsAmount: Number(inv.tdsAmount || 0),
         paymentsJson: inv.paymentsJson || null,
+        dailyChecksJson: inv.dailyChecksJson || null,
         paymentStatus: compStatus,
         balanceAmount: Math.max(0, totalAmt - recAmt),
         clientContacts: inv.clientMaster?.contactPersons || [],
