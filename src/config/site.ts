@@ -44,7 +44,6 @@ export const siteConfig = {
       isMeetingRoomsMenu: true,
       subItems: undefined 
     },
-    { label: "Daily / Weekly Pass", href: "/passes", subItems: undefined },
     { label: "Blog", href: "/blog", subItems: undefined },
     { label: "Gallery", href: "/gallery", subItems: undefined },
   ],

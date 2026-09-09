@@ -461,52 +461,6 @@ export default function ProductDetailClient({ product }: { product: any }) {
                 Proceed to Booking
               </button>
             </div>
-          ) : product.name?.toLowerCase().includes('flexi') ? (
-            <div className="space-y-6">
-              <div className="p-4 bg-[#E0F7FA]/60 border border-[#006064]/20 rounded-xs space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-wider text-[#006064]">
-                  Instant Pass System Available
-                </span>
-                <p className="text-xs text-slate-700 leading-relaxed">
-                  Book flexible seat passes for <strong>1 Day</strong> or <strong>1 Week</strong> with live availability check, 
-                  ICICI QR payment, and short-term agreement.
-                </p>
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#006064]/10 text-xs">
-                  <div className="bg-white p-2.5 rounded border border-slate-200">
-                    <span className="text-[9px] font-bold text-gray-500 uppercase block">Daily Pass</span>
-                    <span className="font-bold text-[#006064] text-sm">₹500</span>
-                    <span className="text-[9px] text-gray-400 block">+ 18% GST</span>
-                  </div>
-                  <div className="bg-white p-2.5 rounded border border-slate-200">
-                    <span className="text-[9px] font-bold text-gray-500 uppercase block">Weekly Pass</span>
-                    <span className="font-bold text-[#006064] text-sm">₹4,000</span>
-                    <span className="text-[9px] text-gray-400 block">+ 18% GST</span>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => router.push(`/passes?centre=${encodeURIComponent(product.location.name)}&type=DAILY`)}
-                className="w-full bg-[#006064] hover:bg-[#004d40] text-white py-4 text-xs font-black uppercase tracking-[0.15em] transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer rounded-xs"
-              >
-                <span>Book Daily / Weekly Pass</span>
-                <ChevronRight size={14} />
-              </button>
-
-              <div className="pt-4 border-t border-slate-200 space-y-3">
-                <p className="text-xs text-gray-500 font-medium">
-                  Need a long-term dedicated workspace or custom enterprise agreement?
-                </p>
-                <button
-                  disabled={isSubmittingInquiry}
-                  onClick={handleInquiryRequest}
-                  className="w-full bg-white border border-slate-300 hover:border-slate-400 text-slate-800 py-3 text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer rounded-xs"
-                >
-                  {isSubmittingInquiry ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                  <span>Submit Long-Term Inquiry</span>
-                </button>
-              </div>
-            </div>
           ) : (
             <div className="space-y-8">
               <p className="text-sm font-light leading-relaxed text-tertiary border-l-2 border-primary pl-4">
