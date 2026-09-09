@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useState, useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { siteConfig } from "../config/site";
-import { Menu, X, ChevronDown, ChevronRight, LayoutDashboard, LogOut, Phone, Calendar, MapPin, Building2, Globe } from "lucide-react";
+import { Menu, X, ChevronDown, ChevronRight, LayoutDashboard, LogOut, Phone, Calendar, MapPin, Building2, Globe, ArrowUpRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuth } from "../context/AuthContext";
 import { BookTourModal } from "./ui/book-tour-modal";
@@ -228,6 +228,22 @@ export function Header() {
               {isOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
+        </div>
+
+        {/* ── CAREERS DIRECT LINK BELOW SSPACIA LOGO ── */}
+        <div>
+          <Link
+            href="/careers"
+            className="absolute left-3 sm:left-6 lg:left-8 top-full mt-2 flex items-center gap-1.5 bg-white/95 hover:bg-[#006064] text-[#006064] hover:text-white border border-teal-300/80 hover:border-[#006064] shadow-md hover:shadow-lg px-3 py-1 rounded-full text-[10.5px] font-bold uppercase tracking-wider transition-all duration-300 ease-out z-[95] cursor-pointer group hover:scale-105 active:scale-95"
+            title="Explore Careers at SSPACIA"
+          >
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 group-hover:bg-emerald-300 transition-colors"></span>
+            </span>
+            <span className="transition-colors">Careers</span>
+            <ArrowUpRight size={11} className="text-teal-600 group-hover:text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-300 shrink-0" />
+          </Link>
         </div>
 
         {/* ── VIRTUAL OFFICE DIRECT LINK BELOW LOGIN / SIGN UP ── */}
@@ -651,6 +667,24 @@ export function Header() {
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Careers - We're Hiring for Mobile Drawer */}
+                <div className="pt-1">
+                  <Link
+                    href="/careers"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center justify-between px-3.5 py-2.5 text-xs font-bold uppercase tracking-wider text-[#006064] bg-[#E0F7FA]/70 border border-[#006064]/25 hover:bg-[#006064] hover:text-white transition-all rounded-sm group"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2 shrink-0">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      <span>Careers</span>
+                    </span>
+                    <ArrowUpRight size={13} className="text-teal-600 group-hover:text-white transition-colors" />
+                  </Link>
                 </div>
 
                 {/* Call & Tour Buttons for Mobile */}
