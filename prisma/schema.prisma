@@ -1603,4 +1603,31 @@ model ExecutiveExpense {
   @@index([expenseDate])
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// VENDOR MASTER (CENTRALIZED VENDOR DATABASE FOR SSPACIA)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model VendorMaster {
+  id            Int      @id @default(autoincrement())
+  vendorName    String   // Mandatory: Vendor Name
+  address       String?  @db.Text // Optional: Full Address
+  email         String?  // Optional: Email
+  mobileNo      String?  // Optional: Mobile No
+  gstin         String?  // Optional: GSTIN
+  pan           String?  // Optional: PAN
+  serviceType   String?  // Optional: Nature of work / service category
+  locationName  String?  // Optional: Associated centre / location
+  notes         String?  @db.Text // Optional: Remarks / Notes
+  isActive      Boolean  @default(true)
+  createdById   Int?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([vendorName])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+
 

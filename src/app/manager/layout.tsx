@@ -23,6 +23,7 @@ import {
   Menu,
   X,
   Boxes,
+  Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -104,7 +105,7 @@ export default function ManagerLayout({
   // 2. Restrict Accountant URL access
   useEffect(() => {
     if (!isLoading && user && isAccountant && !isRole('ADMIN')) {
-      const allowedPaths = ['/manager/dashboard', '/manager/invoices', '/manager/expenses'];
+      const allowedPaths = ['/manager/dashboard', '/manager/invoices', '/manager/expenses', '/manager/vendor-master'];
       const currentLower = pathname.toLowerCase();
       const isAllowed = allowedPaths.some((p) => currentLower.startsWith(p));
       if (!isAllowed) {
@@ -160,6 +161,7 @@ export default function ManagerLayout({
         { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
         { name: 'Invoices', href: '/manager/Invoices', icon: Receipt },
         { name: 'Expenses', href: '/manager/expenses', icon: FileSpreadsheet },
+        { name: 'Vendor Master', href: '/manager/vendor-master', icon: Building2 },
       ];
     }
 
@@ -187,6 +189,7 @@ export default function ManagerLayout({
     items.push({ name: 'Agreements', href: '/manager/agreements', icon: FileText });
     items.push({ name: 'Users', href: '/manager/users', icon: Users });
     items.push({ name: 'Client Master', href: '/manager/client-master', icon: FileText });
+    items.push({ name: 'Vendor Master', href: '/manager/vendor-master', icon: Building2 });
     items.push({ name: 'Internal Inventory', href: '/manager/inventory', icon: Boxes });
     items.push({ name: 'Invoices', href: '/manager/Invoices', icon: Receipt });
 
