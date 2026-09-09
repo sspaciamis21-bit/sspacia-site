@@ -15,7 +15,9 @@ import {
   Armchair,
   Layers,
   ArrowUpRight,
-  ShieldCheck
+  ShieldCheck,
+  FileText,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +27,7 @@ export interface CorporateClientItem {
   clientId: string | null;
   cabinName: string | null;
   noOfSeats: number | null;
+  parkingSlots?: number | null;
   monthlyAmount: number;
   sdrAmount: number;
   clientStatus: string | null;
@@ -32,6 +35,9 @@ export interface CorporateClientItem {
   centreName: string;
   centreId: number | null;
   agreementStartDate?: string | null;
+  agreementEndDate?: string | null;
+  agreementPdfUrl?: string | null;
+  agreementPdfName?: string | null;
   lockInPeriod?: number | null;
   noticePeriodMonths?: number | null;
 }
@@ -89,19 +95,36 @@ export function CorporateClientsModal({
     }).format(val || 0);
   };
 
+  const formatDate = (dateStr?: string | null) => {
+    if (!dateStr) return "—";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return "—";
+      return d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return "—";
+    }
+  };
+
   // Centre stats computation
   const centreStats = useMemo(() => {
-    const map: Record<string, { name: string; count: number; seats: number; value: number }> = {
-      ALL: { name: "All Centres", count: clients.length, seats: 0, value: 0 },
-      "Agarwal Complex": { name: "Agarwal Complex", count: 0, seats: 0, value: 0 },
-      "Mercado": { name: "Mercado Location", count: 0, seats: 0, value: 0 },
-      "Premier House": { name: "Premier House", count: 0, seats: 0, value: 0 },
+    const map: Record<string, { name: string; count: number; seats: number; parking: number; value: number }> = {
+      ALL: { name: "All Centres", count: clients.length, seats: 0, parking: 0, value: 0 },
+      "Agarwal Complex": { name: "Agarwal Complex", count: 0, seats: 0, parking: 0, value: 0 },
+      "Mercado": { name: "Mercado Location", count: 0, seats: 0, parking: 0, value: 0 },
+      "Premier House": { name: "Premier House", count: 0, seats: 0, parking: 0, value: 0 },
     };
 
     clients.forEach((c) => {
       const seats = Number(c.noOfSeats || 0);
+      const parking = Number(c.parkingSlots || 0);
       const val = Number(c.monthlyAmount || 0);
       map.ALL.seats += seats;
+      map.ALL.parking += parking;
       map.ALL.value += val;
 
       const cName = c.centreName || "Mercado";
@@ -109,6 +132,7 @@ export function CorporateClientsModal({
       if (map[key]) {
         map[key].count += 1;
         map[key].seats += seats;
+        map[key].parking += parking;
         map[key].value += val;
       }
     });
@@ -158,6 +182,10 @@ export function CorporateClientsModal({
     return filteredClients.reduce((acc, c) => acc + (Number(c.noOfSeats) || 0), 0);
   }, [filteredClients]);
 
+  const totalFilteredParking = useMemo(() => {
+    return filteredClients.reduce((acc, c) => acc + (Number(c.parkingSlots) || 0), 0);
+  }, [filteredClients]);
+
   const totalFilteredValue = useMemo(() => {
     return filteredClients.reduce((acc, c) => acc + (Number(c.monthlyAmount) || 0), 0);
   }, [filteredClients]);
@@ -173,18 +201,35 @@ export function CorporateClientsModal({
     }
 
     const rows = [
-      ["Client ID", "Company Name", "Centre", "Cabin / Space", "Allocated Seats", "Monthly Agreement (INR)", "SDR Held (INR)", "Status"],
+      [
+        "Client ID",
+        "Company Name",
+        "Centre",
+        "Cabin / Space",
+        "Workstation Seats",
+        "Car Parking Slots",
+        "Agreement Start Date",
+        "Agreement End Date",
+        "Agreement Document URL",
+        "Monthly Agreement (INR)",
+        "SDR Held (INR)",
+        "Status",
+      ],
       ...filteredClients.map((c) => [
         c.clientId || "N/A",
         `"${(c.companyName || "").replace(/"/g, '""')}"`,
         c.centreName,
         `"${(c.cabinName || "").replace(/"/g, '""')}"`,
         c.noOfSeats || 0,
+        c.parkingSlots || 0,
+        c.agreementStartDate ? formatDate(c.agreementStartDate) : "N/A",
+        c.agreementEndDate ? formatDate(c.agreementEndDate) : "N/A",
+        c.agreementPdfUrl ? (typeof window !== "undefined" ? `"${window.location.origin}${c.agreementPdfUrl}"` : `"${c.agreementPdfUrl}"`) : "N/A",
         c.monthlyAmount || 0,
         c.sdrAmount || 0,
         c.clientStatus || "Active",
       ]),
-      ["TOTAL", `${filteredClients.length} Companies`, "", "", totalFilteredSeats, totalFilteredValue, totalFilteredSdr, ""],
+      ["TOTAL", `${filteredClients.length} Companies`, "", "", totalFilteredSeats, totalFilteredParking, "", "", "", totalFilteredValue, totalFilteredSdr, ""],
     ];
 
     const csvContent = "data:text/csv;charset=utf-8," + rows.map((r) => r.join(",")).join("\n");
@@ -224,7 +269,7 @@ export function CorporateClientsModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: "spring", damping: 25, stiffness: 350 }}
-            className="relative bg-white w-full max-w-5xl max-h-[92vh] shadow-2xl border border-neutral-200 flex flex-col overflow-hidden z-10"
+            className="relative bg-white w-full max-w-[96vw] xl:max-w-7xl max-h-[94vh] shadow-2xl border border-neutral-200 flex flex-col overflow-hidden z-10"
             onClick={(e) => e.stopPropagation()}
           >
             {/* ── 1. TOP HEADER ── */}
@@ -242,14 +287,22 @@ export function CorporateClientsModal({
                       Live Client Master
                     </span>
                   </div>
-                  <p className="text-xs text-neutral-300 font-light mt-0.5 flex items-center gap-2">
+                  <p className="text-xs text-neutral-300 font-light mt-0.5 flex items-center gap-2 flex-wrap">
                     <span>
                       Total: <strong className="text-white font-bold">{clients.length} Companies</strong>
                     </span>
                     <span>•</span>
                     <span>
-                      Seats: <strong className="text-teal-300 font-bold">{centreStats.ALL.seats} Seats Allocated</strong>
+                      Workstation Seats: <strong className="text-teal-300 font-bold">{centreStats.ALL.seats} Seats Allocated</strong>
                     </span>
+                    {centreStats.ALL.parking > 0 && (
+                      <>
+                        <span>•</span>
+                        <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 px-1.5 py-0.2 font-bold text-[11px] rounded-xs">
+                          🚗 {centreStats.ALL.parking} Car Parking Slots
+                        </span>
+                      </>
+                    )}
                     <span>•</span>
                     <span>
                       Monthly Value: <strong className="text-emerald-300 font-bold font-mono">{formatINR(centreStats.ALL.value)}</strong>
@@ -306,7 +359,7 @@ export function CorporateClientsModal({
                   {clients.length} Companies
                 </div>
                 <div className="text-[10px] text-neutral-500 font-medium mt-0.5">
-                  {centreStats.ALL.seats} Total Allocated Seats
+                  {centreStats.ALL.seats} Workstation Seats{centreStats.ALL.parking > 0 ? ` • 🚗 ${centreStats.ALL.parking} Parking` : ""}
                 </div>
               </button>
 
@@ -430,41 +483,54 @@ export function CorporateClientsModal({
                 <span className="text-neutral-500 font-medium">
                   Showing <strong className="text-neutral-900 font-bold">{filteredClients.length}</strong> of {clients.length}
                 </span>
-                <span className="font-bold text-teal-800 bg-teal-50 px-2.5 py-1 border border-teal-200 font-mono text-xs">
-                  {totalFilteredSeats} Seats • {formatINR(totalFilteredValue)}/mo
+                <span className="font-bold text-teal-800 bg-teal-50 px-2.5 py-1 border border-teal-200 font-mono text-xs flex items-center gap-1.5 flex-wrap">
+                  <span>{totalFilteredSeats} Workstation Seats</span>
+                  {totalFilteredParking > 0 && (
+                    <span className="text-amber-800 bg-amber-100/90 px-1.5 py-0.2 border border-amber-300 text-[10.5px] font-bold rounded-xs">
+                      🚗 {totalFilteredParking} Parking
+                    </span>
+                  )}
+                  <span>•</span>
+                  <span>{formatINR(totalFilteredValue)}/mo</span>
                 </span>
               </div>
             </div>
 
             {/* ── 4. CLIENTS TABLE ── */}
-            <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[48vh] scrollbar-thin">
-              <table className="w-full text-left border-collapse table-fixed min-w-[820px]">
+            <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[52vh] scrollbar-thin">
+              <table className="w-full text-left border-collapse table-fixed min-w-[1100px]">
                 <colgroup>
-                  <col className="w-[110px]" />
-                  <col className="w-[200px]" />
-                  <col className="w-[150px]" />
-                  <col className="w-auto" />
-                  <col className="w-[80px]" />
-                  <col className="w-[130px]" />
+                  <col className="w-[100px]" />
+                  <col className="w-[180px]" />
+                  <col className="w-[125px]" />
+                  <col className="w-[155px]" />
+                  <col className="w-[65px]" />
+                  <col className="w-[95px]" />
+                  <col className="w-[95px]" />
+                  <col className="w-[85px]" />
                   <col className="w-[110px]" />
                   <col className="w-[100px]" />
+                  <col className="w-[85px]" />
                 </colgroup>
                 <thead className="sticky top-0 bg-neutral-100 z-10 shadow-2xs">
-                  <tr className="border-b border-neutral-200 text-[10.5px] font-black uppercase tracking-wider text-neutral-600">
-                    <th className="py-3 px-4 text-left">Client ID</th>
-                    <th className="py-3 px-4 text-left">Company Name</th>
-                    <th className="py-3 px-4 text-left">Centre</th>
-                    <th className="py-3 px-4 text-left">Cabin / Space</th>
-                    <th className="py-3 px-4 text-center">Seats</th>
-                    <th className="py-3 px-4 text-right">Monthly (₹)</th>
-                    <th className="py-3 px-4 text-right">SDR (₹)</th>
-                    <th className="py-3 px-4 text-center">Status</th>
+                  <tr className="border-b border-neutral-200 text-[10px] font-black uppercase tracking-wider text-neutral-600">
+                    <th className="py-3 px-3 text-left">Client ID</th>
+                    <th className="py-3 px-3 text-left">Company Name</th>
+                    <th className="py-3 px-3 text-left">Centre</th>
+                    <th className="py-3 px-3 text-left">Cabin / Space</th>
+                    <th className="py-3 px-3 text-center">Seats</th>
+                    <th className="py-3 px-3 text-left">Start Date</th>
+                    <th className="py-3 px-3 text-left">End Date</th>
+                    <th className="py-3 px-3 text-center">Agreement</th>
+                    <th className="py-3 px-3 text-right">Monthly (₹)</th>
+                    <th className="py-3 px-3 text-right">SDR (₹)</th>
+                    <th className="py-3 px-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 text-xs">
                   {filteredClients.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-neutral-400">
+                      <td colSpan={11} className="py-12 text-center text-neutral-400">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <Layers size={28} className="text-neutral-300" />
                           <p className="text-sm font-semibold text-neutral-600">No corporate clients found</p>
@@ -478,10 +544,10 @@ export function CorporateClientsModal({
                         key={`${c.id}_${idx}`}
                         className="hover:bg-teal-50/40 transition-colors group"
                       >
-                        <td className="py-3 px-4 font-mono font-bold text-[11px] text-neutral-600 text-left truncate">
+                        <td className="py-3 px-3 font-mono font-bold text-[11px] text-neutral-600 text-left truncate">
                           {c.clientId || `#CL-${c.id}`}
                         </td>
-                        <td className="py-3 px-4 font-bold text-neutral-900 text-left">
+                        <td className="py-3 px-3 font-bold text-neutral-900 text-left">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="truncate">{c.companyName}</span>
                             {c.clientType === "VIRTUAL_OFFICE" && (
@@ -491,29 +557,67 @@ export function CorporateClientsModal({
                             )}
                           </div>
                         </td>
-                        <td className="py-3 px-4 font-semibold text-neutral-700 text-left truncate">
+                        <td className="py-3 px-3 font-semibold text-neutral-700 text-left truncate">
                           <div className="flex items-center gap-1.5 truncate">
                             <span className="w-1.5 h-1.5 rounded-full bg-[#006064] shrink-0" />
                             <span className="truncate">{c.centreName}</span>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-neutral-600 font-medium text-left truncate">
+                        <td className="py-3 px-3 text-neutral-600 font-medium text-left">
                           {c.clientType === "VIRTUAL_OFFICE" ? (
                             <span className="text-indigo-700 font-bold">Address Only (Virtual)</span>
                           ) : (
-                            c.cabinName || "Dedicated Space"
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className="truncate">{c.cabinName || "Dedicated Space"}</span>
+                              {Boolean(c.parkingSlots && c.parkingSlots > 0) && (
+                                <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-900 bg-amber-50 border border-amber-300 px-1.5 py-0.2 rounded-xs">
+                                  🚗 {c.parkingSlots} Car Parking
+                                </span>
+                              )}
+                            </div>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-center font-black text-neutral-800 font-mono">
-                          {c.clientType === "VIRTUAL_OFFICE" ? "—" : (c.noOfSeats || 1)}
+                        <td className="py-3 px-3 text-center font-black text-neutral-800 font-mono">
+                          {c.clientType === "VIRTUAL_OFFICE" ? (
+                            <span className="text-neutral-400 font-normal text-xs">—</span>
+                          ) : (
+                            <span>{c.noOfSeats ?? 0}</span>
+                          )}
                         </td>
-                        <td className="py-3 px-4 text-right font-black text-[#006064] font-mono text-xs whitespace-nowrap">
+                        <td className="py-3 px-3 text-left font-medium text-neutral-700 text-[11px] whitespace-nowrap">
+                          {c.agreementStartDate ? formatDate(c.agreementStartDate) : <span className="text-neutral-400 font-mono text-xs">—</span>}
+                        </td>
+                        <td className="py-3 px-3 text-left font-medium text-neutral-700 text-[11px] whitespace-nowrap">
+                          {c.agreementEndDate ? (
+                            <span className="text-neutral-900 font-semibold">{formatDate(c.agreementEndDate)}</span>
+                          ) : (
+                            <span className="text-neutral-400 font-mono text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          {c.agreementPdfUrl ? (
+                            <a
+                              href={c.agreementPdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-[#006064] hover:text-[#004D40] bg-teal-50 hover:bg-teal-100 border border-teal-300 px-2 py-0.5 rounded-xs transition-colors cursor-pointer group/doc shadow-2xs"
+                              title={c.agreementPdfName ? `Open ${c.agreementPdfName}` : "View Signed Agreement PDF"}
+                            >
+                              <FileText size={11} className="text-[#006064] group-hover/doc:scale-110 transition-transform shrink-0" />
+                              <span>View</span>
+                              <ExternalLink size={9} className="opacity-70 group-hover/doc:opacity-100 shrink-0" />
+                            </a>
+                          ) : (
+                            <span className="text-neutral-400 font-mono text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-right font-black text-[#006064] font-mono text-xs whitespace-nowrap">
                           {formatINR(c.monthlyAmount)}
                         </td>
-                        <td className="py-3 px-4 text-right font-semibold text-neutral-600 font-mono text-xs whitespace-nowrap">
+                        <td className="py-3 px-3 text-right font-semibold text-neutral-600 font-mono text-xs whitespace-nowrap">
                           {formatINR(c.sdrAmount)}
                         </td>
-                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
                           <span className={`text-[9px] font-bold px-2 py-0.5 uppercase tracking-wider border ${
                             c.clientStatus === "On Notice"
                               ? "bg-amber-50 text-amber-700 border-amber-200"

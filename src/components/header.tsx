@@ -58,7 +58,7 @@ export function Header() {
           </div>
 
           {/* Desktop Nav links - center */}
-          <nav className="hidden md:flex flex-1 justify-center items-center gap-3 lg:gap-4 xl:gap-5 text-xs font-bold uppercase tracking-[0.06em] xl:tracking-[0.12em] text-on-surface/75 shrink-0">
+          <nav suppressHydrationWarning className="hidden md:flex flex-1 justify-center items-center gap-3 lg:gap-4 xl:gap-5 text-xs font-bold uppercase tracking-[0.06em] xl:tracking-[0.12em] text-on-surface/75 shrink-0">
             {siteConfig.navigation.map((item: any) => (
               <div key={item.label} className="relative group">
                 <Link
@@ -67,7 +67,7 @@ export function Header() {
                     if (item.href === "/products" && typeof window !== "undefined") {
                       try {
                         sessionStorage.removeItem("sspacia_active_filters");
-                      } catch {}
+                      } catch { }
                     }
                   }}
                   className="relative transition-all hover:text-primary py-2 flex items-center gap-1 whitespace-nowrap text-xs font-bold uppercase tracking-wider"
@@ -78,12 +78,12 @@ export function Header() {
                   )}
                   <span className="absolute left-0 bottom-0 w-full h-[1px] bg-primary scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></span>
                 </Link>
-                
+
                 {/* 1. LOCATIONS MULTI-TIER CASCADING FLYOUT MENU */}
                 {item.isLocationsMenu && (
                   <div className="absolute top-full -left-36 pt-1.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left scale-95 group-hover:scale-100 z-[120]">
-                    <LocationsDropdown 
-                      onLinkClick={() => {}} 
+                    <LocationsDropdown
+                      onLinkClick={() => { }}
                     />
                   </div>
                 )}
@@ -91,14 +91,14 @@ export function Header() {
                 {/* 2. PRODUCTS DYNAMIC HIERARCHY MEGA-DROPDOWN */}
                 {item.label === "Products" && !item.isLocationsMenu && (
                   <div className="absolute top-full left-1/2 -translate-x-1/2 pt-1.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top scale-95 group-hover:scale-100 z-[130]">
-                    <ProductsDropdown onLinkClick={() => {}} />
+                    <ProductsDropdown onLinkClick={() => { }} />
                   </div>
                 )}
 
                 {/* 3. BOOK ONLINE MEETING ROOM DEDICATED MEGA-DROPDOWN */}
                 {item.isMeetingRoomsMenu && (
                   <div className="absolute top-full left-1/2 -translate-x-1/2 pt-1.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top scale-95 group-hover:scale-100 z-[135]">
-                    <MeetingRoomsDropdown onLinkClick={() => {}} />
+                    <MeetingRoomsDropdown onLinkClick={() => { }} />
                   </div>
                 )}
 
@@ -134,7 +134,7 @@ export function Header() {
                   <span className="text-[11px] truncate max-w-[120px]">{user?.name}</span>
                 </div>
                 <span className="text-gray-300">|</span>
-                <Link 
+                <Link
                   href={user?.role === 'ADMIN' ? '/admin/dashboard' : (user?.role === 'MANAGER' || user?.role === 'COMMUNITY_MANAGER') ? '/manager/dashboard' : '/dashboard'}
                   className="text-[10.5px] font-bold uppercase tracking-wider text-[#006064] hover:underline flex items-center gap-1"
                 >
@@ -142,7 +142,7 @@ export function Header() {
                   <span>Dashboard</span>
                 </Link>
                 <span className="text-gray-300">|</span>
-                <button 
+                <button
                   onClick={() => logout()}
                   className="text-[10.5px] font-bold uppercase tracking-wider text-red-600 hover:underline cursor-pointer"
                 >
@@ -151,24 +151,22 @@ export function Header() {
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
-                <Link 
+                <Link
                   href="/login"
-                  className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider transition-all rounded-sm border ${
-                    isLoginPage
-                      ? "bg-[#006064] text-white border-[#006064] shadow-md"
-                      : "bg-white text-[#006064] hover:bg-[#006064] hover:text-white border-[#006064]/25 animate-brand-glow"
-                  }`}
+                  className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider transition-all rounded-sm border ${isLoginPage
+                    ? "bg-[#006064] text-white border-[#006064] shadow-md"
+                    : "bg-white text-[#006064] hover:bg-[#006064] hover:text-white border-[#006064]/25 animate-brand-glow"
+                    }`}
                 >
                   Log In
                 </Link>
                 <span className="text-gray-300">|</span>
-                <Link 
+                <Link
                   href="/signup"
-                  className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider transition-all rounded-sm border ${
-                    isSignupPage
-                      ? "bg-[#006064] text-white border-[#006064] shadow-md"
-                      : "bg-white text-[#006064] hover:bg-[#006064] hover:text-white border-[#006064]/25 animate-brand-glow"
-                  }`}
+                  className={`px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider transition-all rounded-sm border ${isSignupPage
+                    ? "bg-[#006064] text-white border-[#006064] shadow-md"
+                    : "bg-white text-[#006064] hover:bg-[#006064] hover:text-white border-[#006064]/25 animate-brand-glow"
+                    }`}
                 >
                   Sign Up
                 </Link>
@@ -277,7 +275,7 @@ export function Header() {
                           <LayoutDashboard size={13} />
                           <span>Dashboard</span>
                         </Link>
-                        <button 
+                        <button
                           onClick={() => { setIsOpen(false); logout(); }}
                           className="flex items-center justify-center gap-1.5 py-2 text-[10px] font-bold uppercase tracking-wider text-red-600 bg-red-50 hover:bg-red-100 rounded-sm transition-colors text-center border border-red-200"
                         >
@@ -312,7 +310,7 @@ export function Header() {
                 </div>
 
                 {/* Main Nav Items */}
-                <div className="flex flex-col space-y-1">
+                <div suppressHydrationWarning className="flex flex-col space-y-1">
                   {siteConfig.navigation.map((item: any) => {
                     if (item.isLocationsMenu) {
                       return (
@@ -414,7 +412,7 @@ export function Header() {
                               >
                                 🏢 All Workspaces Catalog
                               </Link>
-                              
+
                               <div className="bg-teal-50/60 p-2.5 rounded border border-teal-100 space-y-1.5">
                                 <Link
                                   href="/guest-spaces"
@@ -699,7 +697,7 @@ export function Header() {
                         <LayoutDashboard size={16} />
                         Dashboard
                       </Link>
-                      <button 
+                      <button
                         onClick={() => { setIsOpen(false); logout(); }}
                         className="flex items-center gap-2.5 w-full text-left px-3 py-2 text-xs font-bold uppercase tracking-wider text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
                       >
@@ -712,22 +710,20 @@ export function Header() {
                       <Link
                         href="/login"
                         onClick={() => setIsOpen(false)}
-                        className={`text-center py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm border transition-all ${
-                          isLoginPage
-                            ? "bg-[#006064] text-white border-[#006064] shadow-md"
-                            : "bg-white text-[#006064] border-[#006064]/25 animate-brand-glow"
-                        }`}
+                        className={`text-center py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm border transition-all ${isLoginPage
+                          ? "bg-[#006064] text-white border-[#006064] shadow-md"
+                          : "bg-white text-[#006064] border-[#006064]/25 animate-brand-glow"
+                          }`}
                       >
                         Log In
                       </Link>
                       <Link
                         href="/signup"
                         onClick={() => setIsOpen(false)}
-                        className={`text-center py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm border transition-all ${
-                          isSignupPage
-                            ? "bg-[#006064] text-white border-[#006064] shadow-md"
-                            : "bg-white text-[#006064] border-[#006064]/25 animate-brand-glow"
-                        }`}
+                        className={`text-center py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm border transition-all ${isSignupPage
+                          ? "bg-[#006064] text-white border-[#006064] shadow-md"
+                          : "bg-white text-[#006064] border-[#006064]/25 animate-brand-glow"
+                          }`}
                       >
                         Sign Up
                       </Link>

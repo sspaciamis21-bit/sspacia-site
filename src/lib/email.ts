@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 
 export interface SendEmailOptions {
   to: string | string[];
+  cc?: string | string[];
   subject: string;
   html: string;
   text?: string;
@@ -37,20 +38,26 @@ export function getEmailTransporter() {
 /**
  * Sends an email using the configured SMTP server
  */
-export async function sendEmail({ to, subject, html, text, attachments }: SendEmailOptions) {
+export async function sendEmail({ to, cc, subject, html, text, attachments }: SendEmailOptions) {
   try {
     const { transporter, sender } = getEmailTransporter();
 
-    const info = await transporter.sendMail({
+    const mailOptions: nodemailer.SendMailOptions = {
       from: `"SSPāCIA Community & Operations" <${sender}>`,
       to: Array.isArray(to) ? to.join(', ') : to,
       subject,
       text: text || '',
       html,
       attachments,
-    });
+    };
 
-    console.log(`[Email] Dispatched successfully: ${info.messageId} to ${Array.isArray(to) ? to.join(', ') : to}`);
+    if (cc) {
+      mailOptions.cc = Array.isArray(cc) ? cc.join(', ') : cc;
+    }
+
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log(`[Email] Dispatched successfully: ${info.messageId} to ${Array.isArray(to) ? to.join(', ') : to}${cc ? ` (cc: ${Array.isArray(cc) ? cc.join(', ') : cc})` : ''}`);
     return { success: true, messageId: info.messageId };
   } catch (error: any) {
     console.error('[Email] Failed to dispatch email:', error?.message || error);

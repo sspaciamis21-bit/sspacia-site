@@ -27,14 +27,19 @@ export async function GET() {
           bookingNumber: true,
           createdAt: true,
           startDate: true,
+          endDate: true,
           startTime: true,
           endTime: true,
+          seats: true,
+          notes: true,
+          unitPrice: true,
           grandTotal: true,
-          customer: { select: { name: true, email: true } },
+          durationType: { select: { id: true, name: true, displayName: true } },
+          customer: { select: { name: true, email: true, phone: true, organization: true, billingAddress: true, gstNumber: true } },
           product: { 
             select: { 
                 name: true, 
-                location: { select: { name: true } } 
+                location: { select: { name: true, address: true } } 
             } 
           },
           status: { select: { name: true, displayName: true } },

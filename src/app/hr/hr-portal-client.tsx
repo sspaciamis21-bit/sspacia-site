@@ -14,6 +14,7 @@ import {
   Download,
   ExternalLink,
   LogOut,
+  Home,
   Phone,
   Mail,
   CheckCircle2,
@@ -509,6 +510,16 @@ export function HrPortalClient() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* View Main SSPACIA Website */}
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-[#006064] bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              title="Go back to SSPACIA Website Home"
+            >
+              <Home className="w-3.5 h-3.5" />
+              <span>Website Home</span>
+            </Link>
+
             {/* View Live Careers Page */}
             <Link
               href="/careers"

@@ -61,7 +61,7 @@ export default function UserLayout({
     companyStreet: '', companyCity: '', companyState: '', companyZip: ''
   });
 
-  const isRegularUser = user && !isRole('ADMIN') && !isRole('MANAGER') && !isRole('COMMUNITY_MANAGER');
+  const isRegularUser = user && !isRole('ADMIN') && !isRole('MANAGER') && !isRole('COMMUNITY_MANAGER') && !isRole('HR');
   
   const [hasSkippedProfile, setHasSkippedProfile] = useState(false);
 
@@ -108,9 +108,11 @@ export default function UserLayout({
     if (!isLoading) {
       if (!user) {
         router.push('/login');
+      } else if (isRole('HR')) {
+        router.push('/hr');
       } else if (isRole('ADMIN')) {
         router.push('/admin/dashboard');
-      } else if (isRole('MANAGER')) {
+      } else if (isRole('MANAGER') || isRole('COMMUNITY_MANAGER')) {
         router.push('/manager/dashboard');
       }
     }
@@ -152,7 +154,7 @@ export default function UserLayout({
     }
   };
 
-  if (isLoading || !user || isRole('ADMIN') || isRole('MANAGER')) {
+  if (isLoading || !user || isRole('ADMIN') || isRole('MANAGER') || isRole('COMMUNITY_MANAGER') || isRole('HR')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--surface)]">
         <Loader2 className="h-10 w-10 text-[var(--primary)] animate-spin" />

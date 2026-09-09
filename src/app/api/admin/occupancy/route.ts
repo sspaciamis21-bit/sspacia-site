@@ -158,6 +158,7 @@ export async function GET(req: NextRequest) {
       lockInPeriod?: number;
       noticePeriod?: number;
       locationId: number;
+      parkingSlots?: number;
     }> = {};
 
     clientMasters.forEach((c: any) => {
@@ -176,11 +177,33 @@ export async function GET(req: NextRequest) {
       }
       clientLocationMap[c.id] = locId;
 
+      let pureSeats = 0;
+      let parkingSlots = 0;
+      if (Array.isArray(c.products) && c.products.length > 0) {
+        c.products.forEach((p: any) => {
+          const isParking = (p.cabinName || '').toLowerCase().includes('parking');
+          if (isParking) {
+            parkingSlots += Number(p.noOfSeats || 1);
+          } else {
+            pureSeats += Number(p.noOfSeats || 0);
+          }
+        });
+      } else {
+        const isParking = (c.cabinName || '').toLowerCase().includes('parking');
+        if (isParking) {
+          parkingSlots = Number(c.noOfSeats || 1);
+          pureSeats = 0;
+        } else {
+          pureSeats = Number(c.noOfSeats || 0);
+        }
+      }
+
       const cabinKey = `${locId}_${(c.cabinName || '').trim().toLowerCase()}`;
       cabinOccupancyMap[cabinKey] = {
         companyName: c.companyName || 'Corporate Client',
         clientId: c.clientId || `#CL-${c.id}`,
-        seats: Number(c.noOfSeats || 1),
+        seats: pureSeats,
+        parkingSlots: parkingSlots,
         amount: Number(c.totalAmount || c.amount || 0),
         sdr: Number(c.sorAmount || c.sdrAmount || 0),
         status: c.clientStatus || 'Active',
@@ -341,7 +364,17 @@ export async function GET(req: NextRequest) {
 
         const isOccupied = !!assignedClient;
         const isOnNotice = assignedClient?.clientStatus === 'On Notice';
-        const clientSeats = assignedClient ? Number(assignedClient.noOfSeats || blueprintUnit.capacity) : 0;
+        let clientSeats = 0;
+        if (assignedClient) {
+          if (Array.isArray(assignedClient.products) && assignedClient.products.length > 0) {
+            clientSeats = assignedClient.products.reduce((sum: number, p: any) => {
+              return (p.cabinName || '').toLowerCase().includes('parking') ? sum : sum + Number(p.noOfSeats || 0);
+            }, 0);
+          } else {
+            const isParking = (assignedClient.cabinName || '').toLowerCase().includes('parking');
+            clientSeats = isParking ? 0 : Number(assignedClient.noOfSeats || blueprintUnit.capacity);
+          }
+        }
         const clientAmount = assignedClient ? Number(assignedClient.totalAmount || assignedClient.amount || 0) : 0;
 
         totalSeats += blueprintUnit.capacity;

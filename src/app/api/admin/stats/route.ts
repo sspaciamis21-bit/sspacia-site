@@ -5,6 +5,9 @@ import prisma from '@/lib/prisma';
 import { findOldInvoices } from '@/lib/old-invoices-db';
 import { getUserIdsByLocation } from '@/lib/auth/getNodeScopedUserIds';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
   if (!monthStr) return '';
   const trimmed = monthStr.trim();
@@ -197,6 +200,7 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           clientMasterStats.activeAgreements = clientMasters.filter((c: any) => c.clientStatus !== 'Terminated' && c.clientStatus !== 'Inactive').length;
           clientMasterStats.onNoticeClients = clientMasters.filter((c: any) => c.clientStatus === 'On Notice' || (c.noticePeriodMonths && c.noticePeriodMonths > 0 && c.clientStatus !== 'Active')).length;
           let seatsSum = 0;
+          let parkingSum = 0;
           let valueSum = 0;
           let totalSdrSum = 0;
           const centreSdrMap: Record<string, { id: number | null; name: string; totalSdr: number; companies: any[] }> = {};
@@ -205,6 +209,7 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           clientMasters.forEach((c: any) => {
             const isVO = c.clientType === 'VIRTUAL_OFFICE';
             let clientSeats = 0;
+            let clientParking = 0;
             let clientVal = 0;
 
             if (isVO) {
@@ -212,15 +217,27 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
               clientVal = Number(c.totalAmount || c.amount || 0);
             } else if (Array.isArray(c.products) && c.products.length > 0) {
               c.products.forEach((p: any) => {
-                clientSeats += Number(p.noOfSeats || 0);
+                const isParking = (p.cabinName || '').toLowerCase().includes('parking');
+                if (isParking) {
+                  clientParking += Number(p.noOfSeats || 1);
+                } else {
+                  clientSeats += Number(p.noOfSeats || 0);
+                }
                 clientVal += Number(p.totalAmount || p.amount || 0);
               });
             } else {
-              clientSeats = Number(c.noOfSeats || 0);
+              const isParking = (c.cabinName || '').toLowerCase().includes('parking');
+              if (isParking) {
+                clientParking = Number(c.noOfSeats || 1);
+                clientSeats = 0;
+              } else {
+                clientSeats = Number(c.noOfSeats || 0);
+              }
               clientVal = Number(c.totalAmount || c.amount || 0);
             }
 
             seatsSum += clientSeats;
+            parkingSum += clientParking;
             valueSum += clientVal;
 
             // SDR aggregation
@@ -251,12 +268,32 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
             }
             centreSdrMap[locName].totalSdr += sdr;
 
+            // Clean cabin display name to not pollute with car parking when workstation cabins exist
+            let displayCabin = c.cabinName;
+            if (isVO) {
+              displayCabin = 'Virtual Office';
+            } else if (Array.isArray(c.products) && c.products.length > 0) {
+              const nonParking = c.products.filter((p: any) => !(p.cabinName || '').toLowerCase().includes('parking'));
+              if (nonParking.length > 0) {
+                displayCabin = nonParking.map((p: any) => p.cabinName).filter(Boolean).join(', ');
+              } else {
+                displayCabin = c.products.map((p: any) => p.cabinName).filter(Boolean).join(', ');
+              }
+            } else if (c.cabinName) {
+              const parts = c.cabinName.split(',').map((s: string) => s.trim());
+              const nonParking = parts.filter((s: string) => !s.toLowerCase().includes('parking'));
+              if (nonParking.length > 0) {
+                displayCabin = nonParking.join(', ');
+              }
+            }
+
             const compData = {
               id: c.id,
               companyName: c.companyName,
               clientId: c.clientId,
-              cabinName: isVO ? 'Virtual Office' : c.cabinName,
-              noOfSeats: isVO ? 0 : (clientSeats || c.noOfSeats || 1),
+              cabinName: displayCabin || 'Dedicated Space',
+              noOfSeats: isVO ? 0 : clientSeats,
+              parkingSlots: clientParking,
               monthlyAmount: clientVal,
               sdrAmount: sdr,
               clientStatus: c.clientStatus || 'Active',
@@ -264,6 +301,9 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
               centreName: locName,
               centreId: locId,
               agreementStartDate: c.agreementStartDate || c.createdAt,
+              agreementEndDate: c.agreementEndDate || null,
+              agreementPdfUrl: c.agreementPdfUrl || null,
+              agreementPdfName: c.agreementPdfName || null,
               lockInPeriod: c.lockInPeriodMonths || c.lockInPeriod || 11,
               noticePeriodMonths: c.noticePeriodMonths || 1,
             };
@@ -274,6 +314,7 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           });
 
           clientMasterStats.totalAllocatedSeats = seatsSum;
+          (clientMasterStats as any).totalCarParkingSlots = parkingSum;
           clientMasterStats.totalMonthlyAgreementValue = valueSum;
           (clientMasterStats as any).allClients = allClientsList;
           (clientMasterStats as any).virtualOfficeClients = clientMasters.filter((c: any) => c.clientType === 'VIRTUAL_OFFICE').length;
@@ -831,6 +872,10 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           pending: pendingLeadsCount,
         },
         productsList: (productTypeCounts as any).allWorkspaces || [],
+      },
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       },
     });
   } catch (error) {

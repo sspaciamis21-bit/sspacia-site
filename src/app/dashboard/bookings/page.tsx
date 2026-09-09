@@ -3,19 +3,34 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { FadeUp } from '@/components/ui/fade-up';
-import { Loader2, MapPin, Calendar, FileCheck, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Loader2, MapPin, Calendar, FileCheck, ArrowRight, ShieldCheck, FileText, Tag } from 'lucide-react';
 import { toast } from 'sonner';
+import { ShortTermAgreementModal, ShortTermAgreementData } from '@/components/ui/short-term-agreement-modal';
 
 interface Booking {
   id: number;
   bookingNumber: string;
   createdAt: string;
   startDate: string;
+  endDate?: string;
   startTime: string;
   endTime: string;
+  seats?: number;
+  notes?: string;
+  unitPrice?: number;
   grandTotal: number;
-  customer: { name: string; email: string };
-  product: { name: string; location: { name: string } };
+  durationType?: { id: number; name: string; displayName: string };
+  customer: {
+    name: string;
+    email: string;
+    phone?: string;
+    organization?: string;
+    billingAddress?: string;
+    companyName?: string;
+    address?: string;
+    gstNumber?: string;
+  };
+  product: { name: string; location: { name: string; address?: string } };
   status: { name: string; displayName: string };
   payments: Array<{ method: string }>;
   contracts?: Array<{ id: number; status: { name: string } }>;
@@ -33,6 +48,7 @@ export default function UserBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedScreenshot, setSelectedScreenshot] = useState<string | null>(null);
+  const [viewingAgreementData, setViewingAgreementData] = useState<ShortTermAgreementData | null>(null);
 
   const fetchBookings = async () => {
     try {
@@ -102,271 +118,393 @@ export default function UserBookingsPage() {
              </div>
           ) : (
              <>
-               {/* Mobile Cards Feed (< md) */}
-               <div className="block md:hidden divide-y divide-[var(--outline-variant)]/30">
-                 {bookings.map(booking => {
-                   const isPending = booking.status.name === 'PENDING' || booking.qrBooking?.status === 'PENDING';
-                   const isConfirmed = booking.status.name === 'CONFIRMED' || booking.qrBooking?.status === 'APPROVED';
-                   const isRejected = booking.status.name === 'CANCELLED' || booking.qrBooking?.status === 'REJECTED';
+                {/* Mobile Cards Feed (< md) */}
+                <div className="block md:hidden divide-y divide-[var(--outline-variant)]/30">
+                  {bookings.map(booking => {
+                    const isPending = booking.status.name === 'PENDING' || booking.qrBooking?.status === 'PENDING';
+                    const isConfirmed = booking.status.name === 'CONFIRMED' || booking.qrBooking?.status === 'APPROVED';
+                    const isRejected = booking.status.name === 'CANCELLED' || booking.qrBooking?.status === 'REJECTED';
 
-                   return (
-                     <div key={booking.id} className="p-5 space-y-4 hover:bg-[var(--surface-low)]/20 transition-colors">
-                       <div className="flex items-start justify-between gap-2">
-                         <div>
-                           <p className="text-sm font-bold text-[#1B1C1C]">{booking.bookingNumber}</p>
-                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">
-                             {new Date(booking.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                           </p>
-                         </div>
-                         <div className="text-right">
-                           <p className="text-base font-display font-bold text-[#1B1C1C]">
-                             ₹{parseFloat(booking.grandTotal.toString()).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                           </p>
-                           {booking.qrBooking && (
-                             <span className="inline-block mt-0.5 text-[8px] font-black uppercase tracking-wider bg-teal-50 text-[#1ab0bc] px-2 py-0.5 border border-teal-200">
-                               ICICI QR
-                             </span>
-                           )}
-                         </div>
-                       </div>
+                    const isPass =
+                      booking.bookingNumber?.startsWith('PASS-') ||
+                      booking.notes?.toLowerCase().includes('pass') ||
+                      booking.durationType?.name === 'PER_DAY' ||
+                      booking.durationType?.name === 'PER_WEEK';
 
-                       <div className="bg-[var(--surface-low)] p-3 border border-[var(--outline-variant)]/40 space-y-1.5 text-xs">
-                         <div className="flex items-center justify-between">
-                           <span className="font-bold text-[#1B1C1C]">{booking.product.name}</span>
-                           <span className="flex items-center gap-1 text-[10px] font-bold text-gray-600 uppercase">
-                             <MapPin size={10} className="text-[#1ab0bc]" /> {booking.product.location.name}
-                           </span>
-                         </div>
-                         <div className="flex items-center justify-between text-[11px] text-gray-600">
-                           <span>Date: {new Date(booking.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                           <span>Slot: {booking.startTime || 'Standard'} {booking.endTime ? `— ${booking.endTime}` : ''}</span>
-                         </div>
-                       </div>
+                    const isWeeklyPass =
+                      booking.bookingNumber?.includes('-WEEK-') ||
+                      booking.notes?.toLowerCase().includes('weekly') ||
+                      booking.durationType?.name === 'PER_WEEK';
 
-                       <div className="space-y-2">
-                         {isPending && (
-                           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
-                             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                             <span>QR Verification Under Review</span>
-                           </div>
-                         )}
-                         {isConfirmed && (
-                           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
-                             <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                             <span>Confirmed &amp; Reserved</span>
-                           </div>
-                         )}
-                         {isRejected && (
-                           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-800 text-[10px] font-bold uppercase tracking-wider">
-                             <span className="w-2 h-2 rounded-full bg-rose-500" />
-                             <span>Payment Rejected</span>
-                           </div>
-                         )}
+                    const openShortTermAgreement = () => {
+                      setViewingAgreementData({
+                        clientName: booking.customer?.name || 'Client',
+                        companyName: booking.customer?.organization || booking.customer?.companyName || undefined,
+                        registeredOffice: booking.customer?.billingAddress || booking.customer?.address || undefined,
+                        gstNumber: booking.customer?.gstNumber || undefined,
+                        seats: booking.seats || 1,
+                        centreName: booking.product.location.name,
+                        centreAddress: booking.product.location.address || `${booking.product.location.name}, Ahmedabad`,
+                        startDate: booking.startDate,
+                        endDate: isWeeklyPass ? booking.endDate : undefined,
+                        passType: isWeeklyPass ? 'WEEKLY' : 'DAILY',
+                        bookingNumber: booking.bookingNumber,
+                      });
+                    };
 
-                         {booking.qrBooking?.remarks && (
-                           <p className="text-[11px] text-gray-600">
-                             <span className="font-bold">Remarks:</span> {booking.qrBooking.remarks}
-                           </p>
-                         )}
+                    return (
+                      <div key={booking.id} className="p-5 space-y-4 hover:bg-[var(--surface-low)]/20 transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-sm font-bold text-[#1B1C1C]">{booking.bookingNumber}</p>
+                              {isPass && (
+                                <span className="inline-block text-[8px] font-black uppercase tracking-wider bg-teal-50 text-[#006064] px-2 py-0.5 border border-teal-300">
+                                  {isWeeklyPass ? 'Weekly Pass' : 'Daily Pass'}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                              {new Date(booking.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-base font-display font-bold text-[#1B1C1C]">
+                              ₹{parseFloat(booking.grandTotal.toString()).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </p>
+                            {booking.qrBooking && (
+                              <span className="inline-block mt-0.5 text-[8px] font-black uppercase tracking-wider bg-teal-50 text-[#1ab0bc] px-2 py-0.5 border border-teal-200">
+                                ICICI QR
+                              </span>
+                            )}
+                          </div>
+                        </div>
 
-                         {booking.qrBooking?.rejectionReason && (
-                           <p className="text-[11px] text-rose-600 font-medium">
-                             <span className="font-bold">Reason:</span> {booking.qrBooking.rejectionReason}
-                           </p>
-                         )}
+                        <div className="bg-[var(--surface-low)] p-3 border border-[var(--outline-variant)]/40 space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-[#1B1C1C]">{booking.product.name}</span>
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-gray-600 uppercase">
+                              <MapPin size={10} className="text-[#1ab0bc]" /> {booking.product.location.name}
+                            </span>
+                          </div>
+                          {isPass ? (
+                            <div className="flex items-center justify-between text-[11px] text-gray-600">
+                              <span>
+                                {isWeeklyPass && booking.endDate
+                                  ? `Dates: ${new Date(booking.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(booking.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} (7 Days)`
+                                  : `Date: ${new Date(booking.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                              </span>
+                              <span className="font-bold text-[#006064] font-mono">
+                                {booking.seats || 1} {(booking.seats || 1) === 1 ? 'Desk' : 'Desks'}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between text-[11px] text-gray-600">
+                              <span>Date: {new Date(booking.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                              <span>Slot: {booking.startTime || 'Standard'} {booking.endTime ? `— ${booking.endTime}` : ''}</span>
+                            </div>
+                          )}
+                        </div>
 
-                         {booking.qrBooking?.screenshotData && (
-                           <div>
-                             <button
-                               type="button"
-                               onClick={() => setSelectedScreenshot(booking.qrBooking!.screenshotData)}
-                               className="text-[10px] font-bold text-[#1ab0bc] hover:underline uppercase tracking-wider"
-                             >
-                               View Uploaded Screenshot ↗
-                             </button>
-                           </div>
-                         )}
-                       </div>
+                        <div className="space-y-2">
+                          {isPending && (
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                              <span>QR Verification Under Review</span>
+                            </div>
+                          )}
+                          {isConfirmed && (
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <span>Confirmed &amp; Reserved</span>
+                            </div>
+                          )}
+                          {isRejected && (
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-800 text-[10px] font-bold uppercase tracking-wider">
+                              <span className="w-2 h-2 rounded-full bg-rose-500" />
+                              <span>Payment Rejected</span>
+                            </div>
+                          )}
 
-                       <div className="pt-2 flex justify-end">
-                         {isConfirmed ? (
-                           <>
-                             {booking.contracts && booking.contracts.length > 0 ? (
-                               <button 
-                                 onClick={() => window.location.href = `/dashboard/contracts/${booking.contracts?.[0]?.id}`}
-                                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1B1B1B] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-all"
-                               >
-                                 View Agreement <ArrowRight size={12}/>
-                               </button>
-                             ) : booking.contractRequests && booking.contractRequests.length > 0 ? (
-                               <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 border border-amber-200 text-[10px] font-bold uppercase">
-                                 <ShieldCheck size={14} className="text-amber-500" />
-                                 <span>Agreement Request Pending</span>
-                               </div>
-                             ) : (
-                               <button 
-                                 onClick={() => handleRequestAgreement(booking.id)}
-                                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-white border border-[var(--outline-variant)] text-[#1B1C1C] text-[10px] font-bold uppercase tracking-widest hover:border-[#1ab0bc] hover:text-[#1ab0bc] transition-all"
-                               >
-                                 Request Agreement <FileCheck size={12}/>
-                               </button>
-                             )}
-                           </>
-                         ) : isPending ? (
-                           <span className="w-full text-center py-2 text-[9px] font-bold text-amber-700 uppercase tracking-widest bg-amber-50 border border-amber-200">
-                             Awaiting Community Manager Review
-                           </span>
-                         ) : null}
-                       </div>
-                     </div>
-                   );
-                 })}
-               </div>
+                          {booking.qrBooking?.remarks && (
+                            <p className="text-[11px] text-gray-600">
+                              <span className="font-bold">Remarks:</span> {booking.qrBooking.remarks}
+                            </p>
+                          )}
 
-               {/* Desktop Table (>= md) */}
-               <div className="hidden md:block overflow-x-auto min-w-full">
-                 <table className="w-full text-left border-collapse min-w-[950px]">
-                  <thead>
-                    <tr className="bg-[var(--surface-low)]/50 border-b border-[var(--outline-variant)]">
-                      <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Booking ID</th>
-                      <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Space &amp; Center</th>
-                      <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Date &amp; Time</th>
-                      <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Payment / Status</th>
-                      <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Amount</th>
-                      <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--outline-variant)]/30">
-                   {bookings.map(booking => {
-                      const isPending = booking.status.name === 'PENDING' || booking.qrBooking?.status === 'PENDING';
-                      const isConfirmed = booking.status.name === 'CONFIRMED' || booking.qrBooking?.status === 'APPROVED';
-                      const isRejected = booking.status.name === 'CANCELLED' || booking.qrBooking?.status === 'REJECTED';
+                          {booking.qrBooking?.rejectionReason && (
+                            <p className="text-[11px] text-rose-600 font-medium">
+                              <span className="font-bold">Reason:</span> {booking.qrBooking.rejectionReason}
+                            </p>
+                          )}
 
-                      return (
-                        <motion.tr 
-                          key={booking.id} 
-                          initial={{opacity:0}} 
-                          animate={{opacity:1}} 
-                          className="hover:bg-[var(--surface-low)]/30 transition-colors group"
-                        >
-                          <td className="px-6 py-6 align-top">
-                             <p className="text-sm font-bold text-[#1B1C1C] transition-colors">{booking.bookingNumber}</p>
-                             <p className="text-[9px] text-[#9E9E9E] uppercase font-bold tracking-widest mt-1">
-                               {new Date(booking.createdAt).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' })}
-                             </p>
-                             {booking.qrBooking && (
-                               <span className="inline-block mt-1 text-[8px] font-black uppercase tracking-wider bg-teal-50 text-[#1ab0bc] px-2 py-0.5 border border-teal-200">
-                                 ICICI QR
-                               </span>
-                             )}
-                          </td>
-                          <td className="px-6 py-6 align-top">
-                             <p className="text-sm font-bold text-[#1B1C1C]">{booking.product.name}</p>
-                             <p className="text-[10px] flex items-center gap-1.5 text-[#9E9E9E] font-bold uppercase tracking-wider mt-1">
-                               <MapPin size={10} className="text-[#1ab0bc]"/> {booking.product.location.name}
-                             </p>
-                          </td>
-                          <td className="px-6 py-6 align-top">
-                             <p className="text-sm font-bold text-[#1B1C1C]">
-                               {new Date(booking.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                             </p>
-                             <p className="text-[10px] text-[#9E9E9E] font-bold mt-1 uppercase tracking-widest">
-                               {booking.startTime || 'Standard'} {booking.endTime ? `— ${booking.endTime}` : ''}
-                             </p>
-                          </td>
-                          <td className="px-6 py-6 align-top space-y-1.5">
-                             {isPending && (
-                               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-black uppercase tracking-wider rounded-sm">
-                                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                                 <span>QR Verification Under Review</span>
-                               </div>
-                             )}
-                             {isConfirmed && (
-                               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase tracking-wider rounded-sm">
-                                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                                 <span>Confirmed &amp; Reserved</span>
-                               </div>
-                             )}
-                             {isRejected && (
-                               <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 border border-rose-200 text-rose-700 text-[9px] font-black uppercase tracking-wider rounded-sm">
-                                 <span className="w-2 h-2 rounded-full bg-rose-500" />
-                                 <span>Payment Rejected</span>
-                               </div>
-                             )}
+                          {booking.qrBooking?.screenshotData && (
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedScreenshot(booking.qrBooking!.screenshotData)}
+                                className="text-[10px] font-bold text-[#1ab0bc] hover:underline uppercase tracking-wider"
+                              >
+                                View Uploaded Screenshot ↗
+                              </button>
+                            </div>
+                          )}
+                        </div>
 
-                             {booking.qrBooking?.remarks && (
-                               <p className="text-[10px] text-gray-600 max-w-xs truncate" title={booking.qrBooking.remarks}>
-                                 <span className="font-bold">Remarks:</span> {booking.qrBooking.remarks}
-                               </p>
-                             )}
+                        <div className="pt-2 flex justify-end">
+                          {isPass ? (
+                            <button
+                              onClick={openShortTermAgreement}
+                              className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#006064] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-[#004d40] transition-all cursor-pointer shadow-xs"
+                            >
+                              <FileText size={12} />
+                              <span>View Agreement</span>
+                            </button>
+                          ) : isConfirmed ? (
+                            <>
+                              {booking.contracts && booking.contracts.length > 0 ? (
+                                <button 
+                                  onClick={() => window.location.href = `/dashboard/contracts/${booking.contracts?.[0]?.id}`}
+                                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1B1B1B] text-white text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-all"
+                                >
+                                  View Agreement <ArrowRight size={12}/>
+                                </button>
+                              ) : booking.contractRequests && booking.contractRequests.length > 0 ? (
+                                <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 border border-amber-200 text-[10px] font-bold uppercase">
+                                  <ShieldCheck size={14} className="text-amber-500" />
+                                  <span>Agreement Request Pending</span>
+                                </div>
+                              ) : (
+                                <button 
+                                  onClick={() => handleRequestAgreement(booking.id)}
+                                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-white border border-[var(--outline-variant)] text-[#1B1C1C] text-[10px] font-bold uppercase tracking-widest hover:border-[#1ab0bc] hover:text-[#1ab0bc] transition-all"
+                                >
+                                  Request Agreement <FileCheck size={12}/>
+                                </button>
+                              )}
+                            </>
+                          ) : isPending ? (
+                            <span className="w-full text-center py-2 text-[9px] font-bold text-amber-700 uppercase tracking-widest bg-amber-50 border border-amber-200">
+                              Awaiting Community Manager Review
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
-                             {booking.qrBooking?.rejectionReason && (
-                               <p className="text-[10px] text-rose-600 font-medium">
-                                 <span className="font-bold">Reason:</span> {booking.qrBooking.rejectionReason}
-                               </p>
-                             )}
+                {/* Desktop Table (>= md) */}
+                <div className="hidden md:block overflow-x-auto min-w-full">
+                  <table className="w-full text-left border-collapse min-w-[950px]">
+                   <thead>
+                     <tr className="bg-[var(--surface-low)]/50 border-b border-[var(--outline-variant)]">
+                       <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Booking ID</th>
+                       <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Space &amp; Center</th>
+                       <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Date &amp; Seats</th>
+                       <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Payment / Status</th>
+                       <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest text-right">Amount</th>
+                       <th className="px-6 py-4 text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest text-center">Action</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-[var(--outline-variant)]/30">
+                    {bookings.map(booking => {
+                       const isPending = booking.status.name === 'PENDING' || booking.qrBooking?.status === 'PENDING';
+                       const isConfirmed = booking.status.name === 'CONFIRMED' || booking.qrBooking?.status === 'APPROVED';
+                       const isRejected = booking.status.name === 'CANCELLED' || booking.qrBooking?.status === 'REJECTED';
 
-                             {booking.qrBooking?.screenshotData && (
-                               <div>
-                                 <button
-                                   type="button"
-                                   onClick={() => setSelectedScreenshot(booking.qrBooking!.screenshotData)}
-                                   className="text-[9px] font-bold text-[#1ab0bc] hover:underline uppercase tracking-wider"
-                                 >
-                                   View Uploaded Screenshot ↗
-                                 </button>
-                               </div>
-                             )}
-                          </td>
-                          <td className="px-6 py-6 text-right align-top">
-                             <p className="text-lg font-display font-bold text-[#1B1C1C]">
-                               ₹{parseFloat(booking.grandTotal.toString()).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                             </p>
-                          </td>
-                          <td className="px-6 py-6 align-top">
-                             <div className="flex justify-center">
-                                {isConfirmed ? (
-                                  <>
-                                    {booking.contracts && booking.contracts.length > 0 ? (
-                                      <button 
-                                        onClick={() => window.location.href = `/dashboard/contracts/${booking.contracts?.[0]?.id}`}
-                                        className="flex items-center gap-2 px-4 py-2 rounded-none bg-[#1B1B1B] text-white text-[8px] font-bold uppercase tracking-widest hover:bg-black transition-all cursor-pointer"
-                                      >
-                                        View <ArrowRight size={10}/>
-                                      </button>
-                                    ) : booking.contractRequests && booking.contractRequests.length > 0 ? (
-                                      <div className="flex flex-col items-center gap-1 opacity-60">
-                                        <ShieldCheck size={14} className="text-amber-500" />
-                                        <span className="text-[7px] font-bold uppercase text-amber-700">Pending</span>
-                                      </div>
-                                    ) : (
-                                      <button 
-                                        onClick={() => handleRequestAgreement(booking.id)}
-                                        className="flex items-center gap-2 px-4 py-2 rounded-none bg-white border border-[var(--outline-variant)] text-[#1B1C1C] text-[8px] font-bold uppercase tracking-widest hover:border-[#1ab0bc] hover:text-[#1ab0bc] transition-all cursor-pointer"
-                                      >
-                                        Request <FileCheck size={10}/>
-                                      </button>
-                                    )}
-                                  </>
-                                ) : isPending ? (
-                                  <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 px-2 py-1 border border-amber-200">
-                                    Awaiting CM Review
+                       const isPass =
+                         booking.bookingNumber?.startsWith('PASS-') ||
+                         booking.notes?.toLowerCase().includes('pass') ||
+                         booking.durationType?.name === 'PER_DAY' ||
+                         booking.durationType?.name === 'PER_WEEK';
+
+                       const isWeeklyPass =
+                         booking.bookingNumber?.includes('-WEEK-') ||
+                         booking.notes?.toLowerCase().includes('weekly') ||
+                         booking.durationType?.name === 'PER_WEEK';
+
+                       const openShortTermAgreement = () => {
+                         setViewingAgreementData({
+                           clientName: booking.customer?.name || 'Client',
+                           companyName: booking.customer?.organization || booking.customer?.companyName || undefined,
+                           registeredOffice: booking.customer?.billingAddress || booking.customer?.address || undefined,
+                           gstNumber: booking.customer?.gstNumber || undefined,
+                           seats: booking.seats || 1,
+                           centreName: booking.product.location.name,
+                           centreAddress: booking.product.location.address || `${booking.product.location.name}, Ahmedabad`,
+                           startDate: booking.startDate,
+                           endDate: isWeeklyPass ? booking.endDate : undefined,
+                           passType: isWeeklyPass ? 'WEEKLY' : 'DAILY',
+                           bookingNumber: booking.bookingNumber,
+                         });
+                       };
+
+                       return (
+                         <motion.tr 
+                           key={booking.id} 
+                           initial={{opacity:0}} 
+                           animate={{opacity:1}} 
+                           className="hover:bg-[var(--surface-low)]/30 transition-colors group"
+                         >
+                           <td className="px-6 py-6 align-top">
+                              <p className="text-sm font-bold text-[#1B1C1C] transition-colors">{booking.bookingNumber}</p>
+                              <p className="text-[9px] text-[#9E9E9E] uppercase font-bold tracking-widest mt-1">
+                                {new Date(booking.createdAt).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' })}
+                              </p>
+                              {booking.qrBooking && (
+                                <span className="inline-block mt-1 text-[8px] font-black uppercase tracking-wider bg-teal-50 text-[#1ab0bc] px-2 py-0.5 border border-teal-200">
+                                  ICICI QR
+                                </span>
+                              )}
+                           </td>
+                           <td className="px-6 py-6 align-top">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-bold text-[#1B1C1C]">{booking.product.name}</p>
+                                {isPass && (
+                                  <span className="text-[8px] font-black uppercase tracking-wider bg-teal-50 text-[#006064] px-2 py-0.5 border border-teal-300 rounded-2xs">
+                                    {isWeeklyPass ? 'Weekly Pass' : 'Daily Pass'}
                                   </span>
-                                ) : (
-                                  <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">N/A</span>
                                 )}
-                             </div>
-                          </td>
-                        </motion.tr>
-                      );
-                   })}
-                  </tbody>
-                </table>
-              </div>
-            </>
+                              </div>
+                              <p className="text-[10px] flex items-center gap-1.5 text-[#9E9E9E] font-bold uppercase tracking-wider mt-1">
+                                <MapPin size={10} className="text-[#1ab0bc]"/> {booking.product.location.name}
+                              </p>
+                           </td>
+                           <td className="px-6 py-6 align-top">
+                              {isPass ? (
+                                <div>
+                                  <p className="text-sm font-bold text-[#1B1C1C]">
+                                    {isWeeklyPass && booking.endDate
+                                      ? `${new Date(booking.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(booking.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+                                      : new Date(booking.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </p>
+                                  <p className="text-[10px] text-[#006064] font-bold mt-1 uppercase tracking-widest">
+                                    {isWeeklyPass ? '7-Day Pass' : '1-Day Pass'} • {booking.seats || 1} {(booking.seats || 1) === 1 ? 'Desk' : 'Desks'}
+                                  </p>
+                                </div>
+                              ) : (
+                                <div>
+                                  <p className="text-sm font-bold text-[#1B1C1C]">
+                                    {new Date(booking.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </p>
+                                  <p className="text-[10px] text-[#9E9E9E] font-bold mt-1 uppercase tracking-widest">
+                                    {booking.startTime || 'Standard'} {booking.endTime ? `— ${booking.endTime}` : ''}
+                                  </p>
+                                </div>
+                              )}
+                           </td>
+                           <td className="px-6 py-6 align-top space-y-1.5">
+                              {isPending && (
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-black uppercase tracking-wider rounded-sm">
+                                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                  <span>QR Verification Under Review</span>
+                                </div>
+                              )}
+                              {isConfirmed && (
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase tracking-wider rounded-sm">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                  <span>Confirmed &amp; Reserved</span>
+                                </div>
+                              )}
+                              {isRejected && (
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 border border-rose-200 text-rose-700 text-[9px] font-black uppercase tracking-wider rounded-sm">
+                                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                  <span>Payment Rejected</span>
+                                </div>
+                              )}
+
+                              {booking.qrBooking?.remarks && (
+                                <p className="text-[10px] text-gray-600 max-w-xs truncate" title={booking.qrBooking.remarks}>
+                                  <span className="font-bold">Remarks:</span> {booking.qrBooking.remarks}
+                                </p>
+                              )}
+
+                              {booking.qrBooking?.rejectionReason && (
+                                <p className="text-[10px] text-rose-600 font-medium">
+                                  <span className="font-bold">Reason:</span> {booking.qrBooking.rejectionReason}
+                                </p>
+                              )}
+
+                              {booking.qrBooking?.screenshotData && (
+                                <div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedScreenshot(booking.qrBooking!.screenshotData)}
+                                    className="text-[9px] font-bold text-[#1ab0bc] hover:underline uppercase tracking-wider"
+                                  >
+                                    View Uploaded Screenshot ↗
+                                  </button>
+                                </div>
+                              )}
+                           </td>
+                           <td className="px-6 py-6 text-right align-top">
+                              <p className="text-lg font-display font-bold text-[#1B1C1C]">
+                                ₹{parseFloat(booking.grandTotal.toString()).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </p>
+                           </td>
+                           <td className="px-6 py-6 align-top">
+                              <div className="flex justify-center">
+                                 {isPass ? (
+                                   <button 
+                                     onClick={openShortTermAgreement}
+                                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-none bg-[#006064] text-white text-[8px] font-bold uppercase tracking-widest hover:bg-[#004d40] transition-all cursor-pointer shadow-xs"
+                                   >
+                                     <FileText size={10}/>
+                                     <span>Agreement</span>
+                                   </button>
+                                 ) : isConfirmed ? (
+                                   <>
+                                     {booking.contracts && booking.contracts.length > 0 ? (
+                                       <button 
+                                         onClick={() => window.location.href = `/dashboard/contracts/${booking.contracts?.[0]?.id}`}
+                                         className="flex items-center gap-2 px-4 py-2 rounded-none bg-[#1B1B1B] text-white text-[8px] font-bold uppercase tracking-widest hover:bg-black transition-all cursor-pointer"
+                                       >
+                                         View <ArrowRight size={10}/>
+                                       </button>
+                                     ) : booking.contractRequests && booking.contractRequests.length > 0 ? (
+                                       <div className="flex flex-col items-center gap-1 opacity-60">
+                                         <ShieldCheck size={14} className="text-amber-500" />
+                                         <span className="text-[7px] font-bold uppercase text-amber-700">Pending</span>
+                                       </div>
+                                     ) : (
+                                       <button 
+                                         onClick={() => handleRequestAgreement(booking.id)}
+                                         className="flex items-center gap-2 px-4 py-2 rounded-none bg-white border border-[var(--outline-variant)] text-[#1B1C1C] text-[8px] font-bold uppercase tracking-widest hover:border-[#1ab0bc] hover:text-[#1ab0bc] transition-all cursor-pointer"
+                                       >
+                                         Request <FileCheck size={10}/>
+                                       </button>
+                                     )}
+                                   </>
+                                 ) : isPending ? (
+                                   <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 px-2 py-1 border border-amber-200">
+                                     Awaiting CM Review
+                                   </span>
+                                 ) : (
+                                   <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">N/A</span>
+                                 )}
+                              </div>
+                           </td>
+                         </motion.tr>
+                       );
+                    })}
+                   </tbody>
+                  </table>
+                </div>
+              </>
           )}
         </div>
       </FadeUp>
+
+      {/* Short-Term Agreement Modal */}
+      {viewingAgreementData && (
+        <ShortTermAgreementModal
+          isOpen={!!viewingAgreementData}
+          onClose={() => setViewingAgreementData(null)}
+          data={viewingAgreementData}
+          isSigned={true}
+        />
+      )}
 
       {/* Screenshot Preview Modal */}
       {selectedScreenshot && (

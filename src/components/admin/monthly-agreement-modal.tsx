@@ -115,18 +115,19 @@ export function MonthlyAgreementModal({
     }
 
     const rows = [
-      ["Client ID", "Company Name", "Centre", "Cabin / Unit", "Seats", "Monthly Agreement (INR)", "% Contribution", "Status"],
+      ["Client ID", "Company Name", "Centre", "Cabin / Unit", "Seats", "Car Parking Slots", "Monthly Agreement (INR)", "% Contribution", "Status"],
       ...filteredClients.map((c) => [
         c.clientId || "N/A",
         `"${(c.companyName || "").replace(/"/g, '""')}"`,
         c.centreName,
         `"${(c.cabinName || "").replace(/"/g, '""')}"`,
         c.noOfSeats || 0,
+        c.parkingSlots || 0,
         c.monthlyAmount || 0,
         filteredTotalValue > 0 ? `${(((c.monthlyAmount || 0) / filteredTotalValue) * 100).toFixed(1)}%` : "0.0%",
         c.clientStatus || "Active",
       ]),
-      ["TOTAL", `${filteredClients.length} Agreements`, "", "", "", filteredTotalValue, "100.0%", ""],
+      ["TOTAL", `${filteredClients.length} Agreements`, "", "", "", "", filteredTotalValue, "100.0%", ""],
     ];
 
     const csvContent = "data:text/csv;charset=utf-8," + rows.map((r) => r.join(",")).join("\n");
@@ -387,11 +388,18 @@ export function MonthlyAgreementModal({
                               <span className="truncate">{c.centreName}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-neutral-600 font-medium text-left truncate">
-                            {c.cabinName || "Dedicated Space"}
+                          <td className="py-3 px-4 text-neutral-600 font-medium text-left">
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className="truncate">{c.cabinName || "Dedicated Space"}</span>
+                              {Boolean(c.parkingSlots && c.parkingSlots > 0) && (
+                                <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-900 bg-amber-50 border border-amber-300 px-1.5 py-0.2 rounded-xs">
+                                  🚗 {c.parkingSlots} Car Parking
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-4 text-center font-black text-neutral-800 font-mono">
-                            {c.noOfSeats || 1}
+                            {c.clientType === "VIRTUAL_OFFICE" ? "—" : (c.noOfSeats ?? 0)}
                           </td>
                           <td className="py-3 px-4 text-right font-black text-[#006064] font-mono text-xs whitespace-nowrap">
                             {formatINR(c.monthlyAmount)}

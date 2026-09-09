@@ -834,9 +834,23 @@ export default function ProductsClient({
                            <div className="p-4 sm:p-6 lg:p-8 flex-1 min-w-0 flex flex-col justify-between gap-4 sm:gap-6">
                               <div className="space-y-4 sm:space-y-6">
                                   <div className="flex flex-wrap sm:flex-nowrap justify-between items-start gap-2 sm:gap-4">
-                                      <h3 className="font-display text-base sm:text-lg md:text-xl font-bold tracking-tight text-on-surface leading-tight">
-                                        {gs.name} @ {gs.location.name}
-                                      </h3>
+                                      <div className="space-y-1.5 min-w-0">
+                                          <h3 className="font-display text-base sm:text-lg md:text-xl font-bold tracking-tight text-on-surface leading-tight">
+                                            {gs.name}
+                                          </h3>
+                                          {gs.location && (
+                                              <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-700 bg-[#006064]/5 border border-[#006064]/15 px-2.5 py-0.5 rounded-xs w-fit">
+                                                  <MapPin className="w-3 h-3 text-[#006064] shrink-0" />
+                                                  <span className="font-bold text-neutral-900">{gs.location.name}</span>
+                                                  {gs.location.area && (
+                                                      <>
+                                                          <span className="text-neutral-300 font-bold">•</span>
+                                                          <span className="text-neutral-600">{gs.location.area}</span>
+                                                      </>
+                                                  )}
+                                              </div>
+                                          )}
+                                      </div>
                                       <div className="bg-[#E0F7FA] px-3.5 py-1.5 rounded-sm border border-[#006064]/30 shadow-xs whitespace-nowrap shrink-0">
                                           <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#006064] font-mono">{gs.capacity} SEATER</span>
                                       </div>
@@ -934,7 +948,21 @@ export default function ProductsClient({
                            <div className="p-5 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 flex-1 flex flex-col justify-between">
                               <div className="space-y-3">
                                   <div className="flex justify-between items-start gap-2">
-                                      <h3 className="font-display text-lg sm:text-xl font-bold tracking-tight text-on-surface">{ws.name}</h3>
+                                      <div className="space-y-1.5 min-w-0">
+                                          <h3 className="font-display text-lg sm:text-xl font-bold tracking-tight text-on-surface leading-snug">{ws.name}</h3>
+                                          {ws.location && (
+                                              <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-700 bg-[#006064]/5 border border-[#006064]/15 px-2.5 py-0.5 rounded-xs w-fit">
+                                                  <MapPin className="w-3 h-3 text-[#006064] shrink-0" />
+                                                  <span className="font-bold text-neutral-900">{ws.location.name}</span>
+                                                  {ws.location.area && (
+                                                      <>
+                                                          <span className="text-neutral-300 font-bold">•</span>
+                                                          <span className="text-neutral-600">{ws.location.area}</span>
+                                                      </>
+                                                  )}
+                                              </div>
+                                          )}
+                                      </div>
                                       <div className="bg-[#E0F7FA] px-3 py-1 rounded-sm border border-[#006064]/30 shadow-xs whitespace-nowrap shrink-0">
                                           <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-[#006064] font-mono">{ws.capacity} {ws.capacity === 1 ? 'SEAT' : 'SEATS'}</span>
                                       </div>

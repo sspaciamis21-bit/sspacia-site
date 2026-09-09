@@ -94,6 +94,7 @@ interface DashboardStats {
     activeAgreements: number;
     onNoticeClients: number;
     totalAllocatedSeats: number;
+    totalCarParkingSlots?: number;
     totalMonthlyAgreementValue: number;
     dispatchedForSelectedMonth?: number;
     pendingDispatchForSelectedMonth?: number;
@@ -298,6 +299,7 @@ export default function AdminDashboardPage() {
   const totalClients = stats?.clientMaster?.totalClients ?? 0;
   const activeAgreements = stats?.clientMaster?.activeAgreements ?? 0;
   const totalSeats = stats?.clientMaster?.totalAllocatedSeats ?? 0;
+  const totalParking = stats?.clientMaster?.totalCarParkingSlots ?? 0;
   const agreementRevenue = stats?.clientMaster?.totalMonthlyAgreementValue ?? 0;
 
   // Real Invoices & Operational Revenue Metrics (CM Approved = Payment Received)
@@ -518,10 +520,17 @@ export default function AdminDashboardPage() {
             </div>
             <div className="flex items-center justify-between mt-2 text-xs text-gray-500 font-light pt-2 border-t border-neutral-100">
               <span className="text-emerald-700 font-bold">{activeAgreements} Active</span>
-              <span className="font-bold text-[#006064] flex items-center gap-0.5 group-hover:underline">
-                <span>{totalSeats} Seats</span>
-                <ArrowUpRight size={11} />
-              </span>
+              <div className="flex items-center gap-1.5">
+                {totalParking > 0 && (
+                  <span className="text-[10px] text-amber-800 font-bold bg-amber-50 px-1 py-0.2 border border-amber-200 rounded-xs" title="Car Parking Spaces">
+                    🚗 {totalParking} Parking
+                  </span>
+                )}
+                <span className="font-bold text-[#006064] flex items-center gap-0.5 group-hover:underline">
+                  <span>{totalSeats} Seats</span>
+                  <ArrowUpRight size={11} />
+                </span>
+              </div>
             </div>
           </div>
         </FadeUp>
@@ -741,7 +750,9 @@ export default function AdminDashboardPage() {
                   <span className="text-lg font-bold text-[#1B1C1C] mt-0.5 block">
                     {totalSeats} Seats
                   </span>
-                  <span className="text-[10px] text-gray-500 font-medium">Across Cabins</span>
+                  <span className="text-[10px] text-gray-500 font-medium">
+                    Across Cabins {totalParking > 0 && `• 🚗 ${totalParking} Parking`}
+                  </span>
                 </div>
               </div>
 
