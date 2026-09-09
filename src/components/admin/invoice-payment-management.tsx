@@ -300,8 +300,6 @@ export function InvoicePaymentManagement({
   const handleOpenPaymentModal = (invoice: LiveApprovedInvoice) => {
     setEditingInvoice(invoice);
 
-    const todayStr = new Date().toISOString().split('T')[0];
-
     // Check if invoice already has multi-part payments stored in paymentsJson
     if (invoice.paymentsJson) {
       try {
@@ -314,7 +312,7 @@ export function InvoicePaymentManagement({
                 ? String(p.payReceiveDate).split('T')[0]
                 : p.date
                 ? String(p.date).split('T')[0]
-                : todayStr,
+                : '',
               receiveAmount:
                 p.receiveAmount !== undefined && p.receiveAmount !== null
                   ? String(p.receiveAmount)
@@ -323,7 +321,7 @@ export function InvoicePaymentManagement({
                   : '',
               paymentMode: p.paymentMode || p.mode || 'NEFT',
               utrNumber: p.utrNumber || '',
-              utrDate: p.utrDate ? String(p.utrDate).split('T')[0] : todayStr,
+              utrDate: p.utrDate ? String(p.utrDate).split('T')[0] : '',
               tdsDeducted: p.tdsDeducted === 'Yes' ? 'Yes' : 'No',
               tdsAmount: p.tdsAmount !== undefined && p.tdsAmount !== null ? String(p.tdsAmount) : '0',
               utrFileUrl: p.utrFileUrl || null,
@@ -338,27 +336,50 @@ export function InvoicePaymentManagement({
       }
     }
 
-    // Default 1 payment entry
-    const initialAmount =
-      invoice.receiveAmount > 0
-        ? String(invoice.receiveAmount)
-        : String(invoice.totalAmount);
+    // If an existing single payment was already recorded in the past
+    const hasRecordedPayment =
+      (invoice.receiveAmount !== null && invoice.receiveAmount !== undefined && invoice.receiveAmount > 0) ||
+      Boolean(invoice.payReceiveDate) ||
+      Boolean(invoice.utrNumber);
 
+    if (hasRecordedPayment) {
+      setPaymentParts([
+        {
+          id: `part_${Date.now()}`,
+          payReceiveDate: invoice.payReceiveDate
+            ? String(invoice.payReceiveDate).split('T')[0]
+            : '',
+          receiveAmount:
+            invoice.receiveAmount && invoice.receiveAmount > 0
+              ? String(invoice.receiveAmount)
+              : '',
+          paymentMode: invoice.paymentMode || 'NEFT',
+          utrNumber: invoice.utrNumber || '',
+          utrDate: invoice.utrDate ? String(invoice.utrDate).split('T')[0] : '',
+          tdsDeducted: invoice.tdsDeducted || 'No',
+          tdsAmount: invoice.tdsAmount ? String(invoice.tdsAmount) : '0',
+          utrFileUrl: invoice.utrFileUrl || null,
+          utrFileName: invoice.utrFileName || null,
+          remarks: invoice.remarks || '',
+        },
+      ]);
+      return;
+    }
+
+    // Clean blank 1st entry for pending settlement (NEVER pre-fill dates or invoice amount)
     setPaymentParts([
       {
         id: `part_${Date.now()}`,
-        payReceiveDate: invoice.payReceiveDate
-          ? String(invoice.payReceiveDate).split('T')[0]
-          : todayStr,
-        receiveAmount: initialAmount,
-        paymentMode: invoice.paymentMode || 'NEFT',
-        utrNumber: invoice.utrNumber || '',
-        utrDate: invoice.utrDate ? String(invoice.utrDate).split('T')[0] : todayStr,
-        tdsDeducted: invoice.tdsDeducted || 'No',
-        tdsAmount: invoice.tdsAmount ? String(invoice.tdsAmount) : '0',
-        utrFileUrl: invoice.utrFileUrl || null,
-        utrFileName: invoice.utrFileName || null,
-        remarks: invoice.remarks || '',
+        payReceiveDate: '',
+        receiveAmount: '',
+        paymentMode: 'NEFT',
+        utrNumber: '',
+        utrDate: '',
+        tdsDeducted: 'No',
+        tdsAmount: '0',
+        utrFileUrl: null,
+        utrFileName: null,
+        remarks: '',
       },
     ]);
   };
@@ -367,21 +388,13 @@ export function InvoicePaymentManagement({
   const handleAddPaymentPart = () => {
     if (!editingInvoice) return;
 
-    // Calculate remaining unallocated balance
-    const currentTotalRec = paymentParts.reduce(
-      (acc, p) => acc + (parseFloat(p.receiveAmount) || 0),
-      0
-    );
-    const remaining = Math.max(0, editingInvoice.totalAmount - currentTotalRec);
-    const todayStr = new Date().toISOString().split('T')[0];
-
     const newPart: PaymentPartItem = {
       id: `part_${Date.now()}`,
-      payReceiveDate: todayStr,
-      receiveAmount: remaining > 0 ? String(remaining) : '',
+      payReceiveDate: '',
+      receiveAmount: '',
       paymentMode: 'NEFT',
       utrNumber: '',
-      utrDate: todayStr,
+      utrDate: '',
       tdsDeducted: 'No',
       tdsAmount: '0',
       utrFileUrl: null,
@@ -657,6 +670,17 @@ export function InvoicePaymentManagement({
 
     const totalRecordedRec = modalSummary.totalRec;
     const totalRecordedTds = modalSummary.totalTds;
+
+    const hasAnyInput =
+      totalRecordedRec > 0 ||
+      paymentParts.some(
+        (p) => Boolean(p.payReceiveDate) || Boolean(p.utrNumber.trim()) || (parseFloat(p.receiveAmount) || 0) > 0
+      );
+
+    if (!hasAnyInput) {
+      toast.error('Please enter payment receive date, received amount, or UTR details before saving');
+      return;
+    }
 
     let status: 'PENDING' | 'RECEIVED' | 'PARTIAL' = 'PENDING';
     if (totalRecordedRec >= editingInvoice.totalAmount && editingInvoice.totalAmount > 0) {
@@ -1454,11 +1478,17 @@ export function InvoicePaymentManagement({
                           </span>
                         </div>
                         <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded-xs border ${
-                          modalSummary.balance === 0
+                          modalSummary.totalRec >= modalSummary.totalInv && modalSummary.totalInv > 0
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                            : modalSummary.totalRec > 0
+                            ? 'bg-blue-50 text-blue-700 border-blue-300'
                             : 'bg-amber-50 text-amber-800 border-amber-300'
                         }`}>
-                          {modalSummary.balance === 0 ? '✓ Fully Settled' : 'Pending'}
+                          {modalSummary.totalRec >= modalSummary.totalInv && modalSummary.totalInv > 0
+                            ? '✓ Fully Settled'
+                            : modalSummary.totalRec > 0
+                            ? 'Partial Payment'
+                            : 'Pending Settlement'}
                         </span>
                       </div>
                     </div>
@@ -1532,7 +1562,11 @@ export function InvoicePaymentManagement({
                               onChange={(e) =>
                                 handleUpdatePaymentPart(part.id, 'receiveAmount', e.target.value)
                               }
-                              placeholder="e.g. 25000"
+                              placeholder={
+                                editingInvoice.totalAmount
+                                  ? `e.g. ${Number(editingInvoice.totalAmount).toLocaleString('en-IN')}`
+                                  : 'e.g. 25000'
+                              }
                               className="w-full px-2.5 py-1.5 text-xs bg-white border border-neutral-300 focus:outline-none focus:border-[#006064] font-mono font-bold text-gray-900 shadow-2xs"
                             />
                           </div>

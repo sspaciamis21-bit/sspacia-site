@@ -809,11 +809,11 @@ export function OldInvoicesArchive({
       setPaymentParts([
         {
           id: `part_${Date.now()}`,
-          payReceiveDate: new Date().toISOString().split('T')[0],
-          receiveAmount: combinedInvSum > 0 ? String(combinedInvSum) : '',
+          payReceiveDate: '',
+          receiveAmount: '',
           paymentMode: 'NEFT',
           utrNumber: '',
-          utrDate: new Date().toISOString().split('T')[0],
+          utrDate: '',
           tdsDeducted: 'No',
           tdsAmount: '',
           paymentDocUrl: '',
@@ -919,11 +919,14 @@ export function OldInvoicesArchive({
     }
 
     // Default 1 payment entry (from legacy or new)
+    const hasRecordedPayment =
+      (item.receiveAmount !== null && item.receiveAmount !== undefined && Number(item.receiveAmount) > 0) ||
+      Boolean(item.payReceiveDate) ||
+      Boolean(item.utrNumber);
+
     const initialAmount =
-      item.receiveAmount !== null && item.receiveAmount !== undefined
+      hasRecordedPayment && item.receiveAmount !== null && item.receiveAmount !== undefined
         ? String(item.receiveAmount)
-        : item.amount !== null && item.amount !== undefined
-        ? String(item.amount)
         : '';
 
     setPaymentParts([
@@ -931,13 +934,13 @@ export function OldInvoicesArchive({
         id: `part_${Date.now()}`,
         payReceiveDate: item.payReceiveDate
           ? String(item.payReceiveDate).split('T')[0]
-          : new Date().toISOString().split('T')[0],
+          : '',
         receiveAmount: initialAmount,
         paymentMode: item.paymentMode || 'NEFT',
         utrNumber: item.utrNumber || '',
         utrDate: item.utrDate
           ? String(item.utrDate).split('T')[0]
-          : new Date().toISOString().split('T')[0],
+          : '',
         tdsDeducted: item.tdsDeducted === 'Yes' ? 'Yes' : 'No',
         tdsAmount: item.tdsAmount !== null && item.tdsAmount !== undefined ? String(item.tdsAmount) : '',
         paymentDocUrl: '',
@@ -962,11 +965,11 @@ export function OldInvoicesArchive({
       ...prev,
       {
         id: `part_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-        payReceiveDate: new Date().toISOString().split('T')[0],
+        payReceiveDate: '',
         receiveAmount: '',
         paymentMode: 'NEFT',
         utrNumber: '',
-        utrDate: new Date().toISOString().split('T')[0],
+        utrDate: '',
         tdsDeducted: 'No',
         tdsAmount: '',
         paymentDocUrl: '',
