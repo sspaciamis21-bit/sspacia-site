@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Building2,
   Calendar,
@@ -232,6 +233,38 @@ export function ExpenseRegister({
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
+
+  // Portal mount state
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Lock body scroll when any popup modal is open for clear, focused view
+  useEffect(() => {
+    const isAnyModalOpen = Boolean(
+      isAddModalOpen ||
+      approvingRecord ||
+      isNewVendorModalOpen ||
+      settlingRecord ||
+      isApprovalsModalOpen ||
+      isViewPaymentModalOpen
+    );
+    if (isAnyModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [
+    isAddModalOpen,
+    approvingRecord,
+    isNewVendorModalOpen,
+    settlingRecord,
+    isApprovalsModalOpen,
+    isViewPaymentModalOpen,
+  ]);
 
   // Global pending approvals across ALL centres (irrespective of center/month filter)
   const [allPendingApprovals, setAllPendingApprovals] = useState<ExpenseRecordItem[]>([]);
@@ -1455,98 +1488,16 @@ export function ExpenseRegister({
               </div>
             )}
 
-            {/* Sync from legacy spreadsheets */}
-            <button
-              onClick={handleSyncFromSheets}
-              disabled={syncing}
-              title="Import all historical month-wise entries from Excel spreadsheets"
-              className="bg-gray-50 hover:bg-gray-100 text-gray-800 px-3 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <RefreshCw
-                className={`w-3.5 h-3.5 text-[#006064] ${syncing ? "animate-spin" : ""}`}
-              />
-              <span>{syncing ? "Syncing Spreadsheets..." : "Sync Spreadsheets"}</span>
-            </button>
-
-            {/* Switch to Legacy Spreadsheet (Kept Above Only) */}
-            {onSwitchToSpreadsheet && (
+            {/* Add Expense Button (Modal) - Accountant Only */}
+            {isAccountant && (
               <button
-                onClick={onSwitchToSpreadsheet}
-                className="bg-white hover:bg-gray-100 text-gray-800 px-3.5 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                onClick={openAddModal}
+                className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
-                <TableIcon className="w-3.5 h-3.5 text-gray-600" />
-                <span>Spreadsheet View (Excel)</span>
+                <Plus className="w-4 h-4" />
+                <span>+ Add Expense (Accountant)</span>
               </button>
             )}
-
-            {/* Quick Vendor Registration Button */}
-            <button
-              onClick={() => {
-                setNewVendorForm({
-                  vendorName: "",
-                  mobileNo: "",
-                  email: "",
-                  accountNo: "",
-                  ifscCode: "",
-                  address: "",
-                  locationName: locations.find((l) => String(l.id) === String(selectedLocation))?.name || "",
-                  gstin: "",
-                  pan: "",
-                });
-                setNewVendorErrors({});
-                setIsNewVendorModalOpen(true);
-              }}
-              className="bg-white hover:bg-emerald-50 text-emerald-800 px-3.5 py-2 text-xs font-bold uppercase tracking-wider border border-emerald-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <UserPlus className="w-3.5 h-3.5 text-emerald-700" />
-              <span>+ Register Vendor</span>
-            </button>
-
-            {/* Inline Add Row Button */}
-            <button
-              onClick={() => {
-                setIsAddingRow(true);
-                setNewRowData({
-                  locationId:
-                    selectedLocation !== "ALL"
-                      ? selectedLocation
-                      : locations[0]?.id
-                      ? String(locations[0].id)
-                      : "",
-                  expenseDate: new Date().toISOString().split("T")[0],
-                  receiptNo: "",
-                  vendorId: "",
-                  vendorName: "",
-                  accountNo: "",
-                  ifscCode: "",
-                  bankName: "",
-                  category: FIXED_EXPENSE_TYPES[0],
-                  description: "",
-                  quantity: "1",
-                  unit: "Nos",
-                  rate: "",
-                  amount: "",
-                  paymentMode: "",
-                  remarks: "",
-                  attachmentUrl: "",
-                  invoiceUrl: "",
-                  uploadedInBankPortal: false,
-                });
-              }}
-              className="bg-white hover:bg-gray-100 text-gray-800 px-3.5 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5 text-[#006064]" />
-              <span>+ Add Row</span>
-            </button>
-
-            {/* Add Expense Button (Modal) */}
-            <button
-              onClick={openAddModal}
-              className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{isAccountant ? "+ Add Expense (Accountant)" : "+ Add Expense"}</span>
-            </button>
           </div>
         </div>
 
@@ -1722,14 +1673,55 @@ export function ExpenseRegister({
 
         {/* ── ACTIVE MONTH FINANCIAL SUMMARY BANNER (REPLACES SPREADSHEET FORMULA ROW) ── */}
         <div className="flex flex-wrap items-center justify-between gap-3 bg-cyan-50/60 p-2.5 border border-cyan-200">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-[#006064]" />
-            <span className="text-xs font-bold text-gray-900">
-              Selected View:{" "}
-              <span className="text-[#006064] uppercase font-black tracking-wide">
-                {activeMonthMeta.label}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-[#006064]" />
+              <span className="text-xs font-bold text-gray-900">
+                Selected View:{" "}
+                <span className="text-[#006064] uppercase font-black tracking-wide">
+                  {activeMonthMeta.label}
+                </span>
               </span>
-            </span>
+            </div>
+
+            {/* Compact Add Row Button - Accessible to both CM and Accountant */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsAddingRow(true);
+                setNewRowData({
+                  locationId:
+                    selectedLocation !== "ALL"
+                      ? selectedLocation
+                      : locations[0]?.id
+                      ? String(locations[0].id)
+                      : "",
+                  expenseDate: new Date().toISOString().split("T")[0],
+                  receiptNo: "",
+                  vendorId: "",
+                  vendorName: "",
+                  accountNo: "",
+                  ifscCode: "",
+                  bankName: "",
+                  category: FIXED_EXPENSE_TYPES[0],
+                  description: "",
+                  quantity: "1",
+                  unit: "Nos",
+                  rate: "",
+                  amount: "",
+                  paymentMode: "",
+                  remarks: "",
+                  attachmentUrl: "",
+                  invoiceUrl: "",
+                  uploadedInBankPortal: false,
+                });
+              }}
+              className="bg-[#006064] hover:bg-[#00838f] text-white px-2.5 py-1 text-xs font-bold tracking-wide transition-all flex items-center gap-1 shadow-2xs cursor-pointer ml-1"
+              title="Add a new expense entry inline"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Add Row</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-3">
@@ -2719,9 +2711,9 @@ export function ExpenseRegister({
       </div>
 
       {/* ── MODAL 1: RECORD / EDIT EXPENSE (NEW FORMAT) ── */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="bg-white border border-gray-300 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+      {mounted && typeof document !== "undefined" && isAddModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white border border-gray-300 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#f8f9fa] sticky top-0 z-10">
               <div>
@@ -3124,13 +3116,14 @@ export function ExpenseRegister({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── MODAL 2: SUPER ADMIN REVIEW & APPROVAL DISBURSEMENT ── */}
-      {approvingRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="bg-white border border-gray-300 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+      {mounted && typeof document !== "undefined" && approvingRecord && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white border border-gray-300 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#006064] text-white sticky top-0 z-10">
               <div className="flex items-center gap-2">
@@ -3361,13 +3354,14 @@ export function ExpenseRegister({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── MODAL 3: INLINE QUICK-ADD VENDOR (MANDATORY MOBILE & EMAIL) ── */}
-      {isNewVendorModalOpen && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs">
-          <div className="bg-white border border-gray-300 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+      {mounted && typeof document !== "undefined" && isNewVendorModalOpen && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white border border-gray-300 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#006064] text-white sticky top-0 z-10">
               <div className="flex items-center gap-2">
                 <UserPlus className="w-4 h-4" />
@@ -3596,13 +3590,14 @@ export function ExpenseRegister({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── MODAL 4: ACCOUNTANT ENTER VENDOR & BILLING BREAKDOWN (STEP 2) ── */}
-      {settlingRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="bg-white border border-gray-300 w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+      {mounted && typeof document !== "undefined" && settlingRecord && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white border border-gray-300 w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#004d40] text-white sticky top-0 z-10">
               <div className="flex items-center gap-2.5">
@@ -4133,13 +4128,14 @@ export function ExpenseRegister({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── MODAL 5: SUPER ADMIN DEDICATED APPROVALS MODAL ── */}
-      {isApprovalsModalOpen && isAdmin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="bg-white border border-gray-300 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+      {mounted && typeof document !== "undefined" && isApprovalsModalOpen && isAdmin && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white border border-gray-300 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#006064] text-white sticky top-0 z-10">
               <div className="flex items-center gap-2.5">
@@ -4334,13 +4330,14 @@ export function ExpenseRegister({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── MODAL 6: CM VIEW PAYMENT DETAILS MODAL ── */}
-      {isViewPaymentModalOpen && viewingPaymentRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="bg-white border border-gray-300 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+      {mounted && typeof document !== "undefined" && isViewPaymentModalOpen && viewingPaymentRecord && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white border border-gray-300 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#006064] text-white sticky top-0 z-10">
               <div className="flex items-center gap-2">
@@ -4592,7 +4589,8 @@ export function ExpenseRegister({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
