@@ -101,6 +101,38 @@ export async function PUT(
     }
 
     const body = await request.json();
+
+    // Check permissions if editing base expense attributes (description, amount, date, category, payment mode, receipt)
+    const isEditingBaseExpense =
+      body.description !== undefined ||
+      body.amount !== undefined ||
+      body.expenseDate !== undefined ||
+      body.category !== undefined ||
+      body.paymentMode !== undefined ||
+      body.receiptNo !== undefined ||
+      body.attachmentUrl !== undefined;
+
+    const isRecordByAccountant =
+      existing.createdByRole === "ACCOUNTANT" ||
+      existing.createdByName?.toLowerCase()?.includes("account");
+    const isRecordByAdmin = existing.createdByRole === "ADMIN";
+
+    if (isEditingBaseExpense && !isSuperAdmin) {
+      if (isAccountant && !isRecordByAccountant && existing.createdById !== user.id) {
+        return NextResponse.json(
+          { error: 'Accountants can only edit their own expense entries.' },
+          { status: 403 }
+        );
+      }
+      const isManager = roleName === 'COMMUNITY_MANAGER' || roleName === 'MANAGER';
+      if (isManager && (isRecordByAccountant || isRecordByAdmin) && existing.createdById !== user.id) {
+        return NextResponse.json(
+          { error: 'Community Managers can only edit their own expense entries.' },
+          { status: 403 }
+        );
+      }
+    }
+
     const updateData: any = {};
 
     // Fields that can be updated
@@ -248,9 +280,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const roleName = user.role?.name?.toUpperCase() || '';
-    const isSuperAdmin = roleName === 'SUPER_ADMIN' || roleName === 'ADMIN';
-
     const { id } = await params;
     const recordId = parseInt(id, 10);
     if (isNaN(recordId)) {
@@ -265,10 +294,40 @@ export async function DELETE(
       return NextResponse.json({ error: 'Expense record not found' }, { status: 404 });
     }
 
-    // Check permission: Super Admin or creator
-    if (!isSuperAdmin && existing.createdById !== user.id) {
+    const roleName = user.role?.name?.toUpperCase() || '';
+    const userEmail = user.email.toLowerCase();
+    const isSuperAdmin = roleName === 'SUPER_ADMIN' || roleName === 'ADMIN';
+    const isAccountant =
+      roleName === 'ACCOUNTANT' ||
+      roleName === 'ACCOUNTS' ||
+      userEmail === ACCOUNTANT_EMAIL ||
+      user.name.toLowerCase() === 'accounts';
+    const isManager = roleName === 'COMMUNITY_MANAGER' || roleName === 'MANAGER';
+    const assignedLocationIds = user.assignedLocations ? user.assignedLocations.map((al: any) => al.locationId) : [];
+
+    const isRecordByAccountant =
+      existing.createdByRole === "ACCOUNTANT" ||
+      existing.createdByName?.toLowerCase()?.includes("account");
+    const isRecordByAdmin = existing.createdByRole === "ADMIN";
+
+    let canDelete = false;
+    if (isSuperAdmin) {
+      canDelete = true; // Super admin can delete everyone's
+    } else if (isAccountant) {
+      // Accountant can ONLY delete their own entries
+      canDelete = isRecordByAccountant || existing.createdById === user.id;
+    } else if (isManager) {
+      // Community Manager can ONLY delete CM entries (not accountant, not admin)
+      canDelete = (!isRecordByAccountant && !isRecordByAdmin) || existing.createdById === user.id;
+    }
+
+    if (!canDelete) {
       return NextResponse.json(
-        { error: 'You do not have permission to delete this expense record' },
+        {
+          error: isAccountant
+            ? 'Accountants can only delete their own expense entries.'
+            : 'Community Managers can only delete their own expense entries.',
+        },
         { status: 403 }
       );
     }

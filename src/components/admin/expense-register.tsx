@@ -39,6 +39,7 @@ import {
   Paperclip,
   Eye,
   User,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
@@ -294,7 +295,7 @@ export function ExpenseRegister({
     paymentStatus: "PENDING" as "PAID" | "PENDING",
   });
 
-  // Accountant Vendor & Billing Breakdown form state (Submitted before approval)
+  // Accountant Vendor & Billing Breakdown form state (Submitted before approval, and updated after approval)
   const [settleData, setSettleData] = useState({
     receiptNo: "",
     vendorId: "" as string | number,
@@ -310,6 +311,11 @@ export function ExpenseRegister({
     invoiceUrl: "",
     uploadedInBankPortal: false,
     remarks: "",
+    utrNumber: "",
+    utrDate: "",
+    accPaymentMode: "Bank Transfer",
+    utrFileUrl: "",
+    sendAlertEmail: true,
   });
 
   // Super Admin Approval form state
@@ -409,6 +415,27 @@ export function ExpenseRegister({
       );
     }
     return null;
+  };
+
+  // Permission check:
+  // - Super Admin can edit & delete everyone's entries
+  // - Accountant can ONLY edit & delete their own entries
+  // - Community Manager can ONLY edit & delete CM entries
+  const canEditOrDeleteEntry = (rec: ExpenseRecordItem) => {
+    if (isAdmin) return true; // Super Admin can edit/delete everyone's entries
+
+    const isRecordByAccountant =
+      rec.createdByRole === "ACCOUNTANT" ||
+      rec.createdByName?.toLowerCase()?.includes("account");
+    const isRecordByAdmin = rec.createdByRole === "ADMIN";
+
+    if (isAccountant) {
+      // Accountant can ONLY edit their own entries
+      return isRecordByAccountant;
+    }
+
+    // Community Manager can ONLY edit CM entries (not accountant's, not admin's)
+    return !isRecordByAccountant && !isRecordByAdmin;
   };
 
   // Active Month Meta (Total Count & Price for Month Dropdown selection)
@@ -806,6 +833,15 @@ export function ExpenseRegister({
 
   // Open Edit Modal
   const openEditModal = (rec: ExpenseRecordItem) => {
+    if (!canEditOrDeleteEntry(rec)) {
+      toast.error(
+        isAccountant
+          ? "Accountants can only edit their own expense entries."
+          : "Community Managers can only edit their own expense entries."
+      );
+      return;
+    }
+
     setEditingRecord(rec);
     const isKnown = allAvailableCategories.includes(rec.category || "");
     const dateFormatted = rec.expenseDate
@@ -858,7 +894,7 @@ export function ExpenseRegister({
     });
   };
 
-  // Open Settle Modal (Accountant Enter Vendor & Billing Breakdown Against Expense)
+  // Open Settle Modal (Accountant Enter/Edit Vendor & Billing Breakdown Against Expense)
   const openSettleModal = (rec: ExpenseRecordItem) => {
     setSettlingRecord(rec);
     const initialVendorId = rec.vendorId ? String(rec.vendorId) : "";
@@ -879,6 +915,11 @@ export function ExpenseRegister({
       invoiceUrl: rec.invoiceUrl || "",
       uploadedInBankPortal: Boolean(rec.uploadedInBankPortal),
       remarks: rec.remarks || "",
+      utrNumber: rec.utrNumber || "",
+      utrDate: rec.utrDate || rec.payReceiveDate || "",
+      accPaymentMode: rec.accPaymentMode || "Bank Transfer",
+      utrFileUrl: rec.utrFileUrl || "",
+      sendAlertEmail: true,
     });
   };
 
@@ -1057,10 +1098,14 @@ export function ExpenseRegister({
     }
   };
 
-  // Submit Vendor & Billing Breakdown Against Expense (Accountant -> Awaiting Approval)
+  // Submit Vendor & Billing Breakdown Against Expense (Accountant -> Awaiting Approval OR Updating Approved Record)
   const handleSaveQuickSettle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!settlingRecord) return;
+
+    const isAlreadyApproved =
+      settlingRecord.approvalStatus === "APPROVED" ||
+      settlingRecord.paymentStatus === "PAID";
 
     try {
       setSavingForm(true);
@@ -1080,15 +1125,45 @@ export function ExpenseRegister({
           invoiceUrl: settleData.invoiceUrl || undefined,
           uploadedInBankPortal: Boolean(settleData.uploadedInBankPortal),
           remarks: settleData.remarks ? settleData.remarks.trim() : null,
-          approvalStatus: "PENDING_APPROVAL", // Submitted for Super Admin approval
+          approvalStatus: isAlreadyApproved ? "APPROVED" : "PENDING_APPROVAL",
+          ...(isAlreadyApproved && settleData.utrNumber
+            ? {
+                utrNumber: settleData.utrNumber.trim(),
+                utrDate: settleData.utrDate || new Date().toISOString().split("T")[0],
+                payReceiveDate: settleData.utrDate || new Date().toISOString().split("T")[0],
+                accPaymentMode: settleData.accPaymentMode || "Bank Transfer",
+                utrFileUrl: settleData.utrFileUrl || null,
+                paymentStatus: "PAID",
+              }
+            : {}),
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save billing details");
 
+      // If approved and UTR entered with sendAlertEmail checked, dispatch alert to vendor
+      if (isAlreadyApproved && settleData.utrNumber && settleData.sendAlertEmail) {
+        try {
+          await fetch(`/api/admin/expense-records/${settlingRecord.id}/approve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              paymentDate: settleData.utrDate || new Date().toISOString().split("T")[0],
+              utrNumber: settleData.utrNumber,
+              sendAlertEmail: true,
+              alertEmailRecipient: "t6565154@gmail.com",
+            }),
+          });
+        } catch (alertErr) {
+          console.error("Failed to send alert email:", alertErr);
+        }
+      }
+
       toast.success(
-        "Vendor and billing details submitted for Super Admin approval!",
+        isAlreadyApproved
+          ? "Payment details updated successfully!"
+          : "Vendor and billing details submitted for Super Admin approval!",
         { duration: 4000 }
       );
       setSettlingRecord(null);
@@ -1291,6 +1366,16 @@ export function ExpenseRegister({
 
   // Delete Record
   const handleDelete = async (id: number) => {
+    const target = records.find((r) => r.id === id);
+    if (target && !canEditOrDeleteEntry(target)) {
+      toast.error(
+        isAccountant
+          ? "Accountants can only delete their own expense entries."
+          : "Community Managers can only delete their own expense entries."
+      );
+      return;
+    }
+
     if (!confirm("Are you sure you want to delete this expense record?")) return;
     try {
       setDeletingId(id);
@@ -1676,6 +1761,7 @@ export function ExpenseRegister({
                   <th className="py-3 px-3 min-w-[150px]">Remarks</th>
                   <th className="py-3 px-3 text-center whitespace-nowrap">Attached PDF</th>
                   <th className="py-3 px-3 text-center whitespace-nowrap">Payment Details</th>
+                  <th className="py-3 px-3 text-center whitespace-nowrap">Actions</th>
                 </tr>
               ) : (
                 /* ── ACCOUNTANT & BILLING MASTER HEADERS (HANDWRITTEN SCHEMA STEPS) ── */
@@ -1828,6 +1914,9 @@ export function ExpenseRegister({
                           {uploadingInlineDoc ? "..." : "+ Upload PDF"}
                         </button>
                       )}
+                    </td>
+                    <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                      <span className="text-[10px] text-gray-400 font-mono italic">Accountant Step</span>
                     </td>
                     <td className="py-2.5 px-3 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1.5">
@@ -2211,17 +2300,96 @@ export function ExpenseRegister({
 
                         {/* 10. Payment Details Action */}
                         <td className="py-3 px-3 text-center whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setViewingPaymentRecord(rec);
-                              setIsViewPaymentModalOpen(true);
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#006064] hover:bg-[#00838f] text-white text-[10.5px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>View Payment Details</span>
-                          </button>
+                          {isAccountant || isAdmin ? (
+                            <div className="inline-flex items-center justify-center gap-1.5">
+                              {rec.vendorName || rec.accountNo || rec.receiptNo || rec.invoiceUrl ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openSettleModal(rec)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                                  title="Edit Payment Details (Vendor, Bank A/C, Invoice, UTR)"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                  <span>Edit Payment Details</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => openSettleModal(rec)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#006064] hover:bg-[#00838f] text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                                  title="Enter Payment Details against this expense"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  <span>+ Enter Payment Details</span>
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setViewingPaymentRecord(rec);
+                                  setIsViewPaymentModalOpen(true);
+                                }}
+                                className="p-1 text-gray-500 hover:text-[#006064] hover:bg-cyan-50 border border-gray-200 transition-all cursor-pointer"
+                                title="View Payment Details"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setViewingPaymentRecord(rec);
+                                setIsViewPaymentModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#006064] hover:bg-[#00838f] text-white text-[10.5px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>View Payment Details</span>
+                            </button>
+                          )}
+                        </td>
+
+                        {/* 11. Actions: Edit & Delete Expense (Accountant only own, CM only own, Super Admin everyone) */}
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          {canEditOrDeleteEntry(rec) ? (
+                            <div className="inline-flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(rec)}
+                                title="Edit Expense Details (Date, Description, Amount, Category, Receipt)"
+                                className="p-1.5 text-gray-600 hover:text-[#006064] hover:bg-cyan-50 border border-transparent hover:border-cyan-200 transition-all cursor-pointer"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(rec.id)}
+                                disabled={deletingId === rec.id}
+                                title="Delete Expense Record"
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer disabled:opacity-40"
+                              >
+                                {deletingId === rec.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600" />
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <span
+                              title={`Editable only by ${
+                                rec.createdByRole === "ACCOUNTANT"
+                                  ? "Accountant"
+                                  : rec.createdByRole === "ADMIN"
+                                  ? "Super Admin"
+                                  : "Community Manager"
+                              }`}
+                              className="text-gray-300 text-xs select-none"
+                            >
+                              -
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -2470,13 +2638,13 @@ export function ExpenseRegister({
                             </button>
                           )}
 
-                          {/* Accountant edit own entry */}
-                          {(rec.createdByRole === "ACCOUNTANT" || isAccountant) && (
+                          {/* Edit Expense Entry (Accountant only own, CM only own, Super Admin everyone) */}
+                          {canEditOrDeleteEntry(rec) && (
                             <button
                               type="button"
                               onClick={() => openEditModal(rec)}
                               title="Edit Expense Entry"
-                              className="p-1 text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
+                              className="p-1 text-gray-500 hover:text-[#006064] hover:bg-cyan-50 border border-transparent hover:border-cyan-200 transition-all cursor-pointer"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
@@ -2494,16 +2662,20 @@ export function ExpenseRegister({
                             </button>
                           )}
 
-                          {/* Delete Entry */}
-                          {(isAdmin || rec.createdByRole === "ACCOUNTANT") && (
+                          {/* Delete Entry (Accountant only own, CM only own, Super Admin everyone) */}
+                          {canEditOrDeleteEntry(rec) && (
                             <button
                               type="button"
                               onClick={() => handleDelete(rec.id)}
                               disabled={deletingId === rec.id}
-                              title="Delete Entry"
-                              className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer"
+                              title="Delete Expense Entry"
+                              className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer disabled:opacity-40"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              {deletingId === rec.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
                             </button>
                           )}
                         </div>
@@ -3851,16 +4023,89 @@ export function ExpenseRegister({
                 </div>
               </div>
 
-              {/* Form Section 5: Locked Step Notice */}
-              <div className="bg-amber-50 p-3 border border-amber-200 flex items-start gap-2.5">
-                <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                <div className="text-[11px] text-amber-900 leading-snug">
-                  <strong>Approval Workflow Notice:</strong>
-                  <p className="mt-0.5 text-amber-800">
-                    UTR No., Payment Date, and Send email to vendor will take place after Super Admin Approval. Before approval, they remain strictly locked.
-                  </p>
+              {/* Form Section 5: Disbursal / UTR Entry (UNLOCKED AFTER APPROVAL) */}
+              {(settlingRecord.approvalStatus === "APPROVED" || settlingRecord.paymentStatus === "PAID") ? (
+                <div className="space-y-3 pt-2 bg-emerald-50/60 p-3.5 border border-emerald-200">
+                  <div className="flex items-center justify-between border-b border-emerald-200 pb-1.5">
+                    <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> 5. Super Admin Approved — Disbursal & UTR Details
+                    </h4>
+                    <span className="bg-emerald-600 text-white text-[9.5px] font-mono px-2 py-0.5 font-bold uppercase">
+                      Approved ✓
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* UTR No */}
+                    <div>
+                      <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1 text-[10.5px]">
+                        UTR No / Bank Ref # *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. UTR123456789"
+                        value={settleData.utrNumber}
+                        onChange={(e) => setSettleData((prev) => ({ ...prev, utrNumber: e.target.value }))}
+                        className="w-full border border-gray-300 p-1.5 text-xs bg-white font-mono font-bold focus:outline-none focus:border-emerald-600"
+                      />
+                    </div>
+
+                    {/* Payment Date */}
+                    <div>
+                      <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1 text-[10.5px]">
+                        Payment Date
+                      </label>
+                      <input
+                        type="date"
+                        value={settleData.utrDate}
+                        onChange={(e) => setSettleData((prev) => ({ ...prev, utrDate: e.target.value }))}
+                        className="w-full border border-gray-300 p-1.5 text-xs bg-white font-mono focus:outline-none focus:border-emerald-600"
+                      />
+                    </div>
+
+                    {/* Payment Mode */}
+                    <div>
+                      <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1 text-[10.5px]">
+                        Disbursal Mode
+                      </label>
+                      <select
+                        value={settleData.accPaymentMode}
+                        onChange={(e) => setSettleData((prev) => ({ ...prev, accPaymentMode: e.target.value }))}
+                        className="w-full border border-gray-300 p-1.5 text-xs bg-white focus:outline-none focus:border-emerald-600"
+                      >
+                        <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
+                        <option value="IMPS">IMPS</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Cheque">Cheque</option>
+                        <option value="Cash">Cash</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Send Alert Email to Vendor */}
+                  <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between">
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-emerald-900">
+                      <input
+                        type="checkbox"
+                        checked={settleData.sendAlertEmail}
+                        onChange={(e) => setSettleData((prev) => ({ ...prev, sendAlertEmail: e.target.checked }))}
+                        className="w-4 h-4 accent-emerald-700 cursor-pointer"
+                      />
+                      <span>Send Alert / confirmation email to vendor upon saving UTR</span>
+                    </label>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-amber-50 p-3 border border-amber-200 flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="text-[11px] text-amber-900 leading-snug">
+                    <strong>Approval Workflow Notice:</strong>
+                    <p className="mt-0.5 text-amber-800">
+                      UTR No., Payment Date, and Send email to vendor will take place after Super Admin Approval. Before approval, they remain strictly locked.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2 sticky bottom-0 bg-white py-2">
@@ -3879,7 +4124,9 @@ export function ExpenseRegister({
                   <Send className="w-4 h-4" />
                   <span>
                     {savingForm
-                      ? "Submitting..."
+                      ? "Saving..."
+                      : (settlingRecord.approvalStatus === "APPROVED" || settlingRecord.paymentStatus === "PAID")
+                      ? "Save & Update Payment Details"
                       : "Submit Bill & Send for Super Admin Approval"}
                   </span>
                 </button>
@@ -4321,7 +4568,20 @@ export function ExpenseRegister({
               </div>
 
               {/* Actions */}
-              <div className="pt-2 flex items-center justify-end">
+              <div className="pt-2 flex items-center justify-end gap-2">
+                {(isAccountant || isAdmin) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsViewPaymentModalOpen(false);
+                      openSettleModal(viewingPaymentRecord);
+                    }}
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Payment Details</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setIsViewPaymentModalOpen(false)}
