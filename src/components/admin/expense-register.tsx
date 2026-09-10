@@ -232,6 +232,37 @@ export function ExpenseRegister({
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
 
+  // Global pending approvals across ALL centres (irrespective of center/month filter)
+  const [allPendingApprovals, setAllPendingApprovals] = useState<ExpenseRecordItem[]>([]);
+
+  // Inline Add Row state
+  const [isAddingRow, setIsAddingRow] = useState(false);
+  const [savingInlineRow, setSavingInlineRow] = useState(false);
+  const [uploadingInlineDoc, setUploadingInlineDoc] = useState(false);
+  const [newRowData, setNewRowData] = useState({
+    locationId: initialLocationId ? String(initialLocationId) : "",
+    expenseDate: new Date().toISOString().split("T")[0],
+    receiptNo: "",
+    vendorId: "" as string | number,
+    vendorName: "",
+    accountNo: "",
+    ifscCode: "",
+    bankName: "",
+    category: FIXED_EXPENSE_TYPES[0],
+    description: "",
+    quantity: "1",
+    unit: "Nos",
+    rate: "",
+    amount: "",
+    paymentMode: "",
+    remarks: "",
+    attachmentUrl: "",
+    invoiceUrl: "",
+    uploadedInBankPortal: false,
+  });
+  const inlineReceiptFileRef = useRef<HTMLInputElement | null>(null);
+  const inlineInvoiceFileRef = useRef<HTMLInputElement | null>(null);
+
   // Add / Edit form state (Fixed format values)
   const [formData, setFormData] = useState({
     locationId: initialLocationId || "",
@@ -326,14 +357,59 @@ export function ExpenseRegister({
     return Array.from(set);
   }, [categories, customCategories]);
 
-  // Pending Approvals count for Super Admin
-  const pendingApprovals = useMemo(() => {
-    return records.filter(
-      (r) =>
-        r.approvalStatus === "PENDING_APPROVAL" ||
-        (r.approvalStatus === "PENDING" && Boolean(r.vendorName))
-    );
-  }, [records]);
+  // Fetch all pending approvals across ALL locations and months (irrespective of selected filter)
+  const fetchAllPendingApprovals = async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await fetch("/api/admin/expense-records?locationId=ALL&month=ALL");
+      if (res.ok) {
+        const data = await res.json();
+        const all: ExpenseRecordItem[] = data.records || [];
+        const pending = all.filter(
+          (r) =>
+            r.approvalStatus === "PENDING_APPROVAL" ||
+            (r.approvalStatus === "PENDING" && Boolean(r.vendorName))
+        );
+        setAllPendingApprovals(pending);
+      }
+    } catch (err) {
+      console.error("Error fetching all pending approvals:", err);
+    }
+  };
+
+  // Keep pendingApprovals synced with allPendingApprovals for backward compatibility
+  const pendingApprovals = allPendingApprovals;
+
+  // Helper to render attribution badge for who created/entered the expense
+  const renderEnteredByBadge = (rec: ExpenseRecordItem) => {
+    const isAcc =
+      rec.createdByRole === "ACCOUNTANT" ||
+      rec.createdByName?.toLowerCase()?.includes("account");
+    const isCM = rec.createdByRole === "COMMUNITY_MANAGER";
+
+    if (isAcc) {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+          Entered by Accountant ({rec.createdByName || "Accountant"})
+        </span>
+      );
+    }
+    if (isCM) {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+          Entered by CM ({rec.createdByName || "CM"})
+        </span>
+      );
+    }
+    if (rec.createdByName) {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-medium bg-gray-50 text-gray-600 border border-gray-200">
+          Entered by: {rec.createdByName}
+        </span>
+      );
+    }
+    return null;
+  };
 
   // Active Month Meta (Total Count & Price for Month Dropdown selection)
   const activeMonthMeta = useMemo(() => {
@@ -411,11 +487,17 @@ export function ExpenseRegister({
 
   useEffect(() => {
     fetchVendors();
-  }, []);
+    if (isAdmin) {
+      fetchAllPendingApprovals();
+    }
+  }, [isAdmin]);
 
   useEffect(() => {
     fetchRecords(true);
-  }, [selectedLocation, selectedMonth, selectedCategory, selectedStatus, selectedApprovalStatus]);
+    if (isAdmin) {
+      fetchAllPendingApprovals();
+    }
+  }, [selectedLocation, selectedMonth, selectedCategory, selectedStatus, selectedApprovalStatus, isAdmin]);
 
   // Debounced search
   useEffect(() => {
@@ -509,7 +591,10 @@ export function ExpenseRegister({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "File upload failed");
 
-      const fileUrl = data.url || data.fileUrl || `/api/documents/${data.id || data.documentId}`;
+      const fileUrl = data.fileUrl || data.url || data.data?.fileUrl || (data.id ? `/api/admin/stored-documents/${data.id}` : "");
+      if (!fileUrl) {
+        throw new Error("Failed to obtain document URL from upload response");
+      }
       if (type === "receipt") {
         setFormData((prev) => ({
           ...prev,
@@ -564,6 +649,118 @@ export function ExpenseRegister({
       customCategory: "",
     }));
     toast.success(`Expense Category "${trimmed}" added and selected!`);
+  };
+
+  // Handle inline file upload for Add Row
+  const handleInlineUpload = async (file: File, type: "receipt" | "invoice") => {
+    try {
+      setUploadingInlineDoc(true);
+      const uploadData = new FormData();
+      uploadData.append("file", file);
+
+      const res = await fetch("/api/admin/upload-pdf", {
+        method: "POST",
+        body: uploadData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "File upload failed");
+
+      const fileUrl =
+        data.fileUrl ||
+        data.url ||
+        data.data?.fileUrl ||
+        (data.id ? `/api/admin/stored-documents/${data.id}` : "");
+
+      if (!fileUrl) {
+        throw new Error("Failed to obtain document URL");
+      }
+
+      if (type === "receipt") {
+        setNewRowData((prev) => ({ ...prev, attachmentUrl: fileUrl }));
+        toast.success("Receipt slip attached!");
+      } else {
+        setNewRowData((prev) => ({ ...prev, invoiceUrl: fileUrl }));
+        toast.success("Invoice PDF attached!");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload file");
+    } finally {
+      setUploadingInlineDoc(false);
+    }
+  };
+
+  // Handle Save Inline Row
+  const handleSaveInlineRow = async () => {
+    let locId = newRowData.locationId;
+    if (!locId || locId === "ALL") {
+      if (selectedLocation !== "ALL") {
+        locId = selectedLocation;
+      } else if (locations.length > 0) {
+        locId = String(locations[0].id);
+      }
+    }
+
+    if (!locId) {
+      toast.error("Please select a Center for the expense");
+      return;
+    }
+    if (!newRowData.description.trim()) {
+      toast.error("Please enter an expense description");
+      return;
+    }
+    const amtNum = parseFloat(newRowData.amount);
+    if (isNaN(amtNum) || amtNum <= 0) {
+      toast.error("Please enter a valid amount greater than ₹0");
+      return;
+    }
+
+    try {
+      setSavingInlineRow(true);
+      const payload: any = {
+        locationId: Number(locId),
+        expenseDate: newRowData.expenseDate || new Date().toISOString().split("T")[0],
+        category: newRowData.category || "GENERAL EXPENSE",
+        description: newRowData.description.trim(),
+        amount: amtNum,
+        paymentMode: newRowData.paymentMode ? newRowData.paymentMode.trim() : null,
+        receiptNo: newRowData.receiptNo ? newRowData.receiptNo.trim() : null,
+        attachmentUrl: newRowData.attachmentUrl || null,
+        invoiceUrl: newRowData.invoiceUrl || null,
+        remarks: newRowData.remarks ? newRowData.remarks.trim() : null,
+      };
+
+      if (activeViewMode === "ACCOUNTANT") {
+        payload.vendorId = newRowData.vendorId ? Number(newRowData.vendorId) : null;
+        payload.vendorName = newRowData.vendorName ? newRowData.vendorName.trim() : null;
+        payload.accountNo = newRowData.accountNo ? newRowData.accountNo.trim() : null;
+        payload.quantity = newRowData.quantity ? parseFloat(newRowData.quantity) : 1;
+        payload.unit = newRowData.unit || "Nos";
+        payload.rate = newRowData.rate ? parseFloat(newRowData.rate) : null;
+        payload.uploadedInBankPortal = Boolean(newRowData.uploadedInBankPortal);
+        if (newRowData.vendorName) {
+          payload.approvalStatus = "PENDING_APPROVAL";
+        }
+      }
+
+      const res = await fetch("/api/admin/expense-records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save expense row");
+
+      toast.success("Expense row added successfully!");
+      setIsAddingRow(false);
+      fetchRecords(false);
+      fetchAllPendingApprovals();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save expense row");
+    } finally {
+      setSavingInlineRow(false);
+    }
   };
 
   // Open Add Modal
@@ -896,6 +1093,7 @@ export function ExpenseRegister({
       );
       setSettlingRecord(null);
       fetchRecords(false);
+      fetchAllPendingApprovals();
     } catch (err: any) {
       toast.error(err.message || "Failed to save billing details");
     } finally {
@@ -952,8 +1150,8 @@ export function ExpenseRegister({
         }
       }
 
-      setIsApprovalsModalOpen(false);
       setApprovingRecord(null);
+      await fetchAllPendingApprovals();
       fetchRecords(false);
     } catch (err: any) {
       toast.error(err.message || "Approval failed");
@@ -1005,6 +1203,7 @@ export function ExpenseRegister({
         { duration: 4000 }
       );
       fetchRecords(false);
+      fetchAllPendingApprovals();
     } catch (err: any) {
       toast.error(err.message || "Failed to submit for approval");
       fetchRecords(false);
@@ -1060,6 +1259,15 @@ export function ExpenseRegister({
         accountNo: data.vendor.accountNo || prev.accountNo || "",
         ifscCode: data.vendor.ifscCode || prev.ifscCode || "",
       }));
+      // Auto select in active inline row
+      setNewRowData((prev) => ({
+        ...prev,
+        vendorId: data.vendor.id,
+        vendorName: data.vendor.vendorName,
+        accountNo: data.vendor.accountNo || prev.accountNo || "",
+        ifscCode: data.vendor.ifscCode || prev.ifscCode || "",
+        bankName: data.vendor.bankName || prev.bankName || "",
+      }));
 
       setIsNewVendorModalOpen(false);
       setNewVendorForm({
@@ -1093,6 +1301,7 @@ export function ExpenseRegister({
       if (!res.ok) throw new Error(data.error || "Failed to delete");
       toast.success("Expense record deleted successfully");
       fetchRecords(false);
+      fetchAllPendingApprovals();
     } catch (err: any) {
       toast.error(err.message || "Failed to delete expense record");
     } finally {
@@ -1111,22 +1320,11 @@ export function ExpenseRegister({
                 <Receipt className="w-5 h-5 text-[#006064]" />
                 <span>Centralized Expense & Vendor Payment Register</span>
               </h2>
-              <span className="bg-[#006064] text-white text-[9px] font-mono px-2 py-0.5 uppercase tracking-widest font-bold">
-                STRUCTURED MASTER FORMAT
-              </span>
-              {isAccountant && (
-                <span className="bg-emerald-600 text-white text-[9px] font-mono px-2 py-0.5 uppercase tracking-widest font-bold">
-                  ACCOUNTANT ACCESS
-                </span>
-              )}
             </div>
-            <p className="text-xs text-gray-500 font-medium mt-1">
-              Fixed values expense entry, month-wise historical records, vendor disbursement management & Super Admin approval workflow.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Super Admin Dedicated Approvals Button */}
+            {/* Super Admin Dedicated Approvals Button (Badge across ALL centres) */}
             {isAdmin && (
               <button
                 onClick={() => setIsApprovalsModalOpen(true)}
@@ -1134,9 +1332,9 @@ export function ExpenseRegister({
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span>Approvals</span>
-                {pendingApprovals.length > 0 && (
+                {allPendingApprovals.length > 0 && (
                   <span className="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse ml-1">
-                    {pendingApprovals.length}
+                    {allPendingApprovals.length}
                   </span>
                 )}
               </button>
@@ -1185,7 +1383,7 @@ export function ExpenseRegister({
               <span>{syncing ? "Syncing Spreadsheets..." : "Sync Spreadsheets"}</span>
             </button>
 
-            {/* Switch to Legacy Spreadsheet */}
+            {/* Switch to Legacy Spreadsheet (Kept Above Only) */}
             {onSwitchToSpreadsheet && (
               <button
                 onClick={onSwitchToSpreadsheet}
@@ -1196,7 +1394,67 @@ export function ExpenseRegister({
               </button>
             )}
 
-            {/* Add Expense Button */}
+            {/* Quick Vendor Registration Button */}
+            <button
+              onClick={() => {
+                setNewVendorForm({
+                  vendorName: "",
+                  mobileNo: "",
+                  email: "",
+                  accountNo: "",
+                  ifscCode: "",
+                  address: "",
+                  locationName: locations.find((l) => String(l.id) === String(selectedLocation))?.name || "",
+                  gstin: "",
+                  pan: "",
+                });
+                setNewVendorErrors({});
+                setIsNewVendorModalOpen(true);
+              }}
+              className="bg-white hover:bg-emerald-50 text-emerald-800 px-3.5 py-2 text-xs font-bold uppercase tracking-wider border border-emerald-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-emerald-700" />
+              <span>+ Register Vendor</span>
+            </button>
+
+            {/* Inline Add Row Button */}
+            <button
+              onClick={() => {
+                setIsAddingRow(true);
+                setNewRowData({
+                  locationId:
+                    selectedLocation !== "ALL"
+                      ? selectedLocation
+                      : locations[0]?.id
+                      ? String(locations[0].id)
+                      : "",
+                  expenseDate: new Date().toISOString().split("T")[0],
+                  receiptNo: "",
+                  vendorId: "",
+                  vendorName: "",
+                  accountNo: "",
+                  ifscCode: "",
+                  bankName: "",
+                  category: FIXED_EXPENSE_TYPES[0],
+                  description: "",
+                  quantity: "1",
+                  unit: "Nos",
+                  rate: "",
+                  amount: "",
+                  paymentMode: "",
+                  remarks: "",
+                  attachmentUrl: "",
+                  invoiceUrl: "",
+                  uploadedInBankPortal: false,
+                });
+              }}
+              className="bg-white hover:bg-gray-100 text-gray-800 px-3.5 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#006064]" />
+              <span>+ Add Row</span>
+            </button>
+
+            {/* Add Expense Button (Modal) */}
             <button
               onClick={openAddModal}
               className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -1460,6 +1718,350 @@ export function ExpenseRegister({
               )}
             </thead>
             <tbody className="divide-y divide-gray-200">
+              {/* ── INLINE ADD ROW (CM & ACCOUNTANT VIEWS) ── */}
+              {isAddingRow && (
+                activeViewMode === "CM" ? (
+                  <tr className="bg-cyan-50/50 border-2 border-[#006064] animate-in fade-in">
+                    <td className="py-2.5 px-2 text-center font-mono text-[11px] text-[#006064] font-bold">
+                      NEW
+                    </td>
+                    <td className="py-2.5 px-2 whitespace-nowrap">
+                      <input
+                        type="date"
+                        value={newRowData.expenseDate}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, expenseDate: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[11px] font-mono bg-white focus:outline-none focus:border-[#006064] w-28"
+                      />
+                      {selectedLocation === "ALL" && (
+                        <select
+                          value={newRowData.locationId}
+                          onChange={(e) => setNewRowData((prev) => ({ ...prev, locationId: e.target.value }))}
+                          className="border border-gray-300 p-0.5 text-[10px] bg-white mt-1 block w-28 focus:outline-none focus:border-[#006064]"
+                        >
+                          <option value="">Select Center *</option>
+                          {locations.map((loc) => (
+                            <option key={loc.id} value={loc.id}>{loc.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <input
+                        type="text"
+                        placeholder="Expense description *"
+                        value={newRowData.description}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, description: e.target.value }))}
+                        className="border border-gray-300 p-1.5 text-xs w-full bg-white font-medium focus:outline-none focus:border-[#006064]"
+                      />
+                    </td>
+                    <td className="py-2.5 px-2 whitespace-nowrap">
+                      <select
+                        value={newRowData.category}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, category: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[11px] bg-white focus:outline-none focus:border-[#006064] w-32 font-bold uppercase text-[#006064]"
+                      >
+                        {allAvailableCategories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-2.5 px-2 text-right whitespace-nowrap">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="₹ Amount *"
+                        value={newRowData.amount}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, amount: e.target.value }))}
+                        className="border border-gray-300 p-1 text-xs font-bold font-mono text-right w-24 bg-white focus:outline-none focus:border-[#006064]"
+                      />
+                    </td>
+                    <td className="py-2.5 px-2 whitespace-nowrap">
+                      <select
+                        value={newRowData.paymentMode}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, paymentMode: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[11px] bg-white focus:outline-none focus:border-[#006064] w-24"
+                      >
+                        <option value="">Mode (Opt)</option>
+                        {PAYMENT_MODES.map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-2.5 px-2 text-center whitespace-nowrap">
+                      <input
+                        type="text"
+                        placeholder="Receipt #"
+                        value={newRowData.receiptNo}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, receiptNo: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[10.5px] font-mono w-24 bg-white focus:outline-none focus:border-[#006064]"
+                      />
+                    </td>
+                    <td className="py-2.5 px-2">
+                      <input
+                        type="text"
+                        placeholder="Remarks (opt)"
+                        value={newRowData.remarks}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, remarks: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[11px] w-28 bg-white focus:outline-none focus:border-[#006064]"
+                      />
+                    </td>
+                    <td className="py-2.5 px-2 text-center whitespace-nowrap">
+                      <input
+                        type="file"
+                        ref={inlineInvoiceFileRef}
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleInlineUpload(file, "invoice");
+                        }}
+                      />
+                      {newRowData.invoiceUrl ? (
+                        <span className="text-[10px] text-emerald-700 font-bold">Attached ✓</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => inlineInvoiceFileRef.current?.click()}
+                          disabled={uploadingInlineDoc}
+                          className="text-[10px] text-[#006064] font-bold underline cursor-pointer"
+                        >
+                          {uploadingInlineDoc ? "..." : "+ Upload PDF"}
+                        </button>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleSaveInlineRow}
+                          disabled={savingInlineRow}
+                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold uppercase transition-all cursor-pointer shadow-xs flex items-center gap-1 disabled:opacity-50"
+                          title="Save Row"
+                        >
+                          <Check className="w-3.5 h-3.5" /> Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingRow(false)}
+                          className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold uppercase transition-all cursor-pointer"
+                          title="Cancel"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr className="bg-emerald-50/50 border-2 border-emerald-600 animate-in fade-in text-[11px]">
+                    <td className="py-2 px-1 text-center font-mono font-bold text-emerald-800">
+                      NEW
+                    </td>
+                    <td className="py-2 px-1.5 whitespace-nowrap">
+                      <input
+                        type="date"
+                        value={newRowData.expenseDate}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, expenseDate: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[10.5px] font-mono bg-white w-24 focus:outline-none focus:border-emerald-600"
+                      />
+                      {selectedLocation === "ALL" && (
+                        <select
+                          value={newRowData.locationId}
+                          onChange={(e) => setNewRowData((prev) => ({ ...prev, locationId: e.target.value }))}
+                          className="border border-gray-300 p-0.5 text-[9.5px] bg-white mt-1 block w-24 focus:outline-none focus:border-emerald-600"
+                        >
+                          <option value="">Center *</option>
+                          {locations.map((loc) => (
+                            <option key={loc.id} value={loc.id}>{loc.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                    <td className="py-2 px-1.5 whitespace-nowrap">
+                      <input
+                        type="text"
+                        placeholder="Inv #"
+                        value={newRowData.receiptNo}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, receiptNo: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[10.5px] font-mono w-20 bg-white focus:outline-none focus:border-emerald-600"
+                      />
+                    </td>
+                    <td className="py-2 px-1.5 whitespace-nowrap">
+                      <select
+                        value={newRowData.vendorId}
+                        onChange={(e) => {
+                          const vid = e.target.value;
+                          const vObj = vendors.find((v) => String(v.id) === String(vid));
+                          setNewRowData((prev) => ({
+                            ...prev,
+                            vendorId: vid,
+                            vendorName: vObj?.vendorName || "",
+                            accountNo: vObj?.accountNo || prev.accountNo || "",
+                            ifscCode: vObj?.ifscCode || prev.ifscCode || "",
+                            bankName: vObj?.bankName || prev.bankName || "",
+                          }));
+                        }}
+                        className="border border-gray-300 p-1 text-[10.5px] bg-white w-28 focus:outline-none focus:border-emerald-600"
+                      >
+                        <option value="">-- Vendor --</option>
+                        {vendors.map((v) => (
+                          <option key={v.id} value={v.id}>{v.vendorName}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewVendorForm({
+                            vendorName: "",
+                            mobileNo: "",
+                            email: "",
+                            accountNo: "",
+                            ifscCode: "",
+                            address: "",
+                            locationName: locations.find((l) => String(l.id) === String(selectedLocation))?.name || "",
+                            gstin: "",
+                            pan: "",
+                          });
+                          setNewVendorErrors({});
+                          setIsNewVendorModalOpen(true);
+                        }}
+                        className="text-[9px] text-[#006064] hover:underline font-bold block mt-0.5 cursor-pointer"
+                      >
+                        + Add Vendor
+                      </button>
+                    </td>
+                    <td className="py-2 px-2">
+                      <input
+                        type="text"
+                        placeholder="Description *"
+                        value={newRowData.description}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, description: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[11px] w-32 bg-white focus:outline-none focus:border-emerald-600 font-medium"
+                      />
+                      <select
+                        value={newRowData.category}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, category: e.target.value }))}
+                        className="border border-gray-300 p-0.5 text-[9.5px] bg-white mt-1 block w-32 uppercase text-[#006064] font-bold"
+                      >
+                        {allAvailableCategories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-2 px-1 text-center whitespace-nowrap">
+                      <input
+                        type="number"
+                        value={newRowData.quantity}
+                        onChange={(e) => {
+                          const q = e.target.value;
+                          const r = newRowData.rate;
+                          const autoAmt = q && r ? (parseFloat(q) * parseFloat(r)).toFixed(2) : newRowData.amount;
+                          setNewRowData((prev) => ({ ...prev, quantity: q, amount: autoAmt }));
+                        }}
+                        className="border border-gray-300 p-1 text-[10.5px] font-mono text-center w-12 bg-white"
+                      />
+                    </td>
+                    <td className="py-2 px-1 text-center whitespace-nowrap">
+                      <input
+                        type="text"
+                        value={newRowData.unit}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, unit: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[10.5px] font-mono text-center w-12 bg-white"
+                      />
+                    </td>
+                    <td className="py-2 px-1 text-right whitespace-nowrap">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Rate"
+                        value={newRowData.rate}
+                        onChange={(e) => {
+                          const r = e.target.value;
+                          const q = newRowData.quantity;
+                          const autoAmt = q && r ? (parseFloat(q) * parseFloat(r)).toFixed(2) : newRowData.amount;
+                          setNewRowData((prev) => ({ ...prev, rate: r, amount: autoAmt }));
+                        }}
+                        className="border border-gray-300 p-1 text-[10.5px] font-mono text-right w-16 bg-white"
+                      />
+                    </td>
+                    <td className="py-2 px-1.5 text-right whitespace-nowrap">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Amt *"
+                        value={newRowData.amount}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, amount: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[11px] font-mono font-bold text-right w-20 bg-white text-gray-900"
+                      />
+                    </td>
+                    <td className="py-2 px-1 text-center whitespace-nowrap">
+                      <input
+                        type="file"
+                        ref={inlineInvoiceFileRef}
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleInlineUpload(file, "invoice");
+                        }}
+                      />
+                      {newRowData.invoiceUrl ? (
+                        <span className="text-[10px] text-emerald-700 font-bold">Uploaded ✓</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => inlineInvoiceFileRef.current?.click()}
+                          disabled={uploadingInlineDoc}
+                          className="text-[10px] text-emerald-700 underline font-bold cursor-pointer"
+                        >
+                          {uploadingInlineDoc ? "..." : "+ Upload"}
+                        </button>
+                      )}
+                    </td>
+                    <td className="py-2 px-1 text-center whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={newRowData.uploadedInBankPortal}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, uploadedInBankPortal: e.target.checked }))}
+                        className="w-4 h-4 accent-[#006064] cursor-pointer"
+                      />
+                    </td>
+                    <td className="py-2 px-1 text-center text-[10px] text-gray-400 font-mono whitespace-nowrap">
+                      Pending
+                    </td>
+                    <td className="py-2 px-1 text-center text-[10px] text-gray-400 font-mono whitespace-nowrap">
+                      Locked
+                    </td>
+                    <td className="py-2 px-1 text-center text-[10px] text-gray-400 font-mono whitespace-nowrap">
+                      Locked
+                    </td>
+                    <td className="py-2 px-1 text-center text-[10px] text-gray-400 font-mono whitespace-nowrap">
+                      Locked
+                    </td>
+                    <td className="py-2 px-2 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={handleSaveInlineRow}
+                          disabled={savingInlineRow}
+                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10.5px] font-bold uppercase transition-all cursor-pointer shadow-xs flex items-center gap-1 disabled:opacity-50"
+                          title="Save Row"
+                        >
+                          <Check className="w-3 h-3" /> Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingRow(false)}
+                          className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[10.5px] font-bold uppercase transition-all cursor-pointer"
+                          title="Cancel"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              )}
+
               {loading ? (
                 <tr>
                   <td
@@ -1474,7 +2076,7 @@ export function ExpenseRegister({
                     </div>
                   </td>
                 </tr>
-              ) : records.length === 0 ? (
+              ) : records.length === 0 && !isAddingRow ? (
                 <tr>
                   <td
                     colSpan={activeViewMode === "CM" ? 10 : 16}
@@ -1533,6 +2135,9 @@ export function ExpenseRegister({
                           <div className="font-semibold text-gray-900 leading-snug">
                             {rec.description}
                           </div>
+                          <div className="mt-1">
+                            {renderEnteredByBadge(rec)}
+                          </div>
                         </td>
 
                         {/* 4. Expense Section */}
@@ -1561,7 +2166,7 @@ export function ExpenseRegister({
 
                         {/* 7. Receipt / Ref # */}
                         <td className="py-3 px-3 text-center whitespace-nowrap">
-                          {rec.attachmentUrl ? (
+                          {rec.attachmentUrl && !rec.attachmentUrl.includes("undefined") ? (
                             <a
                               href={rec.attachmentUrl}
                               target="_blank"
@@ -1589,7 +2194,7 @@ export function ExpenseRegister({
 
                         {/* 9. Attached PDF */}
                         <td className="py-3 px-3 text-center whitespace-nowrap">
-                          {rec.invoiceUrl ? (
+                          {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") ? (
                             <a
                               href={rec.invoiceUrl}
                               target="_blank"
@@ -1681,6 +2286,9 @@ export function ExpenseRegister({
                         <div className="text-[9.5px] text-gray-400 font-mono mt-0.5">
                           {rec.locationName} • {rec.category || "GENERAL"}
                         </div>
+                        <div className="mt-1">
+                          {renderEnteredByBadge(rec)}
+                        </div>
                       </td>
 
                       {/* 6. Qty */}
@@ -1707,7 +2315,7 @@ export function ExpenseRegister({
 
                       {/* 10. Upload Inv */}
                       <td className="py-3 px-2.5 text-center whitespace-nowrap">
-                        {rec.invoiceUrl ? (
+                        {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") ? (
                           <a
                             href={rec.invoiceUrl}
                             target="_blank"
@@ -2586,7 +3194,7 @@ export function ExpenseRegister({
 
       {/* ── MODAL 3: INLINE QUICK-ADD VENDOR (MANDATORY MOBILE & EMAIL) ── */}
       {isNewVendorModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs">
           <div className="bg-white border border-gray-300 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#006064] text-white sticky top-0 z-10">
               <div className="flex items-center gap-2">
@@ -2878,14 +3486,18 @@ export function ExpenseRegister({
                   </div>
                 </div>
 
-                <div className="text-[11.5px] text-gray-700 pt-1 border-t border-emerald-100">
+                <div className="text-[11.5px] text-gray-700 pt-1 border-t border-cyan-100">
                   <span className="font-bold text-gray-900">Description:</span> {settlingRecord.description}
+                </div>
+                <div className="pt-1">
+                  {renderEnteredByBadge(settlingRecord)}
                 </div>
 
                 {/* CM Uploaded Attachments (Receipt & Invoice PDF) */}
-                {(settlingRecord.invoiceUrl || settlingRecord.attachmentUrl) && (
+                {((settlingRecord.invoiceUrl && !settlingRecord.invoiceUrl.includes("undefined")) ||
+                  (settlingRecord.attachmentUrl && !settlingRecord.attachmentUrl.includes("undefined"))) && (
                   <div className="pt-1.5 flex flex-wrap items-center gap-2">
-                    {settlingRecord.attachmentUrl && (
+                    {settlingRecord.attachmentUrl && !settlingRecord.attachmentUrl.includes("undefined") && (
                       <a
                         href={settlingRecord.attachmentUrl}
                         target="_blank"
@@ -2896,7 +3508,7 @@ export function ExpenseRegister({
                         <span>View CM's Receipt Slip</span>
                       </a>
                     )}
-                    {settlingRecord.invoiceUrl && (
+                    {settlingRecord.invoiceUrl && !settlingRecord.invoiceUrl.includes("undefined") && (
                       <a
                         href={settlingRecord.invoiceUrl}
                         target="_blank"
@@ -3289,11 +3901,11 @@ export function ExpenseRegister({
                   <h3 className="text-sm font-display font-black uppercase tracking-wide flex items-center gap-2">
                     <span>Super Admin: Expense Approvals & Payment Authorization</span>
                     <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
-                      {pendingApprovals.length} Pending
+                      {allPendingApprovals.length} Pending
                     </span>
                   </h3>
                   <p className="text-[11px] text-cyan-100">
-                    Review vendor billing details submitted by Accountant. Approving unlocks UTR entry, Payment Date, and Vendor alert email.
+                    Review vendor billing details across all centers submitted by Accountant. Approving unlocks UTR entry, Payment Date, and Vendor alert email.
                   </p>
                 </div>
               </div>
@@ -3307,25 +3919,25 @@ export function ExpenseRegister({
 
             {/* Approvals List */}
             <div className="p-5 space-y-4">
-              {pendingApprovals.length === 0 ? (
+              {allPendingApprovals.length === 0 ? (
                 <div className="py-12 text-center text-gray-400">
                   <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-500 mb-2" />
                   <p className="text-sm font-semibold text-gray-700">
                     All expense requisitions have been approved!
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    No pending approval requests from Accountant at this time.
+                    No pending approval requests at this time.
                   </p>
                 </div>
               ) : (
-                pendingApprovals.map((rec) => (
+                allPendingApprovals.map((rec) => (
                   <div
                     key={rec.id}
                     className="border border-gray-200 bg-[#fbfcfd] p-4 space-y-3 shadow-2xs hover:border-[#006064]/50 transition-colors"
                   >
                     {/* Header Row */}
                     <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-gray-100">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs font-bold text-gray-500">
                           #{rec.id}
                         </span>
@@ -3351,6 +3963,11 @@ export function ExpenseRegister({
                           Pending SA Approval
                         </span>
                       </div>
+                    </div>
+
+                    {/* Attribution */}
+                    <div className="pt-0.5">
+                      {renderEnteredByBadge(rec)}
                     </div>
 
                     {/* Description */}
@@ -3402,9 +4019,10 @@ export function ExpenseRegister({
                     </div>
 
                     {/* Attached Documents */}
-                    {(rec.attachmentUrl || rec.invoiceUrl) && (
+                    {((rec.attachmentUrl && !rec.attachmentUrl.includes("undefined")) ||
+                      (rec.invoiceUrl && !rec.invoiceUrl.includes("undefined"))) && (
                       <div className="flex items-center gap-3 pt-1">
-                        {rec.attachmentUrl && (
+                        {rec.attachmentUrl && !rec.attachmentUrl.includes("undefined") && (
                           <a
                             href={rec.attachmentUrl}
                             target="_blank"
@@ -3415,7 +4033,7 @@ export function ExpenseRegister({
                             <span>CM Receipt Slip</span>
                           </a>
                         )}
-                        {rec.invoiceUrl && (
+                        {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") && (
                           <a
                             href={rec.invoiceUrl}
                             target="_blank"
@@ -3534,11 +4152,15 @@ export function ExpenseRegister({
                 <div className="text-[11.5px] text-gray-700 pt-1 border-t border-cyan-100">
                   <span className="font-bold text-gray-900">Description:</span> {viewingPaymentRecord.description}
                 </div>
+                <div className="pt-1">
+                  {renderEnteredByBadge(viewingPaymentRecord)}
+                </div>
 
                 {/* CM Documents */}
-                {(viewingPaymentRecord.attachmentUrl || viewingPaymentRecord.invoiceUrl) && (
+                {((viewingPaymentRecord.attachmentUrl && !viewingPaymentRecord.attachmentUrl.includes("undefined")) ||
+                  (viewingPaymentRecord.invoiceUrl && !viewingPaymentRecord.invoiceUrl.includes("undefined"))) && (
                   <div className="pt-1.5 flex flex-wrap items-center gap-2">
-                    {viewingPaymentRecord.attachmentUrl && (
+                    {viewingPaymentRecord.attachmentUrl && !viewingPaymentRecord.attachmentUrl.includes("undefined") && (
                       <a
                         href={viewingPaymentRecord.attachmentUrl}
                         target="_blank"
@@ -3549,7 +4171,7 @@ export function ExpenseRegister({
                         <span>Receipt Slip</span>
                       </a>
                     )}
-                    {viewingPaymentRecord.invoiceUrl && (
+                    {viewingPaymentRecord.invoiceUrl && !viewingPaymentRecord.invoiceUrl.includes("undefined") && (
                       <a
                         href={viewingPaymentRecord.invoiceUrl}
                         target="_blank"

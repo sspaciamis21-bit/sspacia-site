@@ -62,6 +62,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
+      fileUrl,
+      url: fileUrl,
+      documentId: storedDoc.id,
+      id: storedDoc.id,
       data: {
         fileUrl,
         fileName: file.name,
