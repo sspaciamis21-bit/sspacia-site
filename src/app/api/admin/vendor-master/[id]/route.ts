@@ -105,6 +105,9 @@ export async function PATCH(
       address,
       email,
       mobileNo,
+      accountNo,
+      ifscCode,
+      bankName,
       gstin,
       pan,
       serviceType,
@@ -120,11 +123,28 @@ export async function PATCH(
       );
     }
 
+    if (mobileNo !== undefined && !mobileNo.trim()) {
+      return NextResponse.json(
+        { success: false, error: 'Mobile Number cannot be empty.' },
+        { status: 400 }
+      );
+    }
+
+    if (email !== undefined && !email.trim()) {
+      return NextResponse.json(
+        { success: false, error: 'Email Address cannot be empty.' },
+        { status: 400 }
+      );
+    }
+
     const updateData: any = {};
     if (vendorName !== undefined) updateData.vendorName = vendorName.trim();
     if (address !== undefined) updateData.address = address?.trim() || null;
-    if (email !== undefined) updateData.email = email?.trim() || null;
-    if (mobileNo !== undefined) updateData.mobileNo = mobileNo?.trim() || null;
+    if (email !== undefined) updateData.email = email.trim();
+    if (mobileNo !== undefined) updateData.mobileNo = mobileNo.trim();
+    if (accountNo !== undefined) updateData.accountNo = accountNo?.trim() || null;
+    if (ifscCode !== undefined) updateData.ifscCode = ifscCode?.trim() || null;
+    if (bankName !== undefined) updateData.bankName = bankName?.trim() || null;
     if (gstin !== undefined) updateData.gstin = gstin?.trim() || null;
     if (pan !== undefined) updateData.pan = pan?.trim() || null;
     if (serviceType !== undefined) updateData.serviceType = serviceType?.trim() || null;
@@ -132,7 +152,7 @@ export async function PATCH(
     if (notes !== undefined) updateData.notes = notes?.trim() || null;
     if (isActive !== undefined) updateData.isActive = Boolean(isActive);
 
-    const updated = await prisma.vendorMaster.update({
+    const updated = await (prisma as any).vendorMaster.update({
       where: { id: vendorId },
       data: updateData,
     });

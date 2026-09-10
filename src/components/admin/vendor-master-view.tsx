@@ -32,6 +32,9 @@ export interface VendorRecord {
   address: string | null;
   email: string | null;
   mobileNo: string | null;
+  accountNo?: string | null;
+  ifscCode?: string | null;
+  bankName?: string | null;
   gstin: string | null;
   pan: string | null;
   serviceType: string | null;
@@ -50,9 +53,11 @@ interface LocationOption {
   cityName?: string | null;
 }
 
-// Validation helpers
+// Validation helpers - MOBILE & EMAIL ARE STRICTLY MANDATORY
 const validateMobile = (mobile: string): string | null => {
-  if (!mobile || !mobile.trim()) return null;
+  if (!mobile || !mobile.trim()) {
+    return 'Mobile number is mandatory';
+  }
   const clean = mobile.replace(/[\s\-\(\)]/g, '');
   // Indian mobile numbers (starts with optional +91 or 0, followed by 10 digits starting with 6, 7, 8, 9)
   const mobileRegex = /^(\+91|0)?[6-9]\d{9}$/;
@@ -63,7 +68,9 @@ const validateMobile = (mobile: string): string | null => {
 };
 
 const validateEmail = (email: string): string | null => {
-  if (!email || !email.trim()) return null;
+  if (!email || !email.trim()) {
+    return 'Email address is mandatory';
+  }
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   if (!emailRegex.test(email.trim())) {
     return 'Please enter a valid email address';
@@ -89,6 +96,8 @@ export function VendorMasterView() {
     vendorName: '',
     mobileNo: '',
     email: '',
+    accountNo: '',
+    ifscCode: '',
     address: '',
     locationName: '',
     gstin: '',
@@ -155,6 +164,8 @@ export function VendorMasterView() {
       vendorName: '',
       mobileNo: '',
       email: '',
+      accountNo: '',
+      ifscCode: '',
       address: '',
       locationName: '',
       gstin: '',
@@ -173,6 +184,8 @@ export function VendorMasterView() {
       vendorName: vendor.vendorName || '',
       mobileNo: vendor.mobileNo || '',
       email: vendor.email || '',
+      accountNo: vendor.accountNo || '',
+      ifscCode: vendor.ifscCode || '',
       address: vendor.address || '',
       locationName: vendor.locationName || '',
       gstin: vendor.gstin || '',
@@ -811,17 +824,19 @@ export function VendorMasterView() {
                   />
                 </div>
 
-                {/* Mobile & Email in 2 columns */}
+                {/* Mobile & Email in 2 columns (BOTH STRICTLY MANDATORY) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Mobile Input with Validation */}
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                      Mobile Number
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-800 mb-1">
+                      Mobile Number <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <Phone size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
+                        required
+                        placeholder="e.g. 9876543210"
                         maxLength={13}
                         value={formData.mobileNo}
                         onChange={(e) => {
@@ -850,13 +865,15 @@ export function VendorMasterView() {
 
                   {/* Email Input with Validation */}
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                      Email Address
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-800 mb-1">
+                      Email Address <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <Mail size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="email"
+                        required
+                        placeholder="e.g. vendor@example.com"
                         value={formData.email}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -913,6 +930,35 @@ export function VendorMasterView() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Bank Account No (A/C No) & IFSC Code */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                      Bank A/C No. (For Expense Payments)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 50100234567890"
+                      value={formData.accountNo}
+                      onChange={(e) => setFormData({ ...formData, accountNo: e.target.value })}
+                      className="w-full px-3 py-2 text-xs bg-white border border-neutral-300 focus:outline-none focus:border-[#006064] font-mono text-gray-900 shadow-2xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                      IFSC Code
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. HDFC0001234"
+                      value={formData.ifscCode}
+                      onChange={(e) => setFormData({ ...formData, ifscCode: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2 text-xs bg-white border border-neutral-300 focus:outline-none focus:border-[#006064] font-mono text-gray-900 uppercase shadow-2xs"
+                    />
+                  </div>
                 </div>
 
                 {/* GSTIN & PAN */}

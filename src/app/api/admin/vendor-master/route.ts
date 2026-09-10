@@ -128,6 +128,9 @@ export async function POST(request: Request) {
       address,
       email,
       mobileNo,
+      accountNo,
+      ifscCode,
+      bankName,
       gstin,
       pan,
       serviceType,
@@ -143,12 +146,29 @@ export async function POST(request: Request) {
       );
     }
 
-    const created = await prisma.vendorMaster.create({
+    if (!mobileNo || !mobileNo.trim()) {
+      return NextResponse.json(
+        { success: false, error: 'Mobile Number is mandatory.' },
+        { status: 400 }
+      );
+    }
+
+    if (!email || !email.trim()) {
+      return NextResponse.json(
+        { success: false, error: 'Email Address is mandatory.' },
+        { status: 400 }
+      );
+    }
+
+    const created = await (prisma as any).vendorMaster.create({
       data: {
         vendorName: vendorName.trim(),
         address: address?.trim() || null,
-        email: email?.trim() || null,
-        mobileNo: mobileNo?.trim() || null,
+        email: email.trim(),
+        mobileNo: mobileNo.trim(),
+        accountNo: accountNo?.trim() || null,
+        ifscCode: ifscCode?.trim() || null,
+        bankName: bankName?.trim() || null,
         gstin: gstin?.trim() || null,
         pan: pan?.trim() || null,
         serviceType: serviceType?.trim() || null,

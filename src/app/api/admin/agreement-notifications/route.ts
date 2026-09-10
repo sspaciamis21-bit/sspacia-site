@@ -330,6 +330,37 @@ export async function GET(request: Request) {
       console.warn('Failed to query invoice payment alerts:', payErr);
     }
 
+    let expenseApprovalAlerts: any[] = [];
+    try {
+      // Show pending expense approvals from last 2 days
+      const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+      const pendingExpenses = await (prisma as any).expenseRecord.findMany({
+        where: {
+          approvalStatus: 'PENDING_APPROVAL',
+          updatedAt: { gte: twoDaysAgo },
+        },
+        include: {
+          location: { select: { name: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      expenseApprovalAlerts = pendingExpenses.map((exp: any) => ({
+        id: exp.id,
+        vendorName: exp.vendorName || 'Vendor Bill',
+        locationName: exp.locationName || exp.location?.name || 'Centre',
+        amount: Number(exp.amount || 0),
+        category: exp.category || 'GENERAL EXPENSE',
+        description: exp.description || '',
+        createdAt: exp.updatedAt || exp.createdAt,
+        type: 'EXPENSE_APPROVAL',
+        title: `Expense Approval: ${exp.vendorName || exp.category} (₹${Number(exp.amount || 0).toLocaleString('en-IN')})`,
+        message: `Accountant submitted an expense for ${exp.locationName || 'Centre'} requiring Super Admin approval.`,
+      }));
+    } catch (expErr) {
+      console.warn('Failed to query expense approval alerts:', expErr);
+    }
+
     // Sort arrays
     agreementNotifications.sort((a, b) => a.daysRemaining - b.daysRemaining);
     lockinNotifications.sort((a, b) => a.daysRemaining - b.daysRemaining);
@@ -340,12 +371,14 @@ export async function GET(request: Request) {
       ticketCount: isSuperOrAdmin ? ticketEscalations.length : 0,
       bufferAlertCount: bufferAlerts.length,
       paymentAlertCount: paymentAlerts.length,
+      expenseApprovalCount: expenseApprovalAlerts.length,
       totalCount:
         agreementNotifications.length +
         lockinNotifications.length +
         (isSuperOrAdmin ? ticketEscalations.length : 0) +
         bufferAlerts.length +
-        paymentAlerts.length,
+        paymentAlerts.length +
+        expenseApprovalAlerts.length,
     };
 
     return NextResponse.json({
@@ -356,6 +389,7 @@ export async function GET(request: Request) {
       escalatedTickets: ticketEscalations,
       bufferAlerts,
       paymentAlerts,
+      expenseApprovalAlerts,
     });
   } catch (error) {
     console.error('Agreement, Lock-in & Ticket notifications error:', error);

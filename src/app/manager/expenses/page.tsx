@@ -5,10 +5,15 @@ import {
   Building2,
   Loader2,
   RefreshCcw,
+  Receipt,
+  Table as TableIcon,
+  Sparkles,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FadeUp } from "@/components/ui/fade-up";
 import { ExpenseSpreadsheet } from "@/components/admin/expense-spreadsheet";
+import { ExpenseRegister } from "@/components/admin/expense-register";
 import { useAuth } from "@/context/AuthContext";
 
 interface LocationInfo {
@@ -28,7 +33,7 @@ interface ExpenseSheetData {
   updatedAt: string;
 }
 
-const ACCOUNTANT_EMAIL = 'ssinfrazone21@gmail.com';
+const ACCOUNTANT_EMAIL = "ssinfrazone21@gmail.com";
 
 export default function ManagerExpensesPage() {
   const { user, isRole } = useAuth();
@@ -38,17 +43,20 @@ export default function ManagerExpensesPage() {
   const [sheets, setSheets] = useState<ExpenseSheetData[]>([]);
   const [activeLocationId, setActiveLocationId] = useState<number | null>(null);
 
-  const userEmail = user?.email?.toLowerCase() || '';
-  const userRoleUpper = user?.role?.toUpperCase() || '';
+  // View mode: 'REGISTER' (Modern Format) or 'SPREADSHEET' (Legacy Table)
+  const [viewMode, setViewMode] = useState<"REGISTER" | "SPREADSHEET">("REGISTER");
+
+  const userEmail = user?.email?.toLowerCase() || "";
+  const userRoleUpper = user?.role?.toUpperCase() || "";
   const isAccountant =
     userEmail === ACCOUNTANT_EMAIL ||
-    user?.name?.toLowerCase() === 'accounts' ||
-    userRoleUpper === 'ACCOUNTS' ||
-    userRoleUpper === 'ACCOUNTANT' ||
-    isRole('ACCOUNTS') ||
-    isRole('ACCOUNTANT');
-  const isAdmin = isRole('ADMIN');
-  const userRoleView: 'CM' | 'ACCOUNTANT' = isAccountant ? 'ACCOUNTANT' : 'CM';
+    user?.name?.toLowerCase() === "accounts" ||
+    userRoleUpper === "ACCOUNTS" ||
+    userRoleUpper === "ACCOUNTANT" ||
+    isRole("ACCOUNTS") ||
+    isRole("ACCOUNTANT");
+  const isAdmin = isRole("ADMIN");
+  const userRoleView: "CM" | "ACCOUNTANT" = isAccountant ? "ACCOUNTANT" : "CM";
 
   useEffect(() => {
     fetchExpensesData(true);
@@ -76,7 +84,7 @@ export default function ManagerExpensesPage() {
     } catch (err: any) {
       console.error(err);
       if (isInitial) {
-        toast.error(err.message || "Failed to load expense sheet");
+        toast.error(err.message || "Failed to load expense data");
       }
     } finally {
       if (isInitial) {
@@ -87,29 +95,19 @@ export default function ManagerExpensesPage() {
     }
   };
 
-  const activeLocation = locations.find((l) => l.id === activeLocationId) || locations[0] || null;
-  const activeSheet = sheets.find((s) => s.locationId === (activeLocation?.id ?? -1)) || sheets[0] || null;
+  const activeLocation =
+    locations.find((l) => l.id === activeLocationId) || locations[0] || null;
+  const activeSheet =
+    sheets.find((s) => s.locationId === (activeLocation?.id ?? -1)) ||
+    sheets[0] ||
+    null;
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 className="w-10 h-10 animate-spin text-[#1ab0bc]" />
         <p className="text-xs font-mono font-bold text-gray-500 uppercase tracking-widest">
-          Loading Center Expense Spreadsheets...
-        </p>
-      </div>
-    );
-  }
-
-  if (!activeLocation || !activeSheet) {
-    return (
-      <div className="bg-white p-12 text-center border border-gray-200 shadow-sm max-w-2xl mx-auto my-12 space-y-4">
-        <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto border border-amber-200">
-          <Building2 className="w-8 h-8" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-900 uppercase tracking-tight">No Center Assigned Yet</h2>
-        <p className="text-xs text-gray-500 max-w-md mx-auto">
-          You are currently not assigned to any specific coworking location center.
+          Loading Center Operating Expenses...
         </p>
       </div>
     );
@@ -121,71 +119,141 @@ export default function ManagerExpensesPage() {
       <FadeUp>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-200">
           <div>
-            <h1 className="text-2xl md:text-3xl font-display font-black text-[#1B1C1C] uppercase tracking-tight flex items-center gap-3">
-              <span>{isAccountant ? 'Center Expense Spreadsheets' : `${activeLocation.name} Expense Sheet`}</span>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl md:text-3xl font-display font-black text-[#1B1C1C] uppercase tracking-tight flex items-center gap-2.5">
+                <Receipt className="w-7 h-7 text-[#1ab0bc]" />
+                <span>Center Operating Expenses</span>
+              </h1>
               <span className="bg-[#1ab0bc] text-white text-[9px] font-mono px-2.5 py-0.5 uppercase tracking-widest">
-                {isAccountant ? 'ACCOUNTANT PAYMENT VIEW' : 'COMMUNITY MANAGER'}
+                {isAccountant ? "ACCOUNTANT PORTAL" : "COMMUNITY MANAGER"}
               </span>
-            </h1>
+            </div>
             <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
               {isAccountant
-                ? 'Accountant payment details upload & center expense audit. CM columns are read-only.'
-                : 'Daily Center Operating Expenses Spreadsheet'}
+                ? "Accountant payment verification, settlement & month-wise expense audit."
+                : "Daily Center Operating Expenses, vendor invoices & settlement tracking"}
             </p>
           </div>
 
-          <button
-            onClick={() => fetchExpensesData(false)}
-            disabled={refreshing}
-            className="bg-white hover:bg-gray-100 text-gray-800 px-4 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-2 shadow-xs cursor-pointer self-start md:self-auto"
-          >
-            <RefreshCcw className={`w-4 h-4 text-[#1ab0bc] ${refreshing ? "animate-spin" : ""}`} />
-            <span>{refreshing ? "Refreshing..." : "Refresh Sheet"}</span>
-          </button>
+          {/* View Switcher: Modern Register vs Spreadsheet */}
+          <div className="flex items-center gap-2">
+            <div className="inline-flex bg-gray-100 p-1 border border-gray-300">
+              <button
+                onClick={() => setViewMode("REGISTER")}
+                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === "REGISTER"
+                    ? "bg-[#1ab0bc] text-white shadow-xs"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Modern Register</span>
+              </button>
+
+              <button
+                onClick={() => setViewMode("SPREADSHEET")}
+                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === "SPREADSHEET"
+                    ? "bg-[#1ab0bc] text-white shadow-xs"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <TableIcon className="w-3.5 h-3.5" />
+                <span>Legacy Grid</span>
+              </button>
+            </div>
+
+            {viewMode === "SPREADSHEET" && (
+              <button
+                onClick={() => fetchExpensesData(false)}
+                disabled={refreshing}
+                className="bg-white hover:bg-gray-100 text-gray-800 px-3 py-1.5 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                <RefreshCcw
+                  className={`w-3.5 h-3.5 text-[#1ab0bc] ${refreshing ? "animate-spin" : ""}`}
+                />
+                <span>Refresh</span>
+              </button>
+            )}
+          </div>
         </div>
       </FadeUp>
 
-      {/* ── TOP CENTER TABS (For Accountant and Multi-Center Managers) ── */}
-      {(isAccountant || locations.length > 1) && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-gray-200">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#1ab0bc] shrink-0 mr-2 flex items-center gap-1">
-              <Building2 className="w-4 h-4" /> SELECT CENTER:
-            </span>
-
-            {locations.map((loc) => {
-              const isSelected = (activeLocationId ?? activeLocation.id) === loc.id;
-              return (
-                <button
-                  key={loc.id}
-                  onClick={() => setActiveLocationId(loc.id)}
-                  className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 cursor-pointer ${
-                    isSelected
-                      ? "bg-[#1ab0bc] text-white border-[#1ab0bc] shadow-md scale-105"
-                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100 hover:text-gray-900"
-                  }`}
-                >
-                  <Building2 className={`w-4 h-4 ${isSelected ? "text-white" : "text-[#1ab0bc]"}`} />
-                  <span>{loc.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {/* ── VIEW MODE 1: MODERN REGISTER (Default & Primary) ── */}
+      {viewMode === "REGISTER" && (
+        <ExpenseRegister
+          initialLocationId={activeLocation?.id || null}
+          isAccountant={isAccountant}
+          isAdmin={isAdmin}
+          currentUserName={user?.name || (isAccountant ? "Accountant" : "Community Manager")}
+          onSwitchToSpreadsheet={() => setViewMode("SPREADSHEET")}
+        />
       )}
 
-      {/* ── CLEAN FULL-SCREEN SPREADSHEET ── */}
-      <ExpenseSpreadsheet
-        key={`${activeLocation.id}_${userRoleView}`}
-        locationId={activeLocation.id}
-        locationName={activeLocation.name}
-        initialColumns={activeSheet.columns || []}
-        initialRows={activeSheet.rows || []}
-        isSuperAdmin={isAdmin}
-        userRoleView={userRoleView}
-        currentUserName={user?.name || (isAccountant ? 'Accountant' : 'Community Manager')}
-        currentUserId={user?.id ? Number(user.id) : (isAccountant ? 5 : 2)}
-      />
+      {/* ── VIEW MODE 2: LEGACY SPREADSHEET ── */}
+      {viewMode === "SPREADSHEET" && (
+        <div className="space-y-6">
+          {/* Center Tabs */}
+          {(isAccountant || locations.length > 1) && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-gray-200">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#1ab0bc] shrink-0 mr-2 flex items-center gap-1">
+                  <Building2 className="w-4 h-4" /> SELECT CENTER:
+                </span>
+
+                {locations.map((loc) => {
+                  const isSelected =
+                    (activeLocationId ?? activeLocation?.id) === loc.id;
+                  return (
+                    <button
+                      key={loc.id}
+                      onClick={() => setActiveLocationId(loc.id)}
+                      className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 cursor-pointer ${
+                        isSelected
+                          ? "bg-[#1ab0bc] text-white border-[#1ab0bc] shadow-md scale-105"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                    >
+                      <Building2
+                        className={`w-4 h-4 ${isSelected ? "text-white" : "text-[#1ab0bc]"}`}
+                      />
+                      <span>{loc.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {activeLocation && activeSheet ? (
+            <ExpenseSpreadsheet
+              key={`${activeLocation.id}_${userRoleView}`}
+              locationId={activeLocation.id}
+              locationName={activeLocation.name}
+              initialColumns={activeSheet.columns || []}
+              initialRows={activeSheet.rows || []}
+              isSuperAdmin={isAdmin}
+              userRoleView={userRoleView}
+              currentUserName={
+                user?.name || (isAccountant ? "Accountant" : "Community Manager")
+              }
+              currentUserId={user?.id ? Number(user.id) : isAccountant ? 5 : 2}
+            />
+          ) : (
+            <div className="bg-white p-12 text-center border border-gray-200 shadow-sm max-w-2xl mx-auto my-12 space-y-4">
+              <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto border border-amber-200">
+                <Building2 className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 uppercase tracking-tight">
+                No Center Assigned Yet
+              </h2>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">
+                You are currently not assigned to any specific coworking location center.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

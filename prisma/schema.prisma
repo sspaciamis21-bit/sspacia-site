@@ -195,6 +195,7 @@ model User {
   visitorChatMessages VisitorChatMessage[]
   updatedExpenseSheets LocationExpenseSheet[]
   verifiedQrBookings QrBooking[]
+  expenseRecords    ExpenseRecord[]
 
   @@index([email])
   @@index([roleId])
@@ -309,6 +310,7 @@ model Location {
   supportTickets SupportTicket[]
   expenseSheet   LocationExpenseSheet?
   qrBookings     QrBooking[]
+  expenseRecords ExpenseRecord[]
 
   @@index([cityId])
   @@index([slug])
@@ -1295,6 +1297,73 @@ model LocationExpenseSheet {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CENTER EXPENSE MASTER / REGISTER (NEW EXPENSE FORMAT)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ExpenseRecord {
+  id               Int       @id @default(autoincrement())
+  expenseDate      DateTime  @default(now())
+  expenseDateStr   String?   // e.g. "01 APR 2026"
+  locationId       Int?
+  locationName     String?
+  category         String?   // Expense category / type
+  description      String    @db.Text
+  amount           Float     @default(0)
+  paymentMode      String?   // Cash, Bank Transfer, UPI, Cheque, NEFT, RTGS
+  receiptNo        String?   // Receipt / Ref #
+  attachmentUrl    String?   @db.Text
+  remarks          String?   @db.Text
+  vendorId         Int?
+  vendorName       String?
+
+  // Vendor Bill & Quantity / Rate
+  accountNo        String?   // Vendor Bank A/C No.
+  quantity         Float?    @default(1) // QTY
+  unit             String?   @default("Nos") // A/U (Accounting Unit, e.g. Nos, Month, Lump, Pcs, Sqft)
+  rate             Float?    // Rate per unit
+  invoiceUrl       String?   @db.Text // Uploaded invoice / bill
+  paymentProofUrl  String?   @db.Text // Uploaded payment proof / UTR receipt
+  uploadedInBankPortal Boolean @default(false) // Checkbox for bank portal upload
+
+  // Super Admin Approval & Disbursement Flow
+  approvalStatus   String    @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  approvedById     Int?
+  approvedByName   String?
+  approvedAt       DateTime?
+  approvalRemarks  String?   @db.Text
+  alertEmailSent   Boolean   @default(false)
+  alertEmailSentTo String?
+
+  // Accountant Payment Details
+  payReceiveDate   String?
+  receiveAmount    Float?
+  accPaymentMode   String?
+  utrNumber        String?
+  utrDate          String?
+  utrFileUrl       String?   @db.Text
+  tdsDeducted      String?   @default("No")
+  tdsAmount        Float?
+  paymentStatus    String    @default("PENDING") // "PAID" | "PENDING"
+
+  // Origin & Audit
+  sourceSheetRowId String?   @unique // e.g. "sheet_1_row_1" prevents duplicate imports
+  createdById      Int?
+  createdByName    String?
+  createdByRole    String?   // "ACCOUNTANT" | "COMMUNITY_MANAGER" | "ADMIN"
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  location         Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  createdBy        User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([locationId])
+  @@index([expenseDate])
+  @@index([category])
+  @@index([paymentStatus])
+  @@index([approvalStatus])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // QR UPI BOOKINGS & VERIFICATION
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1612,7 +1681,10 @@ model VendorMaster {
   vendorName    String   // Mandatory: Vendor Name
   address       String?  @db.Text // Optional: Full Address
   email         String?  // Optional: Email
-  mobileNo      String?  // Optional: Mobile No
+  mobileNo      String?  // Mandatory in application validation
+  accountNo     String?  // Optional: Bank Account No (A/C No)
+  ifscCode      String?  // Optional: IFSC Code
+  bankName      String?  // Optional: Bank Name
   gstin         String?  // Optional: GSTIN
   pan           String?  // Optional: PAN
   serviceType   String?  // Optional: Nature of work / service category
