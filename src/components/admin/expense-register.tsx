@@ -69,6 +69,7 @@ export interface ExpenseRecordItem {
   unit?: string | null; // A/U (Accounting Unit)
   rate?: number | null;
   invoiceUrl?: string | null;
+  vendorInvoiceUrl?: string | null;
   paymentProofUrl?: string | null;
   uploadedInBankPortal?: boolean;
 
@@ -387,6 +388,8 @@ export function ExpenseRegister({
     rate: "",
     amount: "",
     invoiceUrl: "",
+    vendorInvoiceUrl: "",
+    payReceiveDate: "",
     uploadedInBankPortal: false,
     remarks: "",
     utrNumber: "",
@@ -772,9 +775,9 @@ export function ExpenseRegister({
       } else if (type === "settleInvoice") {
         setSettleData((prev) => ({
           ...prev,
-          invoiceUrl: fileUrl,
+          vendorInvoiceUrl: fileUrl,
         }));
-        toast.success("Vendor Invoice attached successfully!");
+        toast.success("Official Vendor Tax Invoice attached successfully!");
       } else {
         setApprovalData((prev) => ({
           ...prev,
@@ -1182,6 +1185,11 @@ export function ExpenseRegister({
       rate: rec.rate ? String(rec.rate) : "",
       amount: rec.amount ? String(rec.amount) : "",
       invoiceUrl: rec.invoiceUrl || "",
+      vendorInvoiceUrl:
+        rec.vendorInvoiceUrl ||
+        (rec.createdByRole === "ACCOUNTANT" ? rec.invoiceUrl || "" : "") ||
+        "",
+      payReceiveDate: rec.payReceiveDate || "",
       uploadedInBankPortal: Boolean(rec.uploadedInBankPortal),
       remarks: rec.remarks || "",
       utrNumber: rec.utrNumber || "",
@@ -1376,21 +1384,27 @@ export function ExpenseRegister({
         quantity: settleData.quantity ? parseFloat(settleData.quantity) : 1,
         unit: settleData.unit || "Nos",
         rate: settleData.rate ? parseFloat(settleData.rate) : null,
-        invoiceUrl: settleData.invoiceUrl || undefined,
+        vendorInvoiceUrl: settleData.vendorInvoiceUrl ? settleData.vendorInvoiceUrl.trim() : null,
+        payReceiveDate: settleData.payReceiveDate ? settleData.payReceiveDate.trim() : null,
         uploadedInBankPortal: Boolean(settleData.uploadedInBankPortal),
         remarks: settleData.remarks ? settleData.remarks.trim() : null,
         approvalStatus: isAlreadyApproved ? "APPROVED" : "PENDING_APPROVAL",
         ...(isAlreadyApproved && settleData.utrNumber
           ? {
               utrNumber: settleData.utrNumber.trim(),
-              utrDate: settleData.utrDate || new Date().toISOString().split("T")[0],
-              payReceiveDate: settleData.utrDate || new Date().toISOString().split("T")[0],
+              utrDate: settleData.utrDate || settleData.payReceiveDate || new Date().toISOString().split("T")[0],
+              payReceiveDate: settleData.payReceiveDate || settleData.utrDate || new Date().toISOString().split("T")[0],
               accPaymentMode: settleData.accPaymentMode || "Bank Transfer",
               utrFileUrl: settleData.utrFileUrl || null,
               paymentStatus: "PAID",
             }
           : {}),
       };
+
+      // For non-CM records (e.g. entered by accountant directly), also preserve/update invoiceUrl
+      if (!isCMRecord && settleData.invoiceUrl) {
+        payload.invoiceUrl = settleData.invoiceUrl.trim();
+      }
 
       // Strict enforcement: Accountants cannot edit base description or amount entered by CMs
       if (!isCMRecord || isAdmin) {
@@ -3027,17 +3041,31 @@ export function ExpenseRegister({
                       {/* 11. Attached Document (Operational Bill Proof / Accountant Tax Invoice) */}
                       <td className="py-3 px-2.5 text-center whitespace-nowrap">
                         <div className="flex flex-col items-center justify-center gap-1">
+                          {rec.vendorInvoiceUrl && !rec.vendorInvoiceUrl.includes("undefined") ? (
+                            <a
+                              href={rec.vendorInvoiceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all cursor-pointer shadow-2xs"
+                              title="View Official Vendor Tax Invoice Uploaded by Accountant"
+                            >
+                              <FileText className="w-3 h-3 text-emerald-700" /> Tax Inv PDF
+                            </a>
+                          ) : null}
+
                           {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") ? (
                             <a
                               href={rec.invoiceUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold text-[#006064] bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 transition-all cursor-pointer"
-                              title="View Attached Bill / Invoice Document"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold text-[#006064] bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 transition-all cursor-pointer shadow-2xs"
+                              title="View Attached Bill / Operational Proof Document uploaded by CM"
                             >
                               <FileText className="w-3 h-3 text-[#006064]" /> Attached Doc
                             </a>
-                          ) : (
+                          ) : null}
+
+                          {!rec.vendorInvoiceUrl && !rec.invoiceUrl && (
                             <button
                               type="button"
                               onClick={() => openSettleModal(rec)}
@@ -3125,30 +3153,51 @@ export function ExpenseRegister({
                         )}
                       </td>
 
-                      {/* 15. Payment Date (UNLOCKED FOR ACCOUNTANT ONCE APPROVED) */}
+                      {/* 15. Payment Date (Accountant sets in Step 2; finalized upon disbursal) */}
                       <td className="py-3 px-2.5 text-center whitespace-nowrap">
-                        {isApproved ? (
-                          rec.utrDate || rec.payReceiveDate ? (
-                            <span className="font-mono text-[10.5px] text-gray-800">
-                              {rec.utrDate || rec.payReceiveDate}
+                        {rec.payReceiveDate || rec.utrDate ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="font-mono text-[10.5px] font-semibold text-emerald-950">
+                              {rec.payReceiveDate || rec.utrDate}
                             </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => openApproveModal(rec)}
-                              className="text-[10px] text-amber-700 hover:text-amber-900 font-bold underline cursor-pointer"
-                              title="Click to set payment date"
-                            >
-                              Set Date
-                            </button>
-                          )
-                        ) : (
-                          <span
-                            title="Payment Date will take place after approval"
-                            className="inline-flex items-center gap-1 text-[9.5px] text-gray-400 font-mono bg-gray-50 px-1.5 py-0.5 border border-gray-200"
+                            {isApproved ? (
+                              <button
+                                type="button"
+                                onClick={() => openApproveModal(rec)}
+                                className="text-[8.5px] text-amber-700 hover:text-amber-900 underline cursor-pointer"
+                                title="Edit payment disbursal details"
+                              >
+                                edit
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openSettleModal(rec)}
+                                className="text-[8.5px] text-gray-400 hover:text-emerald-700 underline cursor-pointer"
+                                title="Edit scheduled payment date"
+                              >
+                                edit
+                              </button>
+                            )}
+                          </div>
+                        ) : isApproved ? (
+                          <button
+                            type="button"
+                            onClick={() => openApproveModal(rec)}
+                            className="text-[10px] text-amber-700 hover:text-amber-900 font-bold underline cursor-pointer"
+                            title="Click to set payment date"
                           >
-                            <Lock className="w-2.5 h-2.5 text-gray-400" /> Locked
-                          </span>
+                            Set Date
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openSettleModal(rec)}
+                            className="text-[9.5px] text-gray-400 hover:text-emerald-700 underline cursor-pointer"
+                            title="Set scheduled payment date in Enter Bill"
+                          >
+                            Set Date
+                          </button>
                         )}
                       </td>
 
@@ -4339,13 +4388,13 @@ export function ExpenseRegister({
                 )}
               </div>
 
-              {/* Form Section 1: Invoice Number & Date */}
+              {/* Form Section 1: Invoice Number & Dates */}
               <div className="space-y-3 pt-1">
                 <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-emerald-900 border-b border-gray-100 pb-1 flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-emerald-600" /> 1. Invoice Number (Inv No)
+                  <FileText className="w-3.5 h-3.5 text-emerald-600" /> 1. Invoice Number (Inv No) & Dates
                 </h4>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
                       Inv No (Invoice / Bill Number)
@@ -4363,7 +4412,7 @@ export function ExpenseRegister({
 
                   <div>
                     <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
-                      Expense Date
+                      Expense Date (Entry Date)
                     </label>
                     <input
                       type="text"
@@ -4376,6 +4425,20 @@ export function ExpenseRegister({
                           : "-")
                       }
                       className="w-full border border-gray-200 bg-gray-50 p-2 text-xs font-mono text-gray-600 cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-emerald-800 uppercase tracking-wider mb-1">
+                      Payment Date
+                    </label>
+                    <input
+                      type="date"
+                      value={settleData.payReceiveDate || ""}
+                      onChange={(e) =>
+                        setSettleData((prev) => ({ ...prev, payReceiveDate: e.target.value }))
+                      }
+                      className="w-full border border-emerald-400 bg-emerald-50/40 p-2 text-xs font-mono font-bold text-emerald-950 focus:outline-none focus:border-emerald-600 focus:bg-white"
                     />
                   </div>
                 </div>
@@ -4586,7 +4649,7 @@ export function ExpenseRegister({
                     <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
                       Official Vendor Tax Invoice PDF <span className="text-gray-400 font-normal text-[10px] lowercase">(Accountant Step)</span>
                     </label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <input
                         type="file"
                         ref={settleInvoiceFileInputRef}
@@ -4611,16 +4674,28 @@ export function ExpenseRegister({
                         <span>{uploadingInvoice ? "Uploading..." : "Upload Inv PDF"}</span>
                       </button>
 
-                      {settleData.invoiceUrl && (
-                        <a
-                          href={settleData.invoiceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[#006064] hover:underline font-bold text-[11px] flex items-center gap-1 truncate"
-                        >
-                          <FileText className="w-3.5 h-3.5 text-[#006064]" />
-                          <span>View Uploaded Inv</span>
-                        </a>
+                      {settleData.vendorInvoiceUrl ? (
+                        <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1 border border-emerald-300">
+                          <a
+                            href={settleData.vendorInvoiceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-800 hover:underline font-bold text-[11px] flex items-center gap-1 truncate"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>View Uploaded Tax Inv</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setSettleData((prev) => ({ ...prev, vendorInvoiceUrl: "" }))}
+                            className="text-gray-400 hover:text-rose-600 text-xs font-bold ml-1 cursor-pointer"
+                            title="Remove uploaded invoice"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10.5px] text-gray-400 italic">No official tax invoice uploaded yet</span>
                       )}
                     </div>
                   </div>

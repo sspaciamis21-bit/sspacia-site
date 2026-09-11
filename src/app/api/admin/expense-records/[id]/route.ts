@@ -196,6 +196,9 @@ export async function PUT(
     if (body.invoiceUrl !== undefined) {
       updateData.invoiceUrl = body.invoiceUrl || null;
     }
+    if (body.vendorInvoiceUrl !== undefined) {
+      updateData.vendorInvoiceUrl = body.vendorInvoiceUrl || null;
+    }
     if (body.paymentProofUrl !== undefined) {
       updateData.paymentProofUrl = body.paymentProofUrl || null;
     }

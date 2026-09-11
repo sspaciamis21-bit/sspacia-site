@@ -1321,7 +1321,8 @@ model ExpenseRecord {
   quantity         Float?    @default(1) // QTY
   unit             String?   @default("Nos") // A/U (Accounting Unit, e.g. Nos, Month, Lump, Pcs, Sqft)
   rate             Float?    // Rate per unit
-  invoiceUrl       String?   @db.Text // Uploaded invoice / bill
+  invoiceUrl       String?   @db.Text // Uploaded operational invoice / bill proof (CM or initial entry)
+  vendorInvoiceUrl String?   @db.Text // Official Vendor Tax Invoice uploaded strictly by Accountant in billing step
   paymentProofUrl  String?   @db.Text // Uploaded payment proof / UTR receipt
   uploadedInBankPortal Boolean @default(false) // Checkbox for bank portal upload
 
