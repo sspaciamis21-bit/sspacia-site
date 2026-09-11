@@ -54,7 +54,6 @@ const sidebarItems = [
   { name: 'Contracts', href: '/admin/contracts', icon: ShieldCheck },
   { name: 'Documents', href: '/admin/documents', icon: FileText },
   { name: 'Client Master', href: '/admin/client-master', icon: FileText },
-  { name: 'Vendor Master', href: '/admin/vendor-master', icon: Building2 },
   { name: 'Invoices', href: '/admin/Invoices', icon: FileText },
   { name: 'Careers & HR', href: '/hr', icon: Briefcase },
   { name: 'Announcements', href: '/admin/announcements', icon: Sparkles },

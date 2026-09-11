@@ -41,9 +41,11 @@ import {
   Eye,
   User,
   Loader2,
+  Landmark,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
+import { BankStatementModal } from "./bank-statement-modal";
 
 export interface ExpenseRecordItem {
   id: number;
@@ -206,7 +208,16 @@ export function ExpenseRegister({
   const [selectedLocation, setSelectedLocation] = useState<string>(
     initialLocationId ? String(initialLocationId) : "ALL"
   );
+  // Comprehensive Date Filters: Month-wise, Year-wise, Date-wise, Custom Date Range
+  const [filterType, setFilterType] = useState<"ALL" | "MONTH" | "YEAR" | "DATE" | "CUSTOM">("ALL");
   const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
+  const [selectedYear, setSelectedYear] = useState<string>("ALL");
+  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
+  const [availableYears, setAvailableYears] = useState<
+    { value: string; label: string; count: number; total: number }[]
+  >([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
   const [selectedApprovalStatus, setSelectedApprovalStatus] = useState<string>("ALL");
@@ -227,6 +238,9 @@ export function ExpenseRegister({
   const [isViewPaymentModalOpen, setIsViewPaymentModalOpen] = useState(false);
   const [viewingPaymentRecord, setViewingPaymentRecord] = useState<ExpenseRecordItem | null>(null);
   const [isNewVendorModalOpen, setIsNewVendorModalOpen] = useState(false);
+  const [isBankStatementOpen, setIsBankStatementOpen] = useState(false);
+  const [isAddingCustomCategoryInline, setIsAddingCustomCategoryInline] = useState(false);
+  const [inlineCustomCategoryInput, setInlineCustomCategoryInput] = useState("");
   const [savingForm, setSavingForm] = useState(false);
   const [approving, setApproving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -248,7 +262,8 @@ export function ExpenseRegister({
       isNewVendorModalOpen ||
       settlingRecord ||
       isApprovalsModalOpen ||
-      isViewPaymentModalOpen
+      isViewPaymentModalOpen ||
+      isBankStatementOpen
     );
     if (isAnyModalOpen) {
       const originalOverflow = document.body.style.overflow;
@@ -264,6 +279,7 @@ export function ExpenseRegister({
     settlingRecord,
     isApprovalsModalOpen,
     isViewPaymentModalOpen,
+    isBankStatementOpen,
   ]);
 
   // Global pending approvals across ALL centres (irrespective of center/month filter)
@@ -471,30 +487,60 @@ export function ExpenseRegister({
     return !isRecordByAccountant && !isRecordByAdmin;
   };
 
-  // Active Month Meta (Total Count & Price for Month Dropdown selection)
+  // Active Date Filter Meta (Total Count & Price for Filter selection)
   const activeMonthMeta = useMemo(() => {
-    if (selectedMonth === "ALL") {
+    if (filterType === "ALL") {
       return {
-        label: "All Months",
+        label: "All Expenses",
         count: records.length,
         total: summary.totalAmount,
       };
     }
-    const found = availableMonths.find((m) => m.value === selectedMonth);
-    if (found) {
+    if (filterType === "MONTH") {
+      if (selectedMonth === "ALL") {
+        return { label: "All Months", count: records.length, total: summary.totalAmount };
+      }
+      const found = availableMonths.find((m) => m.value === selectedMonth);
       return {
-        label: found.label,
-        count: found.count,
-        total: found.total,
+        label: found ? found.label : selectedMonth,
+        count: found ? found.count : records.length,
+        total: found ? found.total : records.reduce((s, r) => s + (r.amount || 0), 0),
       };
     }
-    const filteredTotal = records.reduce((sum, r) => sum + (r.amount || 0), 0);
+    if (filterType === "YEAR") {
+      if (selectedYear === "ALL") {
+        return { label: "All Years", count: records.length, total: summary.totalAmount };
+      }
+      const found = availableYears.find((y) => y.value === selectedYear);
+      return {
+        label: found ? found.label : `Year ${selectedYear}`,
+        count: found ? found.count : records.length,
+        total: found ? found.total : records.reduce((s, r) => s + (r.amount || 0), 0),
+      };
+    }
+    if (filterType === "DATE") {
+      const formatted = selectedDate ? selectedDate.split("-").reverse().join("/") : "Selected Date";
+      return {
+        label: `Date: ${formatted}`,
+        count: records.length,
+        total: records.reduce((s, r) => s + (r.amount || 0), 0),
+      };
+    }
+    if (filterType === "CUSTOM") {
+      const f = fromDate ? fromDate.split("-").reverse().join("/") : "Start";
+      const t = toDate ? toDate.split("-").reverse().join("/") : "End";
+      return {
+        label: `Range: ${f} to ${t}`,
+        count: records.length,
+        total: records.reduce((s, r) => s + (r.amount || 0), 0),
+      };
+    }
     return {
-      label: selectedMonth,
+      label: "All Records",
       count: records.length,
-      total: filteredTotal,
+      total: summary.totalAmount,
     };
-  }, [selectedMonth, availableMonths, records, summary]);
+  }, [filterType, selectedMonth, selectedYear, selectedDate, fromDate, toDate, availableMonths, availableYears, records, summary]);
 
   // Fetch vendors from VendorMaster
   const fetchVendors = async () => {
@@ -515,7 +561,13 @@ export function ExpenseRegister({
       if (showLoading) setLoading(true);
       const params = new URLSearchParams();
       if (selectedLocation !== "ALL") params.set("locationId", selectedLocation);
-      if (selectedMonth !== "ALL") params.set("month", selectedMonth);
+      if (filterType === "MONTH" && selectedMonth !== "ALL") params.set("month", selectedMonth);
+      if (filterType === "YEAR" && selectedYear !== "ALL") params.set("year", selectedYear);
+      if (filterType === "DATE" && selectedDate.trim()) params.set("date", selectedDate.trim());
+      if (filterType === "CUSTOM") {
+        if (fromDate.trim()) params.set("fromDate", fromDate.trim());
+        if (toDate.trim()) params.set("toDate", toDate.trim());
+      }
       if (selectedCategory !== "ALL") params.set("category", selectedCategory);
       if (selectedStatus !== "ALL") params.set("paymentStatus", selectedStatus);
       if (selectedApprovalStatus !== "ALL") params.set("approvalStatus", selectedApprovalStatus);
@@ -529,6 +581,7 @@ export function ExpenseRegister({
       setLocations(data.locations || []);
       setCategories(data.categories || []);
       setAvailableMonths(data.availableMonths || []);
+      setAvailableYears(data.availableYears || []);
       setSummary(
         data.summary || {
           totalAmount: 0,
@@ -557,7 +610,19 @@ export function ExpenseRegister({
     if (isAdmin) {
       fetchAllPendingApprovals();
     }
-  }, [selectedLocation, selectedMonth, selectedCategory, selectedStatus, selectedApprovalStatus, isAdmin]);
+  }, [
+    selectedLocation,
+    filterType,
+    selectedMonth,
+    selectedYear,
+    selectedDate,
+    fromDate,
+    toDate,
+    selectedCategory,
+    selectedStatus,
+    selectedApprovalStatus,
+    isAdmin,
+  ]);
 
   // Debounced search
   useEffect(() => {
@@ -789,6 +854,12 @@ export function ExpenseRegister({
         invoiceUrl: newRowData.invoiceUrl || null,
         remarks: newRowData.remarks ? newRowData.remarks.trim() : null,
       };
+
+      if (newRowData.vendorId) {
+        payload.vendorId = Number(newRowData.vendorId);
+        payload.vendorName = newRowData.vendorName ? newRowData.vendorName.trim() : null;
+        payload.accountNo = newRowData.accountNo ? newRowData.accountNo.trim() : null;
+      }
 
       if (activeViewMode === "ACCOUNTANT") {
         payload.vendorId = newRowData.vendorId ? Number(newRowData.vendorId) : null;
@@ -1488,14 +1559,37 @@ export function ExpenseRegister({
               </div>
             )}
 
-            {/* Add Expense Button (Modal) - Accountant Only */}
-            {isAccountant && (
+            {/* Bank Statement Modal Button (Admin & Accountant Only) */}
+            {(isAdmin || isAccountant) && (
               <button
+                type="button"
+                onClick={() => setIsBankStatementOpen(true)}
+                className="bg-[#283593] hover:bg-[#1a237e] text-white px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer border border-[#1a237e]"
+                title="View ICICI Bank Account Statement (A/C: 136705002010)"
+              >
+                <Landmark className="w-3.5 h-3.5 text-orange-300" />
+                <span>Bank Statement</span>
+              </button>
+            )}
+
+            {/* Add Expense Button (Modal) */}
+            {activeViewMode === "ACCOUNTANT" && isAccountant ? (
+              <button
+                type="button"
                 onClick={openAddModal}
                 className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>+ Add Expense (Accountant)</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={openAddModal}
+                className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Add Expense</span>
               </button>
             )}
           </div>
@@ -1607,9 +1701,162 @@ export function ExpenseRegister({
         )}
       </div>
 
-      {/* ── FILTERS & DEDICATED MONTH DROPDOWN WITH SUMMARY ── */}
+      {/* ── COMPREHENSIVE MULTI-MODE FILTERS & SEARCH ── */}
       <div className="bg-white border border-gray-200 p-4 space-y-3 shadow-2xs">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Date Filter Mode Selector */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-gray-100">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider mr-1">
+              Date Filter:
+            </span>
+            <div className="flex items-center gap-1 bg-gray-100 p-0.5 border border-gray-300 text-xs">
+              <button
+                type="button"
+                onClick={() => setFilterType("ALL")}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${
+                  filterType === "ALL" ? "bg-[#006064] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType("MONTH")}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${
+                  filterType === "MONTH" ? "bg-[#006064] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Month
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType("YEAR")}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${
+                  filterType === "YEAR" ? "bg-[#006064] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Year
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType("DATE")}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${
+                  filterType === "DATE" ? "bg-[#006064] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Date
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType("CUSTOM")}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${
+                  filterType === "CUSTOM" ? "bg-[#006064] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Custom Range
+              </button>
+            </div>
+          </div>
+
+          {/* Active Date Filter Inputs */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {filterType === "MONTH" && (
+              <div className="relative min-w-[200px]">
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-full bg-[#fafafa] border border-[#006064] px-3 py-1.5 text-xs font-bold text-gray-900 focus:outline-none appearance-none cursor-pointer"
+                >
+                  <option value="ALL">All Months ({summary.totalRecords} Entries)</option>
+                  {availableMonths.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label} ({m.count} expenses)
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500" />
+              </div>
+            )}
+
+            {filterType === "YEAR" && (
+              <div className="relative min-w-[160px]">
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="w-full bg-[#fafafa] border border-[#006064] px-3 py-1.5 text-xs font-bold text-gray-900 focus:outline-none appearance-none cursor-pointer"
+                >
+                  <option value="ALL">All Years ({summary.totalRecords} Entries)</option>
+                  {availableYears.map((y) => (
+                    <option key={y.value} value={y.value}>
+                      {y.label} ({y.count} expenses)
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500" />
+              </div>
+            )}
+
+            {filterType === "DATE" && (
+              <div className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-[#006064]" />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="bg-[#fafafa] border border-[#006064] px-3 py-1.5 text-xs font-bold text-gray-900 focus:outline-none"
+                />
+                {selectedDate && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate("")}
+                    className="p-1 text-gray-400 hover:text-red-600 text-xs font-bold"
+                    title="Clear Date"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            )}
+
+            {filterType === "CUSTOM" && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-gray-500 font-bold uppercase">From:</span>
+                  <input
+                    type="date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="bg-[#fafafa] border border-[#006064] px-2 py-1 text-xs font-bold text-gray-900 focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-gray-500 font-bold uppercase">To:</span>
+                  <input
+                    type="date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="bg-[#fafafa] border border-[#006064] px-2 py-1 text-xs font-bold text-gray-900 focus:outline-none"
+                  />
+                </div>
+                {(fromDate || toDate) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFromDate("");
+                      setToDate("");
+                    }}
+                    className="px-2 py-1 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-[10.5px] font-bold border border-gray-300"
+                    title="Clear Custom Range"
+                  >
+                    Clear Range
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {/* Search */}
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1620,23 +1867,6 @@ export function ExpenseRegister({
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#fafafa] border border-gray-300 focus:outline-none focus:border-[#006064] text-gray-900"
             />
-          </div>
-
-          {/* Month Dropdown */}
-          <div className="relative">
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-full bg-[#fafafa] border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-900 focus:outline-none focus:border-[#006064] appearance-none cursor-pointer"
-            >
-              <option value="ALL">All Months ({summary.totalRecords} Entries)</option>
-              {availableMonths.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label} ({m.count} expenses)
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500" />
           </div>
 
           {/* Category Filter */}
@@ -1671,7 +1901,7 @@ export function ExpenseRegister({
           </div>
         </div>
 
-        {/* ── ACTIVE MONTH FINANCIAL SUMMARY BANNER (REPLACES SPREADSHEET FORMULA ROW) ── */}
+        {/* ── ACTIVE FILTER FINANCIAL SUMMARY BANNER (REPLACES SPREADSHEET FORMULA ROW) ── */}
         <div className="flex flex-wrap items-center justify-between gap-3 bg-cyan-50/60 p-2.5 border border-cyan-200">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
@@ -1720,7 +1950,7 @@ export function ExpenseRegister({
               title="Add a new expense entry inline"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>+ Add Row</span>
+              <span>Add Row</span>
             </button>
           </div>
 
@@ -1745,13 +1975,23 @@ export function ExpenseRegister({
                 <tr className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-mono text-[10px] uppercase tracking-wider">
                   <th className="py-3 px-3 w-10 text-center">#</th>
                   <th className="py-3 px-3 whitespace-nowrap">Date</th>
+                  <th className="py-3 px-3 whitespace-nowrap">
+                    <div>Vendor / Supplier</div>
+                    <button
+                      type="button"
+                      onClick={() => setIsNewVendorModalOpen(true)}
+                      className="text-[8.5px] text-[#006064] lowercase hover:underline flex items-center gap-0.5 cursor-pointer font-sans font-bold"
+                    >
+                      <Plus className="w-2.5 h-2.5" /> + New Vendor
+                    </button>
+                  </th>
                   <th className="py-3 px-4 min-w-[220px]">Expense Description</th>
                   <th className="py-3 px-3 whitespace-nowrap">Expense Section</th>
                   <th className="py-3 px-3 text-right whitespace-nowrap">Amount (₹)</th>
                   <th className="py-3 px-3 whitespace-nowrap">Payment Mod</th>
                   <th className="py-3 px-3 text-center whitespace-nowrap">Receipt / Ref #</th>
                   <th className="py-3 px-3 min-w-[150px]">Remarks</th>
-                  <th className="py-3 px-3 text-center whitespace-nowrap">Attached PDF</th>
+                  <th className="py-3 px-3 text-center whitespace-nowrap">Receipt Slip / Proof</th>
                   <th className="py-3 px-3 text-center whitespace-nowrap">Payment Details</th>
                   <th className="py-3 px-3 text-center whitespace-nowrap">Actions</th>
                 </tr>
@@ -1823,6 +2063,40 @@ export function ExpenseRegister({
                         </select>
                       )}
                     </td>
+                    <td className="py-2.5 px-2 whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5">
+                        <select
+                          value={newRowData.vendorId}
+                          onChange={(e) => {
+                            const vId = e.target.value;
+                            const found = vendors.find((v) => String(v.id) === vId);
+                            setNewRowData((prev) => ({
+                              ...prev,
+                              vendorId: vId,
+                              vendorName: found ? found.vendorName : "",
+                              accountNo: found?.accountNo || "",
+                              ifscCode: found?.ifscCode || "",
+                              bankName: found?.bankName || "",
+                            }));
+                          }}
+                          className="border border-gray-300 p-1 text-[11px] bg-white focus:outline-none focus:border-[#006064] w-28"
+                        >
+                          <option value="">Vendor (Opt)</option>
+                          {vendors.map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.vendorName}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setIsNewVendorModalOpen(true)}
+                          className="text-[9px] text-[#006064] font-bold hover:underline flex items-center gap-0.5 cursor-pointer text-left"
+                        >
+                          <Plus className="w-2.5 h-2.5" /> + New Vendor
+                        </button>
+                      </div>
+                    </td>
                     <td className="py-2.5 px-3">
                       <input
                         type="text"
@@ -1833,15 +2107,81 @@ export function ExpenseRegister({
                       />
                     </td>
                     <td className="py-2.5 px-2 whitespace-nowrap">
-                      <select
-                        value={newRowData.category}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, category: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[11px] bg-white focus:outline-none focus:border-[#006064] w-32 font-bold uppercase text-[#006064]"
-                      >
-                        {allAvailableCategories.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
+                      {isAddingCustomCategoryInline ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            placeholder="New category..."
+                            value={inlineCustomCategoryInput}
+                            onChange={(e) => setInlineCustomCategoryInput(e.target.value.toUpperCase())}
+                            className="border border-[#006064] p-1 text-[10.5px] bg-white focus:outline-none w-28 uppercase font-bold text-[#006064]"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                if (inlineCustomCategoryInput.trim()) {
+                                  const newCat = inlineCustomCategoryInput.trim();
+                                  if (!customCategories.includes(newCat)) {
+                                    setCustomCategories((prev) => [...prev, newCat]);
+                                  }
+                                  setNewRowData((prev) => ({ ...prev, category: newCat }));
+                                }
+                                setIsAddingCustomCategoryInline(false);
+                                setInlineCustomCategoryInput("");
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (inlineCustomCategoryInput.trim()) {
+                                const newCat = inlineCustomCategoryInput.trim();
+                                if (!customCategories.includes(newCat)) {
+                                  setCustomCategories((prev) => [...prev, newCat]);
+                                }
+                                setNewRowData((prev) => ({ ...prev, category: newCat }));
+                              }
+                              setIsAddingCustomCategoryInline(false);
+                              setInlineCustomCategoryInput("");
+                            }}
+                            className="p-1 bg-[#006064] text-white text-[10px] rounded cursor-pointer"
+                            title="Add"
+                          >
+                            <Check className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAddingCustomCategoryInline(false);
+                              setInlineCustomCategoryInput("");
+                            }}
+                            className="p-1 bg-gray-200 text-gray-700 text-[10px] rounded cursor-pointer"
+                            title="Cancel"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <select
+                          value={newRowData.category}
+                          onChange={(e) => {
+                            if (e.target.value === "__CUSTOM__") {
+                              setIsAddingCustomCategoryInline(true);
+                              setInlineCustomCategoryInput("");
+                            } else {
+                              setNewRowData((prev) => ({ ...prev, category: e.target.value }));
+                            }
+                          }}
+                          className="border border-gray-300 p-1 text-[11px] bg-white focus:outline-none focus:border-[#006064] w-32 font-bold uppercase text-[#006064]"
+                        >
+                          {allAvailableCategories.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                          <option value="__CUSTOM__" className="font-bold text-[#006064]">
+                            + Add New Category...
+                          </option>
+                        </select>
+                      )}
                     </td>
                     <td className="py-2.5 px-2 text-right whitespace-nowrap">
                       <input
@@ -1886,24 +2226,26 @@ export function ExpenseRegister({
                     <td className="py-2.5 px-2 text-center whitespace-nowrap">
                       <input
                         type="file"
-                        ref={inlineInvoiceFileRef}
+                        ref={inlineReceiptFileRef}
                         accept=".pdf,.png,.jpg,.jpeg"
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file) handleInlineUpload(file, "invoice");
+                          if (file) handleInlineUpload(file, "receipt");
                         }}
                       />
-                      {newRowData.invoiceUrl ? (
-                        <span className="text-[10px] text-emerald-700 font-bold">Attached ✓</span>
+                      {newRowData.attachmentUrl ? (
+                        <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 border border-amber-200">
+                          Slip Attached ✓
+                        </span>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => inlineInvoiceFileRef.current?.click()}
+                          onClick={() => inlineReceiptFileRef.current?.click()}
                           disabled={uploadingInlineDoc}
-                          className="text-[10px] text-[#006064] font-bold underline cursor-pointer"
+                          className="text-[10px] text-amber-800 font-bold underline cursor-pointer"
                         >
-                          {uploadingInlineDoc ? "..." : "+ Upload PDF"}
+                          {uploadingInlineDoc ? "..." : "+ Attach Slip"}
                         </button>
                       )}
                     </td>
@@ -2146,7 +2488,7 @@ export function ExpenseRegister({
               {loading ? (
                 <tr>
                   <td
-                    colSpan={activeViewMode === "CM" ? 10 : 16}
+                    colSpan={activeViewMode === "CM" ? 11 : 16}
                     className="py-16 text-center text-gray-500"
                   >
                     <div className="flex flex-col items-center justify-center gap-2">
@@ -2160,7 +2502,7 @@ export function ExpenseRegister({
               ) : records.length === 0 && !isAddingRow ? (
                 <tr>
                   <td
-                    colSpan={activeViewMode === "CM" ? 10 : 16}
+                    colSpan={activeViewMode === "CM" ? 11 : 16}
                     className="py-16 text-center text-gray-400"
                   >
                     <div className="flex flex-col items-center justify-center gap-3">
@@ -2211,6 +2553,18 @@ export function ExpenseRegister({
                           </div>
                         </td>
 
+                        {/* 2.5. Vendor / Supplier */}
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          {rec.vendorName ? (
+                            <div className="font-semibold text-gray-900 text-xs flex items-center gap-1">
+                              <Building2 className="w-3 h-3 text-[#006064]" />
+                              <span>{rec.vendorName}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic text-[11px]">Unassigned</span>
+                          )}
+                        </td>
+
                         {/* 3. Expense Description */}
                         <td className="py-3 px-4 max-w-sm">
                           <div className="font-semibold text-gray-900 leading-snug">
@@ -2247,18 +2601,20 @@ export function ExpenseRegister({
 
                         {/* 7. Receipt / Ref # */}
                         <td className="py-3 px-3 text-center whitespace-nowrap">
-                          {rec.attachmentUrl && !rec.attachmentUrl.includes("undefined") ? (
-                            <a
-                              href={rec.attachmentUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all cursor-pointer"
-                              title="View Attached Receipt Slip"
-                            >
-                              <Receipt className="w-3 h-3 text-amber-700" /> Receipt
-                            </a>
-                          ) : rec.receiptNo ? (
-                            <span className="font-mono text-gray-700">{rec.receiptNo}</span>
+                          {rec.receiptNo ? (
+                            rec.receiptNo.startsWith("http") || rec.receiptNo.startsWith("/api/") ? (
+                              <a
+                                href={rec.receiptNo}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer"
+                                title="View Receipt Document"
+                              >
+                                <Receipt className="w-3 h-3 text-blue-700" /> View Receipt
+                              </a>
+                            ) : (
+                              <span className="font-mono text-gray-700 font-bold">{rec.receiptNo}</span>
+                            )
                           ) : (
                             <span className="text-gray-300 text-[11px]">-</span>
                           )}
@@ -2273,73 +2629,55 @@ export function ExpenseRegister({
                           )}
                         </td>
 
-                        {/* 9. Attached PDF */}
+                        {/* 9. Receipt Slip / Proof */}
                         <td className="py-3 px-3 text-center whitespace-nowrap">
-                          {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") ? (
+                          {(rec.attachmentUrl && !rec.attachmentUrl.includes("undefined")) ||
+                          (rec.invoiceUrl && !rec.invoiceUrl.includes("undefined")) ? (
                             <a
-                              href={rec.invoiceUrl}
+                              href={(rec.attachmentUrl && !rec.attachmentUrl.includes("undefined")) ? rec.attachmentUrl : rec.invoiceUrl!}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#006064] bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 transition-all cursor-pointer"
-                              title="View Attached Invoice PDF"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all cursor-pointer"
+                              title="View Attached Receipt Slip / Voucher"
                             >
-                              <FileText className="w-3 h-3 text-[#006064]" /> Document
+                              <Receipt className="w-3 h-3 text-amber-700" /> View Slip
                             </a>
                           ) : (
                             <span className="text-gray-300 text-[11px]">-</span>
                           )}
                         </td>
 
-                        {/* 10. Payment Details Action */}
+                        {/* 10. Payment Status & Breakdown (Read-only in CM View - Breakdown is entered by Accountant) */}
                         <td className="py-3 px-3 text-center whitespace-nowrap">
-                          {isAccountant || isAdmin ? (
-                            <div className="inline-flex items-center justify-center gap-1.5">
-                              {rec.vendorName || rec.accountNo || rec.receiptNo || rec.invoiceUrl ? (
-                                <button
-                                  type="button"
-                                  onClick={() => openSettleModal(rec)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
-                                  title="Edit Payment Details (Vendor, Bank A/C, Invoice, UTR)"
-                                >
-                                  <Edit3 className="w-3 h-3" />
-                                  <span>Edit Payment Details</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => openSettleModal(rec)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#006064] hover:bg-[#00838f] text-white text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
-                                  title="Enter Payment Details against this expense"
-                                >
-                                  <Plus className="w-3 h-3" />
-                                  <span>+ Enter Payment Details</span>
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setViewingPaymentRecord(rec);
-                                  setIsViewPaymentModalOpen(true);
-                                }}
-                                className="p-1 text-gray-500 hover:text-[#006064] hover:bg-cyan-50 border border-gray-200 transition-all cursor-pointer"
-                                title="View Payment Details"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : (
+                          <div className="inline-flex items-center justify-center gap-1.5">
+                            {rec.paymentStatus === "PAID" || rec.utrNumber ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                <Check className="w-3 h-3 text-emerald-700" />
+                                <span>Paid {rec.utrNumber ? `(${rec.utrNumber})` : ""}</span>
+                              </span>
+                            ) : rec.approvalStatus === "APPROVED" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                <Check className="w-3 h-3 text-blue-700" />
+                                <span>Approved</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                <Clock className="w-3 h-3 text-amber-700" />
+                                <span>Pending Settlement</span>
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
                                 setViewingPaymentRecord(rec);
                                 setIsViewPaymentModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#006064] hover:bg-[#00838f] text-white text-[10.5px] font-bold uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                              className="p-1 text-gray-500 hover:text-[#006064] hover:bg-cyan-50 border border-gray-200 transition-all cursor-pointer"
+                              title="View Payment Breakdown"
                             >
-                              <Eye className="w-3 h-3" />
-                              <span>View Payment Details</span>
+                              <Eye className="w-3.5 h-3.5" />
                             </button>
-                          )}
+                          </div>
                         </td>
 
                         {/* 11. Actions: Edit & Delete Expense (Accountant only own, CM only own, Super Admin everyone) */}
@@ -2791,6 +3129,34 @@ export function ExpenseRegister({
                       className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064]"
                     />
                   </div>
+
+                  {/* Vendor / Supplier (Optional) */}
+                  <div className="sm:col-span-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-gray-700 uppercase tracking-wider text-[11px]">
+                        Vendor / Supplier <span className="text-gray-400 font-normal text-[10px] lowercase">(optional)</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsNewVendorModalOpen(true)}
+                        className="text-[#006064] hover:underline font-bold text-[10.5px] cursor-pointer flex items-center gap-0.5"
+                      >
+                        <Plus className="w-3 h-3" /> + Register Vendor
+                      </button>
+                    </div>
+                    <select
+                      value={formData.vendorId || ""}
+                      onChange={(e) => handleVendorSelect(e.target.value)}
+                      className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064] cursor-pointer bg-white"
+                    >
+                      <option value="">-- Select Vendor (Optional) --</option>
+                      {vendors.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.vendorName} {v.accountNo ? `(A/C: ${v.accountNo})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -2943,7 +3309,7 @@ export function ExpenseRegister({
 
               {/* Section 3: Receipt Ref, 2 Attachment Options (Receipt Attach, Attach PDF) & Remarks */}
               <div className="space-y-3 pt-2">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className={`grid grid-cols-1 ${activeViewMode === "ACCOUNTANT" && (isAccountant || isAdmin) ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-3`}>
                   {/* Receipt / Ref # */}
                   <div>
                     <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
@@ -3016,61 +3382,63 @@ export function ExpenseRegister({
                     </div>
                   </div>
 
-                  {/* Attachment Option 2: Attach PDF */}
-                  <div>
-                    <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1 flex items-center justify-between">
-                      <span>Attach PDF</span>
-                      <span className="text-[10px] text-gray-400 font-normal lowercase">(bill/invoice)</span>
-                    </label>
-                    <input
-                      type="file"
-                      ref={invoiceFileInputRef}
-                      accept=".pdf,.png,.jpg,.jpeg"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleFileUpload(file, "invoice");
-                      }}
-                    />
-                    <div className="space-y-1.5">
-                      <button
-                        type="button"
-                        onClick={() => invoiceFileInputRef.current?.click()}
-                        disabled={uploadingInvoice}
-                        className="w-full bg-white hover:bg-cyan-50 border border-[#006064]/40 text-[#006064] px-3 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                      >
-                        <Upload
-                          className={`w-3.5 h-3.5 text-[#006064] ${
-                            uploadingInvoice ? "animate-spin" : ""
-                          }`}
-                        />
-                        <span>{uploadingInvoice ? "Uploading..." : "Attach PDF"}</span>
-                      </button>
+                  {/* Attachment Option 2: Attach PDF (Accountant / Super Admin Step Only) */}
+                  {activeViewMode === "ACCOUNTANT" && (isAccountant || isAdmin) && (
+                    <div>
+                      <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                        <span>Attach PDF</span>
+                        <span className="text-[10px] text-gray-400 font-normal lowercase">(bill/invoice)</span>
+                      </label>
+                      <input
+                        type="file"
+                        ref={invoiceFileInputRef}
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileUpload(file, "invoice");
+                        }}
+                      />
+                      <div className="space-y-1.5">
+                        <button
+                          type="button"
+                          onClick={() => invoiceFileInputRef.current?.click()}
+                          disabled={uploadingInvoice}
+                          className="w-full bg-white hover:bg-cyan-50 border border-[#006064]/40 text-[#006064] px-3 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                        >
+                          <Upload
+                            className={`w-3.5 h-3.5 text-[#006064] ${
+                              uploadingInvoice ? "animate-spin" : ""
+                            }`}
+                          />
+                          <span>{uploadingInvoice ? "Uploading..." : "Attach PDF"}</span>
+                        </button>
 
-                      {formData.invoiceUrl && (
-                        <div className="flex items-center justify-between bg-cyan-50 border border-cyan-200 px-2 py-1 text-[11px]">
-                          <a
-                            href={formData.invoiceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[#006064] hover:underline font-bold flex items-center gap-1 truncate"
-                            title="View Attached PDF"
-                          >
-                            <FileText className="w-3.5 h-3.5 text-[#006064] shrink-0" />
-                            <span className="truncate">PDF Attached</span>
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => setFormData((prev) => ({ ...prev, invoiceUrl: "" }))}
-                            className="text-gray-400 hover:text-red-600 text-xs ml-1 cursor-pointer font-bold px-1"
-                            title="Remove PDF"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      )}
+                        {formData.invoiceUrl && (
+                          <div className="flex items-center justify-between bg-cyan-50 border border-cyan-200 px-2 py-1 text-[11px]">
+                            <a
+                              href={formData.invoiceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#006064] hover:underline font-bold flex items-center gap-1 truncate"
+                              title="View Attached PDF"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-[#006064] shrink-0" />
+                              <span className="truncate">PDF Attached</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => setFormData((prev) => ({ ...prev, invoiceUrl: "" }))}
+                              className="text-gray-400 hover:text-red-600 text-xs ml-1 cursor-pointer font-bold px-1"
+                              title="Remove PDF"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Remarks */}
@@ -3683,7 +4051,7 @@ export function ExpenseRegister({
                         className="inline-flex items-center gap-1.5 text-[#006064] hover:underline font-bold text-[11px] bg-white px-2.5 py-1 border border-cyan-300 shadow-2xs"
                       >
                         <FileText className="w-3.5 h-3.5 text-[#006064]" />
-                        <span>View CM's Vendor Bill / Invoice PDF</span>
+                        <span>View Current Tax Invoice PDF</span>
                       </a>
                     )}
                   </div>
@@ -3928,14 +4296,14 @@ export function ExpenseRegister({
               {/* Form Section 4: Upload Inv, Bank Portal Checkbox, Remarks */}
               <div className="space-y-3 pt-2">
                 <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-emerald-900 border-b border-gray-100 pb-1 flex items-center gap-1.5">
-                  <Upload className="w-3.5 h-3.5 text-emerald-600" /> 4. Upload Inv & Bank Portal Status
+                  <Upload className="w-3.5 h-3.5 text-emerald-600" /> 4. UPLOAD VENDOR TAX INVOICE & BANK PORTAL STATUS (ACCOUNTANT STEP)
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                   {/* Upload Inv */}
                   <div>
                     <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
-                      Upload Inv (Invoice / Bill PDF)
+                      Official Vendor Tax Invoice PDF <span className="text-gray-400 font-normal text-[10px] lowercase">(Accountant Step)</span>
                     </label>
                     <div className="flex items-center gap-2">
                       <input
@@ -4591,6 +4959,16 @@ export function ExpenseRegister({
           </div>
         </div>,
         document.body
+      )}
+
+      {/* ── ICICI BANK STATEMENT MODAL (ACCOUNTANT & SUPER ADMIN ONLY) ── */}
+      {(isAdmin || isAccountant) && (
+        <BankStatementModal
+          isOpen={isBankStatementOpen}
+          onClose={() => setIsBankStatementOpen(false)}
+          isAdmin={isAdmin}
+          isAccountant={isAccountant}
+        />
       )}
     </div>
   );

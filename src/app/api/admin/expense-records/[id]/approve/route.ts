@@ -120,108 +120,130 @@ export async function POST(
         maximumFractionDigits: 2,
       })}`;
 
-      const emailSubject = `Payment Processed & Approved: ${record.vendorName || 'Vendor'} - ${formattedAmount} | Ref: ${finalUtr}`;
-      const emailHtml = `
-<!DOCTYPE html>
-<html>
+      const emailSubject = `Payment Advice: ${record.vendorName || 'Vendor'} - ${formattedAmount} | Ref: ${finalUtr}`;
+
+      const emailText = `PAYMENT ADVICE & REMITTANCE CONFIRMATION - SSPACIA
+--------------------------------------------------
+
+Dear ${record.vendorName || 'Vendor'},
+
+This is an automated payment confirmation from SSPāCIA Coworking Spaces.
+A payment of ${formattedAmount} has been approved and disbursed to your bank account.
+
+TRANSACTION DETAILS:
+- Beneficiary / Vendor: ${record.vendorName || 'Not Specified'}
+- Amount Credited: ${formattedAmount}
+- UTR / Reference No: ${finalUtr}
+- Payment Date: ${finalPayDate}
+- Payment Mode: ${finalMode}
+- Coworking Center: ${record.locationName || record.location?.name || 'General HQ'}
+${record.receiptNo ? `- Invoice / Ref No: ${record.receiptNo}\n` : ''}${record.accountNo ? `- Credited Bank A/C: ${record.accountNo}\n` : ''}- Description / Purpose: ${record.description}
+
+Kindly verify the credit in your bank account and proceed with fulfillment of the corresponding goods/services as agreed.
+
+If you have any questions, please reply directly to this email or contact our accounts desk at cm@sspacia.com.
+
+Warm regards,
+Finance & Accounts Department
+SSPāCIA Coworking Spaces
+cm@sspacia.com | www.sspacia.com
+`;
+
+      const emailHtml = `<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>${emailSubject}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; color: #1e293b; }
-    .card { background-color: #ffffff; max-width: 620px; margin: 0 auto; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-    .header { background: linear-gradient(135deg, #006064 0%, #00838f 100%); color: #ffffff; padding: 24px; text-align: left; }
-    .header h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
-    .header p { margin: 6px 0 0; font-size: 13px; opacity: 0.9; }
-    .badge { display: inline-block; background: #22c55e; color: #ffffff; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-top: 10px; }
-    .content { padding: 24px; }
-    .info-table { width: 100%; border-collapse: collapse; margin-top: 16px; margin-bottom: 20px; }
-    .info-table td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
-    .info-table td.label { font-weight: 600; color: #64748b; width: 38%; }
-    .info-table td.value { font-weight: 600; color: #0f172a; }
-    .amount-box { background: #ecfeff; border: 1px solid #a5f3fc; border-radius: 6px; padding: 14px 18px; text-align: center; margin: 18px 0; }
-    .amount-box .title { font-size: 11px; font-weight: 700; color: #0891b2; text-transform: uppercase; letter-spacing: 0.5px; }
-    .amount-box .amount { font-size: 26px; font-weight: 800; color: #006064; margin-top: 4px; }
-    .notice { background: #f8fafc; border-left: 4px solid #006064; padding: 12px 16px; font-size: 12.5px; color: #334155; margin-top: 16px; line-height: 1.5; }
-    .footer { padding: 18px 24px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
-  </style>
 </head>
-<body>
-  <div class="card">
-    <div class="header">
-      <h1>SSPāCIA Finance & Accounts</h1>
-      <p>Vendor Payment Processed & Approved Notice</p>
-      <span class="badge">Payment Approved & Settled</span>
-    </div>
+<body style="margin: 0; padding: 20px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.5; color: #222222; background-color: #f7f7f7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 4px;">
+    <tr>
+      <td style="padding: 22px 26px; border-bottom: 2px solid #006064;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td>
+              <h2 style="margin: 0; font-size: 20px; font-weight: bold; color: #006064; text-transform: uppercase; letter-spacing: 0.5px;">SSPāCIA</h2>
+              <p style="margin: 4px 0 0 0; font-size: 12px; color: #666666;">Payment Advice & Remittance Confirmation</p>
+            </td>
+            <td align="right" style="vertical-align: top;">
+              <span style="font-size: 11px; font-weight: bold; color: #0d6832; background-color: #e6f4ea; padding: 4px 8px; border: 1px solid #b7e1cd;">PAYMENT PROCESSED</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 24px 26px;">
+        <p style="margin: 0 0 14px 0; font-size: 14px; color: #333333;">
+          Dear <strong>${record.vendorName || 'Vendor'}</strong>,
+        </p>
+        <p style="margin: 0 0 18px 0; font-size: 13.5px; color: #444444; line-height: 1.5;">
+          This is to confirm that a payment of <strong style="color: #006064;">${formattedAmount}</strong> has been processed and disbursed by SSPāCIA towards the invoice/expense details mentioned below.
+        </p>
 
-    <div class="content">
-      <div class="amount-box">
-        <div class="title">Total Amount Disbursed</div>
-        <div class="amount">${formattedAmount}</div>
-      </div>
+        <table role="presentation" width="100%" cellpadding="8" cellspacing="0" border="0" style="border-collapse: collapse; font-size: 13px; margin-bottom: 20px; border: 1px solid #eeeeee;">
+          <tr style="background-color: #f9f9f9;">
+            <td width="38%" style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Payment Amount</td>
+            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #006064; font-size: 15px;">${formattedAmount}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">UTR / Ref Number</td>
+            <td style="border: 1px solid #eeeeee; font-family: monospace; font-size: 13px; color: #111111; font-weight: bold;">${finalUtr}</td>
+          </tr>
+          <tr style="background-color: #f9f9f9;">
+            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Payment Date</td>
+            <td style="border: 1px solid #eeeeee; color: #333333;">${finalPayDate}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Payment Mode</td>
+            <td style="border: 1px solid #eeeeee; color: #333333;">${finalMode}</td>
+          </tr>
+          <tr style="background-color: #f9f9f9;">
+            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Center / Location</td>
+            <td style="border: 1px solid #eeeeee; color: #333333;">${record.locationName || record.location?.name || 'General HQ'}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Expense Description</td>
+            <td style="border: 1px solid #eeeeee; color: #333333;">${record.description}</td>
+          </tr>
+          ${record.receiptNo ? `
+          <tr style="background-color: #f9f9f9;">
+            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Invoice / Bill Ref.</td>
+            <td style="border: 1px solid #eeeeee; color: #333333;">${record.receiptNo}</td>
+          </tr>` : ''}
+          ${record.accountNo ? `
+          <tr>
+            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Credited Account</td>
+            <td style="border: 1px solid #eeeeee; font-family: monospace; color: #333333;">${record.accountNo}</td>
+          </tr>` : ''}
+        </table>
 
-      <table class="info-table">
-        <tr>
-          <td class="label">Vendor / Supplier:</td>
-          <td class="value">${record.vendorName || 'Not Specified'}</td>
-        </tr>
-        <tr>
-          <td class="label">Center / Location:</td>
-          <td class="value">${record.locationName || record.location?.name || 'General HQ'}</td>
-        </tr>
-        <tr>
-          <td class="label">Vendor Bank A/C No:</td>
-          <td class="value">${record.accountNo || 'Provided in Bank System'}</td>
-        </tr>
-        <tr>
-          <td class="label">Expense Category:</td>
-          <td class="value">${record.category || 'GENERAL EXPENSE'}</td>
-        </tr>
-        <tr>
-          <td class="label">Description:</td>
-          <td class="value">${record.description}</td>
-        </tr>
-        <tr>
-          <td class="label">Quantity & Rate:</td>
-          <td class="value">QTY: ${record.quantity || 1} | Rate: ₹${record.rate || record.amount}</td>
-        </tr>
-        <tr>
-          <td class="label">Payment Date:</td>
-          <td class="value">${finalPayDate}</td>
-        </tr>
-        <tr>
-          <td class="label">Payment Mode:</td>
-          <td class="value">${finalMode}</td>
-        </tr>
-        <tr>
-          <td class="label">UTR / Reference No:</td>
-          <td class="value" style="font-family: monospace; font-size: 14px; color: #006064;">${finalUtr}</td>
-        </tr>
-        <tr>
-          <td class="label">Approved By:</td>
-          <td class="value">${user.name} (Super Admin)</td>
-        </tr>
-        ${approvalRemarks ? `<tr><td class="label">Approval Remarks:</td><td class="value">${approvalRemarks}</td></tr>` : ''}
-      </table>
+        <p style="margin: 0 0 16px 0; font-size: 13px; color: #444444; line-height: 1.5;">
+          Kindly verify the credit in your bank account and proceed with the order fulfillment / delivery as agreed. If you have any queries, please reply directly to this email.
+        </p>
 
-      <div class="notice">
-        <strong>Vendor Fulfillment Notice:</strong><br>
-        Payment of <strong>${formattedAmount}</strong> has been approved and disbursed by SSPāCIA. The vendor is kindly requested to fulfill and deliver the corresponding goods/services as per agreement.
-      </div>
-    </div>
-
-    <div class="footer">
-      This is an automated operational alert generated by SSPāCIA Enterprise Workspace Management System.
-    </div>
-  </div>
+        <p style="margin: 20px 0 0 0; font-size: 13px; color: #333333;">
+          Warm regards,<br>
+          <strong>Finance & Accounts Team</strong><br>
+          SSPāCIA Coworking Spaces<br>
+          <span style="font-size: 12px; color: #777777;">cm@sspacia.com | www.sspacia.com</span>
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 12px 26px; background-color: #fafafa; border-top: 1px solid #eeeeee; font-size: 11px; color: #888888; text-align: center;">
+        This is an official transactional payment advice from SSPāCIA. Please retain this email for your accounting records.
+      </td>
+    </tr>
+  </table>
 </body>
-</html>
-      `;
+</html>`;
 
       try {
         const mailResult = await sendEmail({
           to: recipient,
           subject: emailSubject,
+          text: emailText,
           html: emailHtml,
         });
 

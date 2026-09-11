@@ -270,18 +270,6 @@ export default function ClientMasterRegistryPage() {
     userRole === 'ACCOUNTANT' ||
     user?.name?.toLowerCase() === 'accounts';
 
-  if (isAccountant && !isAdmin) {
-    return (
-      <div className="p-10 max-w-lg mx-auto text-center space-y-4 bg-white border border-red-200 mt-20 shadow-sm">
-        <div className="text-4xl text-red-500">🔒</div>
-        <h2 className="text-xl font-bold text-red-700">Access Denied</h2>
-        <p className="text-xs text-[#616161]">
-          Accountants do not have access to the Client Master Data Entry repository. Please visit the <strong>Invoices Section</strong> to process Tally PDF invoices.
-        </p>
-      </div>
-    );
-  }
-
   const [entries, setEntries] = useState<ClientMasterEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -1499,6 +1487,15 @@ export default function ClientMasterRegistryPage() {
                 Send Selected ({selectedIds.length}) to Invoices ({selectedTargetMonth.split(' ')[0]})
               </button>
             )}
+
+            <Link
+              href={isAdmin ? "/admin/vendor-master" : "/manager/vendor-master"}
+              className="px-5 py-3 bg-[#006064] hover:bg-[#004D40] text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md cursor-pointer border border-[#004D40]"
+              title="Manage Centralized Vendor Master Directory"
+            >
+              <Building2 size={16} className="text-white" />
+              <span>Vendor Master</span>
+            </Link>
 
             <Link
               href={isAdmin ? "/admin/client-master/terminations" : "/manager/client-master/terminations"}

@@ -50,6 +50,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const locationIdParam = url.searchParams.get('locationId');
     const monthParam = url.searchParams.get('month'); // e.g. "2026-04" or "ALL"
+    const yearParam = url.searchParams.get('year'); // e.g. "2026" or "ALL"
+    const dateParam = url.searchParams.get('date'); // e.g. "2026-04-12"
+    const fromDateParam = url.searchParams.get('fromDate'); // e.g. "2026-04-01"
+    const toDateParam = url.searchParams.get('toDate'); // e.g. "2026-04-30"
     const categoryParam = url.searchParams.get('category');
     const paymentStatusParam = url.searchParams.get('paymentStatus'); // "ALL" | "PAID" | "PENDING"
     const approvalStatusParam = url.searchParams.get('approvalStatus'); // "ALL" | "PENDING" | "APPROVED" | "REJECTED"
@@ -123,8 +127,9 @@ export async function GET(request: Request) {
       },
     });
 
-    // Extract available distinct months
+    // Extract available distinct months & distinct years
     const monthCounts: Record<string, { count: number; total: number; label: string }> = {};
+    const yearCounts: Record<string, { count: number; total: number }> = {};
     const monthNames = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -132,7 +137,7 @@ export async function GET(request: Request) {
 
     for (const rec of allRecords) {
       const d = rec.expenseDate ? new Date(rec.expenseDate) : new Date();
-      const yr = d.getUTCFullYear();
+      const yr = String(d.getUTCFullYear());
       const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
       const key = `${yr}-${mo}`;
       const label = `${monthNames[d.getUTCMonth()]} ${yr}`;
@@ -142,6 +147,12 @@ export async function GET(request: Request) {
       }
       monthCounts[key].count++;
       monthCounts[key].total += rec.amount || 0;
+
+      if (!yearCounts[yr]) {
+        yearCounts[yr] = { count: 0, total: 0 };
+      }
+      yearCounts[yr].count++;
+      yearCounts[yr].total += rec.amount || 0;
     }
 
     const availableMonths = Object.keys(monthCounts)
@@ -154,14 +165,56 @@ export async function GET(request: Request) {
         total: Math.round(monthCounts[key].total * 100) / 100,
       }));
 
-    // If month filter is applied, filter the records
+    const availableYears = Object.keys(yearCounts)
+      .sort()
+      .reverse()
+      .map((y) => ({
+        value: y,
+        label: `Year ${y}`,
+        count: yearCounts[y].count,
+        total: Math.round(yearCounts[y].total * 100) / 100,
+      }));
+
+    // If month/year/date/range filters are applied, filter the records
     let filteredRecords = allRecords;
+
     if (monthParam && monthParam !== 'ALL') {
-      filteredRecords = allRecords.filter((rec: any) => {
+      filteredRecords = filteredRecords.filter((rec: any) => {
         const d = rec.expenseDate ? new Date(rec.expenseDate) : new Date();
         const yr = d.getUTCFullYear();
         const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
         return `${yr}-${mo}` === monthParam;
+      });
+    }
+
+    if (yearParam && yearParam !== 'ALL') {
+      filteredRecords = filteredRecords.filter((rec: any) => {
+        const d = rec.expenseDate ? new Date(rec.expenseDate) : new Date();
+        return String(d.getUTCFullYear()) === yearParam;
+      });
+    }
+
+    if (dateParam && dateParam.trim()) {
+      filteredRecords = filteredRecords.filter((rec: any) => {
+        if (!rec.expenseDate) return false;
+        const d = new Date(rec.expenseDate).toISOString().split('T')[0];
+        return d === dateParam.trim();
+      });
+    }
+
+    if (fromDateParam && fromDateParam.trim()) {
+      filteredRecords = filteredRecords.filter((rec: any) => {
+        if (!rec.expenseDate) return false;
+        const d = new Date(rec.expenseDate).toISOString().split('T')[0];
+        return d >= fromDateParam.trim();
+      });
+    }
+
+    if (toDateParam && toDateParam.trim()) {
+      filteredRecords = filteredRecords.filter((rec: any) => {
+        if (!rec.expenseDate) return false;
+        const d = new Date(rec.expenseDate).toISOString().split('T')[0];
+        return d <= toDateParam.trim();
       });
     }
 
@@ -205,6 +258,7 @@ export async function GET(request: Request) {
         totalRecords: filteredRecords.length,
       },
       availableMonths,
+      availableYears,
       categories,
       locations,
       userRole: isSuperAdmin ? 'SUPER_ADMIN' : isAccountant ? 'ACCOUNTANT' : 'COMMUNITY_MANAGER',
