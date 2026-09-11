@@ -134,6 +134,24 @@ export const FIXED_EXPENSE_TYPES = [
   "GENERAL OPERATING EXPENSE",
 ];
 
+export const SUGGESTED_CATEGORY_HEADERS = [
+  "ELECTRICITY & UTILITIES",
+  "MAINTENANCE & REPAIRS",
+  "OFFICE SUPPLIES & STATIONERY",
+  "TEA, COFFEE & PANTRY",
+  "VOUCHERS",
+  "MARKETING & ADVERTISING",
+  "INTERNET & TELECOM",
+  "CLEANING & HOUSEKEEPING",
+  "RO WATER SUPPLY",
+  "RENT & CAM",
+  "COMPUTER & IT SERVICES",
+  "LEGAL & AUDIT",
+  "SECURITY & SURVEILLANCE",
+  "TRAVEL & CONVEYANCE",
+  "GENERAL OPERATING EXPENSE",
+];
+
 export const PAYMENT_MODES = [
   "Bank Transfer",
   "UPI",
@@ -239,10 +257,19 @@ export function ExpenseRegister({
   const [viewingPaymentRecord, setViewingPaymentRecord] = useState<ExpenseRecordItem | null>(null);
   const [isNewVendorModalOpen, setIsNewVendorModalOpen] = useState(false);
   const [isBankStatementOpen, setIsBankStatementOpen] = useState(false);
-  const [isAddingCustomCategoryInline, setIsAddingCustomCategoryInline] = useState(false);
-  const [inlineCustomCategoryInput, setInlineCustomCategoryInput] = useState("");
+
+  // Super Admin Main Expense Category Headers
+  const [categoryHeaders, setCategoryHeaders] = useState<string[]>([]);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [editingCategoryOldName, setEditingCategoryOldName] = useState<string | null>(null);
+  const [editingCategoryNewName, setEditingCategoryNewName] = useState("");
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [deletingCategoryName, setDeletingCategoryName] = useState<string | null>(null);
+
   const [savingForm, setSavingForm] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [sendingAlertId, setSendingAlertId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
@@ -263,7 +290,8 @@ export function ExpenseRegister({
       settlingRecord ||
       isApprovalsModalOpen ||
       isViewPaymentModalOpen ||
-      isBankStatementOpen
+      isBankStatementOpen ||
+      isCategoryModalOpen
     );
     if (isAnyModalOpen) {
       const originalOverflow = document.body.style.overflow;
@@ -280,6 +308,7 @@ export function ExpenseRegister({
     isApprovalsModalOpen,
     isViewPaymentModalOpen,
     isBankStatementOpen,
+    isCategoryModalOpen,
   ]);
 
   // Global pending approvals across ALL centres (irrespective of center/month filter)
@@ -403,14 +432,21 @@ export function ExpenseRegister({
   const settleProofFileInputRef = useRef<HTMLInputElement | null>(null);
   const settleInvoiceFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Consolidated Categories (Built-in + DB-saved + Custom-added)
+  // Consolidated Categories (Super Admin headers + any existing record categories to prevent data loss)
   const allAvailableCategories = useMemo(() => {
     const set = new Set<string>();
-    FIXED_EXPENSE_TYPES.forEach((c) => set.add(c));
-    categories.forEach((c) => c && set.add(c));
-    customCategories.forEach((c) => c && set.add(c));
+    // 1. Super Admin defined Category Headers
+    if (categoryHeaders.length > 0) {
+      categoryHeaders.forEach((c) => c && set.add(c.trim().toUpperCase()));
+    } else {
+      FIXED_EXPENSE_TYPES.forEach((c) => set.add(c));
+    }
+    // 2. Also preserve historic categories from existing records so no historic data is lost
+    categories.forEach((c) => c && set.add(c.trim().toUpperCase()));
+    customCategories.forEach((c) => c && set.add(c.trim().toUpperCase()));
+    records.forEach((r) => r.category && set.add(r.category.trim().toUpperCase()));
     return Array.from(set);
-  }, [categories, customCategories]);
+  }, [categoryHeaders, categories, customCategories, records]);
 
   // Fetch all pending approvals across ALL locations and months (irrespective of selected filter)
   const fetchAllPendingApprovals = async () => {
@@ -600,6 +636,7 @@ export function ExpenseRegister({
 
   useEffect(() => {
     fetchVendors();
+    fetchCategoryHeaders();
     if (isAdmin) {
       fetchAllPendingApprovals();
     }
@@ -758,22 +795,108 @@ export function ExpenseRegister({
     }
   };
 
-  // Add Custom Category to categories list and select it
-  const handleAddCustomCategory = () => {
-    const trimmed = formData.customCategory.trim().toUpperCase();
-    if (!trimmed) {
-      toast.error("Please enter a custom category name");
+  // Fetch Super Admin Category Headers
+  const fetchCategoryHeaders = async () => {
+    try {
+      const res = await fetch("/api/admin/expense-categories");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.categories)) {
+          setCategoryHeaders(data.categories);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch category headers:", err);
+    }
+  };
+
+  // Add new Category Header (Super Admin Only)
+  const handleAddCategoryHeader = async (nameToAdd?: string) => {
+    const target = (nameToAdd || newCategoryName).trim().toUpperCase();
+    if (!target) {
+      toast.error("Please enter a category name");
       return;
     }
-    if (!customCategories.includes(trimmed) && !FIXED_EXPENSE_TYPES.includes(trimmed)) {
-      setCustomCategories((prev) => [...prev, trimmed]);
+    if (categoryHeaders.includes(target)) {
+      toast.error(`Category "${target}" already exists`);
+      return;
     }
-    setFormData((prev) => ({
-      ...prev,
-      category: trimmed,
-      customCategory: "",
-    }));
-    toast.success(`Expense Category "${trimmed}" added and selected!`);
+
+    setSavingCategory(true);
+    try {
+      const res = await fetch("/api/admin/expense-categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: target }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add category");
+
+      setCategoryHeaders(data.categories || [...categoryHeaders, target]);
+      setNewCategoryName("");
+      toast.success(`Category header "${target}" added successfully!`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add category header");
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  // Rename Category Header (Super Admin Only)
+  const handleUpdateCategoryHeader = async (oldName: string, newName: string) => {
+    const trimmed = newName.trim().toUpperCase();
+    if (!trimmed) {
+      toast.error("New category name cannot be empty");
+      return;
+    }
+    if (trimmed === oldName) {
+      setEditingCategoryOldName(null);
+      return;
+    }
+
+    setSavingCategory(true);
+    try {
+      const res = await fetch("/api/admin/expense-categories", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldName, newName: trimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update category");
+
+      setCategoryHeaders(data.categories);
+      setEditingCategoryOldName(null);
+      setEditingCategoryNewName("");
+      toast.success(`Category renamed from "${oldName}" to "${trimmed}"`);
+      fetchRecords(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update category header");
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  // Delete Category Header (Super Admin Only)
+  const handleDeleteCategoryHeader = async (nameToDelete: string) => {
+    if (!confirm(`Are you sure you want to delete category header "${nameToDelete}"? Existing expenses will retain their category.`)) {
+      return;
+    }
+
+    setDeletingCategoryName(nameToDelete);
+    try {
+      const res = await fetch(`/api/admin/expense-categories?name=${encodeURIComponent(nameToDelete)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete category");
+
+      setCategoryHeaders(data.categories);
+      toast.success(`Category header "${nameToDelete}" deleted`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete category header");
+    } finally {
+      setDeletingCategoryName(null);
+    }
   };
 
   // Handle inline file upload for Add Row
@@ -904,10 +1027,13 @@ export function ExpenseRegister({
         ? locations[0].id
         : "";
 
+    const defaultCategory =
+      categoryHeaders.length > 0 ? categoryHeaders[0] : FIXED_EXPENSE_TYPES[0];
+
     setFormData({
       locationId: defaultLocId,
       expenseDate: new Date().toISOString().split("T")[0],
-      category: FIXED_EXPENSE_TYPES[0],
+      category: defaultCategory,
       customCategory: "",
       description: "",
       quantity: "1",
@@ -947,16 +1073,18 @@ export function ExpenseRegister({
     }
 
     setEditingRecord(rec);
-    const isKnown = allAvailableCategories.includes(rec.category || "");
     const dateFormatted = rec.expenseDate
       ? new Date(rec.expenseDate).toISOString().split("T")[0]
       : new Date().toISOString().split("T")[0];
 
+    const fallbackCat =
+      categoryHeaders.length > 0 ? categoryHeaders[0] : FIXED_EXPENSE_TYPES[0];
+
     setFormData({
       locationId: rec.locationId || "",
       expenseDate: dateFormatted,
-      category: isKnown ? (rec.category || FIXED_EXPENSE_TYPES[0]) : "OTHER",
-      customCategory: isKnown ? "" : (rec.category || ""),
+      category: rec.category || fallbackCat,
+      customCategory: "",
       description: rec.description || "",
       quantity: rec.quantity ? String(rec.quantity) : "1",
       rate: rec.rate ? String(rec.rate) : "",
@@ -983,19 +1111,56 @@ export function ExpenseRegister({
     setIsAddModalOpen(true);
   };
 
-  // Open Super Admin Approval Modal
+  // Open Super Admin / Accountant Disbursal & UTR Modal
   const openApproveModal = (rec: ExpenseRecordItem) => {
     setApprovingRecord(rec);
     const today = new Date().toISOString().split("T")[0];
+    const matchedVendor = vendors.find((v) => String(v.id) === String(rec.vendorId));
+    const recipient = rec.alertEmailSentTo || matchedVendor?.email || "t6565154@gmail.com";
     setApprovalData({
       paymentDate: rec.utrDate || rec.payReceiveDate || today,
       utrNumber: rec.utrNumber || "",
       paymentMode: rec.accPaymentMode || rec.paymentMode || "Bank Transfer",
-      paymentProofUrl: rec.paymentProofUrl || "",
+      paymentProofUrl: rec.paymentProofUrl || rec.utrFileUrl || "",
       approvalRemarks: rec.approvalRemarks || "",
       sendAlertEmail: true,
-      alertEmailRecipient: "t6565154@gmail.com",
+      alertEmailRecipient: recipient,
     });
+  };
+
+  // Accountant / Admin: Directly dispatch / resend payment advice alert email to vendor
+  const handleSendAlertEmail = async (rec: ExpenseRecordItem) => {
+    if (!rec.utrNumber) {
+      toast.error("Please enter UTR number before sending payment alert to vendor.");
+      openApproveModal(rec);
+      return;
+    }
+    const matchedVendor = vendors.find((v) => String(v.id) === String(rec.vendorId));
+    const recipient = rec.alertEmailSentTo || matchedVendor?.email || "t6565154@gmail.com";
+    try {
+      setSendingAlertId(rec.id);
+      const res = await fetch(`/api/admin/expense-records/${rec.id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          utrNumber: rec.utrNumber,
+          paymentDate: rec.utrDate || rec.payReceiveDate || new Date().toISOString().split("T")[0],
+          paymentMode: rec.accPaymentMode || rec.paymentMode || "Bank Transfer",
+          sendAlertEmail: true,
+          alertEmailRecipient: recipient,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to send alert email");
+      }
+      toast.success(`Payment alert email successfully dispatched to ${recipient}!`);
+      fetchRecords(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to dispatch email alert");
+    } finally {
+      setSendingAlertId(null);
+    }
   };
 
   // Open Settle Modal (Accountant Enter/Edit Vendor & Billing Breakdown Against Expense)
@@ -1093,18 +1258,7 @@ export function ExpenseRegister({
       return;
     }
 
-    let finalCategory = formData.category;
-    if (formData.category === "OTHER") {
-      const trimmed = formData.customCategory.trim().toUpperCase();
-      if (!trimmed) {
-        toast.error("Please enter a custom category name or select an existing one");
-        return;
-      }
-      finalCategory = trimmed;
-      if (!customCategories.includes(trimmed) && !FIXED_EXPENSE_TYPES.includes(trimmed)) {
-        setCustomCategories((prev) => [...prev, trimmed]);
-      }
-    }
+    const finalCategory = formData.category.trim().toUpperCase() || "GENERAL EXPENSE";
 
     const payload = {
       locationId: Number(formData.locationId),
@@ -1213,34 +1367,41 @@ export function ExpenseRegister({
 
     try {
       setSavingForm(true);
+      const isCMRecord = settlingRecord.createdByRole === "COMMUNITY_MANAGER";
+      const payload: any = {
+        receiptNo: settleData.receiptNo ? settleData.receiptNo.trim() : null,
+        vendorId: settleData.vendorId ? Number(settleData.vendorId) : null,
+        vendorName: settleData.vendorName ? settleData.vendorName.trim() : null,
+        accountNo: settleData.accountNo ? settleData.accountNo.trim() : null,
+        quantity: settleData.quantity ? parseFloat(settleData.quantity) : 1,
+        unit: settleData.unit || "Nos",
+        rate: settleData.rate ? parseFloat(settleData.rate) : null,
+        invoiceUrl: settleData.invoiceUrl || undefined,
+        uploadedInBankPortal: Boolean(settleData.uploadedInBankPortal),
+        remarks: settleData.remarks ? settleData.remarks.trim() : null,
+        approvalStatus: isAlreadyApproved ? "APPROVED" : "PENDING_APPROVAL",
+        ...(isAlreadyApproved && settleData.utrNumber
+          ? {
+              utrNumber: settleData.utrNumber.trim(),
+              utrDate: settleData.utrDate || new Date().toISOString().split("T")[0],
+              payReceiveDate: settleData.utrDate || new Date().toISOString().split("T")[0],
+              accPaymentMode: settleData.accPaymentMode || "Bank Transfer",
+              utrFileUrl: settleData.utrFileUrl || null,
+              paymentStatus: "PAID",
+            }
+          : {}),
+      };
+
+      // Strict enforcement: Accountants cannot edit base description or amount entered by CMs
+      if (!isCMRecord || isAdmin) {
+        if (settleData.description) payload.description = settleData.description.trim();
+        if (settleData.amount) payload.amount = parseFloat(settleData.amount);
+      }
+
       const res = await fetch(`/api/admin/expense-records/${settlingRecord.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          receiptNo: settleData.receiptNo ? settleData.receiptNo.trim() : null,
-          vendorId: settleData.vendorId ? Number(settleData.vendorId) : null,
-          vendorName: settleData.vendorName ? settleData.vendorName.trim() : null,
-          accountNo: settleData.accountNo ? settleData.accountNo.trim() : null,
-          description: settleData.description ? settleData.description.trim() : undefined,
-          quantity: settleData.quantity ? parseFloat(settleData.quantity) : 1,
-          unit: settleData.unit || "Nos",
-          rate: settleData.rate ? parseFloat(settleData.rate) : null,
-          amount: settleData.amount ? parseFloat(settleData.amount) : undefined,
-          invoiceUrl: settleData.invoiceUrl || undefined,
-          uploadedInBankPortal: Boolean(settleData.uploadedInBankPortal),
-          remarks: settleData.remarks ? settleData.remarks.trim() : null,
-          approvalStatus: isAlreadyApproved ? "APPROVED" : "PENDING_APPROVAL",
-          ...(isAlreadyApproved && settleData.utrNumber
-            ? {
-                utrNumber: settleData.utrNumber.trim(),
-                utrDate: settleData.utrDate || new Date().toISOString().split("T")[0],
-                payReceiveDate: settleData.utrDate || new Date().toISOString().split("T")[0],
-                accPaymentMode: settleData.accPaymentMode || "Bank Transfer",
-                utrFileUrl: settleData.utrFileUrl || null,
-                paymentStatus: "PAID",
-              }
-            : {}),
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -1572,6 +1733,19 @@ export function ExpenseRegister({
               </button>
             )}
 
+            {/* Super Admin Dedicated Category Headers Button (Only visible to Super Admin) */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setIsCategoryModalOpen(true)}
+                className="bg-[#37474f] hover:bg-[#263238] text-white px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer border border-[#263238]"
+                title="Manage Main Expense Category Headers (Super Admin Only)"
+              >
+                <Layers className="w-3.5 h-3.5 text-cyan-300" />
+                <span>Category Headers</span>
+              </button>
+            )}
+
             {/* Add Expense Button (Modal) */}
             {activeViewMode === "ACCOUNTANT" && isAccountant ? (
               <button
@@ -1580,7 +1754,7 @@ export function ExpenseRegister({
                 className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>+ Add Expense (Accountant)</span>
+                <span>Add Expense (Accountant)</span>
               </button>
             ) : (
               <button
@@ -1589,7 +1763,7 @@ export function ExpenseRegister({
                 className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>+ Add Expense</span>
+                <span>Add Expense</span>
               </button>
             )}
           </div>
@@ -1971,7 +2145,7 @@ export function ExpenseRegister({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               {activeViewMode === "CM" ? (
-                /* ── CM VIEW HEADERS (EXACT LOOK OF OLD SPREADSHEET) ── */
+                /* ── CM VIEW HEADERS (EXACT LOOK OF OLD SPREADSHEET WITH DUAL DOCUMENTS) ── */
                 <tr className="bg-[#f8f9fa] border-b border-gray-200 text-gray-700 font-mono text-[10px] uppercase tracking-wider">
                   <th className="py-3 px-3 w-10 text-center">#</th>
                   <th className="py-3 px-3 whitespace-nowrap">Date</th>
@@ -1985,13 +2159,14 @@ export function ExpenseRegister({
                       <Plus className="w-2.5 h-2.5" /> + New Vendor
                     </button>
                   </th>
-                  <th className="py-3 px-4 min-w-[220px]">Expense Description</th>
+                  <th className="py-3 px-4 min-w-[200px]">Expense Description</th>
                   <th className="py-3 px-3 whitespace-nowrap">Expense Section</th>
                   <th className="py-3 px-3 text-right whitespace-nowrap">Amount (₹)</th>
                   <th className="py-3 px-3 whitespace-nowrap">Payment Mod</th>
                   <th className="py-3 px-3 text-center whitespace-nowrap">Receipt / Ref #</th>
-                  <th className="py-3 px-3 min-w-[150px]">Remarks</th>
-                  <th className="py-3 px-3 text-center whitespace-nowrap">Receipt Slip / Proof</th>
+                  <th className="py-3 px-3 text-center whitespace-nowrap">Receipt Slip</th>
+                  <th className="py-3 px-3 text-center whitespace-nowrap">Attached Doc / Bill</th>
+                  <th className="py-3 px-3 min-w-[140px]">Remarks</th>
                   <th className="py-3 px-3 text-center whitespace-nowrap">Payment Details</th>
                   <th className="py-3 px-3 text-center whitespace-nowrap">Actions</th>
                 </tr>
@@ -2016,7 +2191,12 @@ export function ExpenseRegister({
                   <th className="py-3 px-2 text-center whitespace-nowrap">A/U</th>
                   <th className="py-3 px-2.5 text-right whitespace-nowrap">Rate</th>
                   <th className="py-3 px-3 text-right whitespace-nowrap font-black">Amt (₹)</th>
-                  <th className="py-3 px-2.5 text-center whitespace-nowrap">Upload Inv</th>
+                  <th className="py-3 px-2.5 text-center whitespace-nowrap">
+                    <div>Receipt Attached Ref</div>
+                  </th>
+                  <th className="py-3 px-2.5 text-center whitespace-nowrap">
+                    <div>Attached Document</div>
+                  </th>
                   <th className="py-3 px-2.5 text-center whitespace-nowrap">
                     <div>Bank portal</div>
                     <span className="text-[8px] text-gray-400 font-normal lowercase">(upload)</span>
@@ -2107,81 +2287,15 @@ export function ExpenseRegister({
                       />
                     </td>
                     <td className="py-2.5 px-2 whitespace-nowrap">
-                      {isAddingCustomCategoryInline ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="text"
-                            placeholder="New category..."
-                            value={inlineCustomCategoryInput}
-                            onChange={(e) => setInlineCustomCategoryInput(e.target.value.toUpperCase())}
-                            className="border border-[#006064] p-1 text-[10.5px] bg-white focus:outline-none w-28 uppercase font-bold text-[#006064]"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                if (inlineCustomCategoryInput.trim()) {
-                                  const newCat = inlineCustomCategoryInput.trim();
-                                  if (!customCategories.includes(newCat)) {
-                                    setCustomCategories((prev) => [...prev, newCat]);
-                                  }
-                                  setNewRowData((prev) => ({ ...prev, category: newCat }));
-                                }
-                                setIsAddingCustomCategoryInline(false);
-                                setInlineCustomCategoryInput("");
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (inlineCustomCategoryInput.trim()) {
-                                const newCat = inlineCustomCategoryInput.trim();
-                                if (!customCategories.includes(newCat)) {
-                                  setCustomCategories((prev) => [...prev, newCat]);
-                                }
-                                setNewRowData((prev) => ({ ...prev, category: newCat }));
-                              }
-                              setIsAddingCustomCategoryInline(false);
-                              setInlineCustomCategoryInput("");
-                            }}
-                            className="p-1 bg-[#006064] text-white text-[10px] rounded cursor-pointer"
-                            title="Add"
-                          >
-                            <Check className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsAddingCustomCategoryInline(false);
-                              setInlineCustomCategoryInput("");
-                            }}
-                            className="p-1 bg-gray-200 text-gray-700 text-[10px] rounded cursor-pointer"
-                            title="Cancel"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <select
-                          value={newRowData.category}
-                          onChange={(e) => {
-                            if (e.target.value === "__CUSTOM__") {
-                              setIsAddingCustomCategoryInline(true);
-                              setInlineCustomCategoryInput("");
-                            } else {
-                              setNewRowData((prev) => ({ ...prev, category: e.target.value }));
-                            }
-                          }}
-                          className="border border-gray-300 p-1 text-[11px] bg-white focus:outline-none focus:border-[#006064] w-32 font-bold uppercase text-[#006064]"
-                        >
-                          {allAvailableCategories.map((c) => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                          <option value="__CUSTOM__" className="font-bold text-[#006064]">
-                            + Add New Category...
-                          </option>
-                        </select>
-                      )}
+                      <select
+                        value={newRowData.category}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, category: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[11px] bg-white focus:outline-none focus:border-[#006064] w-32 font-bold uppercase text-[#006064]"
+                      >
+                        {Array.from(new Set([...categoryHeaders, ...(newRowData.category ? [newRowData.category] : [])])).map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="py-2.5 px-2 text-right whitespace-nowrap">
                       <input
@@ -2214,15 +2328,7 @@ export function ExpenseRegister({
                         className="border border-gray-300 p-1 text-[10.5px] font-mono w-24 bg-white focus:outline-none focus:border-[#006064]"
                       />
                     </td>
-                    <td className="py-2.5 px-2">
-                      <input
-                        type="text"
-                        placeholder="Remarks (opt)"
-                        value={newRowData.remarks}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, remarks: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[11px] w-28 bg-white focus:outline-none focus:border-[#006064]"
-                      />
-                    </td>
+                    {/* Attach Option 1: Receipt Slip */}
                     <td className="py-2.5 px-2 text-center whitespace-nowrap">
                       <input
                         type="file"
@@ -2245,9 +2351,45 @@ export function ExpenseRegister({
                           disabled={uploadingInlineDoc}
                           className="text-[10px] text-amber-800 font-bold underline cursor-pointer"
                         >
-                          {uploadingInlineDoc ? "..." : "+ Attach Slip"}
+                          {uploadingInlineDoc ? "..." : "+ Slip"}
                         </button>
                       )}
+                    </td>
+                    {/* Attach Option 2: Operational Bill / Doc Proof */}
+                    <td className="py-2.5 px-2 text-center whitespace-nowrap">
+                      <input
+                        type="file"
+                        ref={inlineInvoiceFileRef}
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleInlineUpload(file, "invoice");
+                        }}
+                      />
+                      {newRowData.invoiceUrl ? (
+                        <span className="text-[10px] text-[#006064] font-bold bg-cyan-50 px-1.5 py-0.5 border border-cyan-200">
+                          Doc Attached ✓
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => inlineInvoiceFileRef.current?.click()}
+                          disabled={uploadingInlineDoc}
+                          className="text-[10px] text-[#006064] font-bold underline cursor-pointer"
+                        >
+                          {uploadingInlineDoc ? "..." : "+ Doc"}
+                        </button>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-2">
+                      <input
+                        type="text"
+                        placeholder="Remarks (opt)"
+                        value={newRowData.remarks}
+                        onChange={(e) => setNewRowData((prev) => ({ ...prev, remarks: e.target.value }))}
+                        className="border border-gray-300 p-1 text-[11px] w-28 bg-white focus:outline-none focus:border-[#006064]"
+                      />
                     </td>
                     <td className="py-2.5 px-3 text-center whitespace-nowrap">
                       <span className="text-[10px] text-gray-400 font-mono italic">Accountant Step</span>
@@ -2416,6 +2558,35 @@ export function ExpenseRegister({
                         className="border border-gray-300 p-1 text-[11px] font-mono font-bold text-right w-20 bg-white text-gray-900"
                       />
                     </td>
+                    {/* 10. Receipt Slip / Ref */}
+                    <td className="py-2 px-1 text-center whitespace-nowrap">
+                      <input
+                        type="file"
+                        ref={inlineReceiptFileRef}
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleInlineUpload(file, "receipt");
+                        }}
+                      />
+                      {newRowData.attachmentUrl ? (
+                        <span className="text-[9.5px] text-amber-700 font-bold bg-amber-50 px-1 py-0.5 border border-amber-200">
+                          Slip Attached ✓
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => inlineReceiptFileRef.current?.click()}
+                          disabled={uploadingInlineDoc}
+                          className="text-[9.5px] text-amber-800 underline font-bold cursor-pointer"
+                        >
+                          {uploadingInlineDoc ? "..." : "+ Slip"}
+                        </button>
+                      )}
+                    </td>
+
+                    {/* 11. Attached Document */}
                     <td className="py-2 px-1 text-center whitespace-nowrap">
                       <input
                         type="file"
@@ -2428,15 +2599,17 @@ export function ExpenseRegister({
                         }}
                       />
                       {newRowData.invoiceUrl ? (
-                        <span className="text-[10px] text-emerald-700 font-bold">Uploaded ✓</span>
+                        <span className="text-[9.5px] text-[#006064] font-bold bg-cyan-50 px-1 py-0.5 border border-cyan-200">
+                          Doc Attached ✓
+                        </span>
                       ) : (
                         <button
                           type="button"
                           onClick={() => inlineInvoiceFileRef.current?.click()}
                           disabled={uploadingInlineDoc}
-                          className="text-[10px] text-emerald-700 underline font-bold cursor-pointer"
+                          className="text-[9.5px] text-[#006064] underline font-bold cursor-pointer"
                         >
-                          {uploadingInlineDoc ? "..." : "+ Upload"}
+                          {uploadingInlineDoc ? "..." : "+ Doc"}
                         </button>
                       )}
                     </td>
@@ -2488,7 +2661,7 @@ export function ExpenseRegister({
               {loading ? (
                 <tr>
                   <td
-                    colSpan={activeViewMode === "CM" ? 11 : 16}
+                    colSpan={activeViewMode === "CM" ? 13 : 17}
                     className="py-16 text-center text-gray-500"
                   >
                     <div className="flex flex-col items-center justify-center gap-2">
@@ -2502,7 +2675,7 @@ export function ExpenseRegister({
               ) : records.length === 0 && !isAddingRow ? (
                 <tr>
                   <td
-                    colSpan={activeViewMode === "CM" ? 11 : 16}
+                    colSpan={activeViewMode === "CM" ? 13 : 17}
                     className="py-16 text-center text-gray-400"
                   >
                     <div className="flex flex-col items-center justify-center gap-3">
@@ -2620,21 +2793,11 @@ export function ExpenseRegister({
                           )}
                         </td>
 
-                        {/* 8. Remarks */}
-                        <td className="py-3 px-3 text-gray-600 max-w-xs text-[11px]">
-                          {rec.remarks ? (
-                            <span className="italic">{rec.remarks}</span>
-                          ) : (
-                            <span className="text-gray-300">-</span>
-                          )}
-                        </td>
-
-                        {/* 9. Receipt Slip / Proof */}
+                        {/* 8. Receipt Slip (Voucher / Slip attached by CM) */}
                         <td className="py-3 px-3 text-center whitespace-nowrap">
-                          {(rec.attachmentUrl && !rec.attachmentUrl.includes("undefined")) ||
-                          (rec.invoiceUrl && !rec.invoiceUrl.includes("undefined")) ? (
+                          {rec.attachmentUrl && !rec.attachmentUrl.includes("undefined") ? (
                             <a
-                              href={(rec.attachmentUrl && !rec.attachmentUrl.includes("undefined")) ? rec.attachmentUrl : rec.invoiceUrl!}
+                              href={rec.attachmentUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all cursor-pointer"
@@ -2644,6 +2807,32 @@ export function ExpenseRegister({
                             </a>
                           ) : (
                             <span className="text-gray-300 text-[11px]">-</span>
+                          )}
+                        </td>
+
+                        {/* 9. Attached Doc / Bill (Operational Document / Bill copy attached by CM) */}
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") ? (
+                            <a
+                              href={rec.invoiceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#006064] bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 transition-all cursor-pointer"
+                              title="View Attached Operational Bill / Document Proof"
+                            >
+                              <FileText className="w-3 h-3 text-[#006064]" /> View Doc / Bill
+                            </a>
+                          ) : (
+                            <span className="text-gray-300 text-[11px]">-</span>
+                          )}
+                        </td>
+
+                        {/* 10. Remarks */}
+                        <td className="py-3 px-3 text-gray-600 max-w-xs text-[11px]">
+                          {rec.remarks ? (
+                            <span className="italic">{rec.remarks}</span>
+                          ) : (
+                            <span className="text-gray-300">-</span>
                           )}
                         </td>
 
@@ -2811,30 +3000,57 @@ export function ExpenseRegister({
                         {formatCurrency(rec.amount)}
                       </td>
 
-                      {/* 10. Upload Inv */}
+                      {/* 10. Receipt Attached Ref (CM Receipt Slip / Ref) */}
                       <td className="py-3 px-2.5 text-center whitespace-nowrap">
-                        {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") ? (
-                          <a
-                            href={rec.invoiceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold text-[#006064] bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 transition-all cursor-pointer"
-                            title="View Invoice PDF"
-                          >
-                            <FileText className="w-3 h-3 text-[#006064]" /> Bill PDF
-                          </a>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => openSettleModal(rec)}
-                            className="text-[9.5px] text-gray-400 hover:text-[#006064] underline cursor-pointer"
-                          >
-                            Upload
-                          </button>
-                        )}
+                        <div className="flex flex-col items-center justify-center gap-0.5">
+                          {rec.receiptNo && (
+                            <span className="font-mono text-[10px] font-bold text-gray-800">
+                              {rec.receiptNo}
+                            </span>
+                          )}
+                          {rec.attachmentUrl && !rec.attachmentUrl.includes("undefined") ? (
+                            <a
+                              href={rec.attachmentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all cursor-pointer"
+                              title="View CM Receipt Slip"
+                            >
+                              <Receipt className="w-2.5 h-2.5 text-amber-700" /> View Slip
+                            </a>
+                          ) : !rec.receiptNo ? (
+                            <span className="text-gray-400 text-[10px]">-</span>
+                          ) : null}
+                        </div>
                       </td>
 
-                      {/* 11. Upload in Bank portal (with interactive checkbox below) */}
+                      {/* 11. Attached Document (Operational Bill Proof / Accountant Tax Invoice) */}
+                      <td className="py-3 px-2.5 text-center whitespace-nowrap">
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") ? (
+                            <a
+                              href={rec.invoiceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold text-[#006064] bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 transition-all cursor-pointer"
+                              title="View Attached Bill / Invoice Document"
+                            >
+                              <FileText className="w-3 h-3 text-[#006064]" /> Attached Doc
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openSettleModal(rec)}
+                              className="text-[9.5px] text-gray-400 hover:text-[#006064] underline cursor-pointer"
+                              title="Accountant uploads official invoice in billing breakdown modal"
+                            >
+                              Upload Inv
+                            </button>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* 12. Upload in Bank portal (with interactive checkbox below) */}
                       <td className="py-3 px-2.5 text-center whitespace-nowrap">
                         <div className="flex flex-col items-center justify-center">
                           <input
@@ -2850,7 +3066,7 @@ export function ExpenseRegister({
                         </div>
                       </td>
 
-                      {/* 12. Approved (with checkbox/badge below) */}
+                      {/* 13. Approved (with checkbox/badge below) */}
                       <td className="py-3 px-2.5 text-center whitespace-nowrap">
                         <div className="flex flex-col items-center justify-center">
                           <input
@@ -2870,16 +3086,35 @@ export function ExpenseRegister({
                         </div>
                       </td>
 
-                      {/* 13. UTR No. (LOCKED BEFORE APPROVAL) */}
+                      {/* 14. UTR No. (UNLOCKED FOR ACCOUNTANT ONCE APPROVED) */}
                       <td className="py-3 px-3 text-center whitespace-nowrap">
                         {isApproved ? (
-                          <span className="font-mono text-[11px] font-bold text-gray-900">
-                            {rec.utrNumber || (
-                              <span className="text-amber-600 italic text-[10px]">
-                                Disburse Pending
+                          rec.utrNumber ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="font-mono text-[11px] font-bold text-emerald-800">
+                                {rec.utrNumber}
                               </span>
-                            )}
-                          </span>
+                              {(rec.paymentProofUrl || rec.utrFileUrl) && (
+                                <a
+                                  href={rec.paymentProofUrl || rec.utrFileUrl || "#"}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[8.5px] text-[#006064] hover:underline font-bold"
+                                >
+                                  UTR Proof
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openApproveModal(rec)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-all cursor-pointer shadow-2xs"
+                              title="Click to record bank payment UTR number"
+                            >
+                              <CreditCard className="w-2.5 h-2.5 text-amber-700" /> Enter UTR
+                            </button>
+                          )
                         ) : (
                           <span
                             title="UTR No. will take place after approval"
@@ -2890,12 +3125,23 @@ export function ExpenseRegister({
                         )}
                       </td>
 
-                      {/* 14. Payment Date (LOCKED BEFORE APPROVAL) */}
+                      {/* 15. Payment Date (UNLOCKED FOR ACCOUNTANT ONCE APPROVED) */}
                       <td className="py-3 px-2.5 text-center whitespace-nowrap">
                         {isApproved ? (
-                          <span className="font-mono text-[10.5px] text-gray-800">
-                            {rec.utrDate || rec.payReceiveDate || "-"}
-                          </span>
+                          rec.utrDate || rec.payReceiveDate ? (
+                            <span className="font-mono text-[10.5px] text-gray-800">
+                              {rec.utrDate || rec.payReceiveDate}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openApproveModal(rec)}
+                              className="text-[10px] text-amber-700 hover:text-amber-900 font-bold underline cursor-pointer"
+                              title="Click to set payment date"
+                            >
+                              Set Date
+                            </button>
+                          )
                         ) : (
                           <span
                             title="Payment Date will take place after approval"
@@ -2906,21 +3152,45 @@ export function ExpenseRegister({
                         )}
                       </td>
 
-                      {/* 15. Send Alert / email to vendor (LOCKED BEFORE APPROVAL) */}
+                      {/* 16. Send Alert / email to vendor (UNLOCKED FOR ACCOUNTANT ONCE APPROVED) */}
                       <td className="py-3 px-2.5 text-center whitespace-nowrap">
                         {isApproved ? (
-                          <div className="flex flex-col items-center justify-center">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(rec.alertEmailSent)}
-                              readOnly
-                              disabled
-                              className="w-4 h-4 accent-emerald-600 cursor-not-allowed"
-                            />
-                            <span className="text-[8px] text-emerald-700 font-bold mt-0.5">
-                              {rec.alertEmailSent ? "Alert Sent" : "Queued"}
-                            </span>
-                          </div>
+                          rec.alertEmailSent ? (
+                            <div className="flex flex-col items-center justify-center">
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[8.5px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                <Check className="w-2.5 h-2.5 text-emerald-600" /> Sent
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleSendAlertEmail(rec)}
+                                disabled={sendingAlertId === rec.id}
+                                className="text-[8px] text-blue-600 hover:underline mt-0.5 cursor-pointer"
+                                title="Resend payment confirmation email to vendor"
+                              >
+                                {sendingAlertId === rec.id ? "Sending..." : "Resend"}
+                              </button>
+                            </div>
+                          ) : rec.utrNumber ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSendAlertEmail(rec)}
+                              disabled={sendingAlertId === rec.id}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 transition-all cursor-pointer shadow-2xs"
+                              title="Send official payment confirmation alert to vendor"
+                            >
+                              <Send className="w-2.5 h-2.5 text-blue-600" />
+                              <span>{sendingAlertId === rec.id ? "Sending..." : "Send Alert"}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openApproveModal(rec)}
+                              className="text-[8.5px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 border border-amber-200 cursor-pointer"
+                              title="Enter UTR first to dispatch vendor email"
+                            >
+                              Will Send on UTR
+                            </button>
+                          )
                         ) : (
                           <span
                             title="Send Alert to Vendor will take place after approval"
@@ -2931,7 +3201,7 @@ export function ExpenseRegister({
                         )}
                       </td>
 
-                      {/* 16. Actions */}
+                      {/* 17. Actions */}
                       <td className="py-3 px-3 text-right whitespace-nowrap">
                         <div className="inline-flex items-center justify-end gap-1.5">
                           {!isApproved ? (
@@ -2959,13 +3229,29 @@ export function ExpenseRegister({
                               </button>
                             </>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => openApproveModal(rec)}
-                              className="px-2.5 py-1 text-[9.5px] font-bold uppercase bg-emerald-700 hover:bg-emerald-800 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1"
-                            >
-                              <CreditCard className="w-2.5 h-2.5" /> Disburse / UTR
-                            </button>
+                            rec.utrNumber ? (
+                              <div className="inline-flex items-center gap-1">
+                                <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                  Paid ✓
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openApproveModal(rec)}
+                                  className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 transition-all cursor-pointer"
+                                  title="Edit UTR or Disbursal Details"
+                                >
+                                  Edit UTR
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openApproveModal(rec)}
+                                className="px-2.5 py-1 text-[9.5px] font-bold uppercase bg-emerald-700 hover:bg-emerald-800 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                              >
+                                <CreditCard className="w-2.5 h-2.5" /> Disburse / UTR
+                              </button>
+                            )
                           )}
 
                           {/* Edit Expense Entry (Accountant only own, CM only own, Super Admin everyone) */}
@@ -3163,36 +3449,34 @@ export function ExpenseRegister({
               {/* Section 2: Expense Classification & Amount */}
               <div className="space-y-3 pt-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Expense Type / Category */}
+                  {/* Expense Type / Category (Super Admin defined headers only - NO custom option) */}
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block font-bold text-gray-700 uppercase tracking-wider">
-                        Expense Type / Category <span className="text-red-500">*</span>
-                      </label>
-                      {formData.category !== "OTHER" && (
-                        <button
-                          type="button"
-                          onClick={() => setFormData((prev) => ({ ...prev, category: "OTHER" }))}
-                          className="text-[#006064] hover:underline font-bold text-[10.5px] cursor-pointer flex items-center gap-0.5"
-                        >
-                          <Plus className="w-3 h-3" /> Add Custom
-                        </button>
-                      )}
-                    </div>
+                    <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
+                      Expense Type / Category <span className="text-red-500">*</span>
+                    </label>
                     <select
                       value={formData.category}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, category: e.target.value }))
                       }
-                      className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064] cursor-pointer bg-white"
+                      required
+                      className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064] cursor-pointer bg-white font-medium"
                     >
-                      {allAvailableCategories.map((cat) => (
+                      {/* Strictly Super Admin Category Headers (plus existing record's category if editing an older record) */}
+                      {Array.from(
+                        new Set([
+                          ...categoryHeaders,
+                          ...(formData.category ? [formData.category] : []),
+                        ])
+                      ).map((cat) => (
                         <option key={cat} value={cat}>
                           {cat}
                         </option>
                       ))}
-                      <option value="OTHER">-- Custom Category (+ Add New) --</option>
                     </select>
+                    <span className="text-[10px] text-gray-400 mt-0.5 block">
+                      Main expense categories are centrally managed by Super Admin.
+                    </span>
                   </div>
 
                   {/* Payment Mode (Optional) */}
@@ -3216,59 +3500,6 @@ export function ExpenseRegister({
                     </select>
                   </div>
                 </div>
-
-                {/* Custom Category Adder if OTHER */}
-                {formData.category === "OTHER" && (
-                  <div className="bg-cyan-50/60 p-3 border border-cyan-200 space-y-2 animate-in fade-in">
-                    <div className="flex items-center justify-between">
-                      <label className="block font-bold text-gray-800 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                        <Plus className="w-3.5 h-3.5 text-[#006064]" />
-                        <span>Add Custom Expense Type / Category <span className="text-red-500">*</span></span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            category: FIXED_EXPENSE_TYPES[0],
-                            customCategory: "",
-                          }))
-                        }
-                        className="text-gray-400 hover:text-gray-600 font-normal text-[10.5px] cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        placeholder="e.g. FITOUT CAPEX, REPAIR & MAINTENANCE, IT ACCESSORIES"
-                        value={formData.customCategory}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, customCategory: e.target.value }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleAddCustomCategory();
-                          }
-                        }}
-                        className="flex-1 bg-white border border-gray-300 p-2 text-xs uppercase font-medium focus:outline-none focus:border-[#006064]"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddCustomCategory}
-                        className="bg-[#006064] hover:bg-[#00838f] text-white px-3.5 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs whitespace-nowrap"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>+ Add Category</span>
-                      </button>
-                    </div>
-                    <p className="text-[10.5px] text-gray-500">
-                      Click "+ Add Category" or press Enter to add to the category list and select it.
-                    </p>
-                  </div>
-                )}
 
                 {/* Description */}
                 <div>
@@ -3307,9 +3538,9 @@ export function ExpenseRegister({
                 </div>
               </div>
 
-              {/* Section 3: Receipt Ref, 2 Attachment Options (Receipt Attach, Attach PDF) & Remarks */}
+              {/* Section 3: Receipt Ref, 2 Attachment Options (Receipt Attach & Document Attach) & Remarks */}
               <div className="space-y-3 pt-2">
-                <div className={`grid grid-cols-1 ${activeViewMode === "ACCOUNTANT" && (isAccountant || isAdmin) ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-3`}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Receipt / Ref # */}
                   <div>
                     <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
@@ -3326,7 +3557,7 @@ export function ExpenseRegister({
                     />
                   </div>
 
-                  {/* Attachment Option 1: Receipt Attach */}
+                  {/* Attachment Option 1: Receipt Attach (slip/voucher) */}
                   <div>
                     <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1 flex items-center justify-between">
                       <span>Receipt Attach</span>
@@ -3382,64 +3613,66 @@ export function ExpenseRegister({
                     </div>
                   </div>
 
-                  {/* Attachment Option 2: Attach PDF (Accountant / Super Admin Step Only) */}
-                  {activeViewMode === "ACCOUNTANT" && (isAccountant || isAdmin) && (
-                    <div>
-                      <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1 flex items-center justify-between">
-                        <span>Attach PDF</span>
-                        <span className="text-[10px] text-gray-400 font-normal lowercase">(bill/invoice)</span>
-                      </label>
-                      <input
-                        type="file"
-                        ref={invoiceFileInputRef}
-                        accept=".pdf,.png,.jpg,.jpeg"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleFileUpload(file, "invoice");
-                        }}
-                      />
-                      <div className="space-y-1.5">
-                        <button
-                          type="button"
-                          onClick={() => invoiceFileInputRef.current?.click()}
-                          disabled={uploadingInvoice}
-                          className="w-full bg-white hover:bg-cyan-50 border border-[#006064]/40 text-[#006064] px-3 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                        >
-                          <Upload
-                            className={`w-3.5 h-3.5 text-[#006064] ${
-                              uploadingInvoice ? "animate-spin" : ""
-                            }`}
-                          />
-                          <span>{uploadingInvoice ? "Uploading..." : "Attach PDF"}</span>
-                        </button>
+                  {/* Attachment Option 2: Document / Bill Proof Attach (Operational Bill / Proof PDF) */}
+                  <div>
+                    <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+                      <span>Document / Bill Proof</span>
+                      <span className="text-[10px] text-gray-400 font-normal lowercase">(bill PDF/proof)</span>
+                    </label>
+                    <input
+                      type="file"
+                      ref={invoiceFileInputRef}
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUpload(file, "invoice");
+                      }}
+                    />
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => invoiceFileInputRef.current?.click()}
+                        disabled={uploadingInvoice}
+                        className="w-full bg-white hover:bg-cyan-50 border border-[#006064]/40 text-[#006064] px-3 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                      >
+                        <FileText
+                          className={`w-3.5 h-3.5 text-[#006064] ${
+                            uploadingInvoice ? "animate-spin" : ""
+                          }`}
+                        />
+                        <span>{uploadingInvoice ? "Uploading..." : "Attach Bill / Doc"}</span>
+                      </button>
 
-                        {formData.invoiceUrl && (
-                          <div className="flex items-center justify-between bg-cyan-50 border border-cyan-200 px-2 py-1 text-[11px]">
-                            <a
-                              href={formData.invoiceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[#006064] hover:underline font-bold flex items-center gap-1 truncate"
-                              title="View Attached PDF"
-                            >
-                              <FileText className="w-3.5 h-3.5 text-[#006064] shrink-0" />
-                              <span className="truncate">PDF Attached</span>
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => setFormData((prev) => ({ ...prev, invoiceUrl: "" }))}
-                              className="text-gray-400 hover:text-red-600 text-xs ml-1 cursor-pointer font-bold px-1"
-                              title="Remove PDF"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      {formData.invoiceUrl && (
+                        <div className="flex items-center justify-between bg-cyan-50 border border-cyan-200 px-2 py-1 text-[11px]">
+                          <a
+                            href={formData.invoiceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#006064] hover:underline font-bold flex items-center gap-1 truncate"
+                            title="View Attached Operational Bill / Proof Document"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-[#006064] shrink-0" />
+                            <span className="truncate">Doc / Bill Attached</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setFormData((prev) => ({ ...prev, invoiceUrl: "" }))}
+                            className="text-gray-400 hover:text-red-600 text-xs ml-1 cursor-pointer font-bold px-1"
+                            title="Remove Document"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
+
+                <p className="text-[10px] text-gray-400 italic">
+                  * Operational expense documents attached by CM or Staff. Official Vendor Tax Invoices are uploaded by Accountant in Step 2: Payment Details.
+                </p>
 
                 {/* Remarks */}
                 <div>
@@ -3495,10 +3728,23 @@ export function ExpenseRegister({
             {/* Header */}
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#006064] text-white sticky top-0 z-10">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5" />
-                <h3 className="text-sm font-display font-black uppercase tracking-wide">
-                  Super Admin: Approve & Disburse Vendor Payment
-                </h3>
+                {approvingRecord.approvalStatus === "APPROVED" ? (
+                  <CreditCard className="w-5 h-5 text-cyan-200" />
+                ) : (
+                  <ShieldCheck className="w-5 h-5" />
+                )}
+                <div>
+                  <h3 className="text-sm font-display font-black uppercase tracking-wide">
+                    {approvingRecord.approvalStatus === "APPROVED"
+                      ? "Record Disbursal & UTR Details (Super Admin Approved)"
+                      : "Super Admin: Approve & Disburse Vendor Payment"}
+                  </h3>
+                  <p className="text-[11px] text-cyan-100 font-sans">
+                    {approvingRecord.approvalStatus === "APPROVED"
+                      ? "Accountant Payment Disbursal, UTR Number & Vendor Confirmation Advice"
+                      : "Super Admin Review & Payment Authorization Desk"}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setApprovingRecord(null)}
@@ -3515,8 +3761,16 @@ export function ExpenseRegister({
                   <span className="font-mono text-[10px] uppercase tracking-wider text-gray-500 font-bold">
                     Vendor Payment Requisition
                   </span>
-                  <span className="text-xs font-bold px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300">
-                    PENDING APPROVAL
+                  <span
+                    className={`text-xs font-bold px-2 py-0.5 border ${
+                      approvingRecord.approvalStatus === "APPROVED"
+                        ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                        : "bg-amber-100 text-amber-900 border-amber-300"
+                    }`}
+                  >
+                    {approvingRecord.approvalStatus === "APPROVED"
+                      ? "APPROVED ✓ (AWAITING DISBURSAL)"
+                      : "PENDING APPROVAL"}
                   </span>
                 </div>
 
@@ -3690,15 +3944,36 @@ export function ExpenseRegister({
                     }
                     className="mt-0.5 w-4 h-4 text-[#006064] accent-[#006064] cursor-pointer"
                   />
-                  <label
-                    htmlFor="sendAlertEmailCheck"
-                    className="text-[11.5px] text-gray-800 font-medium cursor-pointer"
-                  >
-                    <strong>Send Vendor Fulfillment Alert Email to t6565154@gmail.com</strong>
-                    <span className="block text-[10.5px] text-gray-500 mt-0.5">
-                      An automated executive notification with full transaction & vendor bill details will be dispatched immediately.
-                    </span>
-                  </label>
+                  <div className="flex-1">
+                    <label
+                      htmlFor="sendAlertEmailCheck"
+                      className="text-[11.5px] text-gray-800 font-medium cursor-pointer block"
+                    >
+                      <strong>Send Vendor Payment Advice Email Notification</strong>
+                      <span className="block text-[10.5px] text-gray-500 mt-0.5">
+                        An automated transactional payment confirmation with full invoice breakdown & UTR details will be dispatched immediately.
+                      </span>
+                    </label>
+                    {approvalData.sendAlertEmail && (
+                      <div className="mt-2">
+                        <label className="block text-[10.5px] font-bold text-gray-700 uppercase mb-0.5 font-mono">
+                          Recipient Vendor / Accounts Email:
+                        </label>
+                        <input
+                          type="email"
+                          value={approvalData.alertEmailRecipient}
+                          onChange={(e) =>
+                            setApprovalData((prev) => ({
+                              ...prev,
+                              alertEmailRecipient: e.target.value,
+                            }))
+                          }
+                          placeholder="vendor@company.com"
+                          className="w-full border border-gray-300 p-1.5 text-xs bg-white focus:outline-none focus:border-[#006064]"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -3717,7 +3992,13 @@ export function ExpenseRegister({
                   className="bg-[#006064] hover:bg-[#00838f] text-white px-5 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
-                  <span>{approving ? "Approving & Dispatching..." : "Confirm Approval & Disburse"}</span>
+                  <span>
+                    {approving
+                      ? "Recording & Dispatching..."
+                      : approvingRecord.approvalStatus === "APPROVED"
+                      ? "Record Payment Disbursal & Send Alert"
+                      : "Confirm Approval & Disburse"}
+                  </span>
                 </button>
               </div>
             </form>
@@ -4051,7 +4332,7 @@ export function ExpenseRegister({
                         className="inline-flex items-center gap-1.5 text-[#006064] hover:underline font-bold text-[11px] bg-white px-2.5 py-1 border border-cyan-300 shadow-2xs"
                       >
                         <FileText className="w-3.5 h-3.5 text-[#006064]" />
-                        <span>View Current Tax Invoice PDF</span>
+                        <span>View CM's Attached Document / Bill Proof</span>
                       </a>
                     )}
                   </div>
@@ -4955,6 +5236,230 @@ export function ExpenseRegister({
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL: SUPER ADMIN MAIN EXPENSE CATEGORY HEADERS ── */}
+      {mounted && typeof document !== "undefined" && isCategoryModalOpen && isAdmin && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white border border-gray-300 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#37474f] text-white sticky top-0 z-10">
+              <div className="flex items-center gap-2.5">
+                <Layers className="w-5 h-5 text-cyan-300" />
+                <div>
+                  <h3 className="text-sm font-display font-black uppercase tracking-wide flex items-center gap-2">
+                    <span>Main Expense Category Headers</span>
+                    <span className="bg-cyan-900 text-cyan-200 text-[10px] px-2 py-0.5 font-mono border border-cyan-700">
+                      Super Admin Only
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-gray-300">
+                    Define and control official expense categories for CMs & Accountants. CM and Accountant dropdowns will strictly use these headers.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsCategoryModalOpen(false);
+                  setEditingCategoryOldName(null);
+                  setEditingCategoryNewName("");
+                  setNewCategoryName("");
+                }}
+                className="p-1 text-white/80 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5 text-xs">
+              {/* Section 1: Add New Category Header */}
+              <div className="bg-slate-50 border border-slate-200 p-4 space-y-3">
+                <h4 className="font-bold uppercase tracking-wider text-gray-800 text-[11px] flex items-center gap-1.5">
+                  <Plus className="w-4 h-4 text-[#006064]" />
+                  <span>Add New Category Header</span>
+                </h4>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter category name (e.g. ELECTRICITY & UTILITIES, CAPEX, etc.)"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCategoryHeader();
+                      }
+                    }}
+                    className="flex-1 bg-white border border-gray-300 p-2 text-xs font-bold uppercase text-gray-900 focus:outline-none focus:border-[#006064]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddCategoryHeader()}
+                    disabled={savingCategory || !newCategoryName.trim()}
+                    className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {savingCategory ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="w-3.5 h-3.5" />
+                    )}
+                    <span>Add Header</span>
+                  </button>
+                </div>
+
+                {/* Suggestions Chips from Available / Common Categories */}
+                <div className="pt-2 border-t border-slate-200">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500 font-bold block mb-1.5">
+                    Quick Suggestion Chips (Click to Add):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SUGGESTED_CATEGORY_HEADERS.map((sug) => {
+                      const isAlreadyAdded = categoryHeaders.includes(sug);
+                      return (
+                        <button
+                          key={sug}
+                          type="button"
+                          disabled={isAlreadyAdded || savingCategory}
+                          onClick={() => handleAddCategoryHeader(sug)}
+                          className={`text-[10.5px] px-2.5 py-1 font-bold transition-all border ${
+                            isAlreadyAdded
+                              ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                              : "bg-white text-[#006064] hover:bg-cyan-50 hover:border-[#006064] border-cyan-200 cursor-pointer shadow-2xs"
+                          }`}
+                          title={isAlreadyAdded ? "Already exists" : `Add "${sug}"`}
+                        >
+                          {isAlreadyAdded ? `✓ ${sug}` : `+ ${sug}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Active Category Headers List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold uppercase tracking-wider text-gray-800 text-[11px] flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-[#006064]" />
+                    <span>Active Category Headers ({categoryHeaders.length})</span>
+                  </h4>
+                  <span className="text-[10.5px] text-gray-500 font-mono">
+                    Visible to CM & Accountant in dropdown
+                  </span>
+                </div>
+
+                <div className="border border-gray-200 divide-y divide-gray-100 bg-white max-h-[340px] overflow-y-auto">
+                  {categoryHeaders.length === 0 ? (
+                    <div className="p-6 text-center text-gray-400">
+                      No category headers created yet. Click suggestions above to seed categories.
+                    </div>
+                  ) : (
+                    categoryHeaders.map((cat, idx) => {
+                      const isEditingThis = editingCategoryOldName === cat;
+                      return (
+                        <div
+                          key={cat}
+                          className="flex items-center justify-between p-2.5 hover:bg-slate-50 transition-colors"
+                        >
+                          {isEditingThis ? (
+                            <div className="flex items-center gap-2 flex-1 mr-2">
+                              <input
+                                type="text"
+                                value={editingCategoryNewName}
+                                onChange={(e) => setEditingCategoryNewName(e.target.value.toUpperCase())}
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleUpdateCategoryHeader(cat, editingCategoryNewName);
+                                  } else if (e.key === "Escape") {
+                                    setEditingCategoryOldName(null);
+                                  }
+                                }}
+                                className="border border-[#006064] p-1.5 text-xs font-bold uppercase w-full bg-white text-gray-900 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateCategoryHeader(cat, editingCategoryNewName)}
+                                disabled={savingCategory}
+                                className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10.5px] font-bold uppercase cursor-pointer"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingCategoryOldName(null)}
+                                className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[10.5px] font-bold uppercase cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono text-[11px] text-gray-400 w-6">
+                                {idx + 1}.
+                              </span>
+                              <span className="font-bold text-gray-900 text-xs tracking-wide truncate">
+                                {cat}
+                              </span>
+                            </div>
+                          )}
+
+                          {!isEditingThis && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingCategoryOldName(cat);
+                                  setEditingCategoryNewName(cat);
+                                }}
+                                className="p-1 text-gray-500 hover:text-[#006064] hover:bg-cyan-50 border border-transparent hover:border-cyan-200 transition-all cursor-pointer"
+                                title="Edit / Rename Category Header"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCategoryHeader(cat)}
+                                disabled={deletingCategoryName === cat}
+                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer disabled:opacity-40"
+                                title="Delete Category Header"
+                              >
+                                {deletingCategoryName === cat ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600" />
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-200 flex items-center justify-end bg-gray-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCategoryModalOpen(false);
+                  setEditingCategoryOldName(null);
+                  setEditingCategoryNewName("");
+                  setNewCategoryName("");
+                }}
+                className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 border border-gray-300 cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>,

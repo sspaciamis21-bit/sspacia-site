@@ -40,12 +40,18 @@ export async function POST(
     }
 
     const roleName = user.role?.name?.toUpperCase() || '';
+    const userEmail = user.email.toLowerCase();
     const isSuperAdmin = roleName === 'SUPER_ADMIN' || roleName === 'ADMIN';
+    const isAccountant =
+      roleName === 'ACCOUNTANT' ||
+      roleName === 'ACCOUNTS' ||
+      userEmail === 'ssinfrazone21@gmail.com' ||
+      user.name.toLowerCase() === 'accounts';
 
-    // Check Super Admin permission
-    if (!isSuperAdmin) {
+    // Disbursing payments and recording UTR is authorized for Super Admin and Accountant
+    if (!isSuperAdmin && !isAccountant) {
       return NextResponse.json(
-        { error: 'Only Super Admin can approve and disburse vendor expense payments' },
+        { error: 'Only Super Admin or Accountant can record disbursement and UTR details' },
         { status: 403 }
       );
     }
@@ -67,6 +73,14 @@ export async function POST(
       return NextResponse.json({ error: 'Expense record not found' }, { status: 404 });
     }
 
+    // If the requisition is not yet approved, only Super Admin can grant initial approval
+    if (record.approvalStatus !== 'APPROVED' && !isSuperAdmin) {
+      return NextResponse.json(
+        { error: 'This expense requisition requires Super Admin approval before payment disbursal can be recorded.' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const {
       paymentDate,
@@ -78,16 +92,16 @@ export async function POST(
       alertEmailRecipient = DEFAULT_ALERT_EMAIL,
     } = body;
 
-    if (!utrNumber || !String(utrNumber).trim()) {
+    const finalUtr = utrNumber ? String(utrNumber).trim() : (record.utrNumber ? String(record.utrNumber).trim() : '');
+    if (!finalUtr) {
       return NextResponse.json(
-        { error: 'UTR / Transaction Reference Number is required for payment approval.' },
+        { error: 'UTR / Transaction Reference Number is required for payment disbursement.' },
         { status: 400 }
       );
     }
 
-    const finalPayDate = paymentDate ? String(paymentDate).trim() : new Date().toISOString().split('T')[0];
-    const finalUtr = String(utrNumber).trim();
-    const finalMode = paymentMode ? String(paymentMode).trim() : record.paymentMode || 'Bank Transfer';
+    const finalPayDate = paymentDate ? String(paymentDate).trim() : (record.utrDate || record.payReceiveDate || new Date().toISOString().split('T')[0]);
+    const finalMode = paymentMode ? String(paymentMode).trim() : (record.accPaymentMode || record.paymentMode || 'Bank Transfer');
 
     // Update expense record
     const updated = await (prisma as any).expenseRecord.update({
@@ -101,12 +115,12 @@ export async function POST(
         receiveAmount: record.amount,
         accPaymentMode: finalMode,
         paymentProofUrl: paymentProofUrl || record.paymentProofUrl || null,
-        approvalRemarks: approvalRemarks ? String(approvalRemarks).trim() : null,
-        approvedById: user.id,
-        approvedByName: user.name,
-        approvedAt: new Date(),
-        alertEmailSent: Boolean(sendAlertEmail),
-        alertEmailSentTo: sendAlertEmail ? (alertEmailRecipient || DEFAULT_ALERT_EMAIL) : null,
+        approvalRemarks: approvalRemarks !== undefined ? (approvalRemarks ? String(approvalRemarks).trim() : null) : record.approvalRemarks,
+        approvedById: record.approvedById || user.id,
+        approvedByName: record.approvedByName || user.name,
+        approvedAt: record.approvedAt || new Date(),
+        alertEmailSent: Boolean(sendAlertEmail) || Boolean(record.alertEmailSent),
+        alertEmailSentTo: sendAlertEmail ? (alertEmailRecipient || DEFAULT_ALERT_EMAIL) : record.alertEmailSentTo,
       },
     });
 
