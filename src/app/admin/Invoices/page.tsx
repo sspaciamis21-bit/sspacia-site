@@ -2885,6 +2885,22 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                                 </button>
                               )}
 
+                              {/* Prorate Days Action for CM */}
+                              {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenProrateModal(invoice)}
+                                  className={`px-2.5 py-1 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors rounded ${
+                                    hasProration(invoice)
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
+                                      : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+                                  }`}
+                                  title="Prorate days if client occupied fewer days in month"
+                                >
+                                  <CalendarDays size={10} className="text-amber-700" />
+                                  <span>{hasProration(invoice) ? 'Adjust Prorated Days' : '⚡ Prorate Days'}</span>
+                                </button>
+                              )}
 
                               {/* Split Invoice Action for CM */}
                               {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
@@ -3005,13 +3021,22 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                               </button>
                             )}
                             {userRoleView === 'CM' && (
-                              <button
-                                onClick={() => handleOpenEditModal(invoice)}
-                                className="p-1 text-neutral-500 hover:text-[#006064] hover:bg-neutral-100"
-                                title="Edit invoice record & products"
-                              >
-                                <Edit2 size={12} />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleOpenProrateModal(invoice)}
+                                  className="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-50"
+                                  title="Prorate / adjust active billing days"
+                                >
+                                  <CalendarDays size={12} />
+                                </button>
+                                <button
+                                  onClick={() => handleOpenEditModal(invoice)}
+                                  className="p-1 text-neutral-500 hover:text-[#006064] hover:bg-neutral-100"
+                                  title="Edit invoice record"
+                                >
+                                  <Edit2 size={12} />
+                                </button>
+                              </>
                             )}
                             <button
                               onClick={() => handleDeleteInvoice(invoice.id)}
