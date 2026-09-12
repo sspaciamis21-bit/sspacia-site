@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     const randomSuffix = Math.floor(100000 + Math.random() * 900000);
     const clientId = `SSP-VO-${randomSuffix}`;
 
-    const durationLabel = months >= 12 ? 'YEARLY' : months >= 6 ? 'HALF_YEARLY' : 'MONTHLY';
+    const durationLabel = months >= 24 ? 'TWO_YEARS' : months >= 12 ? 'YEARLY' : months >= 6 ? 'HALF_YEARLY' : 'MONTHLY';
     const voCabinName = `Virtual Office - ${centre.name} (${centre.area})`;
 
     // Create Client Master record with clientType: 'VIRTUAL_OFFICE'

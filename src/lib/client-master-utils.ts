@@ -144,7 +144,7 @@ export interface ProductRow {
   amount: number | '';
   gstPercent: number | '';
   totalAmount: number | '';
-  paymentDuration: string; // 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY'
+  paymentDuration: string; // 'MONTHLY' | 'QUARTERLY' | 'HALF_YEARLY' | 'YEARLY' | 'TWO_YEARS'
   paymentDueDay: number | '';
   firstPaymentDate: string;
   isAmountManuallyEdited: boolean;

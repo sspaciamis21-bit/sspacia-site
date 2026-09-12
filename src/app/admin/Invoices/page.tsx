@@ -1412,7 +1412,7 @@ export default function AdminInvoicesWorkflowPage() {
     const map = new Map<string, { label: string; count: number; itemsName: string; totalAmt: number }>();
     for (const inv of targetInvoices) {
       const key = inv.productGroupKey || `${inv.paymentDueDay || 'DEFAULT'}_${inv.paymentDuration || 'MONTHLY'}`;
-      const durationLabel = inv.paymentDuration ? String(inv.paymentDuration).replace('_', ' ') : 'MONTHLY';
+      const durationLabel = inv.paymentDuration === 'TWO_YEARS' || inv.paymentDuration === '2_YEARS' ? '2 YEARS' : (inv.paymentDuration ? String(inv.paymentDuration).replace('_', ' ') : 'MONTHLY');
       const dueDayLabel = inv.paymentDueDay ? `Due: ${inv.paymentDueDay}th` : 'End of Month';
       const itemsLabel = inv.cabinName ? `(${inv.cabinName})` : '';
       const label = `${durationLabel} [${dueDayLabel}] ${itemsLabel} - ₹${Number(inv.totalAmount || 0).toLocaleString('en-IN')}`;
@@ -2209,7 +2209,7 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                       <td className="p-3">
                         <div className="flex flex-col gap-1">
                           <span className="px-2 py-0.5 bg-[#006064] text-white text-[10px] font-bold uppercase tracking-wider inline-block text-center w-fit">
-                            {invoice.paymentDuration ? String(invoice.paymentDuration).replace('_', ' ') : 'MONTHLY'}
+                            {invoice.paymentDuration === 'TWO_YEARS' || invoice.paymentDuration === '2_YEARS' ? '2 YEARS' : (invoice.paymentDuration ? String(invoice.paymentDuration).replace('_', ' ') : 'MONTHLY')}
                           </span>
                           {invoice.paymentDueDay && (
                             <span className="text-[10px] font-bold text-teal-900 bg-teal-50 px-1.5 py-0.5 border border-teal-200 w-fit">

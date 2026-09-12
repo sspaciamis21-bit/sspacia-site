@@ -3304,6 +3304,7 @@ export default function ClientMasterRegistryPage() {
                               <option value="QUARTERLY">Quarterly (3 Months)</option>
                               <option value="HALF_YEARLY">Half-Yearly (6 Months)</option>
                               <option value="YEARLY">Yearly (12 Months)</option>
+                              <option value="TWO_YEARS">2 Years (24 Months)</option>
                             </select>
                           </div>
 
@@ -3533,6 +3534,7 @@ export default function ClientMasterRegistryPage() {
                                 <option value="QUARTERLY">Quarterly (3 Months)</option>
                                 <option value="HALF_YEARLY">Half-Yearly (6 Months)</option>
                                 <option value="YEARLY">Yearly (12 Months)</option>
+                                <option value="TWO_YEARS">2 Years (24 Months)</option>
                               </select>
                             </div>
 
@@ -4810,7 +4812,7 @@ export default function ClientMasterRegistryPage() {
                     <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60">
                       <div className="text-[10px] font-bold uppercase text-[#616161]">Payment Duration</div>
                       <div className="font-bold mt-0.5 text-[#006064]">
-                        {entryToViewDetails.products?.[0]?.paymentDuration ? String(entryToViewDetails.products[0].paymentDuration).replace('_', ' ') : 'MONTHLY'}
+                        {entryToViewDetails.products?.[0]?.paymentDuration ? (entryToViewDetails.products[0].paymentDuration === 'TWO_YEARS' || entryToViewDetails.products[0].paymentDuration === '2_YEARS' ? '2 YEARS (24 MONTHS)' : String(entryToViewDetails.products[0].paymentDuration).replace('_', ' ')) : 'MONTHLY'}
                       </div>
                     </div>
                     <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60">
@@ -4854,7 +4856,7 @@ export default function ClientMasterRegistryPage() {
                           <td className="p-2 border border-neutral-200 text-center">{p.gstPercent ?? 18}%</td>
                           <td className="p-2 border border-neutral-200 text-right font-mono font-bold text-[#006064]">₹{Number(p.totalAmount || 0).toLocaleString('en-IN')}</td>
                           <td className="p-2 border border-neutral-200 text-center font-bold text-[#006064] text-[10px]">
-                            {p.paymentDuration ? String(p.paymentDuration).replace('_', ' ') : 'MONTHLY'}
+                            {p.paymentDuration ? (p.paymentDuration === 'TWO_YEARS' || p.paymentDuration === '2_YEARS' ? '2 YEARS (24 MONTHS)' : String(p.paymentDuration).replace('_', ' ')) : 'MONTHLY'}
                           </td>
                           <td className="p-2 border border-neutral-200 text-center font-bold text-[10px]">
                             {p.paymentDueDay ? `${p.paymentDueDay}th` : 'Default'}
