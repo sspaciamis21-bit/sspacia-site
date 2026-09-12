@@ -343,6 +343,13 @@ export default function AdminInvoicesWorkflowPage() {
     totalAmount: number | '';
     paymentDuration?: string;
     billingType?: string;
+    baseMonthlyAmount?: number;
+    isProrated?: boolean;
+    activeDays?: number;
+    totalMonthDays?: number;
+    proratedStartDate?: string;
+    proratedEndDate?: string;
+    prorateFormula?: string;
     note?: string;
   }
 
@@ -358,6 +365,13 @@ export default function AdminInvoicesWorkflowPage() {
   const [editGstNo, setEditGstNo] = useState('');
   const [editBillingMonth, setEditBillingMonth] = useState('');
   const [editStatus, setEditStatus] = useState<InvoiceRecord['status']>('PENDING_CM_REVIEW');
+
+  // Edit Invoice Record Prorate State
+  const [showEditProratePanel, setShowEditProratePanel] = useState<boolean>(false);
+  const [editProrateStartDate, setEditProrateStartDate] = useState<string>('');
+  const [editProrateEndDate, setEditProrateEndDate] = useState<string>('');
+  const [editProrateActiveDays, setEditProrateActiveDays] = useState<number>(30);
+  const [editProrateTotalMonthDays, setEditProrateTotalMonthDays] = useState<number>(30);
 
   const fetchSignatureSettings = useCallback(async () => {
     try {
@@ -1429,17 +1443,29 @@ export default function AdminInvoicesWorkflowPage() {
       try {
         const raw = JSON.parse(inv.itemsJson);
         if (Array.isArray(raw) && raw.length > 0) {
-          parsed = raw.map((it: any) => ({
-            cabinName: it.cabinName || '',
-            noOfSeats: it.noOfSeats ?? '',
-            ratePerAgreement: it.ratePerAgreement ?? '',
-            amount: it.amount ?? '',
-            gstPercent: it.gstPercent ?? 18,
-            totalAmount: it.totalAmount ?? '',
-            paymentDuration: it.paymentDuration || 'MONTHLY',
-            billingType: it.billingType || 'REGULAR',
-            note: it.note,
-          }));
+          parsed = raw.map((it: any) => {
+            const seats = Number(it.noOfSeats) || 0;
+            const rate = Number(it.ratePerAgreement) || 0;
+            const baseAmt = Number(it.baseMonthlyAmount) || (seats > 0 && rate > 0 ? seats * rate : Number(it.amount || 0));
+            return {
+              cabinName: it.cabinName || '',
+              noOfSeats: it.noOfSeats ?? '',
+              ratePerAgreement: it.ratePerAgreement ?? '',
+              amount: it.amount ?? '',
+              gstPercent: it.gstPercent ?? 18,
+              totalAmount: it.totalAmount ?? '',
+              paymentDuration: it.paymentDuration || 'MONTHLY',
+              billingType: it.billingType || 'REGULAR',
+              baseMonthlyAmount: baseAmt,
+              isProrated: it.isProrated || it.billingType === 'PRORATED',
+              activeDays: it.activeDays,
+              totalMonthDays: it.totalMonthDays,
+              proratedStartDate: it.proratedStartDate,
+              proratedEndDate: it.proratedEndDate,
+              prorateFormula: it.prorateFormula,
+              note: it.note,
+            };
+          });
         }
       } catch {
         parsed = [];
@@ -1447,6 +1473,10 @@ export default function AdminInvoicesWorkflowPage() {
     }
 
     if (parsed.length === 0) {
+      const seats = Number(inv.noOfSeats) || 0;
+      const rate = Number(inv.ratePerAgreement) || 0;
+      const baseAmt = seats > 0 && rate > 0 ? seats * rate : Number(inv.amount || 0);
+
       parsed = [{
         cabinName: inv.cabinName || 'Workspace',
         noOfSeats: inv.noOfSeats ?? '',
@@ -1456,10 +1486,119 @@ export default function AdminInvoicesWorkflowPage() {
         totalAmount: inv.totalAmount ?? '',
         paymentDuration: inv.paymentDuration || 'MONTHLY',
         billingType: 'REGULAR',
+        baseMonthlyAmount: baseAmt,
       }];
     }
 
     setEditItems(parsed);
+
+    // Initialize Edit Proration State
+    const monthInfo = getBillingMonthInfo(inv.billingMonth, inv.dueDate ? new Date(inv.dueDate) : undefined);
+    setEditProrateTotalMonthDays(monthInfo.totalDays);
+    const existingProrated = parsed.find(it => it.isProrated || it.billingType === 'PRORATED');
+    if (existingProrated) {
+      setEditProrateStartDate(existingProrated.proratedStartDate || monthInfo.firstDateStr);
+      setEditProrateEndDate(existingProrated.proratedEndDate || monthInfo.lastDateStr);
+      setEditProrateActiveDays(Number(existingProrated.activeDays || monthInfo.totalDays));
+      setShowEditProratePanel(true);
+    } else {
+      setEditProrateStartDate(monthInfo.firstDateStr);
+      setEditProrateEndDate(monthInfo.lastDateStr);
+      setEditProrateActiveDays(monthInfo.totalDays);
+      setShowEditProratePanel(false);
+    }
+  };
+
+  const handleEditProrateDateChange = (startStr: string, endStr: string) => {
+    setEditProrateStartDate(startStr);
+    setEditProrateEndDate(endStr);
+    const days = calculateInclusiveDays(startStr, endStr);
+    if (days > 0) {
+      setEditProrateActiveDays(Math.min(editProrateTotalMonthDays, days));
+    }
+  };
+
+  const handleEditProrateDaysChange = (days: number) => {
+    const valid = Math.max(1, Math.min(editProrateTotalMonthDays, days));
+    setEditProrateActiveDays(valid);
+    if (editProrateStartDate) {
+      const s = new Date(editProrateStartDate);
+      if (!isNaN(s.getTime())) {
+        const e = new Date(s);
+        e.setDate(s.getDate() + (valid - 1));
+        const y = e.getFullYear();
+        const m = String(e.getMonth() + 1).padStart(2, '0');
+        const d = String(e.getDate()).padStart(2, '0');
+        setEditProrateEndDate(`${y}-${m}-${d}`);
+      }
+    }
+  };
+
+  const handleApplyEditProration = () => {
+    const updated = editItems.map(item => {
+      const seats = Number(item.noOfSeats) || 0;
+      const rate = Number(item.ratePerAgreement) || 0;
+      const baseAmt = Number(item.baseMonthlyAmount) || (seats > 0 && rate > 0 ? seats * rate : Number(item.amount || 0));
+      const gstP = Number(item.gstPercent) || 18;
+
+      const calc = calculateProratedBilling({
+        monthlyAmount: baseAmt,
+        totalMonthDays: editProrateTotalMonthDays,
+        activeDays: editProrateActiveDays,
+        startDateStr: editProrateStartDate,
+        endDateStr: editProrateEndDate,
+        gstPercent: gstP,
+      });
+
+      return {
+        ...item,
+        baseMonthlyAmount: baseAmt,
+        amount: calc.proratedSubtotal,
+        totalAmount: calc.totalAmount,
+        billingType: 'PRORATED',
+        isProrated: true,
+        activeDays: calc.activeDays,
+        totalMonthDays: calc.totalMonthDays,
+        proratedStartDate: editProrateStartDate,
+        proratedEndDate: editProrateEndDate,
+        prorateFormula: calc.formulaText,
+        note: `Prorated: ${calc.activeDays} of ${calc.totalMonthDays} Days (${formatDateToIndian(editProrateStartDate)} to ${formatDateToIndian(editProrateEndDate)})`,
+      };
+    });
+
+    setEditItems(updated);
+    recalculateEditTotals(updated);
+    const newTot = updated.reduce((s, it) => s + (Number(it.totalAmount) || 0), 0);
+    toast.success(`Proration applied: ${editProrateActiveDays} days → ₹${newTot.toLocaleString('en-IN')}. Click "Save Invoice Changes" to save! 🎉`);
+  };
+
+  const handleResetEditProration = () => {
+    const updated = editItems.map(item => {
+      const seats = Number(item.noOfSeats) || 0;
+      const rate = Number(item.ratePerAgreement) || 0;
+      const baseAmt = Number(item.baseMonthlyAmount) || (seats > 0 && rate > 0 ? seats * rate : Number(item.amount || 0));
+      const gstP = Number(item.gstPercent) || 18;
+      const gstAmt = Math.round(((baseAmt * gstP) / 100) * 100) / 100;
+      const totalAmt = Math.round(baseAmt + gstAmt);
+
+      return {
+        ...item,
+        amount: baseAmt,
+        totalAmount: totalAmt,
+        billingType: 'REGULAR',
+        isProrated: false,
+        activeDays: undefined,
+        totalMonthDays: undefined,
+        proratedStartDate: undefined,
+        proratedEndDate: undefined,
+        prorateFormula: undefined,
+        note: undefined,
+      };
+    });
+
+    setEditItems(updated);
+    recalculateEditTotals(updated);
+    toast.success('Reset back to full month billing.');
   };
 
   const recalculateEditTotals = (items: EditInvoiceItem[]) => {
@@ -2746,22 +2885,6 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                                 </button>
                               )}
 
-                              {/* Prorate Days Action for CM */}
-                              {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenProrateModal(invoice)}
-                                  className={`px-2.5 py-1 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors rounded ${
-                                    hasProration(invoice)
-                                      ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
-                                      : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
-                                  }`}
-                                  title="Prorate days if client occupied fewer days in month"
-                                >
-                                  <CalendarDays size={10} className="text-amber-700" />
-                                  <span>{hasProration(invoice) ? 'Adjust Prorated Days' : '⚡ Prorate Days'}</span>
-                                </button>
-                              )}
 
                               {/* Split Invoice Action for CM */}
                               {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
@@ -2885,7 +3008,7 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                               <button
                                 onClick={() => handleOpenEditModal(invoice)}
                                 className="p-1 text-neutral-500 hover:text-[#006064] hover:bg-neutral-100"
-                                title="Edit invoice record"
+                                title="Edit invoice record & products"
                               >
                                 <Edit2 size={12} />
                               </button>
@@ -4135,14 +4258,202 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleAddEditItem}
-                      className="px-3 py-1 bg-teal-50 text-[#006064] hover:bg-teal-100 border border-teal-300 font-bold text-[11px] uppercase tracking-wider rounded flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
-                    >
-                      <Plus size={12} /> Add Product Item
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowEditProratePanel(!showEditProratePanel)}
+                        className={`px-3 py-1 font-bold text-[11px] uppercase tracking-wider rounded flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs ${
+                          showEditProratePanel || editItems.some(it => it.isProrated || it.billingType === 'PRORATED')
+                            ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                            : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-300'
+                        }`}
+                        title="Prorate days if client occupied space for fewer days in month"
+                      >
+                        <CalendarDays size={13} />
+                        <span>
+                          {editItems.some(it => it.isProrated || it.billingType === 'PRORATED')
+                            ? 'Adjust Days Proration (Active)'
+                            : '⚡ Prorate Days'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleAddEditItem}
+                        className="px-3 py-1 bg-teal-50 text-[#006064] hover:bg-teal-100 border border-teal-300 font-bold text-[11px] uppercase tracking-wider rounded flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                      >
+                        <Plus size={12} /> Add Product Item
+                      </button>
+                    </div>
                   </div>
+
+                  {/* EDIT MODAL PRORATE PANEL */}
+                  {showEditProratePanel && (() => {
+                    const totalBaseMonthly = editItems.reduce((sum, it) => {
+                      const seats = Number(it.noOfSeats) || 0;
+                      const rate = Number(it.ratePerAgreement) || 0;
+                      const base = Number(it.baseMonthlyAmount) || (seats > 0 && rate > 0 ? seats * rate : Number(it.amount || 0));
+                      return sum + base;
+                    }, 0);
+
+                    const calc = calculateProratedBilling({
+                      monthlyAmount: totalBaseMonthly,
+                      totalMonthDays: editProrateTotalMonthDays,
+                      activeDays: editProrateActiveDays,
+                      startDateStr: editProrateStartDate,
+                      endDateStr: editProrateEndDate,
+                    });
+
+                    return (
+                      <div className="p-4 bg-amber-50/70 border border-amber-300 rounded space-y-3 shadow-2xs">
+                        <div className="flex items-center justify-between">
+                          <div className="font-bold text-xs uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                            <CalendarDays size={14} className="text-amber-700" />
+                            <span>Prorate Billing for Active Days ({editProrateActiveDays} of {editProrateTotalMonthDays} Days)</span>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded">
+                            Month: {editBillingMonth || 'Billing Month'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3 border border-amber-200 rounded">
+                          <div>
+                            <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
+                              Usage Start Date
+                            </label>
+                            <input
+                              type="date"
+                              value={editProrateStartDate}
+                              onChange={(e) => handleEditProrateDateChange(e.target.value, editProrateEndDate)}
+                              className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
+                              Usage End Date
+                            </label>
+                            <input
+                              type="date"
+                              value={editProrateEndDate}
+                              onChange={(e) => handleEditProrateDateChange(editProrateStartDate, e.target.value)}
+                              className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9.5px] font-bold uppercase text-amber-700 mb-1">
+                              Active Days Billed
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min={1}
+                                max={editProrateTotalMonthDays}
+                                value={editProrateActiveDays}
+                                onChange={(e) => handleEditProrateDaysChange(parseInt(e.target.value, 10) || 1)}
+                                className="w-full bg-amber-50 border border-amber-300 px-2 py-1 text-xs font-mono font-bold text-amber-900 rounded focus:bg-white focus:border-amber-600 focus:outline-none text-center"
+                              />
+                              <span className="text-[10px] font-bold text-neutral-500 shrink-0">/ {editProrateTotalMonthDays}d</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[9.5px] text-neutral-500 font-bold uppercase mr-1">Presets:</span>
+                          {[
+                            { label: 'Full Month (30d)', days: editProrateTotalMonthDays },
+                            { label: '11 Days (e.g. Harsha Daulani)', days: 11 },
+                            { label: '15 Days (Half Month)', days: Math.round(editProrateTotalMonthDays / 2) },
+                            { label: '10 Days', days: 10 },
+                            { label: '7 Days (1 Week)', days: 7 },
+                          ].map((p, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleEditProrateDaysChange(p.days)}
+                              className={`px-2 py-0.5 text-[9.5px] font-bold rounded border cursor-pointer transition-colors ${
+                                editProrateActiveDays === p.days
+                                  ? 'bg-amber-600 text-white border-amber-600'
+                                  : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100'
+                              }`}
+                            >
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Real-time Math Summary */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-2.5 border border-amber-200 rounded text-xs">
+                          <div>
+                            <div className="text-[9px] uppercase font-bold text-gray-500">Monthly Base</div>
+                            <div className="font-mono font-bold text-neutral-800 mt-0.5">
+                              ₹{totalBaseMonthly.toLocaleString('en-IN')}
+                            </div>
+                            <div className="text-[8.5px] text-gray-400">₹{calc.dailyRate.toFixed(2)}/day</div>
+                          </div>
+
+                          <div>
+                            <div className="text-[9px] uppercase font-bold text-gray-500">Prorated Subtotal ({calc.activeDays}d)</div>
+                            <div className="font-mono font-bold text-amber-900 mt-0.5">
+                              ₹{calc.proratedSubtotal.toLocaleString('en-IN')}
+                            </div>
+                            <div className="text-[8.5px] text-gray-400">{calc.activeDays}d × ₹{calc.dailyRate.toFixed(2)}</div>
+                          </div>
+
+                          <div>
+                            <div className="text-[9px] uppercase font-bold text-gray-500">18% GST</div>
+                            <div className="font-mono font-bold text-neutral-800 mt-0.5">
+                              ₹{calc.gstAmount.toLocaleString('en-IN')}
+                            </div>
+                            <div className="text-[8.5px] text-gray-400">9% CGST + 9% SGST</div>
+                          </div>
+
+                          <div>
+                            <div className="text-[9px] uppercase font-bold text-teal-800">New Grand Total</div>
+                            <div className="font-mono font-black text-sm text-teal-900 mt-0.5">
+                              ₹{calc.totalAmount.toLocaleString('en-IN')}
+                            </div>
+                            <div className="text-[8.5px] text-teal-700 font-medium">Subtotal + GST</div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between pt-1">
+                          <div>
+                            {editItems.some(it => it.isProrated || it.billingType === 'PRORATED') && (
+                              <button
+                                type="button"
+                                onClick={handleResetEditProration}
+                                className="text-[10px] text-neutral-600 hover:text-neutral-900 underline font-semibold flex items-center gap-1 cursor-pointer"
+                              >
+                                <RotateCcw size={10} /> Reset Products to Full Month
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowEditProratePanel(false)}
+                              className="px-2.5 py-1 text-[10px] font-bold uppercase text-neutral-600 hover:bg-neutral-200 rounded cursor-pointer"
+                            >
+                              Close Panel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleApplyEditProration}
+                              className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10.5px] uppercase tracking-wider rounded shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                            >
+                              <CheckCircle2 size={12} />
+                              <span>Apply {editProrateActiveDays} Days Proration (₹{calc.totalAmount.toLocaleString('en-IN')})</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {editItems.length === 0 ? (
                     <div className="p-6 bg-red-50 border border-red-200 text-center rounded text-red-800 text-xs font-medium space-y-2">
@@ -4186,9 +4497,16 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                                   placeholder="e.g. Dedicated Cabin"
                                   className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black rounded focus:outline-none focus:border-[#006064]"
                                 />
-                                {item.note && (
+                                {item.isProrated || item.billingType === 'PRORATED' ? (
+                                  <div className="mt-1 flex items-center gap-1">
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9.5px] font-bold">
+                                      <CalendarDays size={10} className="text-amber-700" />
+                                      <span>Prorated: {item.activeDays || editProrateActiveDays} of {item.totalMonthDays || editProrateTotalMonthDays} Days</span>
+                                    </span>
+                                  </div>
+                                ) : item.note ? (
                                   <div className="text-[10px] text-amber-700 italic mt-0.5">{item.note}</div>
-                                )}
+                                ) : null}
                               </td>
 
                               <td className="p-2">
@@ -4237,14 +4555,24 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                               </td>
 
                               <td className="p-2 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteEditItem(itIdx)}
-                                  className="p-1.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded transition-colors cursor-pointer"
-                                  title="Delete this product from the invoice"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowEditProratePanel(true)}
+                                    className="p-1.5 bg-amber-50 hover:bg-amber-500 text-amber-700 hover:text-white rounded transition-colors cursor-pointer"
+                                    title="Prorate days for this invoice"
+                                  >
+                                    <CalendarDays size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteEditItem(itIdx)}
+                                    className="p-1.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded transition-colors cursor-pointer"
+                                    title="Delete this product from the invoice"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
