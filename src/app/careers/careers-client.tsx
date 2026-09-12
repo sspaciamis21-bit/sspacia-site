@@ -57,7 +57,6 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
   const [positions, setPositions] = useState<JobPosition[]>(initialPositions);
   const [filteredPositions, setFilteredPositions] = useState<JobPosition[]>(initialPositions);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGender, setSelectedGender] = useState('ALL');
 
   // Application Modal State
   const [selectedJob, setSelectedJob] = useState<JobPosition | null>(null);
@@ -129,10 +128,9 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
       });
   }, []);
 
-  // Filter positions when search or gender changes
+  // Filter positions when search changes
   useEffect(() => {
     let list = positions.filter((p) => p.isActive);
-
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -144,31 +142,8 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
       );
     }
 
-    if (selectedGender !== 'ALL') {
-      list = list.filter((p) => {
-        const jobGender = (p.gender || '').toLowerCase().trim();
-        // If job is "Male / Female" or "Any" or includes both, it matches both Male and Female
-        if (
-          jobGender === 'all' ||
-          jobGender === 'any' ||
-          jobGender.includes('both') ||
-          (jobGender.includes('male') && jobGender.includes('female'))
-        ) {
-          return true;
-        }
-        if (selectedGender === 'Female') {
-          return jobGender.includes('female');
-        }
-        if (selectedGender === 'Male') {
-          // Strictly male (must not contain female)
-          return jobGender.includes('male') && !jobGender.includes('female');
-        }
-        return true;
-      });
-    }
-
     setFilteredPositions(list);
-  }, [searchQuery, selectedGender, positions]);
+  }, [searchQuery, positions]);
 
   const handleOpenApply = (job: JobPosition) => {
     setSelectedJob(job);
@@ -326,7 +301,7 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
 
 
             <p className="text-xs sm:text-sm text-[#E0F7FA] max-w-xl leading-relaxed">
-              Join the SSPACIA team at <strong>CG Road, Ahmedabad</strong>. We are seeking energetic, talented & communication-driven professionals.
+              We are seeking energetic, talented &amp; communication-driven professionals.
             </p>
           </div>
 
@@ -351,40 +326,28 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
         </div>
       </section>
 
-      {/* ── FILTER & SEARCH BAR ───────────────────────────────── */}
+      {/* ── SEARCH BAR ───────────────────────────────── */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-        <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-3 flex items-center justify-between gap-3">
           {/* Search Input */}
-          <div className="relative w-full sm:w-80">
+          <div className="relative w-full max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search job title..."
+              placeholder="Search job title or keyword..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white"
+              className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#006064] focus:bg-white"
             />
-          </div>
-
-          {/* Gender Filter Tabs */}
-          <div className="flex items-center gap-1.5 w-full sm:w-auto">
-            {[
-              { id: 'ALL', label: 'All Openings' },
-              { id: 'Female', label: 'Female' },
-              { id: 'Male', label: 'Male' },
-            ].map((tab) => (
+            {searchQuery && (
               <button
-                key={tab.id}
-                onClick={() => setSelectedGender(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                  selectedGender === tab.id
-                    ? 'bg-[#006064] text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
               >
-                {tab.label}
+                <X className="w-3.5 h-3.5" />
               </button>
-            ))}
+            )}
           </div>
         </div>
       </section>
@@ -408,11 +371,10 @@ export function CareersClient({ initialPositions }: { initialPositions: JobPosit
             <button
               onClick={() => {
                 setSearchQuery('');
-                setSelectedGender('ALL');
               }}
               className="mt-3 px-4 py-1.5 bg-[#006064] text-white text-xs font-bold rounded-lg hover:bg-[#004D40] transition-colors"
             >
-              Reset Filters
+              Reset Search
             </button>
           </div>
         ) : (

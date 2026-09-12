@@ -744,11 +744,11 @@ export default function AdminInvoicesWorkflowPage() {
           prev.map((inv) =>
             inv.id === targetId
               ? {
-                  ...inv,
-                  clientEmailSentAt: new Date().toISOString(),
-                  clientEmailSentTo: customPrimaryEmailInput.trim(),
-                  clientEmailSentCc: ccArray.join(', '),
-                }
+                ...inv,
+                clientEmailSentAt: new Date().toISOString(),
+                clientEmailSentTo: customPrimaryEmailInput.trim(),
+                clientEmailSentCc: ccArray.join(', '),
+              }
               : inv
           )
         );
@@ -816,7 +816,7 @@ export default function AdminInvoicesWorkflowPage() {
       try {
         const raw = JSON.parse(inv.itemsJson);
         if (Array.isArray(raw) && raw.length > 0) items = raw;
-      } catch {}
+      } catch { }
     }
     if (items.length === 0) {
       items = [{
@@ -835,7 +835,7 @@ export default function AdminInvoicesWorkflowPage() {
           setSplitGroups(existingSplits);
           return;
         }
-      } catch {}
+      } catch { }
     }
 
     // Default initialization: If >= 2 items, create 2 initial groups, else 1 group
@@ -897,7 +897,7 @@ export default function AdminInvoicesWorkflowPage() {
     let items: any[] = [];
     try {
       items = JSON.parse(splitModalInvoice.itemsJson || '[]');
-    } catch {}
+    } catch { }
 
     const updatedGroups = splitGroups.map(group => {
       let nextIndices = group.productIndices.filter(i => i !== productIndex);
@@ -962,7 +962,7 @@ export default function AdminInvoicesWorkflowPage() {
       let items: any[] = [];
       try {
         items = JSON.parse(splitModalInvoice?.itemsJson || '[]');
-      } catch {}
+      } catch { }
       const selectedItems = remainingGroups[0].productIndices.map(i => items[i]).filter(Boolean);
       remainingGroups[0].noOfSeats = selectedItems.reduce((s, it) => s + (Number(it.noOfSeats) || 0), 0);
       remainingGroups[0].amount = selectedItems.reduce((s, it) => s + (Number(it.amount) || 0), 0);
@@ -1043,7 +1043,7 @@ export default function AdminInvoicesWorkflowPage() {
     let items: any[] = [];
     try {
       items = JSON.parse(splitModalInvoice.itemsJson || '[]');
-    } catch {}
+    } catch { }
 
     const assignedIndices = new Set(splitGroups.flatMap(g => g.productIndices));
     if (items.length > 0 && assignedIndices.size < items.length) {
@@ -1124,7 +1124,7 @@ export default function AdminInvoicesWorkflowPage() {
         if (Array.isArray(items) && items.some(it => it.billingType === 'PRORATED' || it.isProrated)) {
           return true;
         }
-      } catch {}
+      } catch { }
     }
     if (inv.splitsJson) {
       try {
@@ -1132,7 +1132,7 @@ export default function AdminInvoicesWorkflowPage() {
         if (Array.isArray(splits) && splits.some(sp => sp.isProrated)) {
           return true;
         }
-      } catch {}
+      } catch { }
     }
     return false;
   };
@@ -1152,7 +1152,7 @@ export default function AdminInvoicesWorkflowPage() {
             };
           }
         }
-      } catch {}
+      } catch { }
     }
     if (inv.splitsJson) {
       try {
@@ -1168,7 +1168,7 @@ export default function AdminInvoicesWorkflowPage() {
             };
           }
         }
-      } catch {}
+      } catch { }
     }
     return null;
   };
@@ -1181,7 +1181,7 @@ export default function AdminInvoicesWorkflowPage() {
     let items: any[] = [];
     try {
       if (inv.itemsJson) items = JSON.parse(inv.itemsJson);
-    } catch {}
+    } catch { }
 
     const firstItem = items[0] || {};
     // Full monthly base amount without pro-rata:
@@ -1244,7 +1244,7 @@ export default function AdminInvoicesWorkflowPage() {
       if (prorateModalInvoice.itemsJson) {
         items = JSON.parse(prorateModalInvoice.itemsJson);
       }
-    } catch {}
+    } catch { }
 
     if (items.length === 0) {
       items = [{
@@ -1323,7 +1323,7 @@ export default function AdminInvoicesWorkflowPage() {
       if (prorateModalInvoice.itemsJson) {
         items = JSON.parse(prorateModalInvoice.itemsJson);
       }
-    } catch {}
+    } catch { }
 
     items = items.map((it) => ({
       ...it,
@@ -1370,7 +1370,7 @@ export default function AdminInvoicesWorkflowPage() {
     let splits: InvoiceSplitGroup[] = [];
     try {
       splits = JSON.parse(entryToAttachInvoice.splitsJson || '[]');
-    } catch {}
+    } catch { }
 
     if (!splits[groupIndex]) return;
 
@@ -1753,7 +1753,7 @@ export default function AdminInvoicesWorkflowPage() {
         toast.error(json.error || 'Failed to update status');
       }
     } catch {
-      toast.error('Error updating invoice status');    
+      toast.error('Error updating invoice status');
     } finally {
       setActionLoading(false);
     }
@@ -1915,77 +1915,77 @@ export default function AdminInvoicesWorkflowPage() {
     }));
   }, [invoices, selectedCompanyFilter]);
 
-// Month Normalization Helper - Ensures dropdown only ever contains calendar months (e.g. September 2026)
-const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
-  if (!monthStr) return '';
-  let trimmed = monthStr.trim();
-  if (trimmed.toLowerCase().includes('one-time')) {
-    trimmed = trimmed.replace(/^one-time:?\s*/i, '').trim();
-  }
-  const parts = trimmed.split(/\s+/);
-  if (parts.length === 0) return '';
-
-  let monthPart = parts[0];
-  let yearPart = parts[1] || String(new Date().getFullYear());
-  if (/^\d{1,2}$/.test(parts[0]) && parts.length >= 2) {
-    monthPart = parts[1];
-    yearPart = parts[2] || String(new Date().getFullYear());
-  }
-
-  const m = (monthPart || '').toLowerCase();
-  const map: Record<string, string> = {
-    jan: 'January', january: 'January',
-    feb: 'February', february: 'February',
-    mar: 'March', march: 'March',
-    apr: 'April', april: 'April',
-    may: 'May',
-    jun: 'June', june: 'June',
-    jul: 'July', july: 'July',
-    aug: 'August', august: 'August',
-    sep: 'September', sept: 'September', september: 'September',
-    oct: 'October', october: 'October',
-    nov: 'November', november: 'November',
-    dec: 'December', december: 'December',
-  };
-  const standardMonth = map[m] || (monthPart ? monthPart.charAt(0).toUpperCase() + monthPart.slice(1).toLowerCase() : '');
-  if (!standardMonth) return '';
-  return `${standardMonth} ${yearPart}`;
-};
-
-// Formatter to show "One-Time: 9 Sept 2026" in the table cell
-const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
-  if (inv.billingMonth && inv.billingMonth.toLowerCase().includes('one-time')) {
-    return inv.billingMonth;
-  }
-  let sessionDateStr = '';
-  if (inv.itemsJson) {
-    try {
-      const items = JSON.parse(inv.itemsJson);
-      if (items[0]?.sessionDate) {
-        const d = new Date(items[0].sessionDate);
-        if (!isNaN(d.getTime())) {
-          const day = d.getDate();
-          const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
-          const year = d.getFullYear();
-          sessionDateStr = `${day} ${monthShort} ${year}`;
-        }
-      }
-    } catch {}
-  }
-  if (!sessionDateStr && inv.dueDate) {
-    const d = new Date(inv.dueDate);
-    if (!isNaN(d.getTime())) {
-      const day = d.getDate();
-      const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
-      const year = d.getFullYear();
-      sessionDateStr = `${day} ${monthShort} ${year}`;
+  // Month Normalization Helper - Ensures dropdown only ever contains calendar months (e.g. September 2026)
+  const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
+    if (!monthStr) return '';
+    let trimmed = monthStr.trim();
+    if (trimmed.toLowerCase().includes('one-time')) {
+      trimmed = trimmed.replace(/^one-time:?\s*/i, '').trim();
     }
-  }
-  if (!sessionDateStr) {
-    sessionDateStr = normalizeBillingMonth(inv.billingMonth) || 'Session';
-  }
-  return `One-Time: ${sessionDateStr}`;
-};
+    const parts = trimmed.split(/\s+/);
+    if (parts.length === 0) return '';
+
+    let monthPart = parts[0];
+    let yearPart = parts[1] || String(new Date().getFullYear());
+    if (/^\d{1,2}$/.test(parts[0]) && parts.length >= 2) {
+      monthPart = parts[1];
+      yearPart = parts[2] || String(new Date().getFullYear());
+    }
+
+    const m = (monthPart || '').toLowerCase();
+    const map: Record<string, string> = {
+      jan: 'January', january: 'January',
+      feb: 'February', february: 'February',
+      mar: 'March', march: 'March',
+      apr: 'April', april: 'April',
+      may: 'May',
+      jun: 'June', june: 'June',
+      jul: 'July', july: 'July',
+      aug: 'August', august: 'August',
+      sep: 'September', sept: 'September', september: 'September',
+      oct: 'October', october: 'October',
+      nov: 'November', november: 'November',
+      dec: 'December', december: 'December',
+    };
+    const standardMonth = map[m] || (monthPart ? monthPart.charAt(0).toUpperCase() + monthPart.slice(1).toLowerCase() : '');
+    if (!standardMonth) return '';
+    return `${standardMonth} ${yearPart}`;
+  };
+
+  // Formatter to show "One-Time: 9 Sept 2026" in the table cell
+  const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
+    if (inv.billingMonth && inv.billingMonth.toLowerCase().includes('one-time')) {
+      return inv.billingMonth;
+    }
+    let sessionDateStr = '';
+    if (inv.itemsJson) {
+      try {
+        const items = JSON.parse(inv.itemsJson);
+        if (items[0]?.sessionDate) {
+          const d = new Date(items[0].sessionDate);
+          if (!isNaN(d.getTime())) {
+            const day = d.getDate();
+            const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
+            const year = d.getFullYear();
+            sessionDateStr = `${day} ${monthShort} ${year}`;
+          }
+        }
+      } catch { }
+    }
+    if (!sessionDateStr && inv.dueDate) {
+      const d = new Date(inv.dueDate);
+      if (!isNaN(d.getTime())) {
+        const day = d.getDate();
+        const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
+        const year = d.getFullYear();
+        sessionDateStr = `${day} ${monthShort} ${year}`;
+      }
+    }
+    if (!sessionDateStr) {
+      sessionDateStr = normalizeBillingMonth(inv.billingMonth) || 'Session';
+    }
+    return `One-Time: ${sessionDateStr}`;
+  };
 
   const billingMonthOptions = useMemo(() => {
     const set = new Set<string>();
@@ -2003,7 +2003,7 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
     set.add(`${monthNames[now.getMonth()]} ${now.getFullYear()}`);
     const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     set.add(`${monthNames[nextMonth.getMonth()]} ${nextMonth.getFullYear()}`);
-    
+
     return Array.from(set).sort((a, b) => {
       const da = new Date(`1 ${a}`);
       const db = new Date(`1 ${b}`);
@@ -2203,11 +2203,10 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
             <button
               type="button"
               onClick={() => setActiveSection('ACTIVE_WORKFLOW')}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                activeSection === 'ACTIVE_WORKFLOW'
-                  ? 'bg-[var(--primary)] text-white shadow-xs'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
+              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${activeSection === 'ACTIVE_WORKFLOW'
+                ? 'bg-[var(--primary)] text-white shadow-xs'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
             >
               <FileText size={15} />
               <span>Active Monthly Invoices & Tally</span>
@@ -2219,11 +2218,10 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
             <button
               type="button"
               onClick={() => setActiveSection('OLD_INVOICES')}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                activeSection === 'OLD_INVOICES'
-                  ? 'bg-[var(--primary)] text-white shadow-xs'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
+              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${activeSection === 'OLD_INVOICES'
+                ? 'bg-[var(--primary)] text-white shadow-xs'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
             >
               <FolderArchive size={15} />
               <span>Invoice Payment Receive Management</span>
@@ -2236,22 +2234,20 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
               <button
                 type="button"
                 onClick={() => setUserRoleView('CM')}
-                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                  userRoleView === 'CM'
-                    ? 'bg-[var(--primary)] text-white shadow-xs'
-                    : 'text-[#616161] hover:text-[#1B1C1C]'
-                }`}
+                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${userRoleView === 'CM'
+                  ? 'bg-[var(--primary)] text-white shadow-xs'
+                  : 'text-[#616161] hover:text-[#1B1C1C]'
+                  }`}
               >
                 <UserCheck size={14} /> CM View
               </button>
               <button
                 type="button"
                 onClick={() => setUserRoleView('ACCOUNTANT')}
-                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${
-                  userRoleView === 'ACCOUNTANT'
-                    ? 'bg-[var(--primary)] text-white shadow-xs'
-                    : 'text-[#616161] hover:text-[#1B1C1C]'
-                }`}
+                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${userRoleView === 'ACCOUNTANT'
+                  ? 'bg-[var(--primary)] text-white shadow-xs'
+                  : 'text-[#616161] hover:text-[#1B1C1C]'
+                  }`}
               >
                 <Calculator size={14} /> Accountant View
               </button>
@@ -2293,3528 +2289,3515 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
           </FadeUp>
 
           {/* KPI Cards */}
-      <FadeUp delay={0.1}>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="bg-white p-5 border border-[var(--outline-variant)]/40 shadow-xs">
-            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#616161]">Total Invoices</div>
-            <div className="text-2xl font-display font-black mt-1 text-[#1B1C1C]">{kpis.totalInvoices}</div>
-            <div className="text-[11px] text-[#616161] font-light">Dispatched from Client Master</div>
-          </div>
-
-          <div className="bg-white p-5 border border-purple-200 bg-purple-50/20 shadow-xs">
-            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-700">Pending CM Review</div>
-            <div className="text-2xl font-display font-black mt-1 text-purple-800">{kpis.pendingCM}</div>
-            <div className="text-[11px] text-purple-600 font-light">New arrivals</div>
-          </div>
-
-          <div className="bg-white p-5 border border-blue-200 bg-blue-50/20 shadow-xs">
-            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700">With Accountant</div>
-            <div className="text-2xl font-display font-black mt-1 text-blue-800">{kpis.sentToAccountant}</div>
-            <div className="text-[11px] text-blue-600 font-light">Pending Tally PDF</div>
-          </div>
-
-          <div className="bg-white p-5 border border-amber-200 bg-amber-50/20 shadow-xs">
-            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700">Pending CM Approval</div>
-            <div className="text-2xl font-display font-black mt-1 text-amber-800">{kpis.pendingCMApproval}</div>
-            <div className="text-[11px] text-amber-600 font-light">Tally PDF attached</div>
-          </div>
-
-          <div className="bg-white p-5 border border-emerald-200 bg-emerald-50/20 shadow-xs col-span-2 lg:col-span-1">
-            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">Approved Invoices</div>
-            <div className="text-2xl font-display font-black mt-1 text-emerald-800">{kpis.approved}</div>
-            <div className="text-[11px] text-emerald-600 font-light">Approved by CM</div>
-          </div>
-        </div>
-      </FadeUp>
-
-      {/* TABLE WORKFLOW */}
-      <FadeUp delay={0.2}>
-        <div className="bg-white border border-[var(--outline-variant)]/40 p-6 space-y-4 shadow-xs">
-          {/* 5-SECOND ONE-TIME NOTIFICATION BANNER FOR ACCOUNTANT */}
-          <AnimatePresence>
-            {showArrivalBanner && userRoleView === 'ACCOUNTANT' && accountantArrivalCounts.pendingAttachCount > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -10, height: 0 }}
-                animate={{ opacity: 1, y: 0, height: 'auto' }}
-                exit={{ opacity: 0, y: -10, height: 0 }}
-                transition={{ duration: 0.3 }}
-                className="overflow-hidden"
-              >
-                <div className="p-3 bg-gradient-to-r from-blue-700 via-teal-700 to-emerald-700 text-white rounded-xs shadow-md flex items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 bg-white/20 rounded-full animate-bounce shrink-0">
-                      <Sparkles size={16} className="text-amber-300" />
-                    </div>
-                    <div>
-                      <div className="font-extrabold text-xs uppercase tracking-wide">
-                        🔔 New Invoices Arrived from CM!
-                      </div>
-                      <div className="text-[11px] text-white/90">
-                        {accountantArrivalCounts.pendingAttachCount} client invoice{accountantArrivalCounts.pendingAttachCount > 1 ? 's' : ''} waiting for Tally PDF attachment. (Alert auto-dismisses in 5s)
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAccountantArrivalFilter('PENDING_ATTACH');
-                        setShowArrivalBanner(false);
-                      }}
-                      className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-neutral-900 font-extrabold text-[10px] uppercase tracking-wider rounded-xs shadow-xs cursor-pointer"
-                    >
-                      Attach PDF Now →
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowArrivalBanner(false)}
-                      className="text-white/80 hover:text-white p-1 cursor-pointer"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Quick Arrival Shortcuts for Accountant */}
-          {userRoleView === 'ACCOUNTANT' && (
-            <div className="flex items-center gap-1.5 flex-wrap p-2.5 bg-blue-50/70 border border-blue-200 text-xs">
-              <div className="flex items-center gap-1 font-bold text-blue-950 uppercase tracking-wider text-[10px] mr-1">
-                <Sparkles size={12} className="text-blue-700" />
-                <span>Quick Arrival Filter:</span>
+          <FadeUp delay={0.1}>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="bg-white p-5 border border-[var(--outline-variant)]/40 shadow-xs">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#616161]">Total Invoices</div>
+                <div className="text-2xl font-display font-black mt-1 text-[#1B1C1C]">{kpis.totalInvoices}</div>
+                <div className="text-[11px] text-[#616161] font-light">Dispatched from Client Master</div>
               </div>
-              <button
-                type="button"
-                onClick={() => setAccountantArrivalFilter('ALL')}
-                className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer ${
-                  accountantArrivalFilter === 'ALL'
-                    ? 'bg-[#006064] text-white border-[#006064] shadow-2xs'
-                    : 'bg-white hover:bg-neutral-100 text-gray-700 border-neutral-300'
-                }`}
-              >
-                All ({invoices.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setAccountantArrivalFilter('TODAY')}
-                className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${
-                  accountantArrivalFilter === 'TODAY'
-                    ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
-                    : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
-                }`}
-                title="Filter to invoices that arrived today from CM"
-              >
-                <span>📅 Today&apos;s Arrived</span>
-                <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.todayCount}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAccountantArrivalFilter('YESTERDAY')}
-                className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${
-                  accountantArrivalFilter === 'YESTERDAY'
-                    ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
-                    : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
-                }`}
-                title="Filter to invoices that arrived yesterday from CM"
-              >
-                <span>Yesterday&apos;s Arrived</span>
-                <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.yesterdayCount}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAccountantArrivalFilter('TWO_DAYS_AGO')}
-                className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${
-                  accountantArrivalFilter === 'TWO_DAYS_AGO'
-                    ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
-                    : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
-                }`}
-                title="Filter to invoices that arrived within the last 2-3 days"
-              >
-                <span>2-3 Days Ago</span>
-                <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.twoDaysCount}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAccountantArrivalFilter('PENDING_ATTACH')}
-                className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${
-                  accountantArrivalFilter === 'PENDING_ATTACH'
-                    ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
-                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
-                }`}
-                title="Filter to all invoices waiting for Tally PDF attachment"
-              >
-                <span>⚡ Pending Tally PDF</span>
-                <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.pendingAttachCount}</span>
-              </button>
+
+              <div className="bg-white p-5 border border-purple-200 bg-purple-50/20 shadow-xs">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-700">Pending CM Review</div>
+                <div className="text-2xl font-display font-black mt-1 text-purple-800">{kpis.pendingCM}</div>
+                <div className="text-[11px] text-purple-600 font-light">New arrivals</div>
+              </div>
+
+              <div className="bg-white p-5 border border-blue-200 bg-blue-50/20 shadow-xs">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700">With Accountant</div>
+                <div className="text-2xl font-display font-black mt-1 text-blue-800">{kpis.sentToAccountant}</div>
+                <div className="text-[11px] text-blue-600 font-light">Pending Tally PDF</div>
+              </div>
+
+              <div className="bg-white p-5 border border-amber-200 bg-amber-50/20 shadow-xs">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700">Pending CM Approval</div>
+                <div className="text-2xl font-display font-black mt-1 text-amber-800">{kpis.pendingCMApproval}</div>
+                <div className="text-[11px] text-amber-600 font-light">Tally PDF attached</div>
+              </div>
+
+              <div className="bg-white p-5 border border-emerald-200 bg-emerald-50/20 shadow-xs col-span-2 lg:col-span-1">
+                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">Approved Invoices</div>
+                <div className="text-2xl font-display font-black mt-1 text-emerald-800">{kpis.approved}</div>
+                <div className="text-[11px] text-emerald-600 font-light">Approved by CM</div>
+              </div>
             </div>
-          )}
+          </FadeUp>
 
-          {/* Search & Filter Bar - 2-Tier Structured Layout */}
-          <div className="bg-[#F8F9FA] border border-[var(--outline-variant)]/60 p-4 space-y-3.5 shadow-xs">
-            {/* Tier 1: Primary Dimensions & Action Button */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {/* 1. Select Company */}
-                <div className="flex items-center gap-1.5 bg-white border border-[#006064]/30 px-2.5 py-1.5 shadow-2xs">
-                  <Building2 size={13} className="text-[#006064] shrink-0" />
-                  <span className="text-[10px] font-bold text-[#006064] uppercase tracking-wider">Company:</span>
-                  <select
-                    value={selectedCompanyFilter}
-                    onChange={(e) => {
-                      setSelectedCompanyFilter(e.target.value);
-                      setSelectedCycleFilter('ALL');
-                    }}
-                    className="bg-transparent text-xs font-extrabold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[140px] truncate"
+          {/* TABLE WORKFLOW */}
+          <FadeUp delay={0.2}>
+            <div className="bg-white border border-[var(--outline-variant)]/40 p-6 space-y-4 shadow-xs">
+              {/* 5-SECOND ONE-TIME NOTIFICATION BANNER FOR ACCOUNTANT */}
+              <AnimatePresence>
+                {showArrivalBanner && userRoleView === 'ACCOUNTANT' && accountantArrivalCounts.pendingAttachCount > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                    exit={{ opacity: 0, y: -10, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="overflow-hidden"
                   >
-                    <option value="ALL">All Companies ({companyOptions.length})</option>
-                    {companyOptions.map((cName) => (
-                      <option key={cName} value={cName}>
-                        {cName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    <div className="p-3 bg-gradient-to-r from-blue-700 via-teal-700 to-emerald-700 text-white rounded-xs shadow-md flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 bg-white/20 rounded-full animate-bounce shrink-0">
+                          <Sparkles size={16} className="text-amber-300" />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-xs uppercase tracking-wide">
+                            🔔 New Invoices Arrived from CM!
+                          </div>
+                          <div className="text-[11px] text-white/90">
+                            {accountantArrivalCounts.pendingAttachCount} client invoice{accountantArrivalCounts.pendingAttachCount > 1 ? 's' : ''} waiting for Tally PDF attachment. (Alert auto-dismisses in 5s)
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAccountantArrivalFilter('PENDING_ATTACH');
+                            setShowArrivalBanner(false);
+                          }}
+                          className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-neutral-900 font-extrabold text-[10px] uppercase tracking-wider rounded-xs shadow-xs cursor-pointer"
+                        >
+                          Attach PDF Now →
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowArrivalBanner(false)}
+                          className="text-white/80 hover:text-white p-1 cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-                {/* 2. Billing Month Filter */}
-                <div className="flex items-center gap-1.5 bg-purple-50/80 border border-purple-300 px-2.5 py-1.5 shadow-2xs">
-                  <Calendar size={13} className="text-purple-700 shrink-0" />
-                  <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider">Billing Month:</span>
-                  <select
-                    value={selectedBillingMonthFilter}
-                    onChange={(e) => setSelectedBillingMonthFilter(e.target.value)}
-                    className="bg-transparent text-xs font-bold text-purple-950 focus:outline-none cursor-pointer"
-                  >
-                    <option value="ALL">All Months ({billingMonthOptions.length})</option>
-                    {billingMonthOptions.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 3. Due Date Filter */}
-                <div className="flex items-center gap-1.5 bg-white border border-teal-300 px-2.5 py-1.5 shadow-2xs">
-                  <Clock size={13} className="text-teal-700 shrink-0" />
-                  <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Due Day:</span>
-                  <select
-                    value={selectedDueDayFilter}
-                    onChange={(e) => setSelectedDueDayFilter(e.target.value)}
-                    className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
-                  >
-                    <option value="ALL">All Due Days</option>
-                    <option value="5">5th of Month</option>
-                    <option value="7">7th of Month</option>
-                    <option value="10">10th of Month</option>
-                    <option value="15">15th of Month</option>
-                    <option value="20">20th of Month</option>
-                    <option value="25">25th of Month</option>
-                    <option value="30">30th of Month</option>
-                  </select>
-                </div>
-
-                {/* 4. Payment Duration */}
-                <div className="flex items-center gap-1.5 bg-white border border-amber-300 px-2.5 py-1.5 shadow-2xs">
-                  <Calendar size={13} className="text-amber-700 shrink-0" />
-                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Duration:</span>
-                  <select
-                    value={selectedCycleFilter}
-                    onChange={(e) => setSelectedCycleFilter(e.target.value)}
-                    className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[150px] truncate"
-                  >
-                    <option value="ALL">All Cycles ({availableCycleOptions.length})</option>
-                    {availableCycleOptions.map((cyc) => (
-                      <option key={cyc.key} value={cyc.key}>
-                        {cyc.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Primary Actions: Digital Signature Stamp Hub */}
-              <div className="flex items-center gap-2 shrink-0">
-
-
-                {(canAccessCM || isAdmin) && (
+              {/* Quick Arrival Shortcuts for Accountant */}
+              {userRoleView === 'ACCOUNTANT' && (
+                <div className="flex items-center gap-1.5 flex-wrap p-2.5 bg-blue-50/70 border border-blue-200 text-xs">
+                  <div className="flex items-center gap-1 font-bold text-blue-950 uppercase tracking-wider text-[10px] mr-1">
+                    <Sparkles size={12} className="text-blue-700" />
+                    <span>Quick Arrival Filter:</span>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setShowSignatureSettingsModal(true)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-colors shrink-0 cursor-pointer"
+                    onClick={() => setAccountantArrivalFilter('ALL')}
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer ${accountantArrivalFilter === 'ALL'
+                      ? 'bg-[#006064] text-white border-[#006064] shadow-2xs'
+                      : 'bg-white hover:bg-neutral-100 text-gray-700 border-neutral-300'
+                      }`}
                   >
-                    <PenTool size={13} />
-                    <span>Digital Signature Stamp</span>
+                    All ({invoices.length})
                   </button>
-                )}
-              </div>
-            </div>
-
-            {/* Tier 2: Search, Node Scoping, Status Filter & Refresh */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-neutral-200/80">
-              <div className="relative flex-1 min-w-[240px] max-w-md">
-                <Search size={14} className="absolute left-3 top-2.5 text-[#616161]" />
-                <input
-                  type="text"
-                  placeholder="Search by company, GST, or cabin..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-white border border-[var(--outline-variant)] pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-[#006064] font-medium"
-                />
-                {searchTerm && (
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-black"
-                  >
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2.5">
-                {/* Node Filter */}
-                {canUseNodeFilter && locations.length > 0 && (
-                  <div className="flex items-center gap-1 bg-white border border-[var(--outline-variant)] px-2.5 py-1.5">
-                    <MapPin size={13} className="text-[#616161]" />
-                    <span className="text-[10px] font-bold uppercase text-[#616161]">Node:</span>
-                    <select
-                      value={selectedLocationFilter}
-                      onChange={(e) => setSelectedLocationFilter(e.target.value)}
-                      className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
-                    >
-                      <option value="ALL">All Nodes</option>
-                      {locations.map((loc) => (
-                        <option key={loc.id} value={String(loc.id)}>
-                          {loc.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Status Filter */}
-                <div className="flex items-center gap-1 bg-white border border-[var(--outline-variant)] px-2.5 py-1.5">
-                  <Filter size={13} className="text-[#616161]" />
-                  <span className="text-[10px] font-bold uppercase text-[#616161]">Status:</span>
-                  <select
-                    value={selectedStatusFilter}
-                    onChange={(e) => setSelectedStatusFilter(e.target.value)}
-                    className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
-                  >
-                    <option value="ALL">All Statuses</option>
-                    <option value="PENDING_CM_REVIEW">Pending CM Review</option>
-                    <option value="SENT_TO_ACCOUNTANT">Sent to Accountant</option>
-                    <option value="INVOICE_ATTACHED">Invoice Attached</option>
-                    <option value="APPROVED">Approved</option>
-                    <option value="REJECTED_WITH_REMARKS">Revision Requested</option>
-                  </select>
-                </div>
-
-                {/* Reset all filters button if active */}
-                {(selectedCompanyFilter !== 'ALL' || selectedDueDayFilter !== 'ALL' || selectedCycleFilter !== 'ALL' || selectedBillingMonthFilter !== 'ALL' || selectedStatusFilter !== 'ALL' || searchTerm) && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedCompanyFilter('ALL');
-                      setSelectedDueDayFilter('ALL');
-                      setSelectedCycleFilter('ALL');
-                      setSelectedBillingMonthFilter('ALL');
-                      setSelectedStatusFilter('ALL');
-                      setSearchTerm('');
-                    }}
-                    className="px-2.5 py-1.5 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-[10px] font-bold uppercase tracking-wider"
-                    title="Reset all active filters"
+                    onClick={() => setAccountantArrivalFilter('TODAY')}
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${accountantArrivalFilter === 'TODAY'
+                      ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
+                      : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
+                      }`}
+                    title="Filter to invoices that arrived today from CM"
                   >
-                    Clear Filters
+                    <span>📅 Today&apos;s Arrived</span>
+                    <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.todayCount}</span>
                   </button>
-                )}
-
-                <button
-                  onClick={fetchData}
-                  className="p-1.5 bg-white border border-[var(--outline-variant)] hover:bg-neutral-100 text-[#616161] shadow-2xs"
-                  title="Refresh data"
-                >
-                  <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Table */}
-          {loading ? (
-            <div className="py-16 text-center text-[#616161] flex items-center justify-center gap-2">
-              <Loader2 size={20} className="animate-spin text-[var(--primary)]" /> Loading workflow queue...
-            </div>
-          ) : filteredInvoices.length === 0 ? (
-            <div className="py-16 text-center space-y-3">
-              <div className="text-4xl text-neutral-300">📁</div>
-              <div className="text-sm font-bold text-[#1B1C1C]">No invoices found in queue</div>
-              <p className="text-xs text-[#616161] max-w-sm mx-auto font-light">
-                {userRoleView === 'CM'
-                  ? 'No entries have arrived from Client Master yet. Dispatches will appear here.'
-                  : 'No entries sent by Community Manager pending Accountant action.'}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto space-y-4">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[#006064] text-white uppercase tracking-wider text-[10px] font-bold">
-                    <th className="p-3 w-12 text-center">SR.No</th>
-                    <th className="p-3">Company Name</th>
-                    <th className="p-3">Payment Cycle & Duration</th>
-                    <th className="p-3">Node & Person</th>
-                    <th className="p-3">Cabin & Seats / Items</th>
-                    <th className="p-3">Arrival Date & Dispatch Type</th>
-                    <th className="p-3">Billing Month</th>
-                    <th className="p-3 text-right">Total Amt (₹)</th>
-                    <th className="p-3">Workflow Status</th>
-                    <th className="p-3 text-center w-40">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100 font-medium">
-                  {filteredInvoices.map((invoice) => (
-                    <tr key={invoice.id} className="hover:bg-neutral-50/60 transition-colors">
-                      <td className="p-3 text-center font-mono font-bold text-neutral-600 bg-neutral-50/50">
-                        #{invoice.srNo}
-                      </td>
-
-                      <td className="p-3">
-                        <div className="font-bold text-[#1B1C1C] text-sm">{invoice.companyName}</div>
-                        {invoice.gstNo && <div className="text-[10px] font-mono text-neutral-500">GST: {invoice.gstNo}</div>}
-                      </td>
-
-                      <td className="p-3">
-                        <div className="flex flex-col gap-1">
-                          <span className="px-2 py-0.5 bg-[#006064] text-white text-[10px] font-bold uppercase tracking-wider inline-block text-center w-fit">
-                            {invoice.paymentDuration === 'TWO_YEARS' || invoice.paymentDuration === '2_YEARS' ? '2 YEARS' : (invoice.paymentDuration ? String(invoice.paymentDuration).replace('_', ' ') : 'MONTHLY')}
-                          </span>
-                          {invoice.paymentDueDay && (
-                            <span className="text-[10px] font-bold text-teal-900 bg-teal-50 px-1.5 py-0.5 border border-teal-200 w-fit">
-                              Due: {invoice.paymentDueDay}th of month
-                            </span>
-                          )}
-                          {((invoice.totalOverdueDays && invoice.totalOverdueDays > 0) || (invoice.calculatedLateDays && invoice.calculatedLateDays > 0) || Number(invoice.lateFeeAmount || 0) > 0 || Number(invoice.waivedLateDays || 0) > 0) ? (
-                            <div className="space-y-1 mt-1 font-sans">
-                              {/* Overdue Badge */}
-                              <span className="text-[9px] font-extrabold text-red-700 bg-red-50 px-1.5 py-0.5 border border-red-200 flex items-center gap-1 w-fit">
-                                <AlertOctagon size={10} /> Overdue {invoice.totalOverdueDays || invoice.calculatedLateDays || invoice.lateDays || 0} days
-                              </span>
-
-                              {/* Waived Days Note */}
-                              {Number(invoice.waivedLateDays || invoice.effectiveWaivedDays || 0) > 0 && (
-                                <span className="text-[8.5px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 border border-emerald-200 flex items-center gap-1 w-fit">
-                                  ✓ {invoice.waivedLateDays || invoice.effectiveWaivedDays} days waived (-₹{Number(invoice.waivedLateFee || invoice.effectiveWaivedFee || (Number(invoice.waivedLateDays || 0) * 100)).toLocaleString('en-IN')})
-                                </span>
-                              )}
-
-                              {/* Late Fee Charged Line */}
-                              <div className="text-[9px] font-bold">
-                                {Number(invoice.calculatedLateFee || invoice.lateFeeAmount || 0) > 0 ? (
-                                  <span className="text-red-900">
-                                    Late Fee: ₹{Number(invoice.calculatedLateFee || invoice.lateFeeAmount || 0).toLocaleString('en-IN')}
-                                  </span>
-                                ) : (
-                                  <span className="text-emerald-700 font-bold">Late Fee: ₹0 (Waived)</span>
-                                )}
-                              </div>
-
-                              {/* Manage / Waive Days Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenWaiveModal(invoice)}
-                                disabled={actionLoading}
-                                className="text-[8.5px] bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1 mt-0.5"
-                                title="Click to waive full or specific number of days"
-                              >
-                                <Sliders size={9} />
-                                <span>Waive / Adjust Days</span>
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </td>
-
-                      <td className="p-3">
-                        <div className="space-y-0.5">
-                          {invoice.createdBy?.assignedLocations && invoice.createdBy.assignedLocations.length > 0 ? (
-                            invoice.createdBy.assignedLocations.map((al: any, i: number) => (
-                              <div key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 text-[9px] font-bold uppercase tracking-wider mr-1">
-                                <MapPin size={9} /> {al.location.name}
-                              </div>
-                            ))
-                          ) : (
-                            <span className="text-[9px] text-neutral-400">No Node</span>
-                          )}
-                          <div className="text-[11px] font-bold text-[#1B1C1C] mt-0.5">
-                            {invoice.createdBy?.name || 'System'}
-                          </div>
-                          <div className="text-[9px] text-neutral-400">
-                            {invoice.createdBy?.email}
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="p-3">
-                        <div className="font-bold">{invoice.cabinName || 'N/A'}</div>
-                        <div className="text-[10px] text-[#616161]">
-                          {invoice.noOfSeats || 0} seats @ ₹{Number(invoice.ratePerAgreement || 0).toLocaleString('en-IN')}
-                        </div>
-                      </td>
-
-                      <td className="p-3">
-                        <div className="font-bold text-[#1B1C1C]">
-                          {new Date(invoice.sentAt).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
-                        </div>
-                        <div className="mt-0.5">
-                          <span
-                            className={`inline-flex items-center gap-1 px-1.5 py-0.2 text-[9px] font-extrabold uppercase ${
-                              invoice.sendType === 'AUTOMATIC_MONTH_END'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-blue-100 text-blue-800'
-                            }`}
-                          >
-                            <Tag size={9} />
-                            {invoice.sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC MONTH-END' : 'MANUAL DISPATCH'}
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="p-3 font-bold text-neutral-700">
-                        {invoice.paymentDuration === 'ONE_TIME' || invoice.productGroupKey === 'ONE_TIME_SESSION' || invoice.billingMonth?.toLowerCase().includes('one-time') ? (
-                          <div className="space-y-0.5">
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-300 rounded text-[10px] font-bold">
-                              <Clock size={10} className="text-amber-700 shrink-0" />
-                              <span>{formatOneTimeBillingMonth(invoice)}</span>
-                            </span>
-                            <div className="text-[9px] text-neutral-400 font-sans font-normal">
-                              Month: {normalizeBillingMonth(invoice.billingMonth)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span>{invoice.billingMonth || 'N/A'}</span>
-                        )}
-                      </td>
-
-                      <td className="p-3 text-right">
-                        <div className="font-black text-sm text-[var(--primary)]">
-                          ₹{Number(invoice.totalAmount || 0).toLocaleString('en-IN')}
-                        </div>
-                        {hasProration(invoice) && (() => {
-                          const summary = getProrationSummary(invoice);
-                          return (
-                            <div className="mt-1 flex flex-col items-end">
-                              <span
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9px] font-bold"
-                                title={summary?.formula || 'Prorated invoice amount'}
-                              >
-                                <CalendarDays size={9} className="text-amber-700" />
-                                <span>Prorated: {summary?.label || 'Custom Days'}</span>
-                              </span>
-                            </div>
-                          );
-                        })()}
-                        {Number(invoice.lateFeeAmount || 0) > 0 ? (
-                          <div className="text-[9px] text-red-600 font-bold">
-                            Includes ₹{Number(invoice.lateFeeAmount).toLocaleString('en-IN')} Late Fee
-                          </div>
-                        ) : Number(invoice.waivedLateDays || 0) > 0 ? (
-                          <div className="text-[9px] text-emerald-700 font-bold">
-                            Late Fee Waived (₹0)
-                          </div>
-                        ) : null}
-                      </td>
-
-                      <td className="p-3">
-                        <div className="space-y-1.5">
-                          {renderStatusBadge(invoice.status)}
-
-                          {invoice.splitsJson && (() => {
-                            let spCount = 0;
-                            try { spCount = JSON.parse(invoice.splitsJson || '[]').length; } catch {}
-                            if (spCount > 1) {
-                              return (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenSplitModal(invoice)}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded cursor-pointer hover:bg-purple-100 transition-colors"
-                                  title="Click to view or adjust sub-invoice splits"
-                                >
-                                  <Scissors size={9} /> Split: {spCount} Sub-Invoices
-                                </button>
-                              );
-                            }
-                            return null;
-                          })()}
-
-                          {invoice.digitallySignedPdfUrl && (
-                            <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-bold uppercase rounded">
-                              <Award size={10} className="text-emerald-700" /> Digitally Signed
-                            </div>
-                          )}
-
-                          {/* Show Revision Remarks if rejected by CM */}
-                          {invoice.status === 'REJECTED_WITH_REMARKS' && invoice.remarks && (
-                            <div className="mt-2 p-2 bg-red-50 border border-red-200 text-red-800 text-[10px] space-y-1">
-                              <div className="font-bold flex items-center gap-1">
-                                <AlertTriangle size={11} /> CM Revision Remarks:
-                              </div>
-                              <div className="italic">"{invoice.remarks}"</div>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="p-3 text-center">
-                        <div className="flex flex-col gap-1.5 items-center justify-center">
-                          {/* CM ACTIONS */}
-                          {userRoleView === 'CM' && (
-                            <>
-                              {invoice.status === 'PENDING_CM_REVIEW' && (
-                                <button
-                                  onClick={() => handleUpdateStatus(invoice.id, 'SENT_TO_ACCOUNTANT')}
-                                  disabled={actionLoading}
-                                  className="px-3 py-1.5 bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1 w-full justify-center shadow-xs"
-                                >
-                                  <Send size={11} /> Send to Accountant
-                                </button>
-                              )}
-
-                              {/* Prorate Days Action for CM */}
-                              {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenProrateModal(invoice)}
-                                  className={`px-2.5 py-1 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors rounded ${
-                                    hasProration(invoice)
-                                      ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
-                                      : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
-                                  }`}
-                                  title="Prorate days if client occupied fewer days in month"
-                                >
-                                  <CalendarDays size={10} className="text-amber-700" />
-                                  <span>{hasProration(invoice) ? 'Adjust Prorated Days' : '⚡ Prorate Days'}</span>
-                                </button>
-                              )}
-
-                              {/* Split Invoice Action for CM */}
-                              {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenSplitModal(invoice)}
-                                  className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors"
-                                >
-                                  <Scissors size={10} /> {invoice.splitsJson ? 'Adjust Sub-Invoices' : 'Split Invoice'}
-                                </button>
-                              )}
-
-                              {invoice.status === 'INVOICE_ATTACHED' && (invoice.attachedInvoice || invoice.splitsJson) && (
-                                <>
-                                  <button
-                                    onClick={() => setEntryToReviewInvoice(invoice)}
-                                    className="px-3 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 w-full justify-center shadow-xs"
-                                  >
-                                    <Eye size={11} /> Review Tally PDF
-                                  </button>
-
-                                  <button
-                                    onClick={() => {
-                                      setTargetInvoiceToSign(invoice);
-                                      setShowApplySignatureModal(true);
-                                    }}
-                                    className="px-3 py-1.5 bg-[#006064] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-teal-900 flex items-center gap-1 w-full justify-center shadow-xs"
-                                  >
-                                    <PenTool size={11} /> Apply Digital Signature
-                                  </button>
-                                </>
-                              )}
-
-                              {invoice.clientEmailSentAt ? (
-                                <div className="flex flex-col gap-1 w-full items-center">
-                                  <div
-                                    className="px-2 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-[9.5px] uppercase tracking-wider rounded flex items-center justify-center gap-1 w-full shadow-2xs"
-                                    title={`Email sent to: ${invoice.clientEmailSentTo || 'Primary Contact'} on ${new Date(invoice.clientEmailSentAt).toLocaleString('en-IN')}`}
-                                  >
-                                    <CheckCircle2 size={11} className="text-emerald-700 shrink-0" />
-                                    <span>Sent to Client ({invoice.billingMonth || 'Month'})</span>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenSendClientEmailModal(invoice)}
-                                    className="text-[9px] text-neutral-500 hover:text-emerald-800 underline font-semibold flex items-center gap-0.5 cursor-pointer"
-                                    title="Click if you need to resend this invoice email"
-                                  >
-                                    <RotateCcw size={9} /> Resend Email
-                                  </button>
-                                </div>
-                              ) : (invoice.status === 'APPROVED' || invoice.attachedInvoice || invoice.splitsJson || invoice.digitallySignedPdfUrl) ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenSendClientEmailModal(invoice)}
-                                  className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-xs transition-colors cursor-pointer"
-                                  title="Send Tax Invoice Email directly to Client with Primary Contact selection"
-                                >
-                                  <Send size={11} /> Send Invoice to Client
-                                </button>
-                              ) : null}
-
-                              {invoice.digitallySignedPdfUrl && (
-                                <a
-                                  href={invoice.digitallySignedPdfUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-3 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 w-full justify-center shadow-xs"
-                                >
-                                  <Download size={11} /> Signed PDF
-                                </a>
-                              )}
-                            </>
-                          )}
-
-                          {/* ACCOUNTANT ACTIONS */}
-                          {userRoleView === 'ACCOUNTANT' && (
-                            <>
-                              {['SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS', 'INVOICE_ATTACHED'].includes(invoice.status) ? (
-                                <button
-                                  onClick={() => {
-                                    setEntryToAttachInvoice(invoice);
-                                    setSelectedInvoiceFile(null);
-                                  }}
-                                  className={`px-3 py-1.5 font-bold text-[10px] uppercase tracking-wider text-white flex items-center justify-center gap-1 w-full shadow-xs ${
-                                    invoice.status === 'REJECTED_WITH_REMARKS'
-                                      ? 'bg-red-600 hover:bg-red-700'
-                                      : 'bg-[var(--primary)] hover:opacity-90'
-                                  }`}
-                                >
-                                  <Paperclip size={11} />
-                                  {invoice.attachedInvoice ? 'Replace Tally PDF' : 'Attach Tally PDF'}
-                                </button>
-                              ) : (
-                                <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
-                                  <CheckCircle2 size={12} /> Finalized
-                                </span>
-                              )}
-                            </>
-                          )}
-
-                          <div className="flex items-center gap-1 mt-1 border-t border-neutral-100 pt-1 w-full justify-center">
-                            <button
-                              onClick={() => setEntryToViewDetails(invoice)}
-                              className="p-1 text-neutral-500 hover:text-black hover:bg-neutral-100"
-                              title="View details"
-                            >
-                              <Eye size={12} />
-                            </button>
-                            {(canAccessCM || isAdmin) && (
-                              <button
-                                onClick={() => handleOpenSendClientEmailModal(invoice)}
-                                className="p-1 text-neutral-500 hover:text-emerald-700 hover:bg-emerald-50"
-                                title="Send Tax Invoice to Client"
-                              >
-                                <Send size={12} />
-                              </button>
-                            )}
-                            {userRoleView === 'CM' && (
-                              <>
-                                <button
-                                  onClick={() => handleOpenProrateModal(invoice)}
-                                  className="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-50"
-                                  title="Prorate / adjust active billing days"
-                                >
-                                  <CalendarDays size={12} />
-                                </button>
-                                <button
-                                  onClick={() => handleOpenEditModal(invoice)}
-                                  className="p-1 text-neutral-500 hover:text-[#006064] hover:bg-neutral-100"
-                                  title="Edit invoice record"
-                                >
-                                  <Edit2 size={12} />
-                                </button>
-                              </>
-                            )}
-                            <button
-                              onClick={() => handleDeleteInvoice(invoice.id)}
-                              className="p-1 text-neutral-500 hover:text-red-600 hover:bg-neutral-100"
-                              title="Delete invoice record"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </FadeUp>
-
-      {/* RENDER ALL INVOICE WORKFLOW MODALS IN A CLEAN PORTAL OVERLAY */}
-      {mounted && typeof document !== 'undefined' && createPortal(
-        <>
-          {/* MODAL 1: Accountant Attach Tally Invoice PDF */}
-          <AnimatePresence>
-        {entryToAttachInvoice && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
-            >
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
-                <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
-                  <Paperclip size={18} className="text-[var(--primary)]" /> Attach Tally PDF Invoice
-                </h3>
-                <button
-                  onClick={() => {
-                    setEntryToAttachInvoice(null);
-                    setSelectedInvoiceFile(null);
-                  }}
-                  className="text-neutral-400 hover:text-neutral-700"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 space-y-1 shrink-0">
-                <div className="font-bold text-[#1B1C1C] text-sm">Company: {entryToAttachInvoice.companyName}</div>
-                <div className="text-[#616161]">
-                  SR No: #{entryToAttachInvoice.srNo} | Billing Month: {entryToAttachInvoice.billingMonth}
-                </div>
-                <div className="font-bold text-[var(--primary)]">
-                  Total Amount: ₹{Number(entryToAttachInvoice.totalAmount || 0).toLocaleString('en-IN')}
-                </div>
-              </div>
-
-              {entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS' && entryToAttachInvoice.remarks && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-800 space-y-1 shrink-0">
-                  <div className="font-bold flex items-center gap-1.5">
-                    <AlertTriangle size={14} /> Community Manager Revision Remarks:
-                  </div>
-                  <div className="italic">"{entryToAttachInvoice.remarks}"</div>
+                  <button
+                    type="button"
+                    onClick={() => setAccountantArrivalFilter('YESTERDAY')}
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${accountantArrivalFilter === 'YESTERDAY'
+                      ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
+                      : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
+                      }`}
+                    title="Filter to invoices that arrived yesterday from CM"
+                  >
+                    <span>Yesterday&apos;s Arrived</span>
+                    <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.yesterdayCount}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccountantArrivalFilter('TWO_DAYS_AGO')}
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${accountantArrivalFilter === 'TWO_DAYS_AGO'
+                      ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
+                      : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
+                      }`}
+                    title="Filter to invoices that arrived within the last 2-3 days"
+                  >
+                    <span>2-3 Days Ago</span>
+                    <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.twoDaysCount}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccountantArrivalFilter('PENDING_ATTACH')}
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${accountantArrivalFilter === 'PENDING_ATTACH'
+                      ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
+                      : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+                      }`}
+                    title="Filter to all invoices waiting for Tally PDF attachment"
+                  >
+                    <span>⚡ Pending Tally PDF</span>
+                    <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.pendingAttachCount}</span>
+                  </button>
                 </div>
               )}
 
-              {/* CHECK IF SPLIT INVOICES EXIST */}
-              <div className="overflow-y-auto flex-1 pr-1 space-y-3">
-                {entryToAttachInvoice.splitsJson && (() => {
-                  let splits: InvoiceSplitGroup[] = [];
-                  try {
-                    splits = JSON.parse(entryToAttachInvoice.splitsJson || '[]');
-                  } catch {}
-
-                  if (splits.length > 1) {
-                    return (
-                      <div className="space-y-3">
-                        <div className="p-2.5 bg-purple-50 border border-purple-200 text-purple-900 text-[11px] font-bold flex items-center gap-1.5">
-                          <Scissors size={14} className="text-purple-700" />
-                          <span>This invoice is split into {splits.length} Sub-Invoices. Please attach a Tally PDF for each:</span>
-                        </div>
-
-                        <div className="space-y-3">
-                          {splits.map((grp, idx) => (
-                            <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1">
-                                  <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span> {grp.name}
-                                </span>
-                                <span className="font-mono font-bold text-teal-800 text-xs">
-                                  ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
-                                </span>
-                              </div>
-
-                              {/* DATES BADGES FOR ACCOUNTANT */}
-                              <div className="flex flex-wrap items-center gap-2 text-[10px] bg-purple-50/80 p-1.5 border border-purple-200 rounded text-purple-950 font-medium">
-                                <div className="flex items-center gap-1">
-                                  <Calendar size={11} className="text-purple-700 shrink-0" />
-                                  <span><strong>Invoice Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} to {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
-                                </div>
-                                <span className="text-purple-300">|</span>
-                                <div className="flex items-center gap-1 text-red-800 font-bold">
-                                  <Clock size={11} className="text-red-600 shrink-0" />
-                                  <span>Due Date: {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
-                                </div>
-                              </div>
-
-                              <div className="text-[10px] text-neutral-500">
-                                {grp.noOfSeats} seats | Subtotal: ₹{Number(grp.amount || 0).toLocaleString('en-IN')} + GST: ₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}
-                              </div>
-
-                              {grp.attachedInvoice?.fileUrl ? (
-                                <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-2 rounded text-emerald-900">
-                                  <div className="flex items-center gap-2">
-                                    <CheckCircle2 size={14} className="text-emerald-700" />
-                                    <div>
-                                      <div className="font-bold text-[11px]">{grp.attachedInvoice.fileName}</div>
-                                      <div className="text-[9px] text-emerald-700">PDF Attached</div>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <a
-                                      href={grp.attachedInvoice.fileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="px-2 py-1 bg-white border border-emerald-300 text-emerald-800 font-bold text-[10px] rounded hover:bg-emerald-100"
-                                    >
-                                      View
-                                    </a>
-                                    <label className="px-2 py-1 bg-emerald-700 text-white font-bold text-[10px] rounded hover:bg-emerald-800 cursor-pointer">
-                                      Replace
-                                      <input
-                                        type="file"
-                                        accept="application/pdf,.pdf"
-                                        className="hidden"
-                                        onChange={(e) => {
-                                          if (e.target.files && e.target.files[0]) {
-                                            handleUploadSplitPdf(idx, e.target.files[0]);
-                                          }
-                                        }}
-                                      />
-                                    </label>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="file"
-                                    accept="application/pdf,.pdf"
-                                    onChange={(e) => {
-                                      if (e.target.files && e.target.files[0]) {
-                                        handleUploadSplitPdf(idx, e.target.files[0]);
-                                      }
-                                    }}
-                                    disabled={splitUploadingGroupIndex === idx}
-                                    className="w-full bg-white border border-neutral-300 px-2 py-1.5 text-xs text-neutral-700"
-                                  />
-                                  {splitUploadingGroupIndex === idx && (
-                                    <Loader2 size={16} className="animate-spin text-teal-800" />
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* Single Invoice PDF Upload (if not split) */}
-                {(!entryToAttachInvoice.splitsJson || (() => {
-                  try { return JSON.parse(entryToAttachInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
-                })()) && (
-                  <div className="space-y-2">
-                    <label className="block font-bold uppercase text-[#616161]">
-                      Select Tally Invoice PDF File *
-                    </label>
-                    <input
-                      type="file"
-                      accept="application/pdf,.pdf"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          setSelectedInvoiceFile(e.target.files[0]);
-                        }
-                      }}
-                      className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs"
-                    />
-                    {selectedInvoiceFile && (
-                      <div className="text-emerald-700 font-bold flex items-center gap-1">
-                        <Check size={14} /> Selected: {selectedInvoiceFile.name} (
-                        {(selectedInvoiceFile.size / 1024).toFixed(1)} KB)
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEntryToAttachInvoice(null);
-                    setSelectedInvoiceFile(null);
-                  }}
-                  className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
-                >
-                  Cancel
-                </button>
-                {(!entryToAttachInvoice.splitsJson || (() => {
-                  try { return JSON.parse(entryToAttachInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
-                })()) ? (
-                  <button
-                    type="button"
-                    onClick={handleUploadInvoicePdf}
-                    disabled={uploadingPdf || !selectedInvoiceFile}
-                    className="px-6 py-2.5 bg-[var(--primary)] text-white font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {uploadingPdf ? (
-                      <>
-                        <Loader2 size={14} className="animate-spin" /> Uploading PDF...
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={14} /> Attach & Send to CM
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEntryToAttachInvoice(null);
-                      setSelectedInvoiceFile(null);
-                      fetchData();
-                    }}
-                    className="px-6 py-2.5 bg-emerald-700 text-white font-bold uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-2"
-                  >
-                    <CheckCircle2 size={14} /> Done / Send to CM
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 2: CM Review Attached Tally Invoice PDF */}
-      <AnimatePresence>
-        {entryToReviewInvoice && (entryToReviewInvoice.attachedInvoice || entryToReviewInvoice.splitsJson) && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
-            >
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
-                <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
-                  <Eye size={18} className="text-[var(--primary)]" /> Review Attached Tally Invoice PDF
-                </h3>
-                <button
-                  onClick={() => setEntryToReviewInvoice(null)}
-                  className="text-neutral-400 hover:text-neutral-700"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 space-y-1 shrink-0">
-                <div className="font-bold text-[#1B1C1C] text-sm">Company: {entryToReviewInvoice.companyName}</div>
-                <div className="text-[#616161]">
-                  SR No: #{entryToReviewInvoice.srNo} | Billing Month: {entryToReviewInvoice.billingMonth}
-                </div>
-                <div className="font-bold text-[var(--primary)]">
-                  Total Amount: ₹{Number(entryToReviewInvoice.totalAmount || 0).toLocaleString('en-IN')}
-                </div>
-              </div>
-
-              <div className="overflow-y-auto flex-1 pr-1 space-y-3">
-                {/* IF SPLIT INVOICES EXIST */}
-                {entryToReviewInvoice.splitsJson && (() => {
-                  let splits: InvoiceSplitGroup[] = [];
-                  try {
-                    splits = JSON.parse(entryToReviewInvoice.splitsJson || '[]');
-                  } catch {}
-
-                  if (splits.length > 1) {
-                    return (
-                      <div className="space-y-3">
-                        <div className="p-2.5 bg-purple-50 border border-purple-200 text-purple-900 text-[11px] font-bold flex items-center gap-1.5">
-                          <Scissors size={14} className="text-purple-700" />
-                          <span>This invoice is split into {splits.length} Sub-Invoices with attached Tally PDFs:</span>
-                        </div>
-
-                        <div className="space-y-2.5">
-                          {splits.map((grp, idx) => (
-                            <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm flex items-center justify-between gap-3">
-                              <div>
-                                <div className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1.5">
-                                  <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span>
-                                  {grp.name}
-                                </div>
-                                <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-purple-900 mt-1">
-                                  <span>📅 <strong>Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} → {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
-                                  <span>•</span>
-                                  <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
-                                </div>
-                                <div className="text-[10px] text-neutral-500 mt-0.5">
-                                  {grp.noOfSeats} seats | Total: <strong className="text-teal-900 font-mono">₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}</strong>
-                                </div>
-                                {grp.attachedInvoice?.fileName && (
-                                  <div className="text-[9.5px] text-emerald-800 font-bold flex items-center gap-1 mt-1">
-                                    <FileCheck size={11} /> {grp.attachedInvoice.fileName}
-                                  </div>
-                                )}
-                              </div>
-
-                              {grp.attachedInvoice?.fileUrl ? (
-                                <a
-                                  href={grp.attachedInvoice.fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-3 py-1.5 bg-[#1B1C1C] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-neutral-800 flex items-center gap-1 rounded shrink-0"
-                                >
-                                  <Eye size={12} /> View PDF
-                                </a>
-                              ) : (
-                                <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-1 border border-amber-200 rounded shrink-0">
-                                  Pending PDF
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* SINGLE INVOICE PDF REVIEW (if not split) */}
-                {entryToReviewInvoice.attachedInvoice && (!entryToReviewInvoice.splitsJson || (() => {
-                  try { return JSON.parse(entryToReviewInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
-                })()) && (
-                  <div className="p-4 border border-dashed border-neutral-300 bg-neutral-50 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-8 w-8 text-red-600" />
-                      <div>
-                        <div className="font-bold text-[#1B1C1C]">
-                          {entryToReviewInvoice.attachedInvoice.fileName}
-                        </div>
-                        <div className="text-[10px] text-[#616161]">Attached Tally PDF Invoice</div>
-                      </div>
+              {/* Search & Filter Bar - 2-Tier Structured Layout */}
+              <div className="bg-[#F8F9FA] border border-[var(--outline-variant)]/60 p-4 space-y-3.5 shadow-xs">
+                {/* Tier 1: Primary Dimensions & Action Button */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* 1. Select Company */}
+                    <div className="flex items-center gap-1.5 bg-white border border-[#006064]/30 px-2.5 py-1.5 shadow-2xs">
+                      <Building2 size={13} className="text-[#006064] shrink-0" />
+                      <span className="text-[10px] font-bold text-[#006064] uppercase tracking-wider">Company:</span>
+                      <select
+                        value={selectedCompanyFilter}
+                        onChange={(e) => {
+                          setSelectedCompanyFilter(e.target.value);
+                          setSelectedCycleFilter('ALL');
+                        }}
+                        className="bg-transparent text-xs font-extrabold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[140px] truncate"
+                      >
+                        <option value="ALL">All Companies ({companyOptions.length})</option>
+                        {companyOptions.map((cName) => (
+                          <option key={cName} value={cName}>
+                            {cName}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
-                    <a
-                      href={entryToReviewInvoice.attachedInvoice.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-[#1B1C1C] text-white font-bold uppercase tracking-wider hover:bg-neutral-800 transition-colors flex items-center gap-1.5"
-                    >
-                      <Eye size={14} /> View / Download PDF
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-neutral-200 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowRejectModal(true)}
-                  className="px-5 py-2.5 bg-red-50 text-red-700 border border-red-200 font-bold uppercase tracking-wider hover:bg-red-100 flex items-center gap-1.5"
-                >
-                  <RotateCcw size={14} /> Request Revision / Reject
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleUpdateStatus(entryToReviewInvoice.id, 'APPROVED')}
-                  disabled={actionLoading}
-                  className="px-6 py-2.5 bg-emerald-600 text-white font-bold uppercase tracking-wider hover:bg-emerald-700 flex items-center gap-2 shadow-xs"
-                >
-                  {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Approve Invoice ✅
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 3: CM Reject Remarks Modal */}
-      <AnimatePresence>
-        {showRejectModal && entryToReviewInvoice && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-md space-y-4 shadow-xl text-xs"
-            >
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
-                <h3 className="text-base font-bold text-red-700 flex items-center gap-2">
-                  <AlertTriangle size={18} /> Request Revision (CM Remarks)
-                </h3>
-                <button
-                  onClick={() => setShowRejectModal(false)}
-                  className="text-neutral-400 hover:text-neutral-700"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div>
-                <label className="block font-bold uppercase tracking-wider text-[#616161] mb-2">
-                  Enter Revision Remarks for Accountant *
-                </label>
-                <textarea
-                  rows={4}
-                  placeholder="Explain what needs correction in the Tally invoice..."
-                  value={rejectRemarks}
-                  onChange={(e) => setRejectRemarks(e.target.value)}
-                  className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] p-3 text-xs focus:outline-none focus:border-red-500"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
-                <button
-                  type="button"
-                  onClick={() => setShowRejectModal(false)}
-                  className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!rejectRemarks.trim()) {
-                      toast.error('Please enter revision remarks');
-                      return;
-                    }
-                    handleUpdateStatus(entryToReviewInvoice.id, 'REJECTED_WITH_REMARKS', rejectRemarks.trim());
-                  }}
-                  disabled={actionLoading || !rejectRemarks.trim()}
-                  className="px-5 py-2.5 bg-red-600 text-white font-bold uppercase tracking-wider hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send Remarks to Accountant
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 3.5: USB DSC & Digital Signing Modal */}
-      <AnimatePresence>
-        {showApplySignatureModal && targetInvoiceToSign && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-xl space-y-5 shadow-2xl text-xs"
-            >
-              {/* Modal Header */}
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-[#006064] text-white">
-                    <Award size={18} />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-black text-[#1B1C1C] uppercase tracking-wide">
-                      Apply Digital Signature (DSC)
-                    </h3>
-                    <p className="text-[10px] text-[#616161]">
-                      {targetInvoiceToSign.companyName} | SR #{targetInvoiceToSign.srNo} | Amount: ₹{Number(targetInvoiceToSign.totalAmount || 0).toLocaleString('en-IN')}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowApplySignatureModal(false);
-                    setTargetInvoiceToSign(null);
-                  }}
-                  className="text-neutral-400 hover:text-neutral-700 p-1"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Signatory Settings Preview */}
-              <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-[9px] uppercase font-bold text-neutral-400 block">Signatory Name</span>
-                  <span className="font-bold text-[#1B1C1C]">{signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL'}</span>
-                </div>
-                <div>
-                  <span className="text-[9px] uppercase font-bold text-neutral-400 block">Designation / Company</span>
-                  <span className="font-bold text-[#1B1C1C]">{signatureSignerTitle || 'Director'} | SSPACIA INDIA PVT LTD</span>
-                </div>
-              </div>
-
-              {/* OPTION A: Physical ProxKey USB Token (Real Class 3 DSC) */}
-              <div className="p-4 border-2 border-[#006064]/30 bg-teal-50/40 space-y-3 relative">
-                <div className="flex items-center justify-between">
-                  <span className="font-black text-xs uppercase tracking-wider text-[#006064] flex items-center gap-1.5">
-                    <PenTool size={14} /> Method 1: Watchdata ProxKey USB Token (PantaSign Class 3)
-                  </span>
-                  <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded ${
-                    bridgeStatus.connected ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
-                  }`}>
-                    {bridgeStatus.connected ? '● USB Bridge Connected' : '○ Bridge Disconnected'}
-                  </span>
-                </div>
-
-                {bridgeStatus.connected ? (
-                  <div className="space-y-3">
-                    <div className="text-[11px] text-emerald-900 bg-emerald-50 p-2.5 border border-emerald-200 flex items-start gap-2">
-                      <CheckCircle2 size={16} className="text-emerald-700 shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-bold">Hardware USB Token Ready for Cryptographic Signing</div>
-                        <div className="text-[10px] text-emerald-800 mt-0.5">
-                          Certificate: <span className="font-mono font-bold">PRAVEEN DILIPKUMAR AGARWAL</span> (PantaSign Sub CA for DSC 2022 / CCA India)
-                        </div>
-                      </div>
+                    {/* 2. Billing Month Filter */}
+                    <div className="flex items-center gap-1.5 bg-purple-50/80 border border-purple-300 px-2.5 py-1.5 shadow-2xs">
+                      <Calendar size={13} className="text-purple-700 shrink-0" />
+                      <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider">Billing Month:</span>
+                      <select
+                        value={selectedBillingMonthFilter}
+                        onChange={(e) => setSelectedBillingMonthFilter(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-purple-950 focus:outline-none cursor-pointer"
+                      >
+                        <option value="ALL">All Months ({billingMonthOptions.length})</option>
+                        {billingMonthOptions.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleSignWithUsbToken(targetInvoiceToSign)}
-                      disabled={signingWithUsb}
-                      className="w-full py-3 bg-[#006064] hover:bg-[#004d40] text-white font-extrabold uppercase tracking-wider text-xs flex items-center justify-center gap-2 shadow-md disabled:opacity-50 transition-all cursor-pointer"
-                    >
-                      {signingWithUsb ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" /> Signing with ProxKey USB Token...
-                        </>
-                      ) : (
-                        <>
-                          <Award size={16} /> ✍ Sign with ProxKey USB Token (PantaSign Class 3)
-                        </>
-                      )}
-                    </button>
-                    <p className="text-[9px] text-center text-neutral-500 italic">
-                      Clicking will trigger your ProxKey Token PIN dialog on Windows.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="text-[11px] text-amber-900 bg-amber-50 p-2.5 border border-amber-200 flex items-start gap-2">
-                      <AlertTriangle size={16} className="text-amber-700 shrink-0 mt-0.5" />
-                      <div className="space-y-1">
-                        <div className="font-bold">ProxKey USB Bridge is not running on this computer</div>
-                        <div className="text-[10px] text-neutral-700 leading-relaxed">
-                          1. Plug in your <strong>Watchdata ProxKey USB Dongle</strong>.<br />
-                          2. Double-click <strong className="font-mono text-[#006064]">start-dsc-bridge.bat</strong> in the website project folder.
-                        </div>
-                      </div>
+                    {/* 3. Due Date Filter */}
+                    <div className="flex items-center gap-1.5 bg-white border border-teal-300 px-2.5 py-1.5 shadow-2xs">
+                      <Clock size={13} className="text-teal-700 shrink-0" />
+                      <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Due Day:</span>
+                      <select
+                        value={selectedDueDayFilter}
+                        onChange={(e) => setSelectedDueDayFilter(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                      >
+                        <option value="ALL">All Due Days</option>
+                        <option value="5">5th of Month</option>
+                        <option value="7">7th of Month</option>
+                        <option value="10">10th of Month</option>
+                        <option value="15">15th of Month</option>
+                        <option value="20">20th of Month</option>
+                        <option value="25">25th of Month</option>
+                        <option value="30">30th of Month</option>
+                      </select>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    {/* 4. Payment Duration */}
+                    <div className="flex items-center gap-1.5 bg-white border border-amber-300 px-2.5 py-1.5 shadow-2xs">
+                      <Calendar size={13} className="text-amber-700 shrink-0" />
+                      <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Duration:</span>
+                      <select
+                        value={selectedCycleFilter}
+                        onChange={(e) => setSelectedCycleFilter(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[150px] truncate"
+                      >
+                        <option value="ALL">All Cycles ({availableCycleOptions.length})</option>
+                        {availableCycleOptions.map((cyc) => (
+                          <option key={cyc.key} value={cyc.key}>
+                            {cyc.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Primary Actions: Digital Signature Stamp Hub */}
+                  <div className="flex items-center gap-2 shrink-0">
+
+
+                    {(canAccessCM || isAdmin) && (
                       <button
                         type="button"
-                        onClick={checkUsbBridge}
-                        disabled={bridgeStatus.checking}
-                        className="flex-1 py-2 bg-neutral-800 hover:bg-neutral-900 text-white font-bold uppercase text-[10px] tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+                        onClick={() => setShowSignatureSettingsModal(true)}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-colors shrink-0 cursor-pointer"
                       >
-                        {bridgeStatus.checking ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
-                        Re-Check USB Connection
+                        <PenTool size={13} />
+                        <span>Digital Signature Stamp</span>
                       </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* OPTION B: Server-Side High-Speed Digital Stamp */}
-              <div className="p-3 bg-neutral-50 border border-neutral-200 flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-bold text-[#1B1C1C] text-[11px]">Method 2: Server-Side Cryptographic Signature</div>
-                  <div className="text-[10px] text-neutral-500">Sign immediately with server cryptographic certificate & dynamic timestamp.</div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleApplyDigitalSignature(targetInvoiceToSign.id)}
-                  disabled={actionLoading}
-                  className="px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap cursor-pointer"
-                >
-                  {actionLoading ? <Loader2 size={12} className="animate-spin" /> : '⚡ Fast Server Sign'}
-                </button>
-              </div>
-
-              {/* Close Button */}
-              <div className="flex justify-end pt-2 border-t border-neutral-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowApplySignatureModal(false);
-                    setTargetInvoiceToSign(null);
-                  }}
-                  className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
-                >
-                  Cancel
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 4: Full Invoice Record Viewer */}
-      <AnimatePresence>
-        {entryToViewDetails && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 sm:p-8 w-full max-w-4xl space-y-6 shadow-2xl my-auto max-h-[88vh] overflow-y-auto text-xs flex flex-col"
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between border-b border-neutral-200 pb-4">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="font-mono font-bold bg-neutral-100 text-neutral-700 px-2 py-0.5">
-                      SR.No #{entryToViewDetails.srNo}
-                    </span>
-                    {renderStatusBadge(entryToViewDetails.status)}
-                    {entryToViewDetails.createdBy?.assignedLocations && entryToViewDetails.createdBy.assignedLocations.length > 0 && (
-                      entryToViewDetails.createdBy.assignedLocations.map((al: any, i: number) => (
-                        <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 text-[10px] font-bold uppercase">
-                          <MapPin size={10} /> {al.location.name}
-                        </span>
-                      ))
                     )}
                   </div>
-                  <h3 className="text-2xl font-bold text-[#1B1C1C]">
-                    {entryToViewDetails.companyName}
-                  </h3>
-                  <p className="text-[#616161] mt-0.5">
-                    Dispatched on {new Date(entryToViewDetails.sentAt).toLocaleDateString('en-IN')} via{' '}
-                    <span className="font-bold">{entryToViewDetails.sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC MONTH-END' : 'MANUAL DISPATCH'}</span> by{' '}
-                    <span className="font-bold text-[#1B1C1C]">{entryToViewDetails.createdBy?.name || 'System'}</span> ({entryToViewDetails.createdBy?.email})
-                  </p>
                 </div>
-                <button
-                  onClick={() => setEntryToViewDetails(null)}
-                  className="text-neutral-400 hover:text-neutral-700 p-1"
-                >
-                  <X size={20} />
-                </button>
+
+                {/* Tier 2: Search, Node Scoping, Status Filter & Refresh */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-neutral-200/80">
+                  <div className="relative flex-1 min-w-[240px] max-w-md">
+                    <Search size={14} className="absolute left-3 top-2.5 text-[#616161]" />
+                    <input
+                      type="text"
+                      placeholder="Search by company, GST, or cabin..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-white border border-[var(--outline-variant)] pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-[#006064] font-medium"
+                    />
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-black"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Node Filter */}
+                    {canUseNodeFilter && locations.length > 0 && (
+                      <div className="flex items-center gap-1 bg-white border border-[var(--outline-variant)] px-2.5 py-1.5">
+                        <MapPin size={13} className="text-[#616161]" />
+                        <span className="text-[10px] font-bold uppercase text-[#616161]">Node:</span>
+                        <select
+                          value={selectedLocationFilter}
+                          onChange={(e) => setSelectedLocationFilter(e.target.value)}
+                          className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                        >
+                          <option value="ALL">All Nodes</option>
+                          {locations.map((loc) => (
+                            <option key={loc.id} value={String(loc.id)}>
+                              {loc.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Status Filter */}
+                    <div className="flex items-center gap-1 bg-white border border-[var(--outline-variant)] px-2.5 py-1.5">
+                      <Filter size={13} className="text-[#616161]" />
+                      <span className="text-[10px] font-bold uppercase text-[#616161]">Status:</span>
+                      <select
+                        value={selectedStatusFilter}
+                        onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                      >
+                        <option value="ALL">All Statuses</option>
+                        <option value="PENDING_CM_REVIEW">Pending CM Review</option>
+                        <option value="SENT_TO_ACCOUNTANT">Sent to Accountant</option>
+                        <option value="INVOICE_ATTACHED">Invoice Attached</option>
+                        <option value="APPROVED">Approved</option>
+                        <option value="REJECTED_WITH_REMARKS">Revision Requested</option>
+                      </select>
+                    </div>
+
+                    {/* Reset all filters button if active */}
+                    {(selectedCompanyFilter !== 'ALL' || selectedDueDayFilter !== 'ALL' || selectedCycleFilter !== 'ALL' || selectedBillingMonthFilter !== 'ALL' || selectedStatusFilter !== 'ALL' || searchTerm) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCompanyFilter('ALL');
+                          setSelectedDueDayFilter('ALL');
+                          setSelectedCycleFilter('ALL');
+                          setSelectedBillingMonthFilter('ALL');
+                          setSelectedStatusFilter('ALL');
+                          setSearchTerm('');
+                        }}
+                        className="px-2.5 py-1.5 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-[10px] font-bold uppercase tracking-wider"
+                        title="Reset all active filters"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+
+                    <button
+                      onClick={fetchData}
+                      className="p-1.5 bg-white border border-[var(--outline-variant)] hover:bg-neutral-100 text-[#616161] shadow-2xs"
+                      title="Refresh data"
+                    >
+                      <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              {/* SECTION 1: Cabin, Seating & Line-Item Products Breakdown */}
-              <div className="space-y-3">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
-                  <Building2 size={14} /> Cabin, Seating & Billing Amounts
+              {/* Table */}
+              {loading ? (
+                <div className="py-16 text-center text-[#616161] flex items-center justify-center gap-2">
+                  <Loader2 size={20} className="animate-spin text-[var(--primary)]" /> Loading workflow queue...
                 </div>
+              ) : filteredInvoices.length === 0 ? (
+                <div className="py-16 text-center space-y-3">
+                  <div className="text-4xl text-neutral-300">📁</div>
+                  <div className="text-sm font-bold text-[#1B1C1C]">No invoices found in queue</div>
+                  <p className="text-xs text-[#616161] max-w-sm mx-auto font-light">
+                    {userRoleView === 'CM'
+                      ? 'No entries have arrived from Client Master yet. Dispatches will appear here.'
+                      : 'No entries sent by Community Manager pending Accountant action.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto space-y-4">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-[#006064] text-white uppercase tracking-wider text-[10px] font-bold">
+                        <th className="p-3 w-12 text-center">SR.No</th>
+                        <th className="p-3">Company Name</th>
+                        <th className="p-3">Payment Cycle & Duration</th>
+                        <th className="p-3">Node & Person</th>
+                        <th className="p-3">Cabin & Seats / Items</th>
+                        <th className="p-3">Arrival Date & Dispatch Type</th>
+                        <th className="p-3">Billing Month</th>
+                        <th className="p-3 text-right">Total Amt (₹)</th>
+                        <th className="p-3">Workflow Status</th>
+                        <th className="p-3 text-center w-40">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100 font-medium">
+                      {filteredInvoices.map((invoice) => (
+                        <tr key={invoice.id} className="hover:bg-neutral-50/60 transition-colors">
+                          <td className="p-3 text-center font-mono font-bold text-neutral-600 bg-neutral-50/50">
+                            #{invoice.srNo}
+                          </td>
 
-                {(() => {
-                  let items: any[] = [];
-                  if (entryToViewDetails.itemsJson) {
-                    try {
-                      const parsed = JSON.parse(entryToViewDetails.itemsJson);
-                      if (Array.isArray(parsed) && parsed.length > 0) items = parsed;
-                    } catch {}
-                  }
-                  if (items.length === 0 && entryToViewDetails.clientMaster?.products) {
-                    items = entryToViewDetails.clientMaster.products;
-                  }
+                          <td className="p-3">
+                            <div className="font-bold text-[#1B1C1C] text-sm">{invoice.companyName}</div>
+                            {invoice.gstNo && <div className="text-[10px] font-mono text-neutral-500">GST: {invoice.gstNo}</div>}
+                          </td>
 
-                  if (items.length > 0) {
-                    return (
-                      <div className="space-y-3">
-                        {items.map((p: any, idx: number) => {
-                          const isParking = p.cabinName?.toLowerCase().includes('parking');
-                          return (
-                            <div key={idx} className="bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/50 relative">
-                              <div className="flex items-center justify-between border-b border-neutral-200 pb-2 mb-3">
-                                <div className="font-extrabold uppercase text-[#006064] text-[10px] tracking-wider flex items-center gap-2">
-                                  ITEM #{idx + 1}
-                                  {isParking && (
-                                    <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[8px] font-black uppercase tracking-wider">
-                                      PARKING MODE
+                          <td className="p-3">
+                            <div className="flex flex-col gap-1">
+                              <span className="px-2 py-0.5 bg-[#006064] text-white text-[10px] font-bold uppercase tracking-wider inline-block text-center w-fit">
+                                {invoice.paymentDuration === 'TWO_YEARS' || invoice.paymentDuration === '2_YEARS' ? '2 YEARS' : (invoice.paymentDuration ? String(invoice.paymentDuration).replace('_', ' ') : 'MONTHLY')}
+                              </span>
+                              {invoice.paymentDueDay && (
+                                <span className="text-[10px] font-bold text-teal-900 bg-teal-50 px-1.5 py-0.5 border border-teal-200 w-fit">
+                                  Due: {invoice.paymentDueDay}th of month
+                                </span>
+                              )}
+                              {((invoice.totalOverdueDays && invoice.totalOverdueDays > 0) || (invoice.calculatedLateDays && invoice.calculatedLateDays > 0) || Number(invoice.lateFeeAmount || 0) > 0 || Number(invoice.waivedLateDays || 0) > 0) ? (
+                                <div className="space-y-1 mt-1 font-sans">
+                                  {/* Overdue Badge */}
+                                  <span className="text-[9px] font-extrabold text-red-700 bg-red-50 px-1.5 py-0.5 border border-red-200 flex items-center gap-1 w-fit">
+                                    <AlertOctagon size={10} /> Overdue {invoice.totalOverdueDays || invoice.calculatedLateDays || invoice.lateDays || 0} days
+                                  </span>
+
+                                  {/* Waived Days Note */}
+                                  {Number(invoice.waivedLateDays || invoice.effectiveWaivedDays || 0) > 0 && (
+                                    <span className="text-[8.5px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 border border-emerald-200 flex items-center gap-1 w-fit">
+                                      ✓ {invoice.waivedLateDays || invoice.effectiveWaivedDays} days waived (-₹{Number(invoice.waivedLateFee || invoice.effectiveWaivedFee || (Number(invoice.waivedLateDays || 0) * 100)).toLocaleString('en-IN')})
                                     </span>
                                   )}
+
+                                  {/* Late Fee Charged Line */}
+                                  <div className="text-[9px] font-bold">
+                                    {Number(invoice.calculatedLateFee || invoice.lateFeeAmount || 0) > 0 ? (
+                                      <span className="text-red-900">
+                                        Late Fee: ₹{Number(invoice.calculatedLateFee || invoice.lateFeeAmount || 0).toLocaleString('en-IN')}
+                                      </span>
+                                    ) : (
+                                      <span className="text-emerald-700 font-bold">Late Fee: ₹0 (Waived)</span>
+                                    )}
+                                  </div>
+
+                                  {/* Manage / Waive Days Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenWaiveModal(invoice)}
+                                    disabled={actionLoading}
+                                    className="text-[8.5px] bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1 mt-0.5"
+                                    title="Click to waive full or specific number of days"
+                                  >
+                                    <Sliders size={9} />
+                                    <span>Waive / Adjust Days</span>
+                                  </button>
                                 </div>
-                                <div className="font-mono font-bold text-xs text-[#006064]">
-                                  Total: ₹{Number(p.totalAmount || 0).toLocaleString('en-IN')}
+                              ) : null}
+                            </div>
+                          </td>
+
+                          <td className="p-3">
+                            <div className="space-y-0.5">
+                              {invoice.createdBy?.assignedLocations && invoice.createdBy.assignedLocations.length > 0 ? (
+                                invoice.createdBy.assignedLocations.map((al: any, i: number) => (
+                                  <div key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 text-[9px] font-bold uppercase tracking-wider mr-1">
+                                    <MapPin size={9} /> {al.location.name}
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-[9px] text-neutral-400">No Node</span>
+                              )}
+                              <div className="text-[11px] font-bold text-[#1B1C1C] mt-0.5">
+                                {invoice.createdBy?.name || 'System'}
+                              </div>
+                              <div className="text-[9px] text-neutral-400">
+                                {invoice.createdBy?.email}
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="p-3">
+                            <div className="font-bold">{invoice.cabinName || 'N/A'}</div>
+                            <div className="text-[10px] text-[#616161]">
+                              {invoice.noOfSeats || 0} seats @ ₹{Number(invoice.ratePerAgreement || 0).toLocaleString('en-IN')}
+                            </div>
+                          </td>
+
+                          <td className="p-3">
+                            <div className="font-bold text-[#1B1C1C]">
+                              {new Date(invoice.sentAt).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric'
+                              })}
+                            </div>
+                            <div className="mt-0.5">
+                              <span
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.2 text-[9px] font-extrabold uppercase ${invoice.sendType === 'AUTOMATIC_MONTH_END'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-blue-100 text-blue-800'
+                                  }`}
+                              >
+                                <Tag size={9} />
+                                {invoice.sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC MONTH-END' : 'MANUAL DISPATCH'}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="p-3 font-bold text-neutral-700">
+                            {invoice.paymentDuration === 'ONE_TIME' || invoice.productGroupKey === 'ONE_TIME_SESSION' || invoice.billingMonth?.toLowerCase().includes('one-time') ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-300 rounded text-[10px] font-bold">
+                                  <Clock size={10} className="text-amber-700 shrink-0" />
+                                  <span>{formatOneTimeBillingMonth(invoice)}</span>
+                                </span>
+                                <div className="text-[9px] text-neutral-400 font-sans font-normal">
+                                  Month: {normalizeBillingMonth(invoice.billingMonth)}
+                                </div>
+                              </div>
+                            ) : (
+                              <span>{invoice.billingMonth || 'N/A'}</span>
+                            )}
+                          </td>
+
+                          <td className="p-3 text-right">
+                            <div className="font-black text-sm text-[var(--primary)]">
+                              ₹{Number(invoice.totalAmount || 0).toLocaleString('en-IN')}
+                            </div>
+                            {hasProration(invoice) && (() => {
+                              const summary = getProrationSummary(invoice);
+                              return (
+                                <div className="mt-1 flex flex-col items-end">
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9px] font-bold"
+                                    title={summary?.formula || 'Prorated invoice amount'}
+                                  >
+                                    <CalendarDays size={9} className="text-amber-700" />
+                                    <span>Prorated: {summary?.label || 'Custom Days'}</span>
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                            {Number(invoice.lateFeeAmount || 0) > 0 ? (
+                              <div className="text-[9px] text-red-600 font-bold">
+                                Includes ₹{Number(invoice.lateFeeAmount).toLocaleString('en-IN')} Late Fee
+                              </div>
+                            ) : Number(invoice.waivedLateDays || 0) > 0 ? (
+                              <div className="text-[9px] text-emerald-700 font-bold">
+                                Late Fee Waived (₹0)
+                              </div>
+                            ) : null}
+                          </td>
+
+                          <td className="p-3">
+                            <div className="space-y-1.5">
+                              {renderStatusBadge(invoice.status)}
+
+                              {invoice.splitsJson && (() => {
+                                let spCount = 0;
+                                try { spCount = JSON.parse(invoice.splitsJson || '[]').length; } catch { }
+                                if (spCount > 1) {
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenSplitModal(invoice)}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded cursor-pointer hover:bg-purple-100 transition-colors"
+                                      title="Click to view or adjust sub-invoice splits"
+                                    >
+                                      <Scissors size={9} /> Split: {spCount} Sub-Invoices
+                                    </button>
+                                  );
+                                }
+                                return null;
+                              })()}
+
+                              {invoice.digitallySignedPdfUrl && (
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-bold uppercase rounded">
+                                  <Award size={10} className="text-emerald-700" /> Digitally Signed
+                                </div>
+                              )}
+
+                              {/* Show Revision Remarks if rejected by CM */}
+                              {invoice.status === 'REJECTED_WITH_REMARKS' && invoice.remarks && (
+                                <div className="mt-2 p-2 bg-red-50 border border-red-200 text-red-800 text-[10px] space-y-1">
+                                  <div className="font-bold flex items-center gap-1">
+                                    <AlertTriangle size={11} /> CM Revision Remarks:
+                                  </div>
+                                  <div className="italic">"{invoice.remarks}"</div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="p-3 text-center">
+                            <div className="flex flex-col gap-1.5 items-center justify-center">
+                              {/* CM ACTIONS */}
+                              {userRoleView === 'CM' && (
+                                <>
+                                  {invoice.status === 'PENDING_CM_REVIEW' && (
+                                    <button
+                                      onClick={() => handleUpdateStatus(invoice.id, 'SENT_TO_ACCOUNTANT')}
+                                      disabled={actionLoading}
+                                      className="px-3 py-1.5 bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1 w-full justify-center shadow-xs"
+                                    >
+                                      <Send size={11} /> Send to Accountant
+                                    </button>
+                                  )}
+
+                                  {/* Prorate Days Action for CM */}
+                                  {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenProrateModal(invoice)}
+                                      className={`px-2.5 py-1 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors rounded ${hasProration(invoice)
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
+                                        : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+                                        }`}
+                                      title="Prorate days if client occupied fewer days in month"
+                                    >
+                                      <CalendarDays size={10} className="text-amber-700" />
+                                      <span>{hasProration(invoice) ? 'Adjust Prorated Days' : '⚡ Prorate Days'}</span>
+                                    </button>
+                                  )}
+
+                                  {/* Split Invoice Action for CM */}
+                                  {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenSplitModal(invoice)}
+                                      className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors"
+                                    >
+                                      <Scissors size={10} /> {invoice.splitsJson ? 'Adjust Sub-Invoices' : 'Split Invoice'}
+                                    </button>
+                                  )}
+
+                                  {invoice.status === 'INVOICE_ATTACHED' && (invoice.attachedInvoice || invoice.splitsJson) && (
+                                    <>
+                                      <button
+                                        onClick={() => setEntryToReviewInvoice(invoice)}
+                                        className="px-3 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 w-full justify-center shadow-xs"
+                                      >
+                                        <Eye size={11} /> Review Tally PDF
+                                      </button>
+
+                                      <button
+                                        onClick={() => {
+                                          setTargetInvoiceToSign(invoice);
+                                          setShowApplySignatureModal(true);
+                                        }}
+                                        className="px-3 py-1.5 bg-[#006064] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-teal-900 flex items-center gap-1 w-full justify-center shadow-xs"
+                                      >
+                                        <PenTool size={11} /> Apply Digital Signature
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {invoice.clientEmailSentAt ? (
+                                    <div className="flex flex-col gap-1 w-full items-center">
+                                      <div
+                                        className="px-2 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-[9.5px] uppercase tracking-wider rounded flex items-center justify-center gap-1 w-full shadow-2xs"
+                                        title={`Email sent to: ${invoice.clientEmailSentTo || 'Primary Contact'} on ${new Date(invoice.clientEmailSentAt).toLocaleString('en-IN')}`}
+                                      >
+                                        <CheckCircle2 size={11} className="text-emerald-700 shrink-0" />
+                                        <span>Sent to Client ({invoice.billingMonth || 'Month'})</span>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenSendClientEmailModal(invoice)}
+                                        className="text-[9px] text-neutral-500 hover:text-emerald-800 underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                                        title="Click if you need to resend this invoice email"
+                                      >
+                                        <RotateCcw size={9} /> Resend Email
+                                      </button>
+                                    </div>
+                                  ) : (invoice.status === 'APPROVED' || invoice.attachedInvoice || invoice.splitsJson || invoice.digitallySignedPdfUrl) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenSendClientEmailModal(invoice)}
+                                      className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-xs transition-colors cursor-pointer"
+                                      title="Send Tax Invoice Email directly to Client with Primary Contact selection"
+                                    >
+                                      <Send size={11} /> Send Invoice to Client
+                                    </button>
+                                  ) : null}
+
+                                  {invoice.digitallySignedPdfUrl && (
+                                    <a
+                                      href={invoice.digitallySignedPdfUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-3 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 w-full justify-center shadow-xs"
+                                    >
+                                      <Download size={11} /> Signed PDF
+                                    </a>
+                                  )}
+                                </>
+                              )}
+
+                              {/* ACCOUNTANT ACTIONS */}
+                              {userRoleView === 'ACCOUNTANT' && (
+                                <>
+                                  {['SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS', 'INVOICE_ATTACHED'].includes(invoice.status) ? (
+                                    <button
+                                      onClick={() => {
+                                        setEntryToAttachInvoice(invoice);
+                                        setSelectedInvoiceFile(null);
+                                      }}
+                                      className={`px-3 py-1.5 font-bold text-[10px] uppercase tracking-wider text-white flex items-center justify-center gap-1 w-full shadow-xs ${invoice.status === 'REJECTED_WITH_REMARKS'
+                                        ? 'bg-red-600 hover:bg-red-700'
+                                        : 'bg-[var(--primary)] hover:opacity-90'
+                                        }`}
+                                    >
+                                      <Paperclip size={11} />
+                                      {invoice.attachedInvoice ? 'Replace Tally PDF' : 'Attach Tally PDF'}
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
+                                      <CheckCircle2 size={12} /> Finalized
+                                    </span>
+                                  )}
+                                </>
+                              )}
+
+                              <div className="flex items-center gap-1 mt-1 border-t border-neutral-100 pt-1 w-full justify-center">
+                                <button
+                                  onClick={() => setEntryToViewDetails(invoice)}
+                                  className="p-1 text-neutral-500 hover:text-black hover:bg-neutral-100"
+                                  title="View details"
+                                >
+                                  <Eye size={12} />
+                                </button>
+                                {(canAccessCM || isAdmin) && (
+                                  <button
+                                    onClick={() => handleOpenSendClientEmailModal(invoice)}
+                                    className="p-1 text-neutral-500 hover:text-emerald-700 hover:bg-emerald-50"
+                                    title="Send Tax Invoice to Client"
+                                  >
+                                    <Send size={12} />
+                                  </button>
+                                )}
+                                {userRoleView === 'CM' && (
+                                  <>
+                                    <button
+                                      onClick={() => handleOpenProrateModal(invoice)}
+                                      className="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-50"
+                                      title="Prorate / adjust active billing days"
+                                    >
+                                      <CalendarDays size={12} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleOpenEditModal(invoice)}
+                                      className="p-1 text-neutral-500 hover:text-[#006064] hover:bg-neutral-100"
+                                      title="Edit invoice record"
+                                    >
+                                      <Edit2 size={12} />
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  onClick={() => handleDeleteInvoice(invoice.id)}
+                                  className="p-1 text-neutral-500 hover:text-red-600 hover:bg-neutral-100"
+                                  title="Delete invoice record"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </FadeUp>
+
+          {/* RENDER ALL INVOICE WORKFLOW MODALS IN A CLEAN PORTAL OVERLAY */}
+          {mounted && typeof document !== 'undefined' && createPortal(
+            <>
+              {/* MODAL 1: Accountant Attach Tally Invoice PDF */}
+              <AnimatePresence>
+                {entryToAttachInvoice && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
+                    >
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
+                        <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
+                          <Paperclip size={18} className="text-[var(--primary)]" /> Attach Tally PDF Invoice
+                        </h3>
+                        <button
+                          onClick={() => {
+                            setEntryToAttachInvoice(null);
+                            setSelectedInvoiceFile(null);
+                          }}
+                          className="text-neutral-400 hover:text-neutral-700"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 space-y-1 shrink-0">
+                        <div className="font-bold text-[#1B1C1C] text-sm">Company: {entryToAttachInvoice.companyName}</div>
+                        <div className="text-[#616161]">
+                          SR No: #{entryToAttachInvoice.srNo} | Billing Month: {entryToAttachInvoice.billingMonth}
+                        </div>
+                        <div className="font-bold text-[var(--primary)]">
+                          Total Amount: ₹{Number(entryToAttachInvoice.totalAmount || 0).toLocaleString('en-IN')}
+                        </div>
+                      </div>
+
+                      {entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS' && entryToAttachInvoice.remarks && (
+                        <div className="p-3 bg-red-50 border border-red-200 text-red-800 space-y-1 shrink-0">
+                          <div className="font-bold flex items-center gap-1.5">
+                            <AlertTriangle size={14} /> Community Manager Revision Remarks:
+                          </div>
+                          <div className="italic">"{entryToAttachInvoice.remarks}"</div>
+                        </div>
+                      )}
+
+                      {/* CHECK IF SPLIT INVOICES EXIST */}
+                      <div className="overflow-y-auto flex-1 pr-1 space-y-3">
+                        {entryToAttachInvoice.splitsJson && (() => {
+                          let splits: InvoiceSplitGroup[] = [];
+                          try {
+                            splits = JSON.parse(entryToAttachInvoice.splitsJson || '[]');
+                          } catch { }
+
+                          if (splits.length > 1) {
+                            return (
+                              <div className="space-y-3">
+                                <div className="p-2.5 bg-purple-50 border border-purple-200 text-purple-900 text-[11px] font-bold flex items-center gap-1.5">
+                                  <Scissors size={14} className="text-purple-700" />
+                                  <span>This invoice is split into {splits.length} Sub-Invoices. Please attach a Tally PDF for each:</span>
+                                </div>
+
+                                <div className="space-y-3">
+                                  {splits.map((grp, idx) => (
+                                    <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm space-y-2">
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1">
+                                          <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span> {grp.name}
+                                        </span>
+                                        <span className="font-mono font-bold text-teal-800 text-xs">
+                                          ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
+                                        </span>
+                                      </div>
+
+                                      {/* DATES BADGES FOR ACCOUNTANT */}
+                                      <div className="flex flex-wrap items-center gap-2 text-[10px] bg-purple-50/80 p-1.5 border border-purple-200 rounded text-purple-950 font-medium">
+                                        <div className="flex items-center gap-1">
+                                          <Calendar size={11} className="text-purple-700 shrink-0" />
+                                          <span><strong>Invoice Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} to {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
+                                        </div>
+                                        <span className="text-purple-300">|</span>
+                                        <div className="flex items-center gap-1 text-red-800 font-bold">
+                                          <Clock size={11} className="text-red-600 shrink-0" />
+                                          <span>Due Date: {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
+                                        </div>
+                                      </div>
+
+                                      <div className="text-[10px] text-neutral-500">
+                                        {grp.noOfSeats} seats | Subtotal: ₹{Number(grp.amount || 0).toLocaleString('en-IN')} + GST: ₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}
+                                      </div>
+
+                                      {grp.attachedInvoice?.fileUrl ? (
+                                        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-2 rounded text-emerald-900">
+                                          <div className="flex items-center gap-2">
+                                            <CheckCircle2 size={14} className="text-emerald-700" />
+                                            <div>
+                                              <div className="font-bold text-[11px]">{grp.attachedInvoice.fileName}</div>
+                                              <div className="text-[9px] text-emerald-700">PDF Attached</div>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <a
+                                              href={grp.attachedInvoice.fileUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="px-2 py-1 bg-white border border-emerald-300 text-emerald-800 font-bold text-[10px] rounded hover:bg-emerald-100"
+                                            >
+                                              View
+                                            </a>
+                                            <label className="px-2 py-1 bg-emerald-700 text-white font-bold text-[10px] rounded hover:bg-emerald-800 cursor-pointer">
+                                              Replace
+                                              <input
+                                                type="file"
+                                                accept="application/pdf,.pdf"
+                                                className="hidden"
+                                                onChange={(e) => {
+                                                  if (e.target.files && e.target.files[0]) {
+                                                    handleUploadSplitPdf(idx, e.target.files[0]);
+                                                  }
+                                                }}
+                                              />
+                                            </label>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            type="file"
+                                            accept="application/pdf,.pdf"
+                                            onChange={(e) => {
+                                              if (e.target.files && e.target.files[0]) {
+                                                handleUploadSplitPdf(idx, e.target.files[0]);
+                                              }
+                                            }}
+                                            disabled={splitUploadingGroupIndex === idx}
+                                            className="w-full bg-white border border-neutral-300 px-2 py-1.5 text-xs text-neutral-700"
+                                          />
+                                          {splitUploadingGroupIndex === idx && (
+                                            <Loader2 size={16} className="animate-spin text-teal-800" />
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+
+                        {/* Single Invoice PDF Upload (if not split) */}
+                        {(!entryToAttachInvoice.splitsJson || (() => {
+                          try { return JSON.parse(entryToAttachInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
+                        })()) && (
+                            <div className="space-y-2">
+                              <label className="block font-bold uppercase text-[#616161]">
+                                Select Tally Invoice PDF File *
+                              </label>
+                              <input
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    setSelectedInvoiceFile(e.target.files[0]);
+                                  }
+                                }}
+                                className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs"
+                              />
+                              {selectedInvoiceFile && (
+                                <div className="text-emerald-700 font-bold flex items-center gap-1">
+                                  <Check size={14} /> Selected: {selectedInvoiceFile.name} (
+                                  {(selectedInvoiceFile.size / 1024).toFixed(1)} KB)
+                                </div>
+                              )}
+                            </div>
+                          )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEntryToAttachInvoice(null);
+                            setSelectedInvoiceFile(null);
+                          }}
+                          className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
+                        >
+                          Cancel
+                        </button>
+                        {(!entryToAttachInvoice.splitsJson || (() => {
+                          try { return JSON.parse(entryToAttachInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
+                        })()) ? (
+                          <button
+                            type="button"
+                            onClick={handleUploadInvoicePdf}
+                            disabled={uploadingPdf || !selectedInvoiceFile}
+                            className="px-6 py-2.5 bg-[var(--primary)] text-white font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {uploadingPdf ? (
+                              <>
+                                <Loader2 size={14} className="animate-spin" /> Uploading PDF...
+                              </>
+                            ) : (
+                              <>
+                                <Upload size={14} /> Attach & Send to CM
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEntryToAttachInvoice(null);
+                              setSelectedInvoiceFile(null);
+                              fetchData();
+                            }}
+                            className="px-6 py-2.5 bg-emerald-700 text-white font-bold uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-2"
+                          >
+                            <CheckCircle2 size={14} /> Done / Send to CM
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* MODAL 2: CM Review Attached Tally Invoice PDF */}
+              <AnimatePresence>
+                {entryToReviewInvoice && (entryToReviewInvoice.attachedInvoice || entryToReviewInvoice.splitsJson) && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
+                    >
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
+                        <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
+                          <Eye size={18} className="text-[var(--primary)]" /> Review Attached Tally Invoice PDF
+                        </h3>
+                        <button
+                          onClick={() => setEntryToReviewInvoice(null)}
+                          className="text-neutral-400 hover:text-neutral-700"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 space-y-1 shrink-0">
+                        <div className="font-bold text-[#1B1C1C] text-sm">Company: {entryToReviewInvoice.companyName}</div>
+                        <div className="text-[#616161]">
+                          SR No: #{entryToReviewInvoice.srNo} | Billing Month: {entryToReviewInvoice.billingMonth}
+                        </div>
+                        <div className="font-bold text-[var(--primary)]">
+                          Total Amount: ₹{Number(entryToReviewInvoice.totalAmount || 0).toLocaleString('en-IN')}
+                        </div>
+                      </div>
+
+                      <div className="overflow-y-auto flex-1 pr-1 space-y-3">
+                        {/* IF SPLIT INVOICES EXIST */}
+                        {entryToReviewInvoice.splitsJson && (() => {
+                          let splits: InvoiceSplitGroup[] = [];
+                          try {
+                            splits = JSON.parse(entryToReviewInvoice.splitsJson || '[]');
+                          } catch { }
+
+                          if (splits.length > 1) {
+                            return (
+                              <div className="space-y-3">
+                                <div className="p-2.5 bg-purple-50 border border-purple-200 text-purple-900 text-[11px] font-bold flex items-center gap-1.5">
+                                  <Scissors size={14} className="text-purple-700" />
+                                  <span>This invoice is split into {splits.length} Sub-Invoices with attached Tally PDFs:</span>
+                                </div>
+
+                                <div className="space-y-2.5">
+                                  {splits.map((grp, idx) => (
+                                    <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm flex items-center justify-between gap-3">
+                                      <div>
+                                        <div className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1.5">
+                                          <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span>
+                                          {grp.name}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-purple-900 mt-1">
+                                          <span>📅 <strong>Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} → {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
+                                          <span>•</span>
+                                          <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
+                                        </div>
+                                        <div className="text-[10px] text-neutral-500 mt-0.5">
+                                          {grp.noOfSeats} seats | Total: <strong className="text-teal-900 font-mono">₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}</strong>
+                                        </div>
+                                        {grp.attachedInvoice?.fileName && (
+                                          <div className="text-[9.5px] text-emerald-800 font-bold flex items-center gap-1 mt-1">
+                                            <FileCheck size={11} /> {grp.attachedInvoice.fileName}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {grp.attachedInvoice?.fileUrl ? (
+                                        <a
+                                          href={grp.attachedInvoice.fileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="px-3 py-1.5 bg-[#1B1C1C] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-neutral-800 flex items-center gap-1 rounded shrink-0"
+                                        >
+                                          <Eye size={12} /> View PDF
+                                        </a>
+                                      ) : (
+                                        <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-1 border border-amber-200 rounded shrink-0">
+                                          Pending PDF
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+
+                        {/* SINGLE INVOICE PDF REVIEW (if not split) */}
+                        {entryToReviewInvoice.attachedInvoice && (!entryToReviewInvoice.splitsJson || (() => {
+                          try { return JSON.parse(entryToReviewInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
+                        })()) && (
+                            <div className="p-4 border border-dashed border-neutral-300 bg-neutral-50 flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <FileText className="h-8 w-8 text-red-600" />
+                                <div>
+                                  <div className="font-bold text-[#1B1C1C]">
+                                    {entryToReviewInvoice.attachedInvoice.fileName}
+                                  </div>
+                                  <div className="text-[10px] text-[#616161]">Attached Tally PDF Invoice</div>
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                                <div>
-                                  <div className="font-bold uppercase text-[#616161] text-[9px]">Cabin / Product Name</div>
-                                  <div className="font-bold text-[#1B1C1C] mt-0.5">{p.cabinName || 'N/A'}</div>
-                                  {p.note && <div className="text-[10px] text-teal-800 font-medium mt-0.5 italic">{p.note}</div>}
-                                </div>
+                              <a
+                                href={entryToReviewInvoice.attachedInvoice.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-[#1B1C1C] text-white font-bold uppercase tracking-wider hover:bg-neutral-800 transition-colors flex items-center gap-1.5"
+                              >
+                                <Eye size={14} /> View / Download PDF
+                              </a>
+                            </div>
+                          )}
+                      </div>
 
-                                <div>
-                                  <div className="font-bold uppercase text-[#616161] text-[9px]">
-                                    {isParking ? 'No of Parking' : 'No of Seats'}
+                      <div className="flex items-center justify-between pt-4 border-t border-neutral-200 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setShowRejectModal(true)}
+                          className="px-5 py-2.5 bg-red-50 text-red-700 border border-red-200 font-bold uppercase tracking-wider hover:bg-red-100 flex items-center gap-1.5"
+                        >
+                          <RotateCcw size={14} /> Request Revision / Reject
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStatus(entryToReviewInvoice.id, 'APPROVED')}
+                          disabled={actionLoading}
+                          className="px-6 py-2.5 bg-emerald-600 text-white font-bold uppercase tracking-wider hover:bg-emerald-700 flex items-center gap-2 shadow-xs"
+                        >
+                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Approve Invoice ✅
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* MODAL 3: CM Reject Remarks Modal */}
+              <AnimatePresence>
+                {showRejectModal && entryToReviewInvoice && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-md space-y-4 shadow-xl text-xs"
+                    >
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
+                        <h3 className="text-base font-bold text-red-700 flex items-center gap-2">
+                          <AlertTriangle size={18} /> Request Revision (CM Remarks)
+                        </h3>
+                        <button
+                          onClick={() => setShowRejectModal(false)}
+                          className="text-neutral-400 hover:text-neutral-700"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold uppercase tracking-wider text-[#616161] mb-2">
+                          Enter Revision Remarks for Accountant *
+                        </label>
+                        <textarea
+                          rows={4}
+                          placeholder="Explain what needs correction in the Tally invoice..."
+                          value={rejectRemarks}
+                          onChange={(e) => setRejectRemarks(e.target.value)}
+                          className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] p-3 text-xs focus:outline-none focus:border-red-500"
+                          required
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
+                        <button
+                          type="button"
+                          onClick={() => setShowRejectModal(false)}
+                          className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!rejectRemarks.trim()) {
+                              toast.error('Please enter revision remarks');
+                              return;
+                            }
+                            handleUpdateStatus(entryToReviewInvoice.id, 'REJECTED_WITH_REMARKS', rejectRemarks.trim());
+                          }}
+                          disabled={actionLoading || !rejectRemarks.trim()}
+                          className="px-5 py-2.5 bg-red-600 text-white font-bold uppercase tracking-wider hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+                        >
+                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send Remarks to Accountant
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* MODAL 3.5: USB DSC & Digital Signing Modal */}
+              <AnimatePresence>
+                {showApplySignatureModal && targetInvoiceToSign && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-xl space-y-5 shadow-2xl text-xs"
+                    >
+                      {/* Modal Header */}
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 bg-[#006064] text-white">
+                            <Award size={18} />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-black text-[#1B1C1C] uppercase tracking-wide">
+                              Apply Digital Signature (DSC)
+                            </h3>
+                            <p className="text-[10px] text-[#616161]">
+                              {targetInvoiceToSign.companyName} | SR #{targetInvoiceToSign.srNo} | Amount: ₹{Number(targetInvoiceToSign.totalAmount || 0).toLocaleString('en-IN')}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowApplySignatureModal(false);
+                            setTargetInvoiceToSign(null);
+                          }}
+                          className="text-neutral-400 hover:text-neutral-700 p-1"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      {/* Signatory Settings Preview */}
+                      <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-[9px] uppercase font-bold text-neutral-400 block">Signatory Name</span>
+                          <span className="font-bold text-[#1B1C1C]">{signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] uppercase font-bold text-neutral-400 block">Designation / Company</span>
+                          <span className="font-bold text-[#1B1C1C]">{signatureSignerTitle || 'Director'} | SSPACIA INDIA PVT LTD</span>
+                        </div>
+                      </div>
+
+                      {/* OPTION A: Physical ProxKey USB Token (Real Class 3 DSC) */}
+                      <div className="p-4 border-2 border-[#006064]/30 bg-teal-50/40 space-y-3 relative">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-xs uppercase tracking-wider text-[#006064] flex items-center gap-1.5">
+                            <PenTool size={14} /> Method 1: Watchdata ProxKey USB Token (PantaSign Class 3)
+                          </span>
+                          <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded ${bridgeStatus.connected ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                            }`}>
+                            {bridgeStatus.connected ? '● USB Bridge Connected' : '○ Bridge Disconnected'}
+                          </span>
+                        </div>
+
+                        {bridgeStatus.connected ? (
+                          <div className="space-y-3">
+                            <div className="text-[11px] text-emerald-900 bg-emerald-50 p-2.5 border border-emerald-200 flex items-start gap-2">
+                              <CheckCircle2 size={16} className="text-emerald-700 shrink-0 mt-0.5" />
+                              <div>
+                                <div className="font-bold">Hardware USB Token Ready for Cryptographic Signing</div>
+                                <div className="text-[10px] text-emerald-800 mt-0.5">
+                                  Certificate: <span className="font-mono font-bold">PRAVEEN DILIPKUMAR AGARWAL</span> (PantaSign Sub CA for DSC 2022 / CCA India)
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleSignWithUsbToken(targetInvoiceToSign)}
+                              disabled={signingWithUsb}
+                              className="w-full py-3 bg-[#006064] hover:bg-[#004d40] text-white font-extrabold uppercase tracking-wider text-xs flex items-center justify-center gap-2 shadow-md disabled:opacity-50 transition-all cursor-pointer"
+                            >
+                              {signingWithUsb ? (
+                                <>
+                                  <Loader2 size={16} className="animate-spin" /> Signing with ProxKey USB Token...
+                                </>
+                              ) : (
+                                <>
+                                  <Award size={16} /> ✍ Sign with ProxKey USB Token (PantaSign Class 3)
+                                </>
+                              )}
+                            </button>
+                            <p className="text-[9px] text-center text-neutral-500 italic">
+                              Clicking will trigger your ProxKey Token PIN dialog on Windows.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="text-[11px] text-amber-900 bg-amber-50 p-2.5 border border-amber-200 flex items-start gap-2">
+                              <AlertTriangle size={16} className="text-amber-700 shrink-0 mt-0.5" />
+                              <div className="space-y-1">
+                                <div className="font-bold">ProxKey USB Bridge is not running on this computer</div>
+                                <div className="text-[10px] text-neutral-700 leading-relaxed">
+                                  1. Plug in your <strong>Watchdata ProxKey USB Dongle</strong>.<br />
+                                  2. Double-click <strong className="font-mono text-[#006064]">start-dsc-bridge.bat</strong> in the website project folder.
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={checkUsbBridge}
+                                disabled={bridgeStatus.checking}
+                                className="flex-1 py-2 bg-neutral-800 hover:bg-neutral-900 text-white font-bold uppercase text-[10px] tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+                              >
+                                {bridgeStatus.checking ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+                                Re-Check USB Connection
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* OPTION B: Server-Side High-Speed Digital Stamp */}
+                      <div className="p-3 bg-neutral-50 border border-neutral-200 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-[#1B1C1C] text-[11px]">Method 2: Server-Side Cryptographic Signature</div>
+                          <div className="text-[10px] text-neutral-500">Sign immediately with server cryptographic certificate & dynamic timestamp.</div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleApplyDigitalSignature(targetInvoiceToSign.id)}
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap cursor-pointer"
+                        >
+                          {actionLoading ? <Loader2 size={12} className="animate-spin" /> : '⚡ Fast Server Sign'}
+                        </button>
+                      </div>
+
+                      {/* Close Button */}
+                      <div className="flex justify-end pt-2 border-t border-neutral-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowApplySignatureModal(false);
+                            setTargetInvoiceToSign(null);
+                          }}
+                          className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* MODAL 4: Full Invoice Record Viewer */}
+              <AnimatePresence>
+                {entryToViewDetails && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white border border-[var(--outline-variant)] p-6 sm:p-8 w-full max-w-4xl space-y-6 shadow-2xl my-auto max-h-[88vh] overflow-y-auto text-xs flex flex-col"
+                    >
+                      {/* Header */}
+                      <div className="flex items-start justify-between border-b border-neutral-200 pb-4">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="font-mono font-bold bg-neutral-100 text-neutral-700 px-2 py-0.5">
+                              SR.No #{entryToViewDetails.srNo}
+                            </span>
+                            {renderStatusBadge(entryToViewDetails.status)}
+                            {entryToViewDetails.createdBy?.assignedLocations && entryToViewDetails.createdBy.assignedLocations.length > 0 && (
+                              entryToViewDetails.createdBy.assignedLocations.map((al: any, i: number) => (
+                                <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 text-[10px] font-bold uppercase">
+                                  <MapPin size={10} /> {al.location.name}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                          <h3 className="text-2xl font-bold text-[#1B1C1C]">
+                            {entryToViewDetails.companyName}
+                          </h3>
+                          <p className="text-[#616161] mt-0.5">
+                            Dispatched on {new Date(entryToViewDetails.sentAt).toLocaleDateString('en-IN')} via{' '}
+                            <span className="font-bold">{entryToViewDetails.sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC MONTH-END' : 'MANUAL DISPATCH'}</span> by{' '}
+                            <span className="font-bold text-[#1B1C1C]">{entryToViewDetails.createdBy?.name || 'System'}</span> ({entryToViewDetails.createdBy?.email})
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setEntryToViewDetails(null)}
+                          className="text-neutral-400 hover:text-neutral-700 p-1"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+
+                      {/* SECTION 1: Cabin, Seating & Line-Item Products Breakdown */}
+                      <div className="space-y-3">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
+                          <Building2 size={14} /> Cabin, Seating & Billing Amounts
+                        </div>
+
+                        {(() => {
+                          let items: any[] = [];
+                          if (entryToViewDetails.itemsJson) {
+                            try {
+                              const parsed = JSON.parse(entryToViewDetails.itemsJson);
+                              if (Array.isArray(parsed) && parsed.length > 0) items = parsed;
+                            } catch { }
+                          }
+                          if (items.length === 0 && entryToViewDetails.clientMaster?.products) {
+                            items = entryToViewDetails.clientMaster.products;
+                          }
+
+                          if (items.length > 0) {
+                            return (
+                              <div className="space-y-3">
+                                {items.map((p: any, idx: number) => {
+                                  const isParking = p.cabinName?.toLowerCase().includes('parking');
+                                  return (
+                                    <div key={idx} className="bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/50 relative">
+                                      <div className="flex items-center justify-between border-b border-neutral-200 pb-2 mb-3">
+                                        <div className="font-extrabold uppercase text-[#006064] text-[10px] tracking-wider flex items-center gap-2">
+                                          ITEM #{idx + 1}
+                                          {isParking && (
+                                            <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[8px] font-black uppercase tracking-wider">
+                                              PARKING MODE
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="font-mono font-bold text-xs text-[#006064]">
+                                          Total: ₹{Number(p.totalAmount || 0).toLocaleString('en-IN')}
+                                        </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                                        <div>
+                                          <div className="font-bold uppercase text-[#616161] text-[9px]">Cabin / Product Name</div>
+                                          <div className="font-bold text-[#1B1C1C] mt-0.5">{p.cabinName || 'N/A'}</div>
+                                          {p.note && <div className="text-[10px] text-teal-800 font-medium mt-0.5 italic">{p.note}</div>}
+                                        </div>
+
+                                        <div>
+                                          <div className="font-bold uppercase text-[#616161] text-[9px]">
+                                            {isParking ? 'No of Parking' : 'No of Seats'}
+                                          </div>
+                                          <div className="font-bold text-[#1B1C1C] mt-0.5">{p.noOfSeats || 0}</div>
+                                        </div>
+
+                                        <div>
+                                          <div className="font-bold uppercase text-[#616161] text-[9px]">Rate As Per Agreement (₹)</div>
+                                          <div className="font-bold text-[#1B1C1C] mt-0.5">₹{Number(p.ratePerAgreement || 0).toLocaleString('en-IN')}</div>
+                                        </div>
+
+                                        <div>
+                                          <div className="font-bold uppercase text-[#616161] text-[9px]">Amount (₹)</div>
+                                          <div className="font-bold text-blue-700 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                            <span>₹{Number(p.amount || 0).toLocaleString('en-IN')}</span>
+                                            {p.billingType === 'PRORATED' && (
+                                              <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded font-bold">
+                                                Prorated ({p.activeDays || 'Custom'}d)
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <div>
+                                          <div className="font-bold uppercase text-[#616161] text-[9px]">GST (%)</div>
+                                          <div className="font-bold text-neutral-700 mt-0.5">{p.gstPercent ?? 18}%</div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                                {/* GRAND TOTAL SUMMARY BAR FOR THIS INVOICE CYCLE */}
+                                <div className="p-4 bg-[#00363A] text-white flex flex-wrap items-center justify-between gap-4">
+                                  <div className="font-extrabold uppercase text-xs tracking-wider">
+                                    Grand Total (Items Included in Invoice Entry)
                                   </div>
-                                  <div className="font-bold text-[#1B1C1C] mt-0.5">{p.noOfSeats || 0}</div>
-                                </div>
-
-                                <div>
-                                  <div className="font-bold uppercase text-[#616161] text-[9px]">Rate As Per Agreement (₹)</div>
-                                  <div className="font-bold text-[#1B1C1C] mt-0.5">₹{Number(p.ratePerAgreement || 0).toLocaleString('en-IN')}</div>
-                                </div>
-
-                                <div>
-                                  <div className="font-bold uppercase text-[#616161] text-[9px]">Amount (₹)</div>
-                                  <div className="font-bold text-blue-700 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                    <span>₹{Number(p.amount || 0).toLocaleString('en-IN')}</span>
-                                    {p.billingType === 'PRORATED' && (
-                                      <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded font-bold">
-                                        Prorated ({p.activeDays || 'Custom'}d)
+                                  <div className="flex items-center gap-6 text-xs font-mono">
+                                    <div>
+                                      <span className="text-white/70 text-[9px] uppercase tracking-wider block">Total Subtotal</span>
+                                      <span className="font-bold text-sm">
+                                        ₹{Number(items.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)).toLocaleString('en-IN')}
                                       </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-white/70 text-[9px] uppercase tracking-wider block">Total GST</span>
+                                      <span className="font-bold text-sm">
+                                        ₹{Number(items.reduce((sum, p) => sum + (Number(p.totalAmount || 0) - Number(p.amount || 0)), 0)).toLocaleString('en-IN')}
+                                      </span>
+                                    </div>
+                                    <div className="bg-white/10 px-3 py-1.5 border border-white/20">
+                                      <span className="text-white/70 text-[9px] uppercase tracking-wider block">Grand Total</span>
+                                      <span className="font-black text-base text-emerald-300">
+                                        ₹{Number(items.reduce((sum, p) => sum + (Number(p.totalAmount) || 0), 0)).toLocaleString('en-IN')}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
+                                <div>
+                                  <div className="font-bold uppercase text-[#616161] text-[9px]">Cabin Name</div>
+                                  <div className="font-bold text-[#1B1C1C] mt-0.5 text-sm">{entryToViewDetails.cabinName || 'N/A'}</div>
+                                </div>
+                                <div>
+                                  <div className="font-bold uppercase text-[#616161] text-[9px]">Seats & Agreement Rate</div>
+                                  <div className="font-bold text-[#1B1C1C] mt-0.5">
+                                    {entryToViewDetails.noOfSeats || 0} seats @ ₹
+                                    {Number(entryToViewDetails.ratePerAgreement || 0).toLocaleString('en-IN')}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="font-bold uppercase text-[#616161] text-[9px]">GST %</div>
+                                  <div className="font-bold text-[#1B1C1C] mt-0.5">{entryToViewDetails.gstPercent ?? 18}%</div>
+                                </div>
+                                <div>
+                                  <div className="font-bold uppercase text-[#616161] text-[9px]">Total Amount (Amt + GST)</div>
+                                  <div className="font-black text-base text-[var(--primary)] mt-0.5">
+                                    ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
+                                  </div>
+                                  {hasProration(entryToViewDetails) && (() => {
+                                    const ps = getProrationSummary(entryToViewDetails);
+                                    return (
+                                      <div className="text-[9.5px] font-bold text-amber-800 mt-0.5">
+                                        Prorated: {ps?.label || 'Custom Days'}
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            );
+                          }
+                        })()}
+                      </div>
+
+                      {/* SECTION 1.5: Overdue Surcharge & Waive-Off Breakdown */}
+                      {((entryToViewDetails.totalOverdueDays && entryToViewDetails.totalOverdueDays > 0) || Number(entryToViewDetails.lateFeeAmount || 0) > 0 || Number(entryToViewDetails.waivedLateDays || 0) > 0) && (
+                        <div className="p-4 bg-red-50/70 border border-red-200 space-y-3 rounded-xs">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-red-900 flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <AlertOctagon size={14} className="text-red-600" />
+                              <span>Late Payment Surcharge &amp; Overdue Status</span>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold bg-red-100 text-red-800 px-2 py-0.5 border border-red-300">
+                              Due Date: {entryToViewDetails.dueDate ? new Date(entryToViewDetails.dueDate).toLocaleDateString('en-IN') : `Day ${entryToViewDetails.paymentDueDay || 7} of Month`}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 border border-red-200/60 text-xs">
+                            <div>
+                              <div className="font-bold uppercase text-gray-500 text-[9px]">Total Overdue Days</div>
+                              <div className="font-bold text-red-700 mt-0.5 font-mono text-sm">
+                                {entryToViewDetails.totalOverdueDays || entryToViewDetails.lateDays || 0} Days
+                              </div>
+                              <div className="text-[9px] text-gray-500 mt-0.5">Rate: ₹{Number(entryToViewDetails.lateFeePerDay || 100)}/day</div>
+                            </div>
+
+                            <div>
+                              <div className="font-bold uppercase text-gray-500 text-[9px]">Waived Late Days</div>
+                              <div className="font-bold text-emerald-700 mt-0.5 font-mono text-sm">
+                                {entryToViewDetails.waivedLateDays || 0} Days
+                              </div>
+                              <div className="text-[9px] text-emerald-600 font-bold mt-0.5">
+                                -₹{Number(entryToViewDetails.waivedLateFee || (Number(entryToViewDetails.waivedLateDays || 0) * 100)).toLocaleString('en-IN')} Relaxed
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="font-bold uppercase text-gray-500 text-[9px]">Billed Late Days</div>
+                              <div className="font-bold text-gray-900 mt-0.5 font-mono text-sm">
+                                {entryToViewDetails.lateDays || 0} Days
+                              </div>
+                              <div className="text-[9px] text-gray-500 mt-0.5">Chargeable Surcharge</div>
+                            </div>
+
+                            <div>
+                              <div className="font-bold uppercase text-gray-500 text-[9px]">Effective Late Surcharge</div>
+                              <div className="font-black text-sm text-red-700 mt-0.5 font-mono">
+                                +₹{Number(entryToViewDetails.lateFeeAmount || 0).toLocaleString('en-IN')}
+                              </div>
+                              <div className="text-[9px] font-bold text-teal-800 mt-0.5">
+                                Invoice Total: ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* SECTION 1.8: Sub-Invoice Splits Breakdown (if split) */}
+                      {entryToViewDetails.splitsJson && (() => {
+                        let splits: InvoiceSplitGroup[] = [];
+                        try { splits = JSON.parse(entryToViewDetails.splitsJson || '[]'); } catch { }
+                        if (splits.length > 1) {
+                          return (
+                            <div className="p-4 bg-purple-50/60 border border-purple-200 space-y-3 rounded-xs">
+                              <div className="text-[11px] font-bold uppercase tracking-wider text-purple-900 flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <Scissors size={14} className="text-purple-700" />
+                                  <span>Sub-Invoice Splits Breakdown ({splits.length} Groups)</span>
+                                </div>
+                                <span className="text-[10px] font-mono font-bold bg-purple-100 text-purple-800 px-2 py-0.5 border border-purple-300">
+                                  Product-Wise Split Active
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {splits.map((grp, gIdx) => (
+                                  <div key={grp.id} className="bg-white p-3 border border-purple-200 rounded-sm space-y-2">
+                                    <div className="flex items-center justify-between border-b border-purple-100 pb-1.5">
+                                      <span className="font-extrabold text-xs text-[#1B1C1C] flex items-center gap-1">
+                                        <span className="px-1.5 py-0.2 bg-purple-700 text-white text-[9px] rounded">#{gIdx + 1}</span> {grp.name}
+                                      </span>
+                                      <span className="font-mono font-bold text-teal-800 text-xs">
+                                        ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-purple-900 bg-purple-50 p-1.5 border border-purple-100 rounded">
+                                      <span>📅 <strong>Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} → {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
+                                      <span>•</span>
+                                      <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-1 text-[10px] text-neutral-600">
+                                      <div><span className="text-neutral-400 block">Seats:</span> <strong>{grp.noOfSeats}</strong></div>
+                                      <div><span className="text-neutral-400 block">Subtotal:</span> <strong>₹{Number(grp.amount || 0).toLocaleString('en-IN')}</strong></div>
+                                      <div><span className="text-neutral-400 block">GST:</span> <strong>₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}</strong></div>
+                                    </div>
+                                    {grp.attachedInvoice?.fileName && (
+                                      <div className="pt-1 border-t border-neutral-100 flex items-center justify-between text-[9px]">
+                                        <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                          <FileCheck size={10} /> {grp.attachedInvoice.fileName}
+                                        </span>
+                                        {grp.attachedInvoice?.fileUrl && (
+                                          <a
+                                            href={grp.attachedInvoice.fileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-purple-800 font-bold underline"
+                                          >
+                                            View PDF
+                                          </a>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      {/* SECTION 2: Head Office & GST Details */}
+                      <div className="space-y-2">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
+                          <FileText size={14} /> Head Office Address & GST Status
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">Head Office (HO) Address</div>
+                            <div className="font-medium text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.hoAddress || 'Not Provided'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">GST Number & Status</div>
+                            <div className="font-mono font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.gstNo ? `GST: ${entryToViewDetails.gstNo}` : (entryToViewDetails.clientMaster?.gstStatus || 'UNREGISTERED')}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SECTION 3: Agreement Dates, Lock-In & Notice Terms */}
+                      <div className="space-y-2">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
+                          <Calendar size={14} /> Agreement Dates, Lock-In & Notice Terms
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">Agreement Start Date</div>
+                            <div className="font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.agreementStartDate
+                                ? new Date(entryToViewDetails.clientMaster.agreementStartDate).toLocaleDateString('en-IN')
+                                : 'N/A'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">Agreement End Date</div>
+                            <div className="font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.agreementEndDate
+                                ? new Date(entryToViewDetails.clientMaster.agreementEndDate).toLocaleDateString('en-IN')
+                                : 'N/A'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">Lock-In End Date</div>
+                            <div className="font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.lockinEndDate
+                                ? new Date(entryToViewDetails.clientMaster.lockinEndDate).toLocaleDateString('en-IN')
+                                : 'N/A'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">Notice Period</div>
+                            <div className="font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.noticePeriodMonths
+                                ? `${entryToViewDetails.clientMaster.noticePeriodMonths} Months (${entryToViewDetails.clientMaster.noticePeriodApplicable || 'After Lock-in'})`
+                                : 'N/A'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">Escalation %</div>
+                            <div className="font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.escalationPercent
+                                ? `${entryToViewDetails.clientMaster.escalationPercent}%`
+                                : 'N/A'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">Escalation Applicable Date</div>
+                            <div className="font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.escalationApplicable
+                                ? new Date(entryToViewDetails.clientMaster.escalationApplicable).toLocaleDateString('en-IN')
+                                : 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SECTION 4: TDS & Security Deposit (SDR) */}
+                      <div className="space-y-2">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
+                          <Tag size={14} /> TDS Deduction, TAT & Security Deposit (SDR)
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">Will Deduct TDS?</div>
+                            <div className="font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.willDeductTds ? 'Yes' : 'No'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">TAT Number</div>
+                            <div className="font-mono font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.tanNo || 'N/A'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">Client ID (Manual)</div>
+                            <div className="font-mono font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.clientId || 'N/A'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">Security Deposit (SDR)</div>
+                            <div className="font-bold text-[#1B1C1C] mt-0.5">
+                              {entryToViewDetails.clientMaster?.sorAmount
+                                ? `₹${Number(entryToViewDetails.clientMaster.sorAmount).toLocaleString('en-IN')}`
+                                : 'N/A'}
+                              {entryToViewDetails.clientMaster?.sorRecdDate && (
+                                <span className="text-[10px] text-neutral-500 font-normal block">
+                                  SDR Recd: {new Date(entryToViewDetails.clientMaster.sorRecdDate).toLocaleDateString('en-IN')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SECTION 5: Contact Person(s) */}
+                      {entryToViewDetails.clientMaster?.contactPersons && entryToViewDetails.clientMaster.contactPersons.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
+                            <UserCheck size={14} /> Contact Person(s) Details
+                          </div>
+                          <div className="border border-[var(--outline-variant)]/40 overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-[#F8F9FA] font-bold text-[#616161] uppercase text-[9px] border-b border-neutral-200">
+                                <tr>
+                                  <th className="p-2.5">Name</th>
+                                  <th className="p-2.5">Designation</th>
+                                  <th className="p-2.5">Mobile No</th>
+                                  <th className="p-2.5">Email</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-neutral-100 font-medium">
+                                {entryToViewDetails.clientMaster.contactPersons.map((cp, idx) => (
+                                  <tr key={idx}>
+                                    <td className="p-2.5 font-bold text-[#1B1C1C]">{cp.name}</td>
+                                    <td className="p-2.5 text-neutral-600">{cp.designation || 'N/A'}</td>
+                                    <td className="p-2.5 font-mono">{cp.mobileNo || 'N/A'}</td>
+                                    <td className="p-2.5 font-mono">{cp.email || 'N/A'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* SECTION 6: Attached Tally PDF Invoice & Digitally Signed PDF */}
+                      <div className="space-y-2">
+                        {entryToViewDetails.attachedInvoice && (
+                          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Paperclip className="text-emerald-700 h-5 w-5" />
+                              <div>
+                                <span className="font-bold text-emerald-900">Attached Tally Invoice PDF: </span>
+                                <span className="text-emerald-800">{entryToViewDetails.attachedInvoice.fileName}</span>
+                              </div>
+                            </div>
+                            <a
+                              href={entryToViewDetails.attachedInvoice.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-4 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye size={12} /> View Tally PDF
+                            </a>
+                          </div>
+                        )}
+
+                        {entryToViewDetails.digitallySignedPdfUrl && (
+                          <div className="p-3.5 bg-teal-50 border border-teal-300 text-xs flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Award className="text-teal-700 h-5 w-5" />
+                              <div>
+                                <span className="font-bold text-teal-950">Digitally Signed &amp; Approved PDF: </span>
+                                <span className="text-teal-800 font-medium">Cryptographic Digital Signature Applied</span>
+                              </div>
+                            </div>
+                            <a
+                              href={entryToViewDetails.digitallySignedPdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-4 py-1.5 bg-[#006064] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-[#004d40] flex items-center gap-1 cursor-pointer"
+                            >
+                              <Download size={12} /> View / Download Signed PDF
+                            </a>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
+                        <button
+                          type="button"
+                          onClick={() => setEntryToViewDetails(null)}
+                          className="px-5 py-2.5 bg-[#F8F9FA] border border-[var(--outline-variant)] font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* MODAL 5: EDIT INVOICE RECORD MODAL */}
+              <AnimatePresence>
+                {entryToEditInvoice && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.96, y: 15 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.96, y: 15 }}
+                      className="bg-white border border-[var(--outline-variant)] w-full max-w-4xl shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[90vh] flex flex-col"
+                    >
+                      <div className="p-5 bg-[#006064] text-white flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 bg-white/10 flex items-center justify-center font-bold text-sm">
+                            #{entryToEditInvoice.srNo}
+                          </div>
+                          <div>
+                            <h2 className="text-base font-bold tracking-tight uppercase">
+                              Edit Invoice Record & Products (#{entryToEditInvoice.srNo})
+                            </h2>
+                            <p className="text-xs text-white/80 font-light">
+                              Edit details or delete specific product items before sending to the accountant.
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setEntryToEditInvoice(null)}
+                          className="text-white/80 hover:text-white p-1.5 hover:bg-white/10 transition-colors"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleSaveEditInvoice} className="p-6 space-y-5 overflow-y-auto flex-1">
+                        {/* Basic Invoice Parameters */}
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-neutral-50 p-3.5 border border-neutral-200 rounded">
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                              Company Name
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={editCompanyName}
+                              onChange={(e) => setEditCompanyName(e.target.value)}
+                              className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                              GST No
+                            </label>
+                            <input
+                              type="text"
+                              value={editGstNo}
+                              onChange={(e) => setEditGstNo(e.target.value)}
+                              className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-mono font-bold focus:outline-none focus:border-[#006064]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                              Billing Month
+                            </label>
+                            <input
+                              type="text"
+                              value={editBillingMonth}
+                              onChange={(e) => setEditBillingMonth(e.target.value)}
+                              placeholder="e.g. August 2026"
+                              className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                              Cabin Name / Invoice Summary
+                            </label>
+                            <input
+                              type="text"
+                              value={editCabinName}
+                              onChange={(e) => setEditCabinName(e.target.value)}
+                              placeholder="e.g. Dedicated Cabin, Flex Desk"
+                              className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                              Workflow Status
+                            </label>
+                            <select
+                              value={editStatus}
+                              onChange={(e) => setEditStatus(e.target.value as any)}
+                              className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                            >
+                              <option value="PENDING_CM_REVIEW">Pending CM Review</option>
+                              <option value="SENT_TO_ACCOUNTANT">Sent to Accountant</option>
+                              <option value="INVOICE_ATTACHED">Invoice Attached</option>
+                              <option value="APPROVED">Approved</option>
+                              <option value="REJECTED_WITH_REMARKS">Rejected with Remarks</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* INVOICE PRODUCTS & LINE ITEMS (EDITABLE & DELETABLE) */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-xs font-bold text-neutral-900 uppercase flex items-center gap-1.5">
+                                <Package size={14} className="text-[#006064]" />
+                                <span>Invoice Products & Line Items ({editItems.length})</span>
+                              </div>
+                              <p className="text-[11px] text-neutral-500">
+                                You can edit quantities, rates, or <strong>delete specific products</strong> before sending to accountant.
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setShowEditProratePanel(!showEditProratePanel)}
+                                className={`px-3 py-1 font-bold text-[11px] uppercase tracking-wider rounded flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs ${showEditProratePanel || editItems.some(it => it.isProrated || it.billingType === 'PRORATED')
+                                  ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                                  : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-300'
+                                  }`}
+                                title="Prorate days if client occupied space for fewer days in month"
+                              >
+                                <CalendarDays size={13} />
+                                <span>
+                                  {editItems.some(it => it.isProrated || it.billingType === 'PRORATED')
+                                    ? 'Adjust Days Proration (Active)'
+                                    : '⚡ Prorate Days'}
+                                </span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={handleAddEditItem}
+                                className="px-3 py-1 bg-teal-50 text-[#006064] hover:bg-teal-100 border border-teal-300 font-bold text-[11px] uppercase tracking-wider rounded flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                              >
+                                <Plus size={12} /> Add Product Item
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* EDIT MODAL PRORATE PANEL */}
+                          {showEditProratePanel && (() => {
+                            const totalBaseMonthly = editItems.reduce((sum, it) => {
+                              const seats = Number(it.noOfSeats) || 0;
+                              const rate = Number(it.ratePerAgreement) || 0;
+                              const base = Number(it.baseMonthlyAmount) || (seats > 0 && rate > 0 ? seats * rate : Number(it.amount || 0));
+                              return sum + base;
+                            }, 0);
+
+                            const calc = calculateProratedBilling({
+                              monthlyAmount: totalBaseMonthly,
+                              totalMonthDays: editProrateTotalMonthDays,
+                              activeDays: editProrateActiveDays,
+                              startDateStr: editProrateStartDate,
+                              endDateStr: editProrateEndDate,
+                            });
+
+                            return (
+                              <div className="p-4 bg-amber-50/70 border border-amber-300 rounded space-y-3 shadow-2xs">
+                                <div className="flex items-center justify-between">
+                                  <div className="font-bold text-xs uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                                    <CalendarDays size={14} className="text-amber-700" />
+                                    <span>Prorate Billing for Active Days ({editProrateActiveDays} of {editProrateTotalMonthDays} Days)</span>
+                                  </div>
+                                  <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded">
+                                    Month: {editBillingMonth || 'Billing Month'}
+                                  </span>
                                 </div>
 
-                                <div>
-                                  <div className="font-bold uppercase text-[#616161] text-[9px]">GST (%)</div>
-                                  <div className="font-bold text-neutral-700 mt-0.5">{p.gstPercent ?? 18}%</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3 border border-amber-200 rounded">
+                                  <div>
+                                    <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
+                                      Usage Start Date
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={editProrateStartDate}
+                                      onChange={(e) => handleEditProrateDateChange(e.target.value, editProrateEndDate)}
+                                      className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
+                                      Usage End Date
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={editProrateEndDate}
+                                      onChange={(e) => handleEditProrateDateChange(editProrateStartDate, e.target.value)}
+                                      className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[9.5px] font-bold uppercase text-amber-700 mb-1">
+                                      Active Days Billed
+                                    </label>
+                                    <div className="flex items-center gap-1.5">
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        max={editProrateTotalMonthDays}
+                                        value={editProrateActiveDays}
+                                        onChange={(e) => handleEditProrateDaysChange(parseInt(e.target.value, 10) || 1)}
+                                        className="w-full bg-amber-50 border border-amber-300 px-2 py-1 text-xs font-mono font-bold text-amber-900 rounded focus:bg-white focus:border-amber-600 focus:outline-none text-center"
+                                      />
+                                      <span className="text-[10px] font-bold text-neutral-500 shrink-0">/ {editProrateTotalMonthDays}d</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Quick Presets */}
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-[9.5px] text-neutral-500 font-bold uppercase mr-1">Presets:</span>
+                                  {[
+                                    { label: 'Full Month (30d)', days: editProrateTotalMonthDays },
+                                    { label: '11 Days (e.g. Harsha Daulani)', days: 11 },
+                                    { label: '15 Days (Half Month)', days: Math.round(editProrateTotalMonthDays / 2) },
+                                    { label: '10 Days', days: 10 },
+                                    { label: '7 Days (1 Week)', days: 7 },
+                                  ].map((p, idx) => (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => handleEditProrateDaysChange(p.days)}
+                                      className={`px-2 py-0.5 text-[9.5px] font-bold rounded border cursor-pointer transition-colors ${editProrateActiveDays === p.days
+                                        ? 'bg-amber-600 text-white border-amber-600'
+                                        : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100'
+                                        }`}
+                                    >
+                                      {p.label}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {/* Real-time Math Summary */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-2.5 border border-amber-200 rounded text-xs">
+                                  <div>
+                                    <div className="text-[9px] uppercase font-bold text-gray-500">Monthly Base</div>
+                                    <div className="font-mono font-bold text-neutral-800 mt-0.5">
+                                      ₹{totalBaseMonthly.toLocaleString('en-IN')}
+                                    </div>
+                                    <div className="text-[8.5px] text-gray-400">₹{calc.dailyRate.toFixed(2)}/day</div>
+                                  </div>
+
+                                  <div>
+                                    <div className="text-[9px] uppercase font-bold text-gray-500">Prorated Subtotal ({calc.activeDays}d)</div>
+                                    <div className="font-mono font-bold text-amber-900 mt-0.5">
+                                      ₹{calc.proratedSubtotal.toLocaleString('en-IN')}
+                                    </div>
+                                    <div className="text-[8.5px] text-gray-400">{calc.activeDays}d × ₹{calc.dailyRate.toFixed(2)}</div>
+                                  </div>
+
+                                  <div>
+                                    <div className="text-[9px] uppercase font-bold text-gray-500">18% GST</div>
+                                    <div className="font-mono font-bold text-neutral-800 mt-0.5">
+                                      ₹{calc.gstAmount.toLocaleString('en-IN')}
+                                    </div>
+                                    <div className="text-[8.5px] text-gray-400">9% CGST + 9% SGST</div>
+                                  </div>
+
+                                  <div>
+                                    <div className="text-[9px] uppercase font-bold text-teal-800">New Grand Total</div>
+                                    <div className="font-mono font-black text-sm text-teal-900 mt-0.5">
+                                      ₹{calc.totalAmount.toLocaleString('en-IN')}
+                                    </div>
+                                    <div className="text-[8.5px] text-teal-700 font-medium">Subtotal + GST</div>
+                                  </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex items-center justify-between pt-1">
+                                  <div>
+                                    {editItems.some(it => it.isProrated || it.billingType === 'PRORATED') && (
+                                      <button
+                                        type="button"
+                                        onClick={handleResetEditProration}
+                                        className="text-[10px] text-neutral-600 hover:text-neutral-900 underline font-semibold flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <RotateCcw size={10} /> Reset Products to Full Month
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowEditProratePanel(false)}
+                                      className="px-2.5 py-1 text-[10px] font-bold uppercase text-neutral-600 hover:bg-neutral-200 rounded cursor-pointer"
+                                    >
+                                      Close Panel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleApplyEditProration}
+                                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10.5px] uppercase tracking-wider rounded shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                                    >
+                                      <CheckCircle2 size={12} />
+                                      <span>Apply {editProrateActiveDays} Days Proration (₹{calc.totalAmount.toLocaleString('en-IN')})</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {editItems.length === 0 ? (
+                            <div className="p-6 bg-red-50 border border-red-200 text-center rounded text-red-800 text-xs font-medium space-y-2">
+                              <div>⚠️ No product items left on this invoice.</div>
+                              <button
+                                type="button"
+                                onClick={handleAddEditItem}
+                                className="px-3 py-1.5 bg-red-600 text-white font-bold text-xs uppercase rounded"
+                              >
+                                + Add a Product
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="border border-neutral-300 rounded overflow-hidden shadow-xs">
+                              <table className="w-full text-left text-xs border-collapse">
+                                <thead className="bg-neutral-100 text-neutral-700 text-[10px] font-bold uppercase tracking-wider border-b border-neutral-300">
+                                  <tr>
+                                    <th className="p-2 w-8 text-center">#</th>
+                                    <th className="p-2">Product / Cabin Name</th>
+                                    <th className="p-2 w-20 text-center">Seats</th>
+                                    <th className="p-2 w-28 text-right">Rate (₹)</th>
+                                    <th className="p-2 w-28 text-right">Amount (₹)</th>
+                                    <th className="p-2 w-16 text-center">GST %</th>
+                                    <th className="p-2 w-32 text-right">Total (₹)</th>
+                                    <th className="p-2 w-16 text-center">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-neutral-200 bg-white font-sans">
+                                  {editItems.map((item, itIdx) => (
+                                    <tr key={itIdx} className="hover:bg-teal-50/40 transition-colors">
+                                      <td className="p-2 text-center font-bold text-neutral-500 text-[11px]">
+                                        {itIdx + 1}
+                                      </td>
+
+                                      <td className="p-2">
+                                        <input
+                                          type="text"
+                                          required
+                                          value={item.cabinName}
+                                          onChange={(e) => handleUpdateEditItem(itIdx, 'cabinName', e.target.value)}
+                                          placeholder="e.g. Dedicated Cabin"
+                                          className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black rounded focus:outline-none focus:border-[#006064]"
+                                        />
+                                        {item.isProrated || item.billingType === 'PRORATED' ? (
+                                          <div className="mt-1 flex items-center gap-1">
+                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9.5px] font-bold">
+                                              <CalendarDays size={10} className="text-amber-700" />
+                                              <span>Prorated: {item.activeDays || editProrateActiveDays} of {item.totalMonthDays || editProrateTotalMonthDays} Days</span>
+                                            </span>
+                                          </div>
+                                        ) : item.note ? (
+                                          <div className="text-[10px] text-amber-700 italic mt-0.5">{item.note}</div>
+                                        ) : null}
+                                      </td>
+
+                                      <td className="p-2">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={item.noOfSeats}
+                                          onChange={(e) => handleUpdateEditItem(itIdx, 'noOfSeats', e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black text-center rounded focus:outline-none focus:border-[#006064]"
+                                        />
+                                      </td>
+
+                                      <td className="p-2">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={item.ratePerAgreement}
+                                          onChange={(e) => handleUpdateEditItem(itIdx, 'ratePerAgreement', e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black text-right rounded focus:outline-none focus:border-[#006064]"
+                                        />
+                                      </td>
+
+                                      <td className="p-2">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="any"
+                                          value={item.amount}
+                                          onChange={(e) => handleUpdateEditItem(itIdx, 'amount', e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black text-right font-mono rounded focus:outline-none focus:border-[#006064]"
+                                        />
+                                      </td>
+
+                                      <td className="p-2">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={item.gstPercent}
+                                          onChange={(e) => handleUpdateEditItem(itIdx, 'gstPercent', e.target.value === '' ? '' : Number(e.target.value))}
+                                          className="w-full bg-white border border-neutral-300 px-1 py-1 text-xs font-bold text-black text-center rounded focus:outline-none focus:border-[#006064]"
+                                        />
+                                      </td>
+
+                                      <td className="p-2 text-right font-mono font-black text-emerald-800 text-xs">
+                                        ₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}
+                                      </td>
+
+                                      <td className="p-2 text-center">
+                                        <div className="flex items-center justify-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => setShowEditProratePanel(true)}
+                                            className="p-1.5 bg-amber-50 hover:bg-amber-500 text-amber-700 hover:text-white rounded transition-colors cursor-pointer"
+                                            title="Prorate days for this invoice"
+                                          >
+                                            <CalendarDays size={13} />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteEditItem(itIdx)}
+                                            className="p-1.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded transition-colors cursor-pointer"
+                                            title="Delete this product from the invoice"
+                                          >
+                                            <Trash2 size={13} />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* LIVE RECALCULATED TOTALS CARD */}
+                        <div className="p-4 bg-teal-50/80 border-2 border-teal-600/60 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                          <div className="space-y-0.5">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-teal-900">
+                              Recalculated Invoice Summary:
+                            </div>
+                            <div className="text-xs text-teal-950 font-bold">
+                              {editItems.length} Product Line Item{editItems.length !== 1 ? 's' : ''} • {editNoOfSeats} Total Seats
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-4 text-xs font-sans">
+                            <div className="text-right">
+                              <div className="text-[9px] font-bold text-neutral-500 uppercase">Subtotal Amount</div>
+                              <div className="font-mono font-bold text-neutral-900 text-sm">
+                                ₹{Number(editAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <div className="text-[9px] font-bold text-neutral-500 uppercase">GST (18%)</div>
+                              <div className="font-mono font-bold text-neutral-700 text-sm">
+                                ₹{Math.max(0, Number(editTotalAmount || 0) - Number(editAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+
+                            <div className="text-right bg-white px-3 py-1.5 rounded border border-teal-300 shadow-xs">
+                              <div className="text-[9px] font-bold text-teal-900 uppercase">Grand Total (Incl. GST)</div>
+                              <div className="font-mono font-black text-emerald-800 text-base">
+                                ₹{Number(editTotalAmount || 0).toLocaleString('en-IN')}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Form Action Buttons */}
+                        <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
+                          <button
+                            type="button"
+                            onClick={() => setEntryToEditInvoice(null)}
+                            className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider rounded"
+                          >
+                            Cancel
+                          </button>
+
+                          <button
+                            type="submit"
+                            disabled={actionLoading || editItems.length === 0}
+                            className="px-5 py-2.5 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 rounded shadow-sm cursor-pointer disabled:opacity-50"
+                          >
+                            {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                            Save Invoice Changes
+                          </button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* MODAL 6: DIGITAL SIGNATURE STAMP SETTINGS */}
+              <AnimatePresence>
+                {showSignatureSettingsModal && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.96, y: 15 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.96, y: 15 }}
+                      className="bg-white border border-[var(--outline-variant)] w-full max-w-lg shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[88vh] flex flex-col"
+                    >
+                      <div className="p-5 bg-[#006064] text-white flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-2.5">
+                          <PenTool className="h-5 w-5" />
+                          <div>
+                            <h2 className="text-base font-bold tracking-tight uppercase">
+                              Official Digital Signature Stamp Hub
+                            </h2>
+                            <p className="text-xs text-white/80 font-light">
+                              Upload or change your electronic signature stamp for 1-click invoice signing.
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowSignatureSettingsModal(false)}
+                          className="text-white/80 hover:text-white p-1.5 hover:bg-white/10 transition-colors"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleSaveSignatureSettings} className="p-6 space-y-4 overflow-y-auto flex-1">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                            Signatory Full Name
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Authorized Signatory / CM Name"
+                            value={signatureSignerName}
+                            onChange={(e) => setSignatureSignerName(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                            Signatory Designation / Title
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Community Manager"
+                            value={signatureSignerTitle}
+                            onChange={(e) => setSignatureSignerTitle(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
+                            Upload Signature Image / Stamp (Transparent PNG Recommended)
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                setNewSignatureFile(e.target.files[0]);
+                              }
+                            }}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs"
+                          />
+                          <p className="text-[10px] text-neutral-500 mt-1">
+                            A clear transparent PNG image works best on invoice PDFs.
+                          </p>
+                        </div>
+
+                        {/* Stamp Visual Live Preview */}
+                        <div className="space-y-2 pt-2">
+                          <div className="text-[10px] font-bold uppercase text-neutral-600">
+                            Official Adobe Signature Box Preview on Invoice PDF:
+                          </div>
+                          <div className="p-3 bg-neutral-50 border border-neutral-300 rounded space-y-1">
+                            <div className="font-bold text-[11px] text-black">
+                              for {signatureSetting.companyName || 'SSPACIA INDIA PVT LTD'}
+                            </div>
+
+                            <div className="p-3 bg-white border-2 border-black grid grid-cols-2 gap-3 relative shadow-xs">
+                              {/* Watermark preview */}
+                              {(newSignatureFile || signatureSetting.signatureUrl) && (
+                                <div className="absolute inset-0 flex items-center justify-center opacity-25 pointer-events-none p-1">
+                                  {newSignatureFile ? (
+                                    <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 border border-teal-200">
+                                      [{newSignatureFile.name}]
+                                    </span>
+                                  ) : (
+                                    <img src={signatureSetting.signatureUrl} alt="" className="max-h-12 object-contain" />
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="font-black text-xs text-black leading-snug">
+                                {(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ').filter(Boolean).map((part: string, idx: number) => (
+                                  <div key={idx}>{part}</div>
+                                ))}
+                              </div>
+
+                              <div className="text-[9px] text-black space-y-0.5 font-sans leading-tight">
+                                <div>Digitally signed by {(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ')[0]}</div>
+                                <div>{(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ').slice(1).join(' ')}</div>
+                                <div>Date: 2026.08.20 {new Date().toLocaleTimeString('en-GB')}</div>
+                                <div>+05'30'</div>
+                              </div>
+                            </div>
+
+                            <div className="text-center font-bold text-[10px] text-black pt-0.5">
+                              Authorised Signatory
+                            </div>
+                          </div>
+
+                          <div className="p-2.5 bg-teal-50 border border-teal-200 text-teal-900 text-[10px] space-y-1">
+                            <div className="font-bold flex items-center gap-1">
+                              <Award size={12} className="text-[#006064]" /> ProxKey USB Dongle Support:
+                            </div>
+                            <div>
+                              When signing an invoice row, you can choose between <strong>ProxKey USB Hardware Token (PantaSign Class 3)</strong> or <strong>Fast Server-Side Cryptographic Sign</strong>.
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
+                          <button
+                            type="button"
+                            onClick={() => setShowSignatureSettingsModal(false)}
+                            className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider"
+                          >
+                            Cancel
+                          </button>
+
+                          <button
+                            type="submit"
+                            disabled={uploadingSignature}
+                            className="px-5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2"
+                          >
+                            {uploadingSignature ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                            Save Stamp Settings
+                          </button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* MODAL 7: FLEXIBLE LATE FEE SURCHARGE & WAIVE DAYS MANAGER */}
+              <AnimatePresence>
+                {waiveModalInvoice && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                      className="bg-white border border-gray-300 w-full max-w-lg shadow-2xl overflow-hidden text-xs my-auto max-h-[90vh] flex flex-col rounded-xs"
+                    >
+                      {/* HEADER */}
+                      <div className="p-5 bg-gradient-to-r from-red-900 to-[#1B1C1C] text-white flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 bg-red-600/30 border border-red-400/50 rounded-full flex items-center justify-center font-bold">
+                            <Sliders size={18} className="text-red-300" />
+                          </div>
+                          <div>
+                            <h2 className="text-sm font-bold uppercase tracking-tight">
+                              Waive / Adjust Late Fee Surcharge
+                            </h2>
+                            <p className="text-[11px] text-red-200/80">
+                              Choose exactly how many overdue days to waive for this invoice.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setWaiveModalInvoice(null)}
+                          className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded cursor-pointer"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      {/* CONTENT */}
+                      <form onSubmit={handleSaveWaiveModal} className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+                        {/* COMPANY & OVERDUE SUMMARY */}
+                        <div className="bg-neutral-50 p-4 border border-neutral-200 space-y-2 rounded-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-gray-900 text-sm">{waiveModalInvoice.companyName}</span>
+                            <span className="font-mono text-[10px] font-bold bg-neutral-200 text-neutral-800 px-2 py-0.5">
+                              SR #{waiveModalInvoice.srNo}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-neutral-200/70 text-[11px]">
+                            <div>
+                              <span className="text-gray-500 text-[10px] uppercase font-bold block">Total Overdue</span>
+                              <span className="font-mono font-bold text-red-700">
+                                {waiveModalInvoice.totalOverdueDays || waiveModalInvoice.calculatedLateDays || 0} Days
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 text-[10px] uppercase font-bold block">Daily Rate</span>
+                              <span className="font-mono font-bold text-gray-800">
+                                ₹{Number(waiveModalInvoice.lateFeePerDay || 100)} / day
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 text-[10px] uppercase font-bold block">Max Surcharge</span>
+                              <span className="font-mono font-bold text-red-700">
+                                ₹{((waiveModalInvoice.totalOverdueDays || waiveModalInvoice.calculatedLateDays || 0) * Number(waiveModalInvoice.lateFeePerDay || 100)).toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* WAIVE DAYS INPUT & CALCULATION PREVIEW */}
+                        {(() => {
+                          const totalOverdue = waiveModalInvoice.totalOverdueDays || waiveModalInvoice.calculatedLateDays || 0;
+                          const ratePerDay = Number(waiveModalInvoice.lateFeePerDay || 100);
+                          const parsedWaived = parseInt(waiveDaysInput, 10);
+                          const waivedDays = isNaN(parsedWaived) ? 0 : Math.max(0, Math.min(totalOverdue, parsedWaived));
+                          const chargeableDays = Math.max(0, totalOverdue - waivedDays);
+                          const newLateFee = chargeableDays * ratePerDay;
+                          const waivedFee = waivedDays * ratePerDay;
+                          const prevLateFee = Number(waiveModalInvoice.lateFeeAmount || 0);
+                          const baseTotal = Math.max(0, (Number(waiveModalInvoice.totalAmount) || 0) - prevLateFee);
+                          const newTotal = baseTotal + newLateFee;
+
+                          return (
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1.5">
+                                  How many days do you want to waive off? (0 to {totalOverdue} days)
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={totalOverdue}
+                                    value={waiveDaysInput}
+                                    onChange={(e) => setWaiveDaysInput(e.target.value)}
+                                    placeholder="e.g. 5"
+                                    className="w-full bg-white border border-gray-300 px-3 py-2 text-sm font-mono font-bold text-gray-900 outline-none focus:border-[#006064] focus:ring-1 focus:ring-[#006064]"
+                                  />
+                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">
+                                    / {totalOverdue} days
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* QUICK PRESET SHORTCUTS */}
+                              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setWaiveDaysInput(String(totalOverdue))}
+                                  className="px-2.5 py-1 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 text-[10px] font-bold uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
+                                >
+                                  🎉 Waive All ({totalOverdue} Days)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setWaiveDaysInput(String(Math.floor(totalOverdue / 2)))}
+                                  className="px-2.5 py-1 bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-300 text-[10px] font-bold uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
+                                >
+                                  ⚖️ Waive 50% ({Math.floor(totalOverdue / 2)} Days)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setWaiveDaysInput("0")}
+                                  className="px-2.5 py-1 bg-red-50 text-red-800 hover:bg-red-100 border border-red-300 text-[10px] font-bold uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
+                                >
+                                  🛑 Charge All (0 Days Waived)
+                                </button>
+                              </div>
+
+                              {/* CALCULATION LIVE PREVIEW CARD */}
+                              <div className="bg-gradient-to-br from-teal-50 to-neutral-50 p-4 border border-teal-200/80 rounded-xs space-y-2 font-sans shadow-2xs">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-[#006064] border-b border-teal-200/60 pb-1 flex items-center justify-between">
+                                  <span>Live Surcharge Breakdown:</span>
+                                  <span className="font-mono">Real-time Calculation</span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                  <div className="bg-white p-2.5 border border-emerald-200">
+                                    <span className="text-[10px] text-emerald-800 font-bold uppercase block">Waived Surcharge</span>
+                                    <span className="text-base font-black text-emerald-700 font-mono">
+                                      -₹{waivedFee.toLocaleString('en-IN')}
+                                    </span>
+                                    <span className="text-[9px] text-emerald-600 block mt-0.5">({waivedDays} days relaxed)</span>
+                                  </div>
+
+                                  <div className="bg-white p-2.5 border border-red-200">
+                                    <span className="text-[10px] text-red-800 font-bold uppercase block">Chargeable Surcharge</span>
+                                    <span className="text-base font-black text-red-700 font-mono">
+                                      +₹{newLateFee.toLocaleString('en-IN')}
+                                    </span>
+                                    <span className="text-[9px] text-red-600 block mt-0.5">({chargeableDays} days billed @ ₹{ratePerDay})</span>
+                                  </div>
+                                </div>
+
+                                <div className="pt-2 border-t border-teal-200/70 flex items-center justify-between text-xs">
+                                  <div>
+                                    <span className="text-gray-500 text-[10px] block">Base Invoice Amount:</span>
+                                    <span className="font-bold text-gray-800 font-mono">₹{baseTotal.toLocaleString('en-IN')}</span>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="text-[#006064] text-[10px] font-bold uppercase block">New Final Total Amount:</span>
+                                    <span className="text-base font-black text-teal-900 font-mono">₹{newTotal.toLocaleString('en-IN')}</span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
                           );
-                        })}
+                        })()}
 
-                        {/* GRAND TOTAL SUMMARY BAR FOR THIS INVOICE CYCLE */}
-                        <div className="p-4 bg-[#00363A] text-white flex flex-wrap items-center justify-between gap-4">
-                          <div className="font-extrabold uppercase text-xs tracking-wider">
-                            Grand Total (Items Included in Invoice Entry)
-                          </div>
-                          <div className="flex items-center gap-6 text-xs font-mono">
-                            <div>
-                              <span className="text-white/70 text-[9px] uppercase tracking-wider block">Total Subtotal</span>
-                              <span className="font-bold text-sm">
-                                ₹{Number(items.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)).toLocaleString('en-IN')}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-white/70 text-[9px] uppercase tracking-wider block">Total GST</span>
-                              <span className="font-bold text-sm">
-                                ₹{Number(items.reduce((sum, p) => sum + (Number(p.totalAmount || 0) - Number(p.amount || 0)), 0)).toLocaleString('en-IN')}
-                              </span>
-                            </div>
-                            <div className="bg-white/10 px-3 py-1.5 border border-white/20">
-                              <span className="text-white/70 text-[9px] uppercase tracking-wider block">Grand Total</span>
-                              <span className="font-black text-base text-emerald-300">
-                                ₹{Number(items.reduce((sum, p) => sum + (Number(p.totalAmount) || 0), 0)).toLocaleString('en-IN')}
-                              </span>
-                            </div>
-                          </div>
+                        {/* ACTIONS */}
+                        <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-neutral-200">
+                          <button
+                            type="button"
+                            onClick={() => setWaiveModalInvoice(null)}
+                            disabled={actionLoading}
+                            className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-gray-700 font-bold text-xs uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={actionLoading}
+                            className="px-5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider rounded-xs cursor-pointer transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                          >
+                            {actionLoading ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                            <span>Confirm &amp; Apply Waive Off</span>
+                          </button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* MODAL 8: CM SPLIT INVOICE (PRODUCT-WISE) MODAL */}
+              <AnimatePresence>
+                {splitModalInvoice && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-3xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
+                    >
+                      {/* Header */}
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
+                        <div>
+                          <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
+                            <Scissors size={18} className="text-purple-700" />
+                            <span>Split Invoice (Product-Wise)</span>
+                          </h3>
+                          <p className="text-[11px] text-neutral-500 mt-0.5">
+                            Group products into separate sub-invoices for the accountant to attach distinct Tally PDFs. The parent company record stays unified.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setSplitModalInvoice(null)}
+                          className="text-neutral-400 hover:text-neutral-700 p-1"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      {/* Invoice Info Bar */}
+                      <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                        <div>
+                          <span className="font-bold text-[#1B1C1C] text-xs">{splitModalInvoice.companyName}</span>
+                          <span className="text-neutral-500 text-[10px] ml-2">SR #{splitModalInvoice.srNo} | {splitModalInvoice.billingMonth}</span>
+                        </div>
+                        <div className="font-bold text-xs text-[#006064]">
+                          Parent Invoice Total: ₹{Number(splitModalInvoice.totalAmount || 0).toLocaleString('en-IN')}
                         </div>
                       </div>
-                    );
-                  } else {
-                    return (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
-                        <div>
-                          <div className="font-bold uppercase text-[#616161] text-[9px]">Cabin Name</div>
-                          <div className="font-bold text-[#1B1C1C] mt-0.5 text-sm">{entryToViewDetails.cabinName || 'N/A'}</div>
-                        </div>
-                        <div>
-                          <div className="font-bold uppercase text-[#616161] text-[9px]">Seats & Agreement Rate</div>
-                          <div className="font-bold text-[#1B1C1C] mt-0.5">
-                            {entryToViewDetails.noOfSeats || 0} seats @ ₹
-                            {Number(entryToViewDetails.ratePerAgreement || 0).toLocaleString('en-IN')}
+
+                      {/* Split Groups List & Allocation */}
+                      <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+                        {/* Sub-Invoice Groups Configuration */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                              <Package size={14} className="text-purple-700" /> Sub-Invoice Groups ({splitGroups.length})
+                            </h4>
+                            <button
+                              type="button"
+                              onClick={handleAddSplitGroup}
+                              className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 rounded cursor-pointer transition-colors"
+                            >
+                              <Plus size={12} /> Add Another Sub-Invoice
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {splitGroups.map((group, gIdx) => (
+                              <div key={group.id} className="p-3.5 bg-purple-50/50 border border-purple-200 rounded-sm space-y-2.5 shadow-2xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <input
+                                    type="text"
+                                    value={group.name}
+                                    onChange={(e) => handleUpdateSplitGroupField(group.id, 'name', e.target.value)}
+                                    className="font-extrabold text-xs text-purple-950 bg-white border border-purple-300 px-2 py-1 rounded w-full focus:outline-none focus:border-purple-600 shadow-2xs"
+                                    placeholder={`Sub-Invoice #${gIdx + 1}`}
+                                  />
+                                  {splitGroups.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSplitGroup(group.id)}
+                                      className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
+                                      title="Remove group"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* INVOICE BILLING PERIOD & DUE DATE INPUTS */}
+                                <div className="grid grid-cols-3 gap-2 bg-white p-2.5 border border-purple-100 rounded text-[10px]">
+                                  <div>
+                                    <label className="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">
+                                      Invoice Start
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={group.startDate || ''}
+                                      onChange={(e) => handleUpdateSplitGroupField(group.id, 'startDate', e.target.value)}
+                                      className="w-full bg-neutral-50 border border-gray-200 px-1.5 py-1 text-[10px] font-mono rounded focus:bg-white focus:border-purple-600"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">
+                                      Invoice End
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={group.endDate || ''}
+                                      onChange={(e) => handleUpdateSplitGroupField(group.id, 'endDate', e.target.value)}
+                                      className="w-full bg-neutral-50 border border-gray-200 px-1.5 py-1 text-[10px] font-mono rounded focus:bg-white focus:border-purple-600"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[9px] font-bold uppercase text-red-600 mb-0.5">
+                                      Payment Due Date
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={group.dueDate || ''}
+                                      onChange={(e) => handleUpdateSplitGroupField(group.id, 'dueDate', e.target.value)}
+                                      className="w-full bg-neutral-50 border border-red-200 px-1.5 py-1 text-[10px] font-mono font-bold text-red-700 rounded focus:bg-white focus:border-red-600"
+                                      title="Last date for client to pay this sub-invoice"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Sub-Invoice Prorate Days Control & Summary */}
+                                {(() => {
+                                  const mInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
+                                  const incDays = (group.startDate && group.endDate)
+                                    ? calculateInclusiveDays(group.startDate, group.endDate)
+                                    : mInfo.totalDays;
+                                  const isFewerDays = incDays > 0 && incDays < mInfo.totalDays;
+
+                                  return (
+                                    <div className="bg-white p-2 border border-purple-100 rounded text-[10px] space-y-1.5">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-gray-500 font-medium">
+                                          Duration: <strong className="text-purple-950 font-bold">{incDays} Days</strong> ({incDays} of {mInfo.totalDays})
+                                        </span>
+                                        {group.isProrated ? (
+                                          <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded font-bold text-[9px] flex items-center gap-1">
+                                            <CalendarDays size={9} className="text-amber-700" /> Prorated ({group.activeDays}d)
+                                          </span>
+                                        ) : null}
+                                      </div>
+
+                                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-dashed border-purple-100">
+                                        {group.isProrated ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleResetSplitGroupProrate(group.id)}
+                                            className="text-[9.5px] text-purple-700 hover:text-purple-900 underline font-semibold flex items-center gap-1 cursor-pointer"
+                                          >
+                                            <RotateCcw size={10} /> Reset to Full Month
+                                          </button>
+                                        ) : isFewerDays ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleProrateSplitGroup(group.id)}
+                                            className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                                            title={`Calculate prorated amount for ${incDays} days out of ${mInfo.totalDays} days`}
+                                          >
+                                            <CalendarDays size={10} /> ⚡ Prorate ({incDays} Days)
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleProrateSplitGroup(group.id)}
+                                            className="text-[9.5px] text-amber-800 hover:text-amber-950 font-bold flex items-center gap-1 cursor-pointer"
+                                            title="Prorate this sub-invoice for the dates entered above"
+                                          >
+                                            <CalendarDays size={10} /> Prorate Days
+                                          </button>
+                                        )}
+
+                                        <div className="text-right">
+                                          <span className="text-[9px] text-gray-500 block">Sub-Invoice Total:</span>
+                                          <span className="font-mono font-bold text-teal-800 text-xs">
+                                            ₹{Number(group.totalAmount || 0).toLocaleString('en-IN')}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {group.prorateFormula && (
+                                        <div className="text-[9px] text-neutral-500 italic bg-neutral-50 px-1.5 py-0.5 border border-neutral-200 rounded font-mono">
+                                          {group.prorateFormula}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+
+                                <div className="flex items-center justify-between bg-white p-2 border border-purple-100 rounded text-[11px]">
+                                  <div>
+                                    <span className="text-neutral-500">Seats:</span> <strong className="text-neutral-800">{group.noOfSeats}</strong>
+                                    <span className="mx-1.5 text-neutral-300">|</span>
+                                    <span className="text-neutral-500">Items:</span> <strong className="text-neutral-800">{group.productIndices.length}</strong>
+                                  </div>
+                                  <div className="font-mono font-bold text-teal-800">
+                                    Total: ₹{Number(group.totalAmount || 0).toLocaleString('en-IN')}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                        <div>
-                          <div className="font-bold uppercase text-[#616161] text-[9px]">GST %</div>
-                          <div className="font-bold text-[#1B1C1C] mt-0.5">{entryToViewDetails.gstPercent ?? 18}%</div>
-                        </div>
-                        <div>
-                          <div className="font-bold uppercase text-[#616161] text-[9px]">Total Amount (Amt + GST)</div>
-                          <div className="font-black text-base text-[var(--primary)] mt-0.5">
-                            ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
-                          </div>
-                          {hasProration(entryToViewDetails) && (() => {
-                            const ps = getProrationSummary(entryToViewDetails);
+
+                        {/* Product Items Assignment Table */}
+                        <div className="space-y-2 pt-2 border-t border-neutral-200">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-700">
+                            Assign Each Product to a Sub-Invoice:
+                          </h4>
+
+                          {(() => {
+                            let items: any[] = [];
+                            try {
+                              items = JSON.parse(splitModalInvoice.itemsJson || '[]');
+                            } catch { }
+                            if (items.length === 0) {
+                              items = [{
+                                cabinName: splitModalInvoice.cabinName || 'Workspace',
+                                noOfSeats: splitModalInvoice.noOfSeats || 1,
+                                amount: splitModalInvoice.amount || 0,
+                                gstPercent: splitModalInvoice.gstPercent || 18,
+                                totalAmount: splitModalInvoice.totalAmount || 0,
+                              }];
+                            }
+
                             return (
-                              <div className="text-[9.5px] font-bold text-amber-800 mt-0.5">
-                                Prorated: {ps?.label || 'Custom Days'}
+                              <div className="border border-neutral-200 rounded-sm overflow-hidden">
+                                <table className="w-full text-left border-collapse text-[11px]">
+                                  <thead>
+                                    <tr className="bg-neutral-100 border-b border-neutral-200 font-bold uppercase text-[#616161]">
+                                      <th className="p-2.5">#</th>
+                                      <th className="p-2.5">Product / Cabin</th>
+                                      <th className="p-2.5 text-center">Seats</th>
+                                      <th className="p-2.5 text-center">Product Due Day</th>
+                                      <th className="p-2.5 text-right">Subtotal</th>
+                                      <th className="p-2.5 text-right">Total (Incl GST)</th>
+                                      <th className="p-2.5 text-center">Assigned Sub-Invoice</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-neutral-200">
+                                    {items.map((item, pIdx) => {
+                                      const currentGroup = splitGroups.find(g => g.productIndices.includes(pIdx));
+                                      return (
+                                        <tr key={pIdx} className="hover:bg-neutral-50/70">
+                                          <td className="p-2.5 font-mono text-neutral-500 font-bold">{pIdx + 1}</td>
+                                          <td className="p-2.5 font-bold text-[#1B1C1C]">
+                                            {item.cabinName || 'Workspace item'}
+                                            {item.billingType === 'PRORATED' && (
+                                              <span className="ml-1 text-[9px] bg-amber-100 text-amber-900 px-1 py-0.2 rounded font-bold">
+                                                Prorated
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="p-2.5 text-center font-semibold">{item.noOfSeats || 0}</td>
+                                          <td className="p-2.5 text-center font-mono text-[10px] text-gray-600">
+                                            <span className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">
+                                              Due: Day {item.paymentDueDay || splitModalInvoice.paymentDueDay || 5}
+                                            </span>
+                                          </td>
+                                          <td className="p-2.5 text-right font-mono">₹{Number(item.amount || 0).toLocaleString('en-IN')}</td>
+                                          <td className="p-2.5 text-right font-mono font-bold text-teal-800">₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                          <td className="p-2.5 text-center">
+                                            <select
+                                              value={currentGroup?.id || ''}
+                                              onChange={(e) => handleUpdateProductGroupAssignment(pIdx, e.target.value)}
+                                              className="bg-white border border-purple-300 text-purple-950 font-bold px-2 py-1 text-[11px] rounded focus:outline-none focus:border-purple-600 shadow-2xs"
+                                            >
+                                              {splitGroups.map((g) => (
+                                                <option key={g.id} value={g.id}>
+                                                  {g.name}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
                               </div>
                             );
                           })()}
                         </div>
                       </div>
-                    );
-                  }
-                })()}
-              </div>
 
-              {/* SECTION 1.5: Overdue Surcharge & Waive-Off Breakdown */}
-              {((entryToViewDetails.totalOverdueDays && entryToViewDetails.totalOverdueDays > 0) || Number(entryToViewDetails.lateFeeAmount || 0) > 0 || Number(entryToViewDetails.waivedLateDays || 0) > 0) && (
-                <div className="p-4 bg-red-50/70 border border-red-200 space-y-3 rounded-xs">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-red-900 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <AlertOctagon size={14} className="text-red-600" />
-                      <span>Late Payment Surcharge &amp; Overdue Status</span>
-                    </div>
-                    <span className="text-[10px] font-mono font-bold bg-red-100 text-red-800 px-2 py-0.5 border border-red-300">
-                      Due Date: {entryToViewDetails.dueDate ? new Date(entryToViewDetails.dueDate).toLocaleDateString('en-IN') : `Day ${entryToViewDetails.paymentDueDay || 7} of Month`}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 border border-red-200/60 text-xs">
-                    <div>
-                      <div className="font-bold uppercase text-gray-500 text-[9px]">Total Overdue Days</div>
-                      <div className="font-bold text-red-700 mt-0.5 font-mono text-sm">
-                        {entryToViewDetails.totalOverdueDays || entryToViewDetails.lateDays || 0} Days
-                      </div>
-                      <div className="text-[9px] text-gray-500 mt-0.5">Rate: ₹{Number(entryToViewDetails.lateFeePerDay || 100)}/day</div>
-                    </div>
-
-                    <div>
-                      <div className="font-bold uppercase text-gray-500 text-[9px]">Waived Late Days</div>
-                      <div className="font-bold text-emerald-700 mt-0.5 font-mono text-sm">
-                        {entryToViewDetails.waivedLateDays || 0} Days
-                      </div>
-                      <div className="text-[9px] text-emerald-600 font-bold mt-0.5">
-                        -₹{Number(entryToViewDetails.waivedLateFee || (Number(entryToViewDetails.waivedLateDays || 0) * 100)).toLocaleString('en-IN')} Relaxed
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="font-bold uppercase text-gray-500 text-[9px]">Billed Late Days</div>
-                      <div className="font-bold text-gray-900 mt-0.5 font-mono text-sm">
-                        {entryToViewDetails.lateDays || 0} Days
-                      </div>
-                      <div className="text-[9px] text-gray-500 mt-0.5">Chargeable Surcharge</div>
-                    </div>
-
-                    <div>
-                      <div className="font-bold uppercase text-gray-500 text-[9px]">Effective Late Surcharge</div>
-                      <div className="font-black text-sm text-red-700 mt-0.5 font-mono">
-                        +₹{Number(entryToViewDetails.lateFeeAmount || 0).toLocaleString('en-IN')}
-                      </div>
-                      <div className="text-[9px] font-bold text-teal-800 mt-0.5">
-                        Invoice Total: ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SECTION 1.8: Sub-Invoice Splits Breakdown (if split) */}
-              {entryToViewDetails.splitsJson && (() => {
-                let splits: InvoiceSplitGroup[] = [];
-                try { splits = JSON.parse(entryToViewDetails.splitsJson || '[]'); } catch {}
-                if (splits.length > 1) {
-                  return (
-                    <div className="p-4 bg-purple-50/60 border border-purple-200 space-y-3 rounded-xs">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-purple-900 flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <Scissors size={14} className="text-purple-700" />
-                          <span>Sub-Invoice Splits Breakdown ({splits.length} Groups)</span>
-                        </div>
-                        <span className="text-[10px] font-mono font-bold bg-purple-100 text-purple-800 px-2 py-0.5 border border-purple-300">
-                          Product-Wise Split Active
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {splits.map((grp, gIdx) => (
-                          <div key={grp.id} className="bg-white p-3 border border-purple-200 rounded-sm space-y-2">
-                            <div className="flex items-center justify-between border-b border-purple-100 pb-1.5">
-                              <span className="font-extrabold text-xs text-[#1B1C1C] flex items-center gap-1">
-                                <span className="px-1.5 py-0.2 bg-purple-700 text-white text-[9px] rounded">#{gIdx + 1}</span> {grp.name}
-                              </span>
-                              <span className="font-mono font-bold text-teal-800 text-xs">
-                                ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
-                              </span>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-purple-900 bg-purple-50 p-1.5 border border-purple-100 rounded">
-                              <span>📅 <strong>Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} → {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
-                              <span>•</span>
-                              <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-1 text-[10px] text-neutral-600">
-                              <div><span className="text-neutral-400 block">Seats:</span> <strong>{grp.noOfSeats}</strong></div>
-                              <div><span className="text-neutral-400 block">Subtotal:</span> <strong>₹{Number(grp.amount || 0).toLocaleString('en-IN')}</strong></div>
-                              <div><span className="text-neutral-400 block">GST:</span> <strong>₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}</strong></div>
-                            </div>
-                            {grp.attachedInvoice?.fileName && (
-                              <div className="pt-1 border-t border-neutral-100 flex items-center justify-between text-[9px]">
-                                <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                  <FileCheck size={10} /> {grp.attachedInvoice.fileName}
-                                </span>
-                                {grp.attachedInvoice?.fileUrl && (
-                                  <a
-                                    href={grp.attachedInvoice.fileUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-purple-800 font-bold underline"
-                                  >
-                                    View PDF
-                                  </a>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-
-              {/* SECTION 2: Head Office & GST Details */}
-              <div className="space-y-2">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
-                  <FileText size={14} /> Head Office Address & GST Status
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">Head Office (HO) Address</div>
-                    <div className="font-medium text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.hoAddress || 'Not Provided'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">GST Number & Status</div>
-                    <div className="font-mono font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.gstNo ? `GST: ${entryToViewDetails.gstNo}` : (entryToViewDetails.clientMaster?.gstStatus || 'UNREGISTERED')}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* SECTION 3: Agreement Dates, Lock-In & Notice Terms */}
-              <div className="space-y-2">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
-                  <Calendar size={14} /> Agreement Dates, Lock-In & Notice Terms
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">Agreement Start Date</div>
-                    <div className="font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.agreementStartDate
-                        ? new Date(entryToViewDetails.clientMaster.agreementStartDate).toLocaleDateString('en-IN')
-                        : 'N/A'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">Agreement End Date</div>
-                    <div className="font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.agreementEndDate
-                        ? new Date(entryToViewDetails.clientMaster.agreementEndDate).toLocaleDateString('en-IN')
-                        : 'N/A'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">Lock-In End Date</div>
-                    <div className="font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.lockinEndDate
-                        ? new Date(entryToViewDetails.clientMaster.lockinEndDate).toLocaleDateString('en-IN')
-                        : 'N/A'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">Notice Period</div>
-                    <div className="font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.noticePeriodMonths
-                        ? `${entryToViewDetails.clientMaster.noticePeriodMonths} Months (${entryToViewDetails.clientMaster.noticePeriodApplicable || 'After Lock-in'})`
-                        : 'N/A'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">Escalation %</div>
-                    <div className="font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.escalationPercent
-                        ? `${entryToViewDetails.clientMaster.escalationPercent}%`
-                        : 'N/A'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">Escalation Applicable Date</div>
-                    <div className="font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.escalationApplicable
-                        ? new Date(entryToViewDetails.clientMaster.escalationApplicable).toLocaleDateString('en-IN')
-                        : 'N/A'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* SECTION 4: TDS & Security Deposit (SDR) */}
-              <div className="space-y-2">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
-                  <Tag size={14} /> TDS Deduction, TAT & Security Deposit (SDR)
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">Will Deduct TDS?</div>
-                    <div className="font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.willDeductTds ? 'Yes' : 'No'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">TAT Number</div>
-                    <div className="font-mono font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.tanNo || 'N/A'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">Client ID (Manual)</div>
-                    <div className="font-mono font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.clientId || 'N/A'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-bold uppercase text-[#616161] text-[9px]">Security Deposit (SDR)</div>
-                    <div className="font-bold text-[#1B1C1C] mt-0.5">
-                      {entryToViewDetails.clientMaster?.sorAmount
-                        ? `₹${Number(entryToViewDetails.clientMaster.sorAmount).toLocaleString('en-IN')}`
-                        : 'N/A'}
-                      {entryToViewDetails.clientMaster?.sorRecdDate && (
-                        <span className="text-[10px] text-neutral-500 font-normal block">
-                          SDR Recd: {new Date(entryToViewDetails.clientMaster.sorRecdDate).toLocaleDateString('en-IN')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* SECTION 5: Contact Person(s) */}
-              {entryToViewDetails.clientMaster?.contactPersons && entryToViewDetails.clientMaster.contactPersons.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
-                    <UserCheck size={14} /> Contact Person(s) Details
-                  </div>
-                  <div className="border border-[var(--outline-variant)]/40 overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-[#F8F9FA] font-bold text-[#616161] uppercase text-[9px] border-b border-neutral-200">
-                        <tr>
-                          <th className="p-2.5">Name</th>
-                          <th className="p-2.5">Designation</th>
-                          <th className="p-2.5">Mobile No</th>
-                          <th className="p-2.5">Email</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-100 font-medium">
-                        {entryToViewDetails.clientMaster.contactPersons.map((cp, idx) => (
-                          <tr key={idx}>
-                            <td className="p-2.5 font-bold text-[#1B1C1C]">{cp.name}</td>
-                            <td className="p-2.5 text-neutral-600">{cp.designation || 'N/A'}</td>
-                            <td className="p-2.5 font-mono">{cp.mobileNo || 'N/A'}</td>
-                            <td className="p-2.5 font-mono">{cp.email || 'N/A'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* SECTION 6: Attached Tally PDF Invoice & Digitally Signed PDF */}
-              <div className="space-y-2">
-                {entryToViewDetails.attachedInvoice && (
-                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Paperclip className="text-emerald-700 h-5 w-5" />
-                      <div>
-                        <span className="font-bold text-emerald-900">Attached Tally Invoice PDF: </span>
-                        <span className="text-emerald-800">{entryToViewDetails.attachedInvoice.fileName}</span>
-                      </div>
-                    </div>
-                    <a
-                      href={entryToViewDetails.attachedInvoice.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 cursor-pointer"
-                    >
-                      <Eye size={12} /> View Tally PDF
-                    </a>
-                  </div>
-                )}
-
-                {entryToViewDetails.digitallySignedPdfUrl && (
-                  <div className="p-3.5 bg-teal-50 border border-teal-300 text-xs flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Award className="text-teal-700 h-5 w-5" />
-                      <div>
-                        <span className="font-bold text-teal-950">Digitally Signed &amp; Approved PDF: </span>
-                        <span className="text-teal-800 font-medium">Cryptographic Digital Signature Applied</span>
-                      </div>
-                    </div>
-                    <a
-                      href={entryToViewDetails.digitallySignedPdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-1.5 bg-[#006064] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-[#004d40] flex items-center gap-1 cursor-pointer"
-                    >
-                      <Download size={12} /> View / Download Signed PDF
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
-                <button
-                  type="button"
-                  onClick={() => setEntryToViewDetails(null)}
-                  className="px-5 py-2.5 bg-[#F8F9FA] border border-[var(--outline-variant)] font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
-                >
-                  Close
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 5: EDIT INVOICE RECORD MODAL */}
-      <AnimatePresence>
-        {entryToEditInvoice && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 15 }}
-              className="bg-white border border-[var(--outline-variant)] w-full max-w-4xl shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[90vh] flex flex-col"
-            >
-              <div className="p-5 bg-[#006064] text-white flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 bg-white/10 flex items-center justify-center font-bold text-sm">
-                    #{entryToEditInvoice.srNo}
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold tracking-tight uppercase">
-                      Edit Invoice Record & Products (#{entryToEditInvoice.srNo})
-                    </h2>
-                    <p className="text-xs text-white/80 font-light">
-                      Edit details or delete specific product items before sending to the accountant.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setEntryToEditInvoice(null)}
-                  className="text-white/80 hover:text-white p-1.5 hover:bg-white/10 transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveEditInvoice} className="p-6 space-y-5 overflow-y-auto flex-1">
-                {/* Basic Invoice Parameters */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-neutral-50 p-3.5 border border-neutral-200 rounded">
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      Company Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={editCompanyName}
-                      onChange={(e) => setEditCompanyName(e.target.value)}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      GST No
-                    </label>
-                    <input
-                      type="text"
-                      value={editGstNo}
-                      onChange={(e) => setEditGstNo(e.target.value)}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-mono font-bold focus:outline-none focus:border-[#006064]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      Billing Month
-                    </label>
-                    <input
-                      type="text"
-                      value={editBillingMonth}
-                      onChange={(e) => setEditBillingMonth(e.target.value)}
-                      placeholder="e.g. August 2026"
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      Cabin Name / Invoice Summary
-                    </label>
-                    <input
-                      type="text"
-                      value={editCabinName}
-                      onChange={(e) => setEditCabinName(e.target.value)}
-                      placeholder="e.g. Dedicated Cabin, Flex Desk"
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                      Workflow Status
-                    </label>
-                    <select
-                      value={editStatus}
-                      onChange={(e) => setEditStatus(e.target.value as any)}
-                      className="w-full bg-white border border-[var(--outline-variant)] px-3 py-1.5 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                    >
-                      <option value="PENDING_CM_REVIEW">Pending CM Review</option>
-                      <option value="SENT_TO_ACCOUNTANT">Sent to Accountant</option>
-                      <option value="INVOICE_ATTACHED">Invoice Attached</option>
-                      <option value="APPROVED">Approved</option>
-                      <option value="REJECTED_WITH_REMARKS">Rejected with Remarks</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* INVOICE PRODUCTS & LINE ITEMS (EDITABLE & DELETABLE) */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-neutral-900 uppercase flex items-center gap-1.5">
-                        <Package size={14} className="text-[#006064]" />
-                        <span>Invoice Products & Line Items ({editItems.length})</span>
-                      </div>
-                      <p className="text-[11px] text-neutral-500">
-                        You can edit quantities, rates, or <strong>delete specific products</strong> before sending to accountant.
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowEditProratePanel(!showEditProratePanel)}
-                        className={`px-3 py-1 font-bold text-[11px] uppercase tracking-wider rounded flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs ${
-                          showEditProratePanel || editItems.some(it => it.isProrated || it.billingType === 'PRORATED')
-                            ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                            : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-300'
-                        }`}
-                        title="Prorate days if client occupied space for fewer days in month"
-                      >
-                        <CalendarDays size={13} />
-                        <span>
-                          {editItems.some(it => it.isProrated || it.billingType === 'PRORATED')
-                            ? 'Adjust Days Proration (Active)'
-                            : '⚡ Prorate Days'}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleAddEditItem}
-                        className="px-3 py-1 bg-teal-50 text-[#006064] hover:bg-teal-100 border border-teal-300 font-bold text-[11px] uppercase tracking-wider rounded flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
-                      >
-                        <Plus size={12} /> Add Product Item
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* EDIT MODAL PRORATE PANEL */}
-                  {showEditProratePanel && (() => {
-                    const totalBaseMonthly = editItems.reduce((sum, it) => {
-                      const seats = Number(it.noOfSeats) || 0;
-                      const rate = Number(it.ratePerAgreement) || 0;
-                      const base = Number(it.baseMonthlyAmount) || (seats > 0 && rate > 0 ? seats * rate : Number(it.amount || 0));
-                      return sum + base;
-                    }, 0);
-
-                    const calc = calculateProratedBilling({
-                      monthlyAmount: totalBaseMonthly,
-                      totalMonthDays: editProrateTotalMonthDays,
-                      activeDays: editProrateActiveDays,
-                      startDateStr: editProrateStartDate,
-                      endDateStr: editProrateEndDate,
-                    });
-
-                    return (
-                      <div className="p-4 bg-amber-50/70 border border-amber-300 rounded space-y-3 shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <div className="font-bold text-xs uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                            <CalendarDays size={14} className="text-amber-700" />
-                            <span>Prorate Billing for Active Days ({editProrateActiveDays} of {editProrateTotalMonthDays} Days)</span>
-                          </div>
-                          <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded">
-                            Month: {editBillingMonth || 'Billing Month'}
-                          </span>
+                      {/* Footer Actions */}
+                      <div className="flex items-center justify-between pt-3 border-t border-neutral-200 shrink-0">
+                        <div>
+                          {splitModalInvoice.splitsJson && (
+                            <button
+                              type="button"
+                              onClick={handleResetSplitToSingle}
+                              disabled={actionLoading}
+                              className="px-3 py-2 bg-neutral-100 text-neutral-700 hover:bg-neutral-200 text-[11px] font-bold uppercase tracking-wider rounded transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <RotateCcw size={12} /> Reset to Single Invoice
+                            </button>
+                          )}
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3 border border-amber-200 rounded">
-                          <div>
-                            <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
-                              Usage Start Date
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setSplitModalInvoice(null)}
+                            className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100 rounded cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveSplitInvoice}
+                            disabled={actionLoading}
+                            className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50"
+                          >
+                            {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                            <span>Save Split Invoices</span>
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* MODAL 8.5: PRORATE & ADJUST BILLING DAYS (STANDALONE CM REVIEW) */}
+              <AnimatePresence>
+                {prorateModalInvoice && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
+                    >
+                      {/* Header */}
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
+                        <div>
+                          <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
+                            <CalendarDays size={20} className="text-amber-600" />
+                            <span>Prorate &amp; Adjust Billing Period</span>
+                          </h3>
+                          <p className="text-[11px] text-neutral-500 mt-0.5">
+                            Adjust invoice amount when client occupied workspace for fewer days (e.g. 11 days of 30 days).
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setProrateModalInvoice(null)}
+                          className="text-neutral-400 hover:text-neutral-700 p-1 cursor-pointer"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      {/* Client & Month Overview */}
+                      <div className="bg-[#F8F9FA] p-3.5 border border-amber-200/80 rounded-sm flex flex-wrap items-center justify-between gap-3 shrink-0">
+                        <div>
+                          <div className="font-extrabold text-[#1B1C1C] text-sm">{prorateModalInvoice.companyName}</div>
+                          <div className="text-neutral-500 text-[11px] mt-0.5">
+                            SR #{prorateModalInvoice.srNo} • Billing Cycle: <strong className="text-neutral-800">{prorateModalInvoice.billingMonth || 'Current Month'}</strong>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase font-bold text-gray-500">Standard Monthly Base</div>
+                          <div className="font-mono font-bold text-neutral-800 text-xs">
+                            ₹{prorateBaseMonthlyAmount.toLocaleString('en-IN')} + 18% GST (₹{Math.round(prorateBaseMonthlyAmount * 1.18).toLocaleString('en-IN')})
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+                        {/* Step 1: Active Usage Dates */}
+                        <div className="p-4 bg-white border border-neutral-200 rounded-sm space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                              <Calendar size={13} className="text-amber-600" /> Active Usage Period
                             </label>
-                            <input
-                              type="date"
-                              value={editProrateStartDate}
-                              onChange={(e) => handleEditProrateDateChange(e.target.value, editProrateEndDate)}
-                              className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
-                            />
+                            <span className="text-[10px] text-neutral-500">
+                              Total Month Days: <strong className="text-neutral-800">{prorateTotalMonthDays} Days</strong>
+                            </span>
                           </div>
 
-                          <div>
-                            <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
-                              Usage End Date
-                            </label>
-                            <input
-                              type="date"
-                              value={editProrateEndDate}
-                              onChange={(e) => handleEditProrateDateChange(editProrateStartDate, e.target.value)}
-                              className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9.5px] font-bold uppercase text-amber-700 mb-1">
-                              Active Days Billed
-                            </label>
-                            <div className="flex items-center gap-1.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
+                                Usage Start Date
+                              </label>
                               <input
-                                type="number"
-                                min={1}
-                                max={editProrateTotalMonthDays}
-                                value={editProrateActiveDays}
-                                onChange={(e) => handleEditProrateDaysChange(parseInt(e.target.value, 10) || 1)}
-                                className="w-full bg-amber-50 border border-amber-300 px-2 py-1 text-xs font-mono font-bold text-amber-900 rounded focus:bg-white focus:border-amber-600 focus:outline-none text-center"
+                                type="date"
+                                value={prorateStartDate}
+                                onChange={(e) => handleProrateDateChange(e.target.value, prorateEndDate)}
+                                className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1.5 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
                               />
-                              <span className="text-[10px] font-bold text-neutral-500 shrink-0">/ {editProrateTotalMonthDays}d</span>
+                            </div>
+
+                            <div>
+                              <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
+                                Usage End Date
+                              </label>
+                              <input
+                                type="date"
+                                value={prorateEndDate}
+                                onChange={(e) => handleProrateDateChange(prorateStartDate, e.target.value)}
+                                className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1.5 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[9.5px] font-bold uppercase text-amber-700 mb-1">
+                                Active Days Count
+                              </label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={prorateTotalMonthDays}
+                                  value={prorateActiveDays}
+                                  onChange={(e) => handleProrateActiveDaysChange(parseInt(e.target.value, 10) || 1)}
+                                  className="w-full bg-amber-50/50 border border-amber-300 px-2 py-1.5 text-xs font-mono font-bold text-amber-900 rounded focus:bg-white focus:border-amber-600 focus:outline-none text-center"
+                                />
+                                <span className="text-[10px] font-bold text-neutral-500 shrink-0">/ {prorateTotalMonthDays}d</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Quick Presets */}
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-[9.5px] text-neutral-500 font-bold uppercase mr-1">Presets:</span>
-                          {[
-                            { label: 'Full Month (30d)', days: editProrateTotalMonthDays },
-                            { label: '11 Days (e.g. Harsha Daulani)', days: 11 },
-                            { label: '15 Days (Half Month)', days: Math.round(editProrateTotalMonthDays / 2) },
-                            { label: '10 Days', days: 10 },
-                            { label: '7 Days (1 Week)', days: 7 },
-                          ].map((p, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => handleEditProrateDaysChange(p.days)}
-                              className={`px-2 py-0.5 text-[9.5px] font-bold rounded border cursor-pointer transition-colors ${
-                                editProrateActiveDays === p.days
-                                  ? 'bg-amber-600 text-white border-amber-600'
-                                  : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100'
-                              }`}
-                            >
-                              {p.label}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Real-time Math Summary */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-2.5 border border-amber-200 rounded text-xs">
-                          <div>
-                            <div className="text-[9px] uppercase font-bold text-gray-500">Monthly Base</div>
-                            <div className="font-mono font-bold text-neutral-800 mt-0.5">
-                              ₹{totalBaseMonthly.toLocaleString('en-IN')}
-                            </div>
-                            <div className="text-[8.5px] text-gray-400">₹{calc.dailyRate.toFixed(2)}/day</div>
-                          </div>
-
-                          <div>
-                            <div className="text-[9px] uppercase font-bold text-gray-500">Prorated Subtotal ({calc.activeDays}d)</div>
-                            <div className="font-mono font-bold text-amber-900 mt-0.5">
-                              ₹{calc.proratedSubtotal.toLocaleString('en-IN')}
-                            </div>
-                            <div className="text-[8.5px] text-gray-400">{calc.activeDays}d × ₹{calc.dailyRate.toFixed(2)}</div>
-                          </div>
-
-                          <div>
-                            <div className="text-[9px] uppercase font-bold text-gray-500">18% GST</div>
-                            <div className="font-mono font-bold text-neutral-800 mt-0.5">
-                              ₹{calc.gstAmount.toLocaleString('en-IN')}
-                            </div>
-                            <div className="text-[8.5px] text-gray-400">9% CGST + 9% SGST</div>
-                          </div>
-
-                          <div>
-                            <div className="text-[9px] uppercase font-bold text-teal-800">New Grand Total</div>
-                            <div className="font-mono font-black text-sm text-teal-900 mt-0.5">
-                              ₹{calc.totalAmount.toLocaleString('en-IN')}
-                            </div>
-                            <div className="text-[8.5px] text-teal-700 font-medium">Subtotal + GST</div>
-                          </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center justify-between pt-1">
-                          <div>
-                            {editItems.some(it => it.isProrated || it.billingType === 'PRORATED') && (
+                          {/* Quick Preset Buttons */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="text-[9.5px] text-neutral-500 font-bold uppercase mr-1">Presets:</span>
+                            {[
+                              { label: 'Full Month (30d)', days: prorateTotalMonthDays },
+                              { label: '11 Days (e.g. Harsha Daulani)', days: 11 },
+                              { label: '15 Days (Half Month)', days: Math.round(prorateTotalMonthDays / 2) },
+                              { label: '10 Days', days: 10 },
+                              { label: '7 Days (1 Week)', days: 7 },
+                            ].map((p, idx) => (
                               <button
+                                key={idx}
                                 type="button"
-                                onClick={handleResetEditProration}
-                                className="text-[10px] text-neutral-600 hover:text-neutral-900 underline font-semibold flex items-center gap-1 cursor-pointer"
+                                onClick={() => handleProrateActiveDaysChange(p.days)}
+                                className={`px-2 py-0.5 text-[9.5px] font-bold rounded border cursor-pointer transition-colors ${prorateActiveDays === p.days
+                                  ? 'bg-amber-600 text-white border-amber-600'
+                                  : 'bg-neutral-100 text-neutral-700 border-neutral-200 hover:bg-neutral-200'
+                                  }`}
                               >
-                                <RotateCcw size={10} /> Reset Products to Full Month
+                                {p.label}
                               </button>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setShowEditProratePanel(false)}
-                              className="px-2.5 py-1 text-[10px] font-bold uppercase text-neutral-600 hover:bg-neutral-200 rounded cursor-pointer"
-                            >
-                              Close Panel
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleApplyEditProration}
-                              className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10.5px] uppercase tracking-wider rounded shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                            >
-                              <CheckCircle2 size={12} />
-                              <span>Apply {editProrateActiveDays} Days Proration (₹{calc.totalAmount.toLocaleString('en-IN')})</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {editItems.length === 0 ? (
-                    <div className="p-6 bg-red-50 border border-red-200 text-center rounded text-red-800 text-xs font-medium space-y-2">
-                      <div>⚠️ No product items left on this invoice.</div>
-                      <button
-                        type="button"
-                        onClick={handleAddEditItem}
-                        className="px-3 py-1.5 bg-red-600 text-white font-bold text-xs uppercase rounded"
-                      >
-                        + Add a Product
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="border border-neutral-300 rounded overflow-hidden shadow-xs">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead className="bg-neutral-100 text-neutral-700 text-[10px] font-bold uppercase tracking-wider border-b border-neutral-300">
-                          <tr>
-                            <th className="p-2 w-8 text-center">#</th>
-                            <th className="p-2">Product / Cabin Name</th>
-                            <th className="p-2 w-20 text-center">Seats</th>
-                            <th className="p-2 w-28 text-right">Rate (₹)</th>
-                            <th className="p-2 w-28 text-right">Amount (₹)</th>
-                            <th className="p-2 w-16 text-center">GST %</th>
-                            <th className="p-2 w-32 text-right">Total (₹)</th>
-                            <th className="p-2 w-16 text-center">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-neutral-200 bg-white font-sans">
-                          {editItems.map((item, itIdx) => (
-                            <tr key={itIdx} className="hover:bg-teal-50/40 transition-colors">
-                              <td className="p-2 text-center font-bold text-neutral-500 text-[11px]">
-                                {itIdx + 1}
-                              </td>
-
-                              <td className="p-2">
-                                <input
-                                  type="text"
-                                  required
-                                  value={item.cabinName}
-                                  onChange={(e) => handleUpdateEditItem(itIdx, 'cabinName', e.target.value)}
-                                  placeholder="e.g. Dedicated Cabin"
-                                  className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black rounded focus:outline-none focus:border-[#006064]"
-                                />
-                                {item.isProrated || item.billingType === 'PRORATED' ? (
-                                  <div className="mt-1 flex items-center gap-1">
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9.5px] font-bold">
-                                      <CalendarDays size={10} className="text-amber-700" />
-                                      <span>Prorated: {item.activeDays || editProrateActiveDays} of {item.totalMonthDays || editProrateTotalMonthDays} Days</span>
-                                    </span>
-                                  </div>
-                                ) : item.note ? (
-                                  <div className="text-[10px] text-amber-700 italic mt-0.5">{item.note}</div>
-                                ) : null}
-                              </td>
-
-                              <td className="p-2">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={item.noOfSeats}
-                                  onChange={(e) => handleUpdateEditItem(itIdx, 'noOfSeats', e.target.value === '' ? '' : Number(e.target.value))}
-                                  className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black text-center rounded focus:outline-none focus:border-[#006064]"
-                                />
-                              </td>
-
-                              <td className="p-2">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={item.ratePerAgreement}
-                                  onChange={(e) => handleUpdateEditItem(itIdx, 'ratePerAgreement', e.target.value === '' ? '' : Number(e.target.value))}
-                                  className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black text-right rounded focus:outline-none focus:border-[#006064]"
-                                />
-                              </td>
-
-                              <td className="p-2">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  value={item.amount}
-                                  onChange={(e) => handleUpdateEditItem(itIdx, 'amount', e.target.value === '' ? '' : Number(e.target.value))}
-                                  className="w-full bg-white border border-neutral-300 px-2 py-1 text-xs font-bold text-black text-right font-mono rounded focus:outline-none focus:border-[#006064]"
-                                />
-                              </td>
-
-                              <td className="p-2">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={item.gstPercent}
-                                  onChange={(e) => handleUpdateEditItem(itIdx, 'gstPercent', e.target.value === '' ? '' : Number(e.target.value))}
-                                  className="w-full bg-white border border-neutral-300 px-1 py-1 text-xs font-bold text-black text-center rounded focus:outline-none focus:border-[#006064]"
-                                />
-                              </td>
-
-                              <td className="p-2 text-right font-mono font-black text-emerald-800 text-xs">
-                                ₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}
-                              </td>
-
-                              <td className="p-2 text-center">
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowEditProratePanel(true)}
-                                    className="p-1.5 bg-amber-50 hover:bg-amber-500 text-amber-700 hover:text-white rounded transition-colors cursor-pointer"
-                                    title="Prorate days for this invoice"
-                                  >
-                                    <CalendarDays size={13} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteEditItem(itIdx)}
-                                    className="p-1.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded transition-colors cursor-pointer"
-                                    title="Delete this product from the invoice"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                {/* LIVE RECALCULATED TOTALS CARD */}
-                <div className="p-4 bg-teal-50/80 border-2 border-teal-600/60 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-                  <div className="space-y-0.5">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-teal-900">
-                      Recalculated Invoice Summary:
-                    </div>
-                    <div className="text-xs text-teal-950 font-bold">
-                      {editItems.length} Product Line Item{editItems.length !== 1 ? 's' : ''} • {editNoOfSeats} Total Seats
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-4 text-xs font-sans">
-                    <div className="text-right">
-                      <div className="text-[9px] font-bold text-neutral-500 uppercase">Subtotal Amount</div>
-                      <div className="font-mono font-bold text-neutral-900 text-sm">
-                        ₹{Number(editAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-[9px] font-bold text-neutral-500 uppercase">GST (18%)</div>
-                      <div className="font-mono font-bold text-neutral-700 text-sm">
-                        ₹{Math.max(0, Number(editTotalAmount || 0) - Number(editAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </div>
-                    </div>
-
-                    <div className="text-right bg-white px-3 py-1.5 rounded border border-teal-300 shadow-xs">
-                      <div className="text-[9px] font-bold text-teal-900 uppercase">Grand Total (Incl. GST)</div>
-                      <div className="font-mono font-black text-emerald-800 text-base">
-                        ₹{Number(editTotalAmount || 0).toLocaleString('en-IN')}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Form Action Buttons */}
-                <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
-                  <button
-                    type="button"
-                    onClick={() => setEntryToEditInvoice(null)}
-                    className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider rounded"
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={actionLoading || editItems.length === 0}
-                    className="px-5 py-2.5 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 rounded shadow-sm cursor-pointer disabled:opacity-50"
-                  >
-                    {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                    Save Invoice Changes
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 6: DIGITAL SIGNATURE STAMP SETTINGS */}
-      <AnimatePresence>
-        {showSignatureSettingsModal && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 15 }}
-              className="bg-white border border-[var(--outline-variant)] w-full max-w-lg shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[88vh] flex flex-col"
-            >
-              <div className="p-5 bg-[#006064] text-white flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <PenTool className="h-5 w-5" />
-                  <div>
-                    <h2 className="text-base font-bold tracking-tight uppercase">
-                      Official Digital Signature Stamp Hub
-                    </h2>
-                    <p className="text-xs text-white/80 font-light">
-                      Upload or change your electronic signature stamp for 1-click invoice signing.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowSignatureSettingsModal(false)}
-                  className="text-white/80 hover:text-white p-1.5 hover:bg-white/10 transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveSignatureSettings} className="p-6 space-y-4 overflow-y-auto flex-1">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                    Signatory Full Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Authorized Signatory / CM Name"
-                    value={signatureSignerName}
-                    onChange={(e) => setSignatureSignerName(e.target.value)}
-                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                    Signatory Designation / Title
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Community Manager"
-                    value={signatureSignerTitle}
-                    onChange={(e) => setSignatureSignerTitle(e.target.value)}
-                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                    Upload Signature Image / Stamp (Transparent PNG Recommended)
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setNewSignatureFile(e.target.files[0]);
-                      }
-                    }}
-                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs"
-                  />
-                  <p className="text-[10px] text-neutral-500 mt-1">
-                    A clear transparent PNG image works best on invoice PDFs.
-                  </p>
-                </div>
-
-                {/* Stamp Visual Live Preview */}
-                <div className="space-y-2 pt-2">
-                  <div className="text-[10px] font-bold uppercase text-neutral-600">
-                    Official Adobe Signature Box Preview on Invoice PDF:
-                  </div>
-                  <div className="p-3 bg-neutral-50 border border-neutral-300 rounded space-y-1">
-                    <div className="font-bold text-[11px] text-black">
-                      for {signatureSetting.companyName || 'SSPACIA INDIA PVT LTD'}
-                    </div>
-
-                    <div className="p-3 bg-white border-2 border-black grid grid-cols-2 gap-3 relative shadow-xs">
-                      {/* Watermark preview */}
-                      {(newSignatureFile || signatureSetting.signatureUrl) && (
-                        <div className="absolute inset-0 flex items-center justify-center opacity-25 pointer-events-none p-1">
-                          {newSignatureFile ? (
-                            <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 border border-teal-200">
-                              [{newSignatureFile.name}]
-                            </span>
-                          ) : (
-                            <img src={signatureSetting.signatureUrl} alt="" className="max-h-12 object-contain" />
-                          )}
-                        </div>
-                      )}
-
-                      <div className="font-black text-xs text-black leading-snug">
-                        {(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ').filter(Boolean).map((part: string, idx: number) => (
-                          <div key={idx}>{part}</div>
-                        ))}
-                      </div>
-
-                      <div className="text-[9px] text-black space-y-0.5 font-sans leading-tight">
-                        <div>Digitally signed by {(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ')[0]}</div>
-                        <div>{(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ').slice(1).join(' ')}</div>
-                        <div>Date: 2026.08.20 {new Date().toLocaleTimeString('en-GB')}</div>
-                        <div>+05'30'</div>
-                      </div>
-                    </div>
-
-                    <div className="text-center font-bold text-[10px] text-black pt-0.5">
-                      Authorised Signatory
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 bg-teal-50 border border-teal-200 text-teal-900 text-[10px] space-y-1">
-                    <div className="font-bold flex items-center gap-1">
-                      <Award size={12} className="text-[#006064]" /> ProxKey USB Dongle Support:
-                    </div>
-                    <div>
-                      When signing an invoice row, you can choose between <strong>ProxKey USB Hardware Token (PantaSign Class 3)</strong> or <strong>Fast Server-Side Cryptographic Sign</strong>.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
-                  <button
-                    type="button"
-                    onClick={() => setShowSignatureSettingsModal(false)}
-                    className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider"
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={uploadingSignature}
-                    className="px-5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2"
-                  >
-                    {uploadingSignature ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                    Save Stamp Settings
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 7: FLEXIBLE LATE FEE SURCHARGE & WAIVE DAYS MANAGER */}
-      <AnimatePresence>
-        {waiveModalInvoice && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-white border border-gray-300 w-full max-w-lg shadow-2xl overflow-hidden text-xs my-auto max-h-[90vh] flex flex-col rounded-xs"
-            >
-              {/* HEADER */}
-              <div className="p-5 bg-gradient-to-r from-red-900 to-[#1B1C1C] text-white flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-red-600/30 border border-red-400/50 rounded-full flex items-center justify-center font-bold">
-                    <Sliders size={18} className="text-red-300" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold uppercase tracking-tight">
-                      Waive / Adjust Late Fee Surcharge
-                    </h2>
-                    <p className="text-[11px] text-red-200/80">
-                      Choose exactly how many overdue days to waive for this invoice.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setWaiveModalInvoice(null)}
-                  className="text-white/80 hover:text-white p-1 hover:bg-white/10 rounded cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* CONTENT */}
-              <form onSubmit={handleSaveWaiveModal} className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
-                {/* COMPANY & OVERDUE SUMMARY */}
-                <div className="bg-neutral-50 p-4 border border-neutral-200 space-y-2 rounded-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-gray-900 text-sm">{waiveModalInvoice.companyName}</span>
-                    <span className="font-mono text-[10px] font-bold bg-neutral-200 text-neutral-800 px-2 py-0.5">
-                      SR #{waiveModalInvoice.srNo}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-neutral-200/70 text-[11px]">
-                    <div>
-                      <span className="text-gray-500 text-[10px] uppercase font-bold block">Total Overdue</span>
-                      <span className="font-mono font-bold text-red-700">
-                        {waiveModalInvoice.totalOverdueDays || waiveModalInvoice.calculatedLateDays || 0} Days
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 text-[10px] uppercase font-bold block">Daily Rate</span>
-                      <span className="font-mono font-bold text-gray-800">
-                        ₹{Number(waiveModalInvoice.lateFeePerDay || 100)} / day
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 text-[10px] uppercase font-bold block">Max Surcharge</span>
-                      <span className="font-mono font-bold text-red-700">
-                        ₹{((waiveModalInvoice.totalOverdueDays || waiveModalInvoice.calculatedLateDays || 0) * Number(waiveModalInvoice.lateFeePerDay || 100)).toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* WAIVE DAYS INPUT & CALCULATION PREVIEW */}
-                {(() => {
-                  const totalOverdue = waiveModalInvoice.totalOverdueDays || waiveModalInvoice.calculatedLateDays || 0;
-                  const ratePerDay = Number(waiveModalInvoice.lateFeePerDay || 100);
-                  const parsedWaived = parseInt(waiveDaysInput, 10);
-                  const waivedDays = isNaN(parsedWaived) ? 0 : Math.max(0, Math.min(totalOverdue, parsedWaived));
-                  const chargeableDays = Math.max(0, totalOverdue - waivedDays);
-                  const newLateFee = chargeableDays * ratePerDay;
-                  const waivedFee = waivedDays * ratePerDay;
-                  const prevLateFee = Number(waiveModalInvoice.lateFeeAmount || 0);
-                  const baseTotal = Math.max(0, (Number(waiveModalInvoice.totalAmount) || 0) - prevLateFee);
-                  const newTotal = baseTotal + newLateFee;
-
-                  return (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-                          How many days do you want to waive off? (0 to {totalOverdue} days)
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            min="0"
-                            max={totalOverdue}
-                            value={waiveDaysInput}
-                            onChange={(e) => setWaiveDaysInput(e.target.value)}
-                            placeholder="e.g. 5"
-                            className="w-full bg-white border border-gray-300 px-3 py-2 text-sm font-mono font-bold text-gray-900 outline-none focus:border-[#006064] focus:ring-1 focus:ring-[#006064]"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">
-                            / {totalOverdue} days
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* QUICK PRESET SHORTCUTS */}
-                      <div className="flex items-center gap-2 pt-1 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => setWaiveDaysInput(String(totalOverdue))}
-                          className="px-2.5 py-1 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300 text-[10px] font-bold uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
-                        >
-                          🎉 Waive All ({totalOverdue} Days)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setWaiveDaysInput(String(Math.floor(totalOverdue / 2)))}
-                          className="px-2.5 py-1 bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-300 text-[10px] font-bold uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
-                        >
-                          ⚖️ Waive 50% ({Math.floor(totalOverdue / 2)} Days)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setWaiveDaysInput("0")}
-                          className="px-2.5 py-1 bg-red-50 text-red-800 hover:bg-red-100 border border-red-300 text-[10px] font-bold uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
-                        >
-                          🛑 Charge All (0 Days Waived)
-                        </button>
-                      </div>
-
-                      {/* CALCULATION LIVE PREVIEW CARD */}
-                      <div className="bg-gradient-to-br from-teal-50 to-neutral-50 p-4 border border-teal-200/80 rounded-xs space-y-2 font-sans shadow-2xs">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-[#006064] border-b border-teal-200/60 pb-1 flex items-center justify-between">
-                          <span>Live Surcharge Breakdown:</span>
-                          <span className="font-mono">Real-time Calculation</span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="bg-white p-2.5 border border-emerald-200">
-                            <span className="text-[10px] text-emerald-800 font-bold uppercase block">Waived Surcharge</span>
-                            <span className="text-base font-black text-emerald-700 font-mono">
-                              -₹{waivedFee.toLocaleString('en-IN')}
-                            </span>
-                            <span className="text-[9px] text-emerald-600 block mt-0.5">({waivedDays} days relaxed)</span>
-                          </div>
-
-                          <div className="bg-white p-2.5 border border-red-200">
-                            <span className="text-[10px] text-red-800 font-bold uppercase block">Chargeable Surcharge</span>
-                            <span className="text-base font-black text-red-700 font-mono">
-                              +₹{newLateFee.toLocaleString('en-IN')}
-                            </span>
-                            <span className="text-[9px] text-red-600 block mt-0.5">({chargeableDays} days billed @ ₹{ratePerDay})</span>
+                            ))}
                           </div>
                         </div>
 
-                        <div className="pt-2 border-t border-teal-200/70 flex items-center justify-between text-xs">
-                          <div>
-                            <span className="text-gray-500 text-[10px] block">Base Invoice Amount:</span>
-                            <span className="font-bold text-gray-800 font-mono">₹{baseTotal.toLocaleString('en-IN')}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[#006064] text-[10px] font-bold uppercase block">New Final Total Amount:</span>
-                            <span className="text-base font-black text-teal-900 font-mono">₹{newTotal.toLocaleString('en-IN')}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* ACTIONS */}
-                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-neutral-200">
-                  <button
-                    type="button"
-                    onClick={() => setWaiveModalInvoice(null)}
-                    disabled={actionLoading}
-                    className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-gray-700 font-bold text-xs uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={actionLoading}
-                    className="px-5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider rounded-xs cursor-pointer transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
-                  >
-                    {actionLoading ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                    <span>Confirm &amp; Apply Waive Off</span>
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 8: CM SPLIT INVOICE (PRODUCT-WISE) MODAL */}
-      <AnimatePresence>
-        {splitModalInvoice && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-3xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
-                <div>
-                  <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
-                    <Scissors size={18} className="text-purple-700" />
-                    <span>Split Invoice (Product-Wise)</span>
-                  </h3>
-                  <p className="text-[11px] text-neutral-500 mt-0.5">
-                    Group products into separate sub-invoices for the accountant to attach distinct Tally PDFs. The parent company record stays unified.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSplitModalInvoice(null)}
-                  className="text-neutral-400 hover:text-neutral-700 p-1"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Invoice Info Bar */}
-              <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 flex flex-wrap items-center justify-between gap-2 shrink-0">
-                <div>
-                  <span className="font-bold text-[#1B1C1C] text-xs">{splitModalInvoice.companyName}</span>
-                  <span className="text-neutral-500 text-[10px] ml-2">SR #{splitModalInvoice.srNo} | {splitModalInvoice.billingMonth}</span>
-                </div>
-                <div className="font-bold text-xs text-[#006064]">
-                  Parent Invoice Total: ₹{Number(splitModalInvoice.totalAmount || 0).toLocaleString('en-IN')}
-                </div>
-              </div>
-
-              {/* Split Groups List & Allocation */}
-              <div className="space-y-4 overflow-y-auto flex-1 pr-1">
-                {/* Sub-Invoice Groups Configuration */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
-                      <Package size={14} className="text-purple-700" /> Sub-Invoice Groups ({splitGroups.length})
-                    </h4>
-                    <button
-                      type="button"
-                      onClick={handleAddSplitGroup}
-                      className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 rounded cursor-pointer transition-colors"
-                    >
-                      <Plus size={12} /> Add Another Sub-Invoice
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {splitGroups.map((group, gIdx) => (
-                      <div key={group.id} className="p-3.5 bg-purple-50/50 border border-purple-200 rounded-sm space-y-2.5 shadow-2xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <input
-                            type="text"
-                            value={group.name}
-                            onChange={(e) => handleUpdateSplitGroupField(group.id, 'name', e.target.value)}
-                            className="font-extrabold text-xs text-purple-950 bg-white border border-purple-300 px-2 py-1 rounded w-full focus:outline-none focus:border-purple-600 shadow-2xs"
-                            placeholder={`Sub-Invoice #${gIdx + 1}`}
-                          />
-                          {splitGroups.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveSplitGroup(group.id)}
-                              className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
-                              title="Remove group"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-
-                        {/* INVOICE BILLING PERIOD & DUE DATE INPUTS */}
-                        <div className="grid grid-cols-3 gap-2 bg-white p-2.5 border border-purple-100 rounded text-[10px]">
-                          <div>
-                            <label className="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">
-                              Invoice Start
-                            </label>
-                            <input
-                              type="date"
-                              value={group.startDate || ''}
-                              onChange={(e) => handleUpdateSplitGroupField(group.id, 'startDate', e.target.value)}
-                              className="w-full bg-neutral-50 border border-gray-200 px-1.5 py-1 text-[10px] font-mono rounded focus:bg-white focus:border-purple-600"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">
-                              Invoice End
-                            </label>
-                            <input
-                              type="date"
-                              value={group.endDate || ''}
-                              onChange={(e) => handleUpdateSplitGroupField(group.id, 'endDate', e.target.value)}
-                              className="w-full bg-neutral-50 border border-gray-200 px-1.5 py-1 text-[10px] font-mono rounded focus:bg-white focus:border-purple-600"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold uppercase text-red-600 mb-0.5">
-                              Payment Due Date
-                            </label>
-                            <input
-                              type="date"
-                              value={group.dueDate || ''}
-                              onChange={(e) => handleUpdateSplitGroupField(group.id, 'dueDate', e.target.value)}
-                              className="w-full bg-neutral-50 border border-red-200 px-1.5 py-1 text-[10px] font-mono font-bold text-red-700 rounded focus:bg-white focus:border-red-600"
-                              title="Last date for client to pay this sub-invoice"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Sub-Invoice Prorate Days Control & Summary */}
+                        {/* Step 2: Live Calculation Breakdown */}
                         {(() => {
-                          const mInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
-                          const incDays = (group.startDate && group.endDate)
-                            ? calculateInclusiveDays(group.startDate, group.endDate)
-                            : mInfo.totalDays;
-                          const isFewerDays = incDays > 0 && incDays < mInfo.totalDays;
+                          const calc = calculateProratedBilling({
+                            monthlyAmount: prorateBaseMonthlyAmount,
+                            totalMonthDays: prorateTotalMonthDays,
+                            activeDays: prorateActiveDays,
+                            startDateStr: prorateStartDate,
+                            endDateStr: prorateEndDate,
+                            customSubtotal: prorateCustomSubtotal ? parseFloat(prorateCustomSubtotal) : null,
+                          });
 
                           return (
-                            <div className="bg-white p-2 border border-purple-100 rounded text-[10px] space-y-1.5">
+                            <div className="p-4 bg-amber-50/60 border border-amber-300 rounded-sm space-y-3 shadow-2xs">
                               <div className="flex items-center justify-between">
-                                <span className="text-gray-500 font-medium">
-                                  Duration: <strong className="text-purple-950 font-bold">{incDays} Days</strong> ({incDays} of {mInfo.totalDays})
+                                <div className="font-bold text-xs uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                                  <Calculator size={13} className="text-amber-700" /> Prorated Billing Calculation
+                                </div>
+                                <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded">
+                                  {calc.activeDays} of {calc.totalMonthDays} Days Billed
                                 </span>
-                                {group.isProrated ? (
-                                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded font-bold text-[9px] flex items-center gap-1">
-                                    <CalendarDays size={9} className="text-amber-700" /> Prorated ({group.activeDays}d)
-                                  </span>
-                                ) : null}
                               </div>
 
-                              <div className="flex items-center justify-between gap-2 pt-1 border-t border-dashed border-purple-100">
-                                {group.isProrated ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleResetSplitGroupProrate(group.id)}
-                                    className="text-[9.5px] text-purple-700 hover:text-purple-900 underline font-semibold flex items-center gap-1 cursor-pointer"
-                                  >
-                                    <RotateCcw size={10} /> Reset to Full Month
-                                  </button>
-                                ) : isFewerDays ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleProrateSplitGroup(group.id)}
-                                    className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                                    title={`Calculate prorated amount for ${incDays} days out of ${mInfo.totalDays} days`}
-                                  >
-                                    <CalendarDays size={10} /> ⚡ Prorate ({incDays} Days)
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleProrateSplitGroup(group.id)}
-                                    className="text-[9.5px] text-amber-800 hover:text-amber-950 font-bold flex items-center gap-1 cursor-pointer"
-                                    title="Prorate this sub-invoice for the dates entered above"
-                                  >
-                                    <CalendarDays size={10} /> Prorate Days
-                                  </button>
-                                )}
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-white p-3 border border-amber-200 rounded text-xs">
+                                <div>
+                                  <div className="text-[9px] uppercase font-bold text-gray-500">Daily Base Rate</div>
+                                  <div className="font-mono font-bold text-neutral-800 mt-0.5">
+                                    ₹{calc.dailyRate.toLocaleString('en-IN')}/day
+                                  </div>
+                                  <div className="text-[8.5px] text-gray-400 mt-0.5">₹{prorateBaseMonthlyAmount.toLocaleString('en-IN')} ÷ {calc.totalMonthDays}d</div>
+                                </div>
 
-                                <div className="text-right">
-                                  <span className="text-[9px] text-gray-500 block">Sub-Invoice Total:</span>
-                                  <span className="font-mono font-bold text-teal-800 text-xs">
-                                    ₹{Number(group.totalAmount || 0).toLocaleString('en-IN')}
-                                  </span>
+                                <div>
+                                  <div className="text-[9px] uppercase font-bold text-gray-500">Prorated Subtotal</div>
+                                  <div className="font-mono font-bold text-amber-900 mt-0.5">
+                                    ₹{calc.proratedSubtotal.toLocaleString('en-IN')}
+                                  </div>
+                                  <div className="text-[8.5px] text-gray-400 mt-0.5">{calc.activeDays}d × ₹{calc.dailyRate.toLocaleString('en-IN')}</div>
+                                </div>
+
+                                <div>
+                                  <div className="text-[9px] uppercase font-bold text-gray-500">18% GST (9%+9%)</div>
+                                  <div className="font-mono font-bold text-neutral-800 mt-0.5">
+                                    ₹{calc.gstAmount.toLocaleString('en-IN')}
+                                  </div>
+                                  <div className="text-[8.5px] text-gray-400 mt-0.5">CGST ₹{Math.round(calc.gstAmount / 2).toLocaleString('en-IN')} + SGST ₹{Math.round(calc.gstAmount / 2).toLocaleString('en-IN')}</div>
+                                </div>
+
+                                <div>
+                                  <div className="text-[9px] uppercase font-bold text-teal-800">Total Payable</div>
+                                  <div className="font-mono font-black text-sm text-teal-900 mt-0.5">
+                                    ₹{calc.totalAmount.toLocaleString('en-IN')}
+                                  </div>
+                                  <div className="text-[8.5px] text-teal-700 font-medium mt-0.5">Subtotal + GST</div>
                                 </div>
                               </div>
-                              {group.prorateFormula && (
-                                <div className="text-[9px] text-neutral-500 italic bg-neutral-50 px-1.5 py-0.5 border border-neutral-200 rounded font-mono">
-                                  {group.prorateFormula}
+
+                              {/* Formula Verification Banner */}
+                              <div className="bg-amber-100/70 border border-amber-300 p-2.5 rounded text-[10px] text-amber-950 flex items-start gap-2">
+                                <FileCheck size={14} className="text-amber-800 shrink-0 mt-0.5" />
+                                <div>
+                                  <div className="font-bold">Formula Applied:</div>
+                                  <div className="font-mono text-[10.5px] mt-0.5 font-bold">
+                                    ₹{prorateBaseMonthlyAmount.toLocaleString('en-IN')} ÷ {calc.totalMonthDays} days × {calc.activeDays} days = ₹{calc.proratedSubtotal.toLocaleString('en-IN')} Base + ₹{calc.gstAmount.toLocaleString('en-IN')} (18% GST) = <span className="text-teal-900 underline">₹{calc.totalAmount.toLocaleString('en-IN')} Total</span>
+                                  </div>
+                                  <div className="text-[9.5px] text-amber-800 mt-0.5">
+                                    {calc.periodLabel}
+                                  </div>
                                 </div>
-                              )}
+                              </div>
+
+                              {/* Optional Fine-Tuning Override */}
+                              <div className="pt-2 border-t border-amber-200/80 flex items-center justify-between text-[10px]">
+                                <span className="text-gray-600">
+                                  Custom Subtotal adjustment (optional fine-tuning):
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <span className="font-mono">₹</span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    placeholder={String(calc.proratedSubtotal)}
+                                    value={prorateCustomSubtotal}
+                                    onChange={(e) => setProrateCustomSubtotal(e.target.value)}
+                                    className="w-24 bg-white border border-amber-300 px-1.5 py-0.5 text-[10px] font-mono text-right rounded focus:outline-none focus:border-amber-600"
+                                  />
+                                </div>
+                              </div>
                             </div>
                           );
                         })()}
-
-                        <div className="flex items-center justify-between bg-white p-2 border border-purple-100 rounded text-[11px]">
-                          <div>
-                            <span className="text-neutral-500">Seats:</span> <strong className="text-neutral-800">{group.noOfSeats}</strong>
-                            <span className="mx-1.5 text-neutral-300">|</span>
-                            <span className="text-neutral-500">Items:</span> <strong className="text-neutral-800">{group.productIndices.length}</strong>
-                          </div>
-                          <div className="font-mono font-bold text-teal-800">
-                            Total: ₹{Number(group.totalAmount || 0).toLocaleString('en-IN')}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Product Items Assignment Table */}
-                <div className="space-y-2 pt-2 border-t border-neutral-200">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-700">
-                    Assign Each Product to a Sub-Invoice:
-                  </h4>
-
-                  {(() => {
-                    let items: any[] = [];
-                    try {
-                      items = JSON.parse(splitModalInvoice.itemsJson || '[]');
-                    } catch {}
-                    if (items.length === 0) {
-                      items = [{
-                        cabinName: splitModalInvoice.cabinName || 'Workspace',
-                        noOfSeats: splitModalInvoice.noOfSeats || 1,
-                        amount: splitModalInvoice.amount || 0,
-                        gstPercent: splitModalInvoice.gstPercent || 18,
-                        totalAmount: splitModalInvoice.totalAmount || 0,
-                      }];
-                    }
-
-                    return (
-                      <div className="border border-neutral-200 rounded-sm overflow-hidden">
-                        <table className="w-full text-left border-collapse text-[11px]">
-                          <thead>
-                            <tr className="bg-neutral-100 border-b border-neutral-200 font-bold uppercase text-[#616161]">
-                              <th className="p-2.5">#</th>
-                              <th className="p-2.5">Product / Cabin</th>
-                              <th className="p-2.5 text-center">Seats</th>
-                              <th className="p-2.5 text-center">Product Due Day</th>
-                              <th className="p-2.5 text-right">Subtotal</th>
-                              <th className="p-2.5 text-right">Total (Incl GST)</th>
-                              <th className="p-2.5 text-center">Assigned Sub-Invoice</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-neutral-200">
-                            {items.map((item, pIdx) => {
-                              const currentGroup = splitGroups.find(g => g.productIndices.includes(pIdx));
-                              return (
-                                <tr key={pIdx} className="hover:bg-neutral-50/70">
-                                  <td className="p-2.5 font-mono text-neutral-500 font-bold">{pIdx + 1}</td>
-                                  <td className="p-2.5 font-bold text-[#1B1C1C]">
-                                    {item.cabinName || 'Workspace item'}
-                                    {item.billingType === 'PRORATED' && (
-                                      <span className="ml-1 text-[9px] bg-amber-100 text-amber-900 px-1 py-0.2 rounded font-bold">
-                                        Prorated
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="p-2.5 text-center font-semibold">{item.noOfSeats || 0}</td>
-                                  <td className="p-2.5 text-center font-mono text-[10px] text-gray-600">
-                                    <span className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">
-                                      Due: Day {item.paymentDueDay || splitModalInvoice.paymentDueDay || 5}
-                                    </span>
-                                  </td>
-                                  <td className="p-2.5 text-right font-mono">₹{Number(item.amount || 0).toLocaleString('en-IN')}</td>
-                                  <td className="p-2.5 text-right font-mono font-bold text-teal-800">₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}</td>
-                                  <td className="p-2.5 text-center">
-                                    <select
-                                      value={currentGroup?.id || ''}
-                                      onChange={(e) => handleUpdateProductGroupAssignment(pIdx, e.target.value)}
-                                      className="bg-white border border-purple-300 text-purple-950 font-bold px-2 py-1 text-[11px] rounded focus:outline-none focus:border-purple-600 shadow-2xs"
-                                    >
-                                      {splitGroups.map((g) => (
-                                        <option key={g.id} value={g.id}>
-                                          {g.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              {/* Footer Actions */}
-              <div className="flex items-center justify-between pt-3 border-t border-neutral-200 shrink-0">
-                <div>
-                  {splitModalInvoice.splitsJson && (
-                    <button
-                      type="button"
-                      onClick={handleResetSplitToSingle}
-                      disabled={actionLoading}
-                      className="px-3 py-2 bg-neutral-100 text-neutral-700 hover:bg-neutral-200 text-[11px] font-bold uppercase tracking-wider rounded transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <RotateCcw size={12} /> Reset to Single Invoice
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setSplitModalInvoice(null)}
-                    className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100 rounded cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveSplitInvoice}
-                    disabled={actionLoading}
-                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50"
-                  >
-                    {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                    <span>Save Split Invoices</span>
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 8.5: PRORATE & ADJUST BILLING DAYS (STANDALONE CM REVIEW) */}
-      <AnimatePresence>
-        {prorateModalInvoice && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
-                <div>
-                  <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
-                    <CalendarDays size={20} className="text-amber-600" />
-                    <span>Prorate &amp; Adjust Billing Period</span>
-                  </h3>
-                  <p className="text-[11px] text-neutral-500 mt-0.5">
-                    Adjust invoice amount when client occupied workspace for fewer days (e.g. 11 days of 30 days).
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setProrateModalInvoice(null)}
-                  className="text-neutral-400 hover:text-neutral-700 p-1 cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Client & Month Overview */}
-              <div className="bg-[#F8F9FA] p-3.5 border border-amber-200/80 rounded-sm flex flex-wrap items-center justify-between gap-3 shrink-0">
-                <div>
-                  <div className="font-extrabold text-[#1B1C1C] text-sm">{prorateModalInvoice.companyName}</div>
-                  <div className="text-neutral-500 text-[11px] mt-0.5">
-                    SR #{prorateModalInvoice.srNo} • Billing Cycle: <strong className="text-neutral-800">{prorateModalInvoice.billingMonth || 'Current Month'}</strong>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[10px] uppercase font-bold text-gray-500">Standard Monthly Base</div>
-                  <div className="font-mono font-bold text-neutral-800 text-xs">
-                    ₹{prorateBaseMonthlyAmount.toLocaleString('en-IN')} + 18% GST (₹{Math.round(prorateBaseMonthlyAmount * 1.18).toLocaleString('en-IN')})
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4 overflow-y-auto flex-1 pr-1">
-                {/* Step 1: Active Usage Dates */}
-                <div className="p-4 bg-white border border-neutral-200 rounded-sm space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
-                      <Calendar size={13} className="text-amber-600" /> Active Usage Period
-                    </label>
-                    <span className="text-[10px] text-neutral-500">
-                      Total Month Days: <strong className="text-neutral-800">{prorateTotalMonthDays} Days</strong>
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
-                        Usage Start Date
-                      </label>
-                      <input
-                        type="date"
-                        value={prorateStartDate}
-                        onChange={(e) => handleProrateDateChange(e.target.value, prorateEndDate)}
-                        className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1.5 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
-                        Usage End Date
-                      </label>
-                      <input
-                        type="date"
-                        value={prorateEndDate}
-                        onChange={(e) => handleProrateDateChange(prorateStartDate, e.target.value)}
-                        className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1.5 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9.5px] font-bold uppercase text-amber-700 mb-1">
-                        Active Days Count
-                      </label>
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="number"
-                          min={1}
-                          max={prorateTotalMonthDays}
-                          value={prorateActiveDays}
-                          onChange={(e) => handleProrateActiveDaysChange(parseInt(e.target.value, 10) || 1)}
-                          className="w-full bg-amber-50/50 border border-amber-300 px-2 py-1.5 text-xs font-mono font-bold text-amber-900 rounded focus:bg-white focus:border-amber-600 focus:outline-none text-center"
-                        />
-                        <span className="text-[10px] font-bold text-neutral-500 shrink-0">/ {prorateTotalMonthDays}d</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Quick Preset Buttons */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="text-[9.5px] text-neutral-500 font-bold uppercase mr-1">Presets:</span>
-                    {[
-                      { label: 'Full Month (30d)', days: prorateTotalMonthDays },
-                      { label: '11 Days (e.g. Harsha Daulani)', days: 11 },
-                      { label: '15 Days (Half Month)', days: Math.round(prorateTotalMonthDays / 2) },
-                      { label: '10 Days', days: 10 },
-                      { label: '7 Days (1 Week)', days: 7 },
-                    ].map((p, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => handleProrateActiveDaysChange(p.days)}
-                        className={`px-2 py-0.5 text-[9.5px] font-bold rounded border cursor-pointer transition-colors ${
-                          prorateActiveDays === p.days
-                            ? 'bg-amber-600 text-white border-amber-600'
-                            : 'bg-neutral-100 text-neutral-700 border-neutral-200 hover:bg-neutral-200'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Step 2: Live Calculation Breakdown */}
-                {(() => {
-                  const calc = calculateProratedBilling({
-                    monthlyAmount: prorateBaseMonthlyAmount,
-                    totalMonthDays: prorateTotalMonthDays,
-                    activeDays: prorateActiveDays,
-                    startDateStr: prorateStartDate,
-                    endDateStr: prorateEndDate,
-                    customSubtotal: prorateCustomSubtotal ? parseFloat(prorateCustomSubtotal) : null,
-                  });
-
-                  return (
-                    <div className="p-4 bg-amber-50/60 border border-amber-300 rounded-sm space-y-3 shadow-2xs">
-                      <div className="flex items-center justify-between">
-                        <div className="font-bold text-xs uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
-                          <Calculator size={13} className="text-amber-700" /> Prorated Billing Calculation
-                        </div>
-                        <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded">
-                          {calc.activeDays} of {calc.totalMonthDays} Days Billed
-                        </span>
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-white p-3 border border-amber-200 rounded text-xs">
+                      {/* Footer Actions */}
+                      <div className="flex items-center justify-between pt-3 border-t border-neutral-200 shrink-0">
                         <div>
-                          <div className="text-[9px] uppercase font-bold text-gray-500">Daily Base Rate</div>
-                          <div className="font-mono font-bold text-neutral-800 mt-0.5">
-                            ₹{calc.dailyRate.toLocaleString('en-IN')}/day
-                          </div>
-                          <div className="text-[8.5px] text-gray-400 mt-0.5">₹{prorateBaseMonthlyAmount.toLocaleString('en-IN')} ÷ {calc.totalMonthDays}d</div>
-                        </div>
-
-                        <div>
-                          <div className="text-[9px] uppercase font-bold text-gray-500">Prorated Subtotal</div>
-                          <div className="font-mono font-bold text-amber-900 mt-0.5">
-                            ₹{calc.proratedSubtotal.toLocaleString('en-IN')}
-                          </div>
-                          <div className="text-[8.5px] text-gray-400 mt-0.5">{calc.activeDays}d × ₹{calc.dailyRate.toLocaleString('en-IN')}</div>
-                        </div>
-
-                        <div>
-                          <div className="text-[9px] uppercase font-bold text-gray-500">18% GST (9%+9%)</div>
-                          <div className="font-mono font-bold text-neutral-800 mt-0.5">
-                            ₹{calc.gstAmount.toLocaleString('en-IN')}
-                          </div>
-                          <div className="text-[8.5px] text-gray-400 mt-0.5">CGST ₹{Math.round(calc.gstAmount / 2).toLocaleString('en-IN')} + SGST ₹{Math.round(calc.gstAmount / 2).toLocaleString('en-IN')}</div>
-                        </div>
-
-                        <div>
-                          <div className="text-[9px] uppercase font-bold text-teal-800">Total Payable</div>
-                          <div className="font-mono font-black text-sm text-teal-900 mt-0.5">
-                            ₹{calc.totalAmount.toLocaleString('en-IN')}
-                          </div>
-                          <div className="text-[8.5px] text-teal-700 font-medium mt-0.5">Subtotal + GST</div>
-                        </div>
-                      </div>
-
-                      {/* Formula Verification Banner */}
-                      <div className="bg-amber-100/70 border border-amber-300 p-2.5 rounded text-[10px] text-amber-950 flex items-start gap-2">
-                        <FileCheck size={14} className="text-amber-800 shrink-0 mt-0.5" />
-                        <div>
-                          <div className="font-bold">Formula Applied:</div>
-                          <div className="font-mono text-[10.5px] mt-0.5 font-bold">
-                            ₹{prorateBaseMonthlyAmount.toLocaleString('en-IN')} ÷ {calc.totalMonthDays} days × {calc.activeDays} days = ₹{calc.proratedSubtotal.toLocaleString('en-IN')} Base + ₹{calc.gstAmount.toLocaleString('en-IN')} (18% GST) = <span className="text-teal-900 underline">₹{calc.totalAmount.toLocaleString('en-IN')} Total</span>
-                          </div>
-                          <div className="text-[9.5px] text-amber-800 mt-0.5">
-                            {calc.periodLabel}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Optional Fine-Tuning Override */}
-                      <div className="pt-2 border-t border-amber-200/80 flex items-center justify-between text-[10px]">
-                        <span className="text-gray-600">
-                          Custom Subtotal adjustment (optional fine-tuning):
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <span className="font-mono">₹</span>
-                          <input
-                            type="number"
-                            step="any"
-                            placeholder={String(calc.proratedSubtotal)}
-                            value={prorateCustomSubtotal}
-                            onChange={(e) => setProrateCustomSubtotal(e.target.value)}
-                            className="w-24 bg-white border border-amber-300 px-1.5 py-0.5 text-[10px] font-mono text-right rounded focus:outline-none focus:border-amber-600"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Footer Actions */}
-              <div className="flex items-center justify-between pt-3 border-t border-neutral-200 shrink-0">
-                <div>
-                  {hasProration(prorateModalInvoice) && (
-                    <button
-                      type="button"
-                      onClick={handleResetFullMonth}
-                      disabled={prorateSaving}
-                      className="px-3 py-2 bg-neutral-100 text-neutral-700 hover:bg-neutral-200 text-[11px] font-bold uppercase tracking-wider rounded transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                    >
-                      <RotateCcw size={12} /> Reset to Full Month (₹{Math.round(prorateBaseMonthlyAmount * 1.18).toLocaleString('en-IN')})
-                    </button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setProrateModalInvoice(null)}
-                    disabled={prorateSaving}
-                    className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100 rounded cursor-pointer disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveProration}
-                    disabled={prorateSaving}
-                    className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
-                  >
-                    {prorateSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                    <span>Save &amp; Apply Prorated Amount</span>
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-      {/* MODAL 9: SEND TAX INVOICE TO CLIENT (PRIMARY PERSON & CCs) */}
-      <AnimatePresence>
-        {entryToSendClientEmail && (
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
-                <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
-                  <Send size={18} className="text-[#006064]" />
-                  <span>Send Tax Invoice to Client</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setEntryToSendClientEmail(null)}
-                  className="text-neutral-400 hover:text-neutral-700"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {loadingEmailPreview ? (
-                <div className="py-12 text-center text-neutral-500">
-                  <Loader2 size={24} className="animate-spin text-[#006064] mx-auto mb-2" />
-                  <span>Loading client contact persons and invoice details...</span>
-                </div>
-              ) : (
-                <form onSubmit={handleSendClientEmailSubmit} className="overflow-y-auto flex-1 pr-1 space-y-4">
-                  {/* Context Banner */}
-                  <div className="bg-[#F8F9FA] p-3 border border-neutral-200 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <div className="font-extrabold text-sm text-[#1B1C1C]">
-                        {entryToSendClientEmail.companyName}
-                      </div>
-                      <span className="px-2 py-0.5 bg-[#006064] text-white text-[10px] font-bold uppercase rounded">
-                        {entryToSendClientEmail.billingMonth}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-neutral-600 flex items-center gap-2">
-                      <span><strong>Centre:</strong> {clientEmailPreview?.centreName || 'SSPACIA Centre'}</span>
-                      <span>&bull;</span>
-                      <span><strong>Attached PDF:</strong> {clientEmailPreview?.attachedPdfName || 'Tally Invoice PDF'}</span>
-                    </div>
-                  </div>
-
-                  {/* 1. SELECT PRIMARY CONTACT PERSON (TO:) */}
-                  <div className="space-y-2">
-                    <div className="font-bold text-neutral-800 uppercase tracking-wider text-[11px] flex items-center justify-between">
-                      <span>1. Select Primary Contact Person (To: Recipient) *</span>
-                      <span className="text-[10px] text-[#006064] font-semibold lowercase">
-                        uses Dear {customPrimaryNameInput || 'Name'} Ji,
-                      </span>
-                    </div>
-
-                    {clientEmailPreview?.contactPersons && clientEmailPreview.contactPersons.length > 0 ? (
-                      <div className="space-y-2">
-                        {clientEmailPreview.contactPersons.map((contact: any) => {
-                          const isSelected = selectedPrimaryContactId === contact.id;
-                          return (
-                            <label
-                              key={contact.id}
-                              onClick={() => handleSelectPrimaryContact(contact)}
-                              className={`flex items-start gap-3 p-2.5 border rounded cursor-pointer transition-all ${
-                                isSelected
-                                  ? 'bg-teal-50/80 border-[#006064] ring-1 ring-[#006064]'
-                                  : 'bg-white border-neutral-200 hover:bg-neutral-50'
-                              }`}
+                          {hasProration(prorateModalInvoice) && (
+                            <button
+                              type="button"
+                              onClick={handleResetFullMonth}
+                              disabled={prorateSaving}
+                              className="px-3 py-2 bg-neutral-100 text-neutral-700 hover:bg-neutral-200 text-[11px] font-bold uppercase tracking-wider rounded transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
                             >
-                              <input
-                                type="radio"
-                                name="primaryContact"
-                                checked={isSelected}
-                                onChange={() => handleSelectPrimaryContact(contact)}
-                                className="mt-0.5 text-[#006064] focus:ring-[#006064]"
-                              />
-                              <div className="flex-1 text-xs">
-                                <div className="font-bold text-[#1B1C1C] flex items-center gap-2">
-                                  <span>{contact.name}</span>
-                                  {contact.designation && (
-                                    <span className="text-[10px] px-1.5 py-0.2 bg-neutral-100 text-neutral-600 rounded">
-                                      {contact.designation}
-                                    </span>
-                                  )}
-                                  {isSelected && (
-                                    <span className="text-[10px] font-bold text-teal-800 bg-teal-100 px-1.5 py-0.2 rounded">
-                                      Primary (To:)
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-neutral-500 text-[11px] mt-0.5">
-                                  {contact.email ? (
-                                    <span className="font-mono text-neutral-700">{contact.email}</span>
-                                  ) : (
-                                    <span className="text-red-500 italic">No email on file</span>
-                                  )}
-                                  {contact.mobileNo && <span> &bull; {contact.mobileNo}</span>}
+                              <RotateCcw size={12} /> Reset to Full Month (₹{Math.round(prorateBaseMonthlyAmount * 1.18).toLocaleString('en-IN')})
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setProrateModalInvoice(null)}
+                            disabled={prorateSaving}
+                            className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100 rounded cursor-pointer disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveProration}
+                            disabled={prorateSaving}
+                            className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
+                          >
+                            {prorateSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                            <span>Save &amp; Apply Prorated Amount</span>
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+              {/* MODAL 9: SEND TAX INVOICE TO CLIENT (PRIMARY PERSON & CCs) */}
+              <AnimatePresence>
+                {entryToSendClientEmail && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
+                    >
+                      {/* Header */}
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
+                        <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
+                          <Send size={18} className="text-[#006064]" />
+                          <span>Send Tax Invoice to Client</span>
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => setEntryToSendClientEmail(null)}
+                          className="text-neutral-400 hover:text-neutral-700"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      {loadingEmailPreview ? (
+                        <div className="py-12 text-center text-neutral-500">
+                          <Loader2 size={24} className="animate-spin text-[#006064] mx-auto mb-2" />
+                          <span>Loading client contact persons and invoice details...</span>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleSendClientEmailSubmit} className="overflow-y-auto flex-1 pr-1 space-y-4">
+                          {/* Context Banner */}
+                          <div className="bg-[#F8F9FA] p-3 border border-neutral-200 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <div className="font-extrabold text-sm text-[#1B1C1C]">
+                                {entryToSendClientEmail.companyName}
+                              </div>
+                              <span className="px-2 py-0.5 bg-[#006064] text-white text-[10px] font-bold uppercase rounded">
+                                {entryToSendClientEmail.billingMonth}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-neutral-600 flex items-center gap-2">
+                              <span><strong>Centre:</strong> {clientEmailPreview?.centreName || 'SSPACIA Centre'}</span>
+                              <span>&bull;</span>
+                              <span><strong>Attached PDF:</strong> {clientEmailPreview?.attachedPdfName || 'Tally Invoice PDF'}</span>
+                            </div>
+                          </div>
+
+                          {/* 1. SELECT PRIMARY CONTACT PERSON (TO:) */}
+                          <div className="space-y-2">
+                            <div className="font-bold text-neutral-800 uppercase tracking-wider text-[11px] flex items-center justify-between">
+                              <span>1. Select Primary Contact Person (To: Recipient) *</span>
+                              <span className="text-[10px] text-[#006064] font-semibold lowercase">
+                                uses Dear {customPrimaryNameInput || 'Name'} Ji,
+                              </span>
+                            </div>
+
+                            {clientEmailPreview?.contactPersons && clientEmailPreview.contactPersons.length > 0 ? (
+                              <div className="space-y-2">
+                                {clientEmailPreview.contactPersons.map((contact: any) => {
+                                  const isSelected = selectedPrimaryContactId === contact.id;
+                                  return (
+                                    <label
+                                      key={contact.id}
+                                      onClick={() => handleSelectPrimaryContact(contact)}
+                                      className={`flex items-start gap-3 p-2.5 border rounded cursor-pointer transition-all ${isSelected
+                                        ? 'bg-teal-50/80 border-[#006064] ring-1 ring-[#006064]'
+                                        : 'bg-white border-neutral-200 hover:bg-neutral-50'
+                                        }`}
+                                    >
+                                      <input
+                                        type="radio"
+                                        name="primaryContact"
+                                        checked={isSelected}
+                                        onChange={() => handleSelectPrimaryContact(contact)}
+                                        className="mt-0.5 text-[#006064] focus:ring-[#006064]"
+                                      />
+                                      <div className="flex-1 text-xs">
+                                        <div className="font-bold text-[#1B1C1C] flex items-center gap-2">
+                                          <span>{contact.name}</span>
+                                          {contact.designation && (
+                                            <span className="text-[10px] px-1.5 py-0.2 bg-neutral-100 text-neutral-600 rounded">
+                                              {contact.designation}
+                                            </span>
+                                          )}
+                                          {isSelected && (
+                                            <span className="text-[10px] font-bold text-teal-800 bg-teal-100 px-1.5 py-0.2 rounded">
+                                              Primary (To:)
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-neutral-500 text-[11px] mt-0.5">
+                                          {contact.email ? (
+                                            <span className="font-mono text-neutral-700">{contact.email}</span>
+                                          ) : (
+                                            <span className="text-red-500 italic">No email on file</span>
+                                          )}
+                                          {contact.mobileNo && <span> &bull; {contact.mobileNo}</span>}
+                                        </div>
+                                      </div>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded space-y-2">
+                                <div className="font-bold">No Contact Persons in Client Master. Please specify:</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="Primary Contact Name"
+                                    value={customPrimaryNameInput}
+                                    onChange={(e) => setCustomPrimaryNameInput(e.target.value)}
+                                    required
+                                    className="bg-white border border-neutral-300 p-2 text-xs font-bold"
+                                  />
+                                  <input
+                                    type="email"
+                                    placeholder="Primary Email Address"
+                                    value={customPrimaryEmailInput}
+                                    onChange={(e) => setCustomPrimaryEmailInput(e.target.value)}
+                                    required
+                                    className="bg-white border border-neutral-300 p-2 text-xs font-bold"
+                                  />
                                 </div>
                               </div>
+                            )}
+                          </div>
+
+                          {/* 2. CC RECIPIENTS */}
+                          <div className="space-y-1">
+                            <label className="block font-bold text-neutral-800 uppercase tracking-wider text-[11px]">
+                              2. CC Recipients (Comma-separated)
                             </label>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded space-y-2">
-                        <div className="font-bold">No Contact Persons in Client Master. Please specify:</div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            placeholder="Primary Contact Name"
-                            value={customPrimaryNameInput}
-                            onChange={(e) => setCustomPrimaryNameInput(e.target.value)}
-                            required
-                            className="bg-white border border-neutral-300 p-2 text-xs font-bold"
-                          />
-                          <input
-                            type="email"
-                            placeholder="Primary Email Address"
-                            value={customPrimaryEmailInput}
-                            onChange={(e) => setCustomPrimaryEmailInput(e.target.value)}
-                            required
-                            className="bg-white border border-neutral-300 p-2 text-xs font-bold"
-                          />
-                        </div>
-                      </div>
-                    )}
+                            <input
+                              type="text"
+                              value={customCcInput}
+                              onChange={(e) => setCustomCcInput(e.target.value)}
+                              placeholder="e.g. rajesh@example.com, accounts@client.com, praveen@sspacia.com"
+                              className="w-full bg-white border border-neutral-300 p-2 text-xs font-mono text-neutral-800 focus:outline-none focus:border-[#006064]"
+                            />
+                            <div className="text-[10px] text-neutral-500">
+                              Remaining client contacts &amp; <strong>praveen@sspacia.com</strong> are included in CC.
+                            </div>
+                          </div>
+
+                          {/* 3. LIVE EMAIL PREVIEW */}
+                          <div className="space-y-1.5 pt-2 border-t border-neutral-200">
+                            <div className="font-bold text-neutral-700 uppercase tracking-wider text-[10px]">
+                              Email Content Preview:
+                            </div>
+
+                            <div className="p-4 bg-neutral-50 border border-neutral-200 rounded text-xs space-y-2.5 font-sans">
+                              <div className="border-b border-neutral-200 pb-2 text-[11px] space-y-0.5 text-neutral-600">
+                                <div><strong>From:</strong> SSPACIA Community Manager &lt;cm@sspacia.com&gt;</div>
+                                <div><strong>To:</strong> {customPrimaryEmailInput || 'primary@client.com'}</div>
+                                <div><strong>CC:</strong> {customCcInput}</div>
+                                <div><strong>Subject:</strong> Tax Invoice : {entryToSendClientEmail.companyName} - {entryToSendClientEmail.billingMonth}</div>
+                              </div>
+
+                              <div className="space-y-2 text-neutral-900 leading-relaxed">
+                                <div className="font-bold text-sm text-[#006064]">
+                                  SSPACIA COWORKING
+                                </div>
+                                <div className="font-semibold">
+                                  Dear {customPrimaryNameInput || 'Client'} Ji,
+                                </div>
+                                <p className="m-0">
+                                  Please find your tax invoice for the month attached with this email.
+                                </p>
+                                <p className="m-0">
+                                  The due date for payment is <strong>{clientEmailPreview?.dueDay ? `${clientEmailPreview.dueDay}th` : '7th'}</strong> of this month.
+                                </p>
+                                <div className="pt-1">
+                                  <span className="inline-block px-3 py-1.5 bg-[#006064] text-white font-bold text-[11px] rounded">
+                                    📥 Download Tax Invoice ({clientEmailPreview?.attachedPdfName || 'PDF Attached'})
+                                  </span>
+                                </div>
+                                <p className="m-0 text-neutral-500 text-[11px]">
+                                  For any clarification, please feel free to reach us anytime.
+                                </p>
+                                <div className="pt-2 text-[11px] text-neutral-700">
+                                  Best Regards,<br />
+                                  <strong>{clientEmailPreview?.centreName || 'SSPACIA'}'s Community Manager</strong>
+                                </div>
+                                <div className="text-[10px] text-neutral-400 pt-1 border-t border-neutral-200">
+                                  SSPACIA INDIA PVT LTD &bull; WhatsApp &bull; Instagram &bull; LinkedIn &bull; Facebook &bull; YouTube
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setEntryToSendClientEmail(null)}
+                              className="px-4 py-2 font-bold uppercase tracking-wider text-neutral-600 hover:bg-neutral-100 rounded"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={isSendingClientEmail || !customPrimaryEmailInput.trim()}
+                              className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50"
+                            >
+                              {isSendingClientEmail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                              <span>Send Tax Invoice to Client</span>
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </motion.div>
                   </div>
-
-                  {/* 2. CC RECIPIENTS */}
-                  <div className="space-y-1">
-                    <label className="block font-bold text-neutral-800 uppercase tracking-wider text-[11px]">
-                      2. CC Recipients (Comma-separated)
-                    </label>
-                    <input
-                      type="text"
-                      value={customCcInput}
-                      onChange={(e) => setCustomCcInput(e.target.value)}
-                      placeholder="e.g. rajesh@example.com, accounts@client.com, praveen@sspacia.com"
-                      className="w-full bg-white border border-neutral-300 p-2 text-xs font-mono text-neutral-800 focus:outline-none focus:border-[#006064]"
-                    />
-                    <div className="text-[10px] text-neutral-500">
-                      Remaining client contacts &amp; <strong>praveen@sspacia.com</strong> are included in CC.
-                    </div>
-                  </div>
-
-                  {/* 3. LIVE EMAIL PREVIEW */}
-                  <div className="space-y-1.5 pt-2 border-t border-neutral-200">
-                    <div className="font-bold text-neutral-700 uppercase tracking-wider text-[10px]">
-                      Email Content Preview:
-                    </div>
-
-                    <div className="p-4 bg-neutral-50 border border-neutral-200 rounded text-xs space-y-2.5 font-sans">
-                      <div className="border-b border-neutral-200 pb-2 text-[11px] space-y-0.5 text-neutral-600">
-                        <div><strong>From:</strong> SSPACIA Community Manager &lt;cm@sspacia.com&gt;</div>
-                        <div><strong>To:</strong> {customPrimaryEmailInput || 'primary@client.com'}</div>
-                        <div><strong>CC:</strong> {customCcInput}</div>
-                        <div><strong>Subject:</strong> Tax Invoice : {entryToSendClientEmail.companyName} - {entryToSendClientEmail.billingMonth}</div>
-                      </div>
-
-                      <div className="space-y-2 text-neutral-900 leading-relaxed">
-                        <div className="font-bold text-sm text-[#006064]">
-                          SSPACIA COWORKING
-                        </div>
-                        <div className="font-semibold">
-                          Dear {customPrimaryNameInput || 'Client'} Ji,
-                        </div>
-                        <p className="m-0">
-                          Please find your tax invoice for the month attached with this email.
-                        </p>
-                        <p className="m-0">
-                          The due date for payment is <strong>{clientEmailPreview?.dueDay ? `${clientEmailPreview.dueDay}th` : '7th'}</strong> of this month.
-                        </p>
-                        <div className="pt-1">
-                          <span className="inline-block px-3 py-1.5 bg-[#006064] text-white font-bold text-[11px] rounded">
-                            📥 Download Tax Invoice ({clientEmailPreview?.attachedPdfName || 'PDF Attached'})
-                          </span>
-                        </div>
-                        <p className="m-0 text-neutral-500 text-[11px]">
-                          For any clarification, please feel free to reach us anytime.
-                        </p>
-                        <div className="pt-2 text-[11px] text-neutral-700">
-                          Best Regards,<br />
-                          <strong>{clientEmailPreview?.centreName || 'SSPACIA'}'s Community Manager</strong>
-                        </div>
-                        <div className="text-[10px] text-neutral-400 pt-1 border-t border-neutral-200">
-                          SSPACIA INDIA PVT LTD &bull; WhatsApp &bull; Instagram &bull; LinkedIn &bull; Facebook &bull; YouTube
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setEntryToSendClientEmail(null)}
-                      className="px-4 py-2 font-bold uppercase tracking-wider text-neutral-600 hover:bg-neutral-100 rounded"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSendingClientEmail || !customPrimaryEmailInput.trim()}
-                      className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50"
-                    >
-                      {isSendingClientEmail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                      <span>Send Tax Invoice to Client</span>
-                    </button>
-                  </div>
-                </form>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </>,
-    document.body
-  )}
+                )}
+              </AnimatePresence>
+            </>,
+            document.body
+          )}
 
         </>
       )}
