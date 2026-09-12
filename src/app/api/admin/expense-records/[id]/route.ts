@@ -102,12 +102,11 @@ export async function PUT(
 
     const body = await request.json();
 
-    // Check permissions if editing base expense attributes (description, amount, date, category, payment mode, receipt)
+    // Check permissions if editing base expense attributes (description, amount, date, payment mode, receipt)
     const isEditingBaseExpense =
       body.description !== undefined ||
       body.amount !== undefined ||
       body.expenseDate !== undefined ||
-      body.category !== undefined ||
       body.paymentMode !== undefined ||
       body.receiptNo !== undefined ||
       body.attachmentUrl !== undefined;

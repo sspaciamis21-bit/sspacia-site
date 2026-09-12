@@ -315,33 +315,8 @@ export function ExpenseRegister({
   // Global pending approvals across ALL centres (irrespective of center/month filter)
   const [allPendingApprovals, setAllPendingApprovals] = useState<ExpenseRecordItem[]>([]);
 
-  // Inline Add Row state
-  const [isAddingRow, setIsAddingRow] = useState(false);
-  const [savingInlineRow, setSavingInlineRow] = useState(false);
-  const [uploadingInlineDoc, setUploadingInlineDoc] = useState(false);
-  const [newRowData, setNewRowData] = useState({
-    locationId: initialLocationId ? String(initialLocationId) : "",
-    expenseDate: new Date().toISOString().split("T")[0],
-    receiptNo: "",
-    vendorId: "" as string | number,
-    vendorName: "",
-    accountNo: "",
-    ifscCode: "",
-    bankName: "",
-    category: FIXED_EXPENSE_TYPES[0],
-    description: "",
-    quantity: "1",
-    unit: "Nos",
-    rate: "",
-    amount: "",
-    paymentMode: "",
-    remarks: "",
-    attachmentUrl: "",
-    invoiceUrl: "",
-    uploadedInBankPortal: false,
-  });
-  const inlineReceiptFileRef = useRef<HTMLInputElement | null>(null);
-  const inlineInvoiceFileRef = useRef<HTMLInputElement | null>(null);
+
+
 
   // Add / Edit form state (Fixed format values)
   const [formData, setFormData] = useState({
@@ -435,7 +410,15 @@ export function ExpenseRegister({
   const settleProofFileInputRef = useRef<HTMLInputElement | null>(null);
   const settleInvoiceFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Consolidated Categories (Super Admin headers + any existing record categories to prevent data loss)
+  // Official Super Admin Category Headers (Strictly defined by Super Admin, fallback to defaults if none defined yet)
+  const officialCategoryOptions = useMemo(() => {
+    if (categoryHeaders && categoryHeaders.length > 0) {
+      return categoryHeaders;
+    }
+    return FIXED_EXPENSE_TYPES;
+  }, [categoryHeaders]);
+
+  // Consolidated Categories (Super Admin headers + any existing record categories to prevent data loss in filters)
   const allAvailableCategories = useMemo(() => {
     const set = new Set<string>();
     // 1. Super Admin defined Category Headers
@@ -902,123 +885,41 @@ export function ExpenseRegister({
     }
   };
 
-  // Handle inline file upload for Add Row
-  const handleInlineUpload = async (file: File, type: "receipt" | "invoice") => {
-    try {
-      setUploadingInlineDoc(true);
-      const uploadData = new FormData();
-      uploadData.append("file", file);
 
-      const res = await fetch("/api/admin/upload-pdf", {
-        method: "POST",
-        body: uploadData,
-      });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "File upload failed");
+  // State & Handler to update existing expense category from table dropdown
+  const [updatingCategoryId, setUpdatingCategoryId] = useState<number | null>(null);
 
-      const fileUrl =
-        data.fileUrl ||
-        data.url ||
-        data.data?.fileUrl ||
-        (data.id ? `/api/admin/stored-documents/${data.id}` : "");
+  const handleUpdateExpenseCategory = async (recordId: number, newCategory: string) => {
+    const trimmed = newCategory.trim().toUpperCase();
+    if (!trimmed) return;
 
-      if (!fileUrl) {
-        throw new Error("Failed to obtain document URL");
-      }
-
-      if (type === "receipt") {
-        setNewRowData((prev) => ({ ...prev, attachmentUrl: fileUrl }));
-        toast.success("Receipt slip attached!");
-      } else {
-        setNewRowData((prev) => ({ ...prev, invoiceUrl: fileUrl }));
-        toast.success("Invoice PDF attached!");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to upload file");
-    } finally {
-      setUploadingInlineDoc(false);
-    }
-  };
-
-  // Handle Save Inline Row
-  const handleSaveInlineRow = async () => {
-    let locId = newRowData.locationId;
-    if (!locId || locId === "ALL") {
-      if (selectedLocation !== "ALL") {
-        locId = selectedLocation;
-      } else if (locations.length > 0) {
-        locId = String(locations[0].id);
-      }
-    }
-
-    if (!locId) {
-      toast.error("Please select a Center for the expense");
-      return;
-    }
-    if (!newRowData.description.trim()) {
-      toast.error("Please enter an expense description");
-      return;
-    }
-    const amtNum = parseFloat(newRowData.amount);
-    if (isNaN(amtNum) || amtNum <= 0) {
-      toast.error("Please enter a valid amount greater than ₹0");
-      return;
-    }
+    // Optimistically update local state so table updates instantly
+    setRecords((prev) =>
+      prev.map((r) => (r.id === recordId ? { ...r, category: trimmed } : r))
+    );
 
     try {
-      setSavingInlineRow(true);
-      const payload: any = {
-        locationId: Number(locId),
-        expenseDate: newRowData.expenseDate || new Date().toISOString().split("T")[0],
-        category: newRowData.category || "GENERAL EXPENSE",
-        description: newRowData.description.trim(),
-        amount: amtNum,
-        paymentMode: newRowData.paymentMode ? newRowData.paymentMode.trim() : null,
-        receiptNo: newRowData.receiptNo ? newRowData.receiptNo.trim() : null,
-        attachmentUrl: newRowData.attachmentUrl || null,
-        invoiceUrl: newRowData.invoiceUrl || null,
-        remarks: newRowData.remarks ? newRowData.remarks.trim() : null,
-      };
-
-      if (newRowData.vendorId) {
-        payload.vendorId = Number(newRowData.vendorId);
-        payload.vendorName = newRowData.vendorName ? newRowData.vendorName.trim() : null;
-        payload.accountNo = newRowData.accountNo ? newRowData.accountNo.trim() : null;
-      }
-
-      if (activeViewMode === "ACCOUNTANT") {
-        payload.vendorId = newRowData.vendorId ? Number(newRowData.vendorId) : null;
-        payload.vendorName = newRowData.vendorName ? newRowData.vendorName.trim() : null;
-        payload.accountNo = newRowData.accountNo ? newRowData.accountNo.trim() : null;
-        payload.quantity = newRowData.quantity ? parseFloat(newRowData.quantity) : 1;
-        payload.unit = newRowData.unit || "Nos";
-        payload.rate = newRowData.rate ? parseFloat(newRowData.rate) : null;
-        payload.uploadedInBankPortal = Boolean(newRowData.uploadedInBankPortal);
-        if (newRowData.vendorName) {
-          payload.approvalStatus = "PENDING_APPROVAL";
-        }
-      }
-
-      const res = await fetch("/api/admin/expense-records", {
-        method: "POST",
+      setUpdatingCategoryId(recordId);
+      const res = await fetch(`/api/admin/expense-records/${recordId}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ category: trimmed }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to save expense row");
+      if (!res.ok) throw new Error(data.error || "Failed to update expense category");
 
-      toast.success("Expense row added successfully!");
-      setIsAddingRow(false);
-      fetchRecords(false);
-      fetchAllPendingApprovals();
+      toast.success(`Expense category updated to "${trimmed}"`);
     } catch (err: any) {
-      toast.error(err.message || "Failed to save expense row");
+      toast.error(err.message || "Failed to update category");
+      fetchRecords(false);
     } finally {
-      setSavingInlineRow(false);
+      setUpdatingCategoryId(null);
     }
   };
+
+
 
   // Open Add Modal
   const openAddModal = () => {
@@ -1613,15 +1514,7 @@ export function ExpenseRegister({
         accountNo: data.vendor.accountNo || prev.accountNo || "",
         ifscCode: data.vendor.ifscCode || prev.ifscCode || "",
       }));
-      // Auto select in active inline row
-      setNewRowData((prev) => ({
-        ...prev,
-        vendorId: data.vendor.id,
-        vendorName: data.vendor.vendorName,
-        accountNo: data.vendor.accountNo || prev.accountNo || "",
-        ifscCode: data.vendor.ifscCode || prev.ifscCode || "",
-        bankName: data.vendor.bankName || prev.bankName || "",
-      }));
+
 
       setIsNewVendorModalOpen(false);
       setNewVendorForm({
@@ -1760,26 +1653,16 @@ export function ExpenseRegister({
               </button>
             )}
 
-            {/* Add Expense Button (Modal) */}
-            {activeViewMode === "ACCOUNTANT" && isAccountant ? (
-              <button
-                type="button"
-                onClick={openAddModal}
-                className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Expense (Accountant)</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={openAddModal}
-                className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Expense</span>
-              </button>
-            )}
+            {/* Record Center Operating Expense Button (Opens Modal for CM & Accountant) */}
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+              title="Record Center Operating Expense: Enter operational expense and attach bill PDF"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Record Center Operating Expense</span>
+            </button>
           </div>
         </div>
 
@@ -2102,44 +1985,7 @@ export function ExpenseRegister({
               </span>
             </div>
 
-            {/* Compact Add Row Button - Accessible to both CM and Accountant */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsAddingRow(true);
-                setNewRowData({
-                  locationId:
-                    selectedLocation !== "ALL"
-                      ? selectedLocation
-                      : locations[0]?.id
-                      ? String(locations[0].id)
-                      : "",
-                  expenseDate: new Date().toISOString().split("T")[0],
-                  receiptNo: "",
-                  vendorId: "",
-                  vendorName: "",
-                  accountNo: "",
-                  ifscCode: "",
-                  bankName: "",
-                  category: FIXED_EXPENSE_TYPES[0],
-                  description: "",
-                  quantity: "1",
-                  unit: "Nos",
-                  rate: "",
-                  amount: "",
-                  paymentMode: "",
-                  remarks: "",
-                  attachmentUrl: "",
-                  invoiceUrl: "",
-                  uploadedInBankPortal: false,
-                });
-              }}
-              className="bg-[#006064] hover:bg-[#00838f] text-white px-2.5 py-1 text-xs font-bold tracking-wide transition-all flex items-center gap-1 shadow-2xs cursor-pointer ml-1"
-              title="Add a new expense entry inline"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Row</span>
-            </button>
+
           </div>
 
           <div className="flex items-center gap-3">
@@ -2230,447 +2076,7 @@ export function ExpenseRegister({
               )}
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {/* ── INLINE ADD ROW (CM & ACCOUNTANT VIEWS) ── */}
-              {isAddingRow && (
-                activeViewMode === "CM" ? (
-                  <tr className="bg-cyan-50/50 border-2 border-[#006064] animate-in fade-in">
-                    <td className="py-2.5 px-2 text-center font-mono text-[11px] text-[#006064] font-bold">
-                      NEW
-                    </td>
-                    <td className="py-2.5 px-2 whitespace-nowrap">
-                      <input
-                        type="date"
-                        value={newRowData.expenseDate}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, expenseDate: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[11px] font-mono bg-white focus:outline-none focus:border-[#006064] w-28"
-                      />
-                      {selectedLocation === "ALL" && (
-                        <select
-                          value={newRowData.locationId}
-                          onChange={(e) => setNewRowData((prev) => ({ ...prev, locationId: e.target.value }))}
-                          className="border border-gray-300 p-0.5 text-[10px] bg-white mt-1 block w-28 focus:outline-none focus:border-[#006064]"
-                        >
-                          <option value="">Select Center *</option>
-                          {locations.map((loc) => (
-                            <option key={loc.id} value={loc.id}>{loc.name}</option>
-                          ))}
-                        </select>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-2 whitespace-nowrap">
-                      <div className="flex flex-col gap-0.5">
-                        <select
-                          value={newRowData.vendorId}
-                          onChange={(e) => {
-                            const vId = e.target.value;
-                            const found = vendors.find((v) => String(v.id) === vId);
-                            setNewRowData((prev) => ({
-                              ...prev,
-                              vendorId: vId,
-                              vendorName: found ? found.vendorName : "",
-                              accountNo: found?.accountNo || "",
-                              ifscCode: found?.ifscCode || "",
-                              bankName: found?.bankName || "",
-                            }));
-                          }}
-                          className="border border-gray-300 p-1 text-[11px] bg-white focus:outline-none focus:border-[#006064] w-28"
-                        >
-                          <option value="">Vendor (Opt)</option>
-                          {vendors.map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.vendorName}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => setIsNewVendorModalOpen(true)}
-                          className="text-[9px] text-[#006064] font-bold hover:underline flex items-center gap-0.5 cursor-pointer text-left"
-                        >
-                          <Plus className="w-2.5 h-2.5" /> + New Vendor
-                        </button>
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <input
-                        type="text"
-                        placeholder="Expense description *"
-                        value={newRowData.description}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, description: e.target.value }))}
-                        className="border border-gray-300 p-1.5 text-xs w-full bg-white font-medium focus:outline-none focus:border-[#006064]"
-                      />
-                    </td>
-                    <td className="py-2.5 px-2 whitespace-nowrap">
-                      <select
-                        value={newRowData.category}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, category: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[11px] bg-white focus:outline-none focus:border-[#006064] w-32 font-bold uppercase text-[#006064]"
-                      >
-                        {Array.from(new Set([...categoryHeaders, ...(newRowData.category ? [newRowData.category] : [])])).map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-2.5 px-2 text-right whitespace-nowrap">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="₹ Amount *"
-                        value={newRowData.amount}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, amount: e.target.value }))}
-                        className="border border-gray-300 p-1 text-xs font-bold font-mono text-right w-24 bg-white focus:outline-none focus:border-[#006064]"
-                      />
-                    </td>
-                    <td className="py-2.5 px-2 whitespace-nowrap">
-                      <select
-                        value={newRowData.paymentMode}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, paymentMode: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[11px] bg-white focus:outline-none focus:border-[#006064] w-24"
-                      >
-                        <option value="">Mode (Opt)</option>
-                        {PAYMENT_MODES.map((m) => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-2.5 px-2 text-center whitespace-nowrap">
-                      <input
-                        type="text"
-                        placeholder="Receipt #"
-                        value={newRowData.receiptNo}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, receiptNo: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[10.5px] font-mono w-24 bg-white focus:outline-none focus:border-[#006064]"
-                      />
-                    </td>
-                    {/* Attach Option 1: Receipt Slip */}
-                    <td className="py-2.5 px-2 text-center whitespace-nowrap">
-                      <input
-                        type="file"
-                        ref={inlineReceiptFileRef}
-                        accept=".pdf,.png,.jpg,.jpeg"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleInlineUpload(file, "receipt");
-                        }}
-                      />
-                      {newRowData.attachmentUrl ? (
-                        <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 border border-amber-200">
-                          Slip Attached ✓
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => inlineReceiptFileRef.current?.click()}
-                          disabled={uploadingInlineDoc}
-                          className="text-[10px] text-amber-800 font-bold underline cursor-pointer"
-                        >
-                          {uploadingInlineDoc ? "..." : "+ Slip"}
-                        </button>
-                      )}
-                    </td>
-                    {/* Attach Option 2: Operational Bill / Doc Proof */}
-                    <td className="py-2.5 px-2 text-center whitespace-nowrap">
-                      <input
-                        type="file"
-                        ref={inlineInvoiceFileRef}
-                        accept=".pdf,.png,.jpg,.jpeg"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleInlineUpload(file, "invoice");
-                        }}
-                      />
-                      {newRowData.invoiceUrl ? (
-                        <span className="text-[10px] text-[#006064] font-bold bg-cyan-50 px-1.5 py-0.5 border border-cyan-200">
-                          Doc Attached ✓
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => inlineInvoiceFileRef.current?.click()}
-                          disabled={uploadingInlineDoc}
-                          className="text-[10px] text-[#006064] font-bold underline cursor-pointer"
-                        >
-                          {uploadingInlineDoc ? "..." : "+ Doc"}
-                        </button>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-2">
-                      <input
-                        type="text"
-                        placeholder="Remarks (opt)"
-                        value={newRowData.remarks}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, remarks: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[11px] w-28 bg-white focus:outline-none focus:border-[#006064]"
-                      />
-                    </td>
-                    <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                      <span className="text-[10px] text-gray-400 font-mono italic">Accountant Step</span>
-                    </td>
-                    <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={handleSaveInlineRow}
-                          disabled={savingInlineRow}
-                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold uppercase transition-all cursor-pointer shadow-xs flex items-center gap-1 disabled:opacity-50"
-                          title="Save Row"
-                        >
-                          <Check className="w-3.5 h-3.5" /> Save
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingRow(false)}
-                          className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold uppercase transition-all cursor-pointer"
-                          title="Cancel"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  <tr className="bg-emerald-50/50 border-2 border-emerald-600 animate-in fade-in text-[11px]">
-                    <td className="py-2 px-1 text-center font-mono font-bold text-emerald-800">
-                      NEW
-                    </td>
-                    <td className="py-2 px-1.5 whitespace-nowrap">
-                      <input
-                        type="date"
-                        value={newRowData.expenseDate}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, expenseDate: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[10.5px] font-mono bg-white w-24 focus:outline-none focus:border-emerald-600"
-                      />
-                      {selectedLocation === "ALL" && (
-                        <select
-                          value={newRowData.locationId}
-                          onChange={(e) => setNewRowData((prev) => ({ ...prev, locationId: e.target.value }))}
-                          className="border border-gray-300 p-0.5 text-[9.5px] bg-white mt-1 block w-24 focus:outline-none focus:border-emerald-600"
-                        >
-                          <option value="">Center *</option>
-                          {locations.map((loc) => (
-                            <option key={loc.id} value={loc.id}>{loc.name}</option>
-                          ))}
-                        </select>
-                      )}
-                    </td>
-                    <td className="py-2 px-1.5 whitespace-nowrap">
-                      <input
-                        type="text"
-                        placeholder="Inv #"
-                        value={newRowData.receiptNo}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, receiptNo: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[10.5px] font-mono w-20 bg-white focus:outline-none focus:border-emerald-600"
-                      />
-                    </td>
-                    <td className="py-2 px-1.5 whitespace-nowrap">
-                      <select
-                        value={newRowData.vendorId}
-                        onChange={(e) => {
-                          const vid = e.target.value;
-                          const vObj = vendors.find((v) => String(v.id) === String(vid));
-                          setNewRowData((prev) => ({
-                            ...prev,
-                            vendorId: vid,
-                            vendorName: vObj?.vendorName || "",
-                            accountNo: vObj?.accountNo || prev.accountNo || "",
-                            ifscCode: vObj?.ifscCode || prev.ifscCode || "",
-                            bankName: vObj?.bankName || prev.bankName || "",
-                          }));
-                        }}
-                        className="border border-gray-300 p-1 text-[10.5px] bg-white w-28 focus:outline-none focus:border-emerald-600"
-                      >
-                        <option value="">-- Vendor --</option>
-                        {vendors.map((v) => (
-                          <option key={v.id} value={v.id}>{v.vendorName}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewVendorForm({
-                            vendorName: "",
-                            mobileNo: "",
-                            email: "",
-                            accountNo: "",
-                            ifscCode: "",
-                            address: "",
-                            locationName: locations.find((l) => String(l.id) === String(selectedLocation))?.name || "",
-                            gstin: "",
-                            pan: "",
-                          });
-                          setNewVendorErrors({});
-                          setIsNewVendorModalOpen(true);
-                        }}
-                        className="text-[9px] text-[#006064] hover:underline font-bold block mt-0.5 cursor-pointer"
-                      >
-                        + Add Vendor
-                      </button>
-                    </td>
-                    <td className="py-2 px-2">
-                      <input
-                        type="text"
-                        placeholder="Description *"
-                        value={newRowData.description}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, description: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[11px] w-32 bg-white focus:outline-none focus:border-emerald-600 font-medium"
-                      />
-                      <select
-                        value={newRowData.category}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, category: e.target.value }))}
-                        className="border border-gray-300 p-0.5 text-[9.5px] bg-white mt-1 block w-32 uppercase text-[#006064] font-bold"
-                      >
-                        {allAvailableCategories.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-2 px-1 text-center whitespace-nowrap">
-                      <input
-                        type="number"
-                        value={newRowData.quantity}
-                        onChange={(e) => {
-                          const q = e.target.value;
-                          const r = newRowData.rate;
-                          const autoAmt = q && r ? (parseFloat(q) * parseFloat(r)).toFixed(2) : newRowData.amount;
-                          setNewRowData((prev) => ({ ...prev, quantity: q, amount: autoAmt }));
-                        }}
-                        className="border border-gray-300 p-1 text-[10.5px] font-mono text-center w-12 bg-white"
-                      />
-                    </td>
-                    <td className="py-2 px-1 text-center whitespace-nowrap">
-                      <input
-                        type="text"
-                        value={newRowData.unit}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, unit: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[10.5px] font-mono text-center w-12 bg-white"
-                      />
-                    </td>
-                    <td className="py-2 px-1 text-right whitespace-nowrap">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="Rate"
-                        value={newRowData.rate}
-                        onChange={(e) => {
-                          const r = e.target.value;
-                          const q = newRowData.quantity;
-                          const autoAmt = q && r ? (parseFloat(q) * parseFloat(r)).toFixed(2) : newRowData.amount;
-                          setNewRowData((prev) => ({ ...prev, rate: r, amount: autoAmt }));
-                        }}
-                        className="border border-gray-300 p-1 text-[10.5px] font-mono text-right w-16 bg-white"
-                      />
-                    </td>
-                    <td className="py-2 px-1.5 text-right whitespace-nowrap">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="Amt *"
-                        value={newRowData.amount}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, amount: e.target.value }))}
-                        className="border border-gray-300 p-1 text-[11px] font-mono font-bold text-right w-20 bg-white text-gray-900"
-                      />
-                    </td>
-                    {/* 10. Receipt Slip / Ref */}
-                    <td className="py-2 px-1 text-center whitespace-nowrap">
-                      <input
-                        type="file"
-                        ref={inlineReceiptFileRef}
-                        accept=".pdf,.png,.jpg,.jpeg"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleInlineUpload(file, "receipt");
-                        }}
-                      />
-                      {newRowData.attachmentUrl ? (
-                        <span className="text-[9.5px] text-amber-700 font-bold bg-amber-50 px-1 py-0.5 border border-amber-200">
-                          Slip Attached ✓
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => inlineReceiptFileRef.current?.click()}
-                          disabled={uploadingInlineDoc}
-                          className="text-[9.5px] text-amber-800 underline font-bold cursor-pointer"
-                        >
-                          {uploadingInlineDoc ? "..." : "+ Slip"}
-                        </button>
-                      )}
-                    </td>
 
-                    {/* 11. Attached Document */}
-                    <td className="py-2 px-1 text-center whitespace-nowrap">
-                      <input
-                        type="file"
-                        ref={inlineInvoiceFileRef}
-                        accept=".pdf,.png,.jpg,.jpeg"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleInlineUpload(file, "invoice");
-                        }}
-                      />
-                      {newRowData.invoiceUrl ? (
-                        <span className="text-[9.5px] text-[#006064] font-bold bg-cyan-50 px-1 py-0.5 border border-cyan-200">
-                          Doc Attached ✓
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => inlineInvoiceFileRef.current?.click()}
-                          disabled={uploadingInlineDoc}
-                          className="text-[9.5px] text-[#006064] underline font-bold cursor-pointer"
-                        >
-                          {uploadingInlineDoc ? "..." : "+ Doc"}
-                        </button>
-                      )}
-                    </td>
-                    <td className="py-2 px-1 text-center whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        checked={newRowData.uploadedInBankPortal}
-                        onChange={(e) => setNewRowData((prev) => ({ ...prev, uploadedInBankPortal: e.target.checked }))}
-                        className="w-4 h-4 accent-[#006064] cursor-pointer"
-                      />
-                    </td>
-                    <td className="py-2 px-1 text-center text-[10px] text-gray-400 font-mono whitespace-nowrap">
-                      Pending
-                    </td>
-                    <td className="py-2 px-1 text-center text-[10px] text-gray-400 font-mono whitespace-nowrap">
-                      Locked
-                    </td>
-                    <td className="py-2 px-1 text-center text-[10px] text-gray-400 font-mono whitespace-nowrap">
-                      Locked
-                    </td>
-                    <td className="py-2 px-1 text-center text-[10px] text-gray-400 font-mono whitespace-nowrap">
-                      Locked
-                    </td>
-                    <td className="py-2 px-2 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={handleSaveInlineRow}
-                          disabled={savingInlineRow}
-                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10.5px] font-bold uppercase transition-all cursor-pointer shadow-xs flex items-center gap-1 disabled:opacity-50"
-                          title="Save Row"
-                        >
-                          <Check className="w-3 h-3" /> Save
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingRow(false)}
-                          className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[10.5px] font-bold uppercase transition-all cursor-pointer"
-                          title="Cancel"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              )}
 
               {loading ? (
                 <tr>
@@ -2686,7 +2092,7 @@ export function ExpenseRegister({
                     </div>
                   </td>
                 </tr>
-              ) : records.length === 0 && !isAddingRow ? (
+              ) : records.length === 0 ? (
                 <tr>
                   <td
                     colSpan={activeViewMode === "CM" ? 13 : 17}
@@ -2701,7 +2107,7 @@ export function ExpenseRegister({
                         onClick={openAddModal}
                         className="bg-[#006064] text-white px-4 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-[#00838f] transition-all cursor-pointer"
                       >
-                        + Add First Expense
+                        + Record Center Operating Expense
                       </button>
                     </div>
                   </td>
@@ -2764,9 +2170,24 @@ export function ExpenseRegister({
 
                         {/* 4. Expense Section */}
                         <td className="py-3 px-3 whitespace-nowrap">
-                          <span className="inline-block px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider bg-cyan-50 text-[#006064] border border-cyan-100">
-                            {rec.category || "GENERAL"}
-                          </span>
+                          <select
+                            value={rec.category || "GENERAL"}
+                            onChange={(e) => handleUpdateExpenseCategory(rec.id, e.target.value)}
+                            disabled={updatingCategoryId === rec.id}
+                            className="bg-cyan-50/80 hover:bg-cyan-100 text-[#006064] border border-cyan-300 text-[10.5px] font-bold uppercase py-1 px-1.5 focus:outline-none focus:border-[#006064] cursor-pointer max-w-[170px] truncate shadow-2xs"
+                            title="Select / change category header"
+                          >
+                            {Array.from(
+                              new Set([
+                                ...officialCategoryOptions,
+                                ...(rec.category ? [rec.category] : []),
+                              ])
+                            ).map((cat) => (
+                              <option key={cat} value={cat} className="bg-white text-gray-900 font-bold uppercase">
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
                         </td>
 
                         {/* 5. Amount (₹) */}
@@ -2984,8 +2405,26 @@ export function ExpenseRegister({
                         <div className="font-semibold text-gray-900 leading-snug text-[11.5px]">
                           {rec.description}
                         </div>
-                        <div className="text-[9.5px] text-gray-400 font-mono mt-0.5">
-                          {rec.locationName} • {rec.category || "GENERAL"}
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="text-[9.5px] text-gray-500 font-mono shrink-0">{rec.locationName} •</span>
+                          <select
+                            value={rec.category || "GENERAL"}
+                            onChange={(e) => handleUpdateExpenseCategory(rec.id, e.target.value)}
+                            disabled={updatingCategoryId === rec.id}
+                            className="bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9.5px] font-bold uppercase py-0.5 px-1 focus:outline-none focus:border-emerald-600 cursor-pointer max-w-[150px] truncate shadow-2xs"
+                            title="Select / change category header"
+                          >
+                            {Array.from(
+                              new Set([
+                                ...officialCategoryOptions,
+                                ...(rec.category ? [rec.category] : []),
+                              ])
+                            ).map((cat) => (
+                              <option key={cat} value={cat} className="bg-white text-gray-900 font-bold uppercase">
+                                {cat}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div className="mt-1">
                           {renderEnteredByBadge(rec)}
@@ -3514,7 +2953,7 @@ export function ExpenseRegister({
                       {/* Strictly Super Admin Category Headers (plus existing record's category if editing an older record) */}
                       {Array.from(
                         new Set([
-                          ...categoryHeaders,
+                          ...officialCategoryOptions,
                           ...(formData.category ? [formData.category] : []),
                         ])
                       ).map((cat) => (
@@ -5340,8 +4779,6 @@ export function ExpenseRegister({
               <button
                 onClick={() => {
                   setIsCategoryModalOpen(false);
-                  setEditingCategoryOldName(null);
-                  setEditingCategoryNewName("");
                   setNewCategoryName("");
                 }}
                 className="p-1 text-white/80 hover:text-white cursor-pointer"
@@ -5387,139 +4824,16 @@ export function ExpenseRegister({
                   </button>
                 </div>
 
-                {/* Suggestions Chips from Available / Common Categories */}
-                <div className="pt-2 border-t border-slate-200">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500 font-bold block mb-1.5">
-                    Quick Suggestion Chips (Click to Add):
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SUGGESTED_CATEGORY_HEADERS.map((sug) => {
-                      const isAlreadyAdded = categoryHeaders.includes(sug);
-                      return (
-                        <button
-                          key={sug}
-                          type="button"
-                          disabled={isAlreadyAdded || savingCategory}
-                          onClick={() => handleAddCategoryHeader(sug)}
-                          className={`text-[10.5px] px-2.5 py-1 font-bold transition-all border ${
-                            isAlreadyAdded
-                              ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
-                              : "bg-white text-[#006064] hover:bg-cyan-50 hover:border-[#006064] border-cyan-200 cursor-pointer shadow-2xs"
-                          }`}
-                          title={isAlreadyAdded ? "Already exists" : `Add "${sug}"`}
-                        >
-                          {isAlreadyAdded ? `✓ ${sug}` : `+ ${sug}`}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 2: Active Category Headers List */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold uppercase tracking-wider text-gray-800 text-[11px] flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-[#006064]" />
-                    <span>Active Category Headers ({categoryHeaders.length})</span>
-                  </h4>
-                  <span className="text-[10.5px] text-gray-500 font-mono">
-                    Visible to CM & Accountant in dropdown
+                {/* Simple Read-Only Category Suggestions */}
+                <div className="pt-2 border-t border-slate-200 text-[11px] text-gray-500 leading-normal">
+                  <span className="font-bold text-gray-700">Suggestions: </span>
+                  <span className="text-gray-500">
+                    {SUGGESTED_CATEGORY_HEADERS.join(" • ")}
                   </span>
                 </div>
-
-                <div className="border border-gray-200 divide-y divide-gray-100 bg-white max-h-[340px] overflow-y-auto">
-                  {categoryHeaders.length === 0 ? (
-                    <div className="p-6 text-center text-gray-400">
-                      No category headers created yet. Click suggestions above to seed categories.
-                    </div>
-                  ) : (
-                    categoryHeaders.map((cat, idx) => {
-                      const isEditingThis = editingCategoryOldName === cat;
-                      return (
-                        <div
-                          key={cat}
-                          className="flex items-center justify-between p-2.5 hover:bg-slate-50 transition-colors"
-                        >
-                          {isEditingThis ? (
-                            <div className="flex items-center gap-2 flex-1 mr-2">
-                              <input
-                                type="text"
-                                value={editingCategoryNewName}
-                                onChange={(e) => setEditingCategoryNewName(e.target.value.toUpperCase())}
-                                autoFocus
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    handleUpdateCategoryHeader(cat, editingCategoryNewName);
-                                  } else if (e.key === "Escape") {
-                                    setEditingCategoryOldName(null);
-                                  }
-                                }}
-                                className="border border-[#006064] p-1.5 text-xs font-bold uppercase w-full bg-white text-gray-900 focus:outline-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateCategoryHeader(cat, editingCategoryNewName)}
-                                disabled={savingCategory}
-                                className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10.5px] font-bold uppercase cursor-pointer"
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingCategoryOldName(null)}
-                                className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[10.5px] font-bold uppercase cursor-pointer"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-mono text-[11px] text-gray-400 w-6">
-                                {idx + 1}.
-                              </span>
-                              <span className="font-bold text-gray-900 text-xs tracking-wide truncate">
-                                {cat}
-                              </span>
-                            </div>
-                          )}
-
-                          {!isEditingThis && (
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingCategoryOldName(cat);
-                                  setEditingCategoryNewName(cat);
-                                }}
-                                className="p-1 text-gray-500 hover:text-[#006064] hover:bg-cyan-50 border border-transparent hover:border-cyan-200 transition-all cursor-pointer"
-                                title="Edit / Rename Category Header"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteCategoryHeader(cat)}
-                                disabled={deletingCategoryName === cat}
-                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer disabled:opacity-40"
-                                title="Delete Category Header"
-                              >
-                                {deletingCategoryName === cat ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600" />
-                                ) : (
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
               </div>
-            </div>
+              </div>
+
 
             {/* Modal Footer */}
             <div className="p-4 border-t border-gray-200 flex items-center justify-end bg-gray-50">
@@ -5527,8 +4841,6 @@ export function ExpenseRegister({
                 type="button"
                 onClick={() => {
                   setIsCategoryModalOpen(false);
-                  setEditingCategoryOldName(null);
-                  setEditingCategoryNewName("");
                   setNewCategoryName("");
                 }}
                 className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 border border-gray-300 cursor-pointer"
