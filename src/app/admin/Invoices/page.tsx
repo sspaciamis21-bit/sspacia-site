@@ -41,12 +41,21 @@ import {
   Package,
   Plus,
   Sliders,
-  Scissors
+  Scissors,
+  CalendarDays
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
 import { useAuth } from '@/context/AuthContext';
 import { InvoicePaymentManagement } from '@/components/admin/invoice-payment-management';
+import {
+  getBillingMonthInfo,
+  calculateInclusiveDays,
+  calculateProratedBilling,
+  formatDateToIndian,
+  type BillingMonthInfo,
+  type ProrateCalculationResult,
+} from '@/lib/invoice-proration-utils';
 
 
 
@@ -81,6 +90,11 @@ interface InvoiceSplitGroup {
   endDate?: string;
   paymentDueDay?: number | string;
   dueDate?: string;
+  isProrated?: boolean;
+  activeDays?: number;
+  totalMonthDays?: number;
+  baseMonthlyAmount?: number;
+  prorateFormula?: string;
   attachedInvoice?: {
     fileName: string;
     fileUrl: string;
@@ -276,6 +290,16 @@ export default function AdminInvoicesWorkflowPage() {
   const [splitGroups, setSplitGroups] = useState<InvoiceSplitGroup[]>([]);
   const [splitUploadingGroupIndex, setSplitUploadingGroupIndex] = useState<number | null>(null);
 
+  // Standalone Prorate & Billing Days Adjustment Modal State
+  const [prorateModalInvoice, setProrateModalInvoice] = useState<InvoiceRecord | null>(null);
+  const [prorateStartDate, setProrateStartDate] = useState<string>('');
+  const [prorateEndDate, setProrateEndDate] = useState<string>('');
+  const [prorateActiveDays, setProrateActiveDays] = useState<number>(30);
+  const [prorateTotalMonthDays, setProrateTotalMonthDays] = useState<number>(30);
+  const [prorateBaseMonthlyAmount, setProrateBaseMonthlyAmount] = useState<number>(0);
+  const [prorateCustomSubtotal, setProrateCustomSubtotal] = useState<string>('');
+  const [prorateSaving, setProrateSaving] = useState<boolean>(false);
+
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -291,7 +315,8 @@ export default function AdminInvoicesWorkflowPage() {
     showSignatureSettingsModal ||
     entryToViewDetails ||
     waiveModalInvoice ||
-    splitModalInvoice
+    splitModalInvoice ||
+    prorateModalInvoice
   );
 
   useEffect(() => {
@@ -938,6 +963,67 @@ export default function AdminInvoicesWorkflowPage() {
     setSplitGroups(splitGroups.map(g => g.id === groupId ? { ...g, [field]: value } : g));
   };
 
+  const handleProrateSplitGroup = (groupId: string) => {
+    if (!splitModalInvoice) return;
+    const monthInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
+    const targetGroup = splitGroups.find(g => g.id === groupId);
+    if (!targetGroup) return;
+
+    const startDate = targetGroup.startDate || monthInfo.firstDateStr;
+    const endDate = targetGroup.endDate || monthInfo.lastDateStr;
+    const inclusiveDays = calculateInclusiveDays(startDate, endDate) || monthInfo.totalDays;
+
+    const baseAmt = targetGroup.baseMonthlyAmount || targetGroup.amount || 0;
+    const calc = calculateProratedBilling({
+      monthlyAmount: baseAmt,
+      totalMonthDays: monthInfo.totalDays,
+      activeDays: inclusiveDays,
+      startDateStr: startDate,
+      endDateStr: endDate,
+    });
+
+    setSplitGroups(splitGroups.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        startDate,
+        endDate,
+        baseMonthlyAmount: baseAmt,
+        amount: calc.proratedSubtotal,
+        gstAmount: calc.gstAmount,
+        totalAmount: calc.totalAmount,
+        isProrated: true,
+        activeDays: calc.activeDays,
+        totalMonthDays: calc.totalMonthDays,
+        prorateFormula: calc.formulaText,
+      };
+    }));
+    toast.success(`${targetGroup.name} prorated to ₹${calc.totalAmount.toLocaleString('en-IN')} (${calc.activeDays}/${calc.totalMonthDays} Days)`);
+  };
+
+  const handleResetSplitGroupProrate = (groupId: string) => {
+    const targetGroup = splitGroups.find(g => g.id === groupId);
+    if (!targetGroup) return;
+    const baseAmt = targetGroup.baseMonthlyAmount || targetGroup.amount || 0;
+    const gstAmt = Math.round(baseAmt * 0.18);
+    const totAmt = baseAmt + gstAmt;
+
+    setSplitGroups(splitGroups.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        amount: baseAmt,
+        gstAmount: gstAmt,
+        totalAmount: totAmt,
+        isProrated: false,
+        activeDays: undefined,
+        totalMonthDays: undefined,
+        prorateFormula: undefined,
+      };
+    }));
+    toast.success(`${targetGroup.name} reset to full month billing`);
+  };
+
   const handleSaveSplitInvoice = async () => {
     if (!splitModalInvoice) return;
     let items: any[] = [];
@@ -957,6 +1043,9 @@ export default function AdminInvoicesWorkflowPage() {
       return;
     }
 
+    const sumBaseAmount = validGroups.reduce((acc, g) => acc + (Number(g.amount) || 0), 0);
+    const sumTotalAmount = validGroups.reduce((acc, g) => acc + (Number(g.totalAmount) || 0), 0);
+
     setActionLoading(true);
     try {
       const res = await fetch(`/api/admin/Invoices/${splitModalInvoice.id}`, {
@@ -964,12 +1053,14 @@ export default function AdminInvoicesWorkflowPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           splitsJson: validGroups.length > 1 ? JSON.stringify(validGroups) : null,
+          amount: sumBaseAmount,
+          totalAmount: sumTotalAmount,
         }),
       });
       const json = await res.json();
       if (json.success) {
         if (validGroups.length > 1) {
-          toast.success(`Invoice split into ${validGroups.length} Sub-Invoices successfully!`);
+          toast.success(`Invoice split into ${validGroups.length} Sub-Invoices successfully! Total: ₹${sumTotalAmount.toLocaleString('en-IN')}`);
         } else {
           toast.success('Unified single invoice saved.');
         }
@@ -1008,6 +1099,255 @@ export default function AdminInvoicesWorkflowPage() {
       toast.error('Error resetting split invoice');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // ── STANDALONE PRORATE DAYS HANDLERS (FOR CM REVIEW) ──
+  const hasProration = (inv: InvoiceRecord): boolean => {
+    if (inv.itemsJson) {
+      try {
+        const items = JSON.parse(inv.itemsJson);
+        if (Array.isArray(items) && items.some(it => it.billingType === 'PRORATED' || it.isProrated)) {
+          return true;
+        }
+      } catch {}
+    }
+    if (inv.splitsJson) {
+      try {
+        const splits = JSON.parse(inv.splitsJson);
+        if (Array.isArray(splits) && splits.some(sp => sp.isProrated)) {
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  };
+
+  const getProrationSummary = (inv: InvoiceRecord): { activeDays: number; totalDays: number; label: string; formula?: string } | null => {
+    if (inv.itemsJson) {
+      try {
+        const items = JSON.parse(inv.itemsJson);
+        if (Array.isArray(items)) {
+          const proratedItem = items.find(it => it.billingType === 'PRORATED' || it.isProrated);
+          if (proratedItem && proratedItem.activeDays && proratedItem.totalMonthDays) {
+            return {
+              activeDays: proratedItem.activeDays,
+              totalDays: proratedItem.totalMonthDays,
+              label: `${proratedItem.activeDays}/${proratedItem.totalMonthDays} Days`,
+              formula: proratedItem.prorateFormula,
+            };
+          }
+        }
+      } catch {}
+    }
+    if (inv.splitsJson) {
+      try {
+        const splits = JSON.parse(inv.splitsJson);
+        if (Array.isArray(splits)) {
+          const proratedSplit = splits.find(sp => sp.isProrated);
+          if (proratedSplit && proratedSplit.activeDays && proratedSplit.totalMonthDays) {
+            return {
+              activeDays: proratedSplit.activeDays,
+              totalDays: proratedSplit.totalMonthDays,
+              label: `${proratedSplit.activeDays}/${proratedSplit.totalMonthDays} Days`,
+              formula: proratedSplit.prorateFormula,
+            };
+          }
+        }
+      } catch {}
+    }
+    return null;
+  };
+
+  const handleOpenProrateModal = (inv: InvoiceRecord) => {
+    setProrateModalInvoice(inv);
+    const monthInfo = getBillingMonthInfo(inv.billingMonth, inv.dueDate ? new Date(inv.dueDate) : undefined);
+    setProrateTotalMonthDays(monthInfo.totalDays);
+
+    let items: any[] = [];
+    try {
+      if (inv.itemsJson) items = JSON.parse(inv.itemsJson);
+    } catch {}
+
+    const firstItem = items[0] || {};
+    // Full monthly base amount without pro-rata:
+    const baseAmt = Number(firstItem.baseMonthlyAmount || inv.amount || 0);
+    setProrateBaseMonthlyAmount(baseAmt);
+
+    if (firstItem.isProrated || firstItem.billingType === 'PRORATED') {
+      setProrateStartDate(firstItem.proratedStartDate || monthInfo.firstDateStr);
+      setProrateEndDate(firstItem.proratedEndDate || monthInfo.lastDateStr);
+      setProrateActiveDays(Number(firstItem.activeDays || monthInfo.totalDays));
+      setProrateCustomSubtotal(String(inv.amount || ''));
+    } else {
+      setProrateStartDate(monthInfo.firstDateStr);
+      setProrateEndDate(monthInfo.lastDateStr);
+      setProrateActiveDays(monthInfo.totalDays);
+      setProrateCustomSubtotal('');
+    }
+  };
+
+  const handleProrateDateChange = (startStr: string, endStr: string) => {
+    setProrateStartDate(startStr);
+    setProrateEndDate(endStr);
+    const days = calculateInclusiveDays(startStr, endStr);
+    if (days > 0) {
+      setProrateActiveDays(Math.min(prorateTotalMonthDays, days));
+      setProrateCustomSubtotal('');
+    }
+  };
+
+  const handleProrateActiveDaysChange = (days: number) => {
+    const validDays = Math.max(1, Math.min(prorateTotalMonthDays, days));
+    setProrateActiveDays(validDays);
+    setProrateCustomSubtotal('');
+    if (prorateStartDate) {
+      const start = new Date(prorateStartDate);
+      if (!isNaN(start.getTime())) {
+        const end = new Date(start);
+        end.setDate(start.getDate() + (validDays - 1));
+        const y = end.getFullYear();
+        const m = String(end.getMonth() + 1).padStart(2, '0');
+        const d = String(end.getDate()).padStart(2, '0');
+        setProrateEndDate(`${y}-${m}-${d}`);
+      }
+    }
+  };
+
+  const handleSaveProration = async () => {
+    if (!prorateModalInvoice) return;
+    const calc = calculateProratedBilling({
+      monthlyAmount: prorateBaseMonthlyAmount,
+      totalMonthDays: prorateTotalMonthDays,
+      activeDays: prorateActiveDays,
+      startDateStr: prorateStartDate,
+      endDateStr: prorateEndDate,
+      customSubtotal: prorateCustomSubtotal ? parseFloat(prorateCustomSubtotal) : null,
+    });
+
+    let items: any[] = [];
+    try {
+      if (prorateModalInvoice.itemsJson) {
+        items = JSON.parse(prorateModalInvoice.itemsJson);
+      }
+    } catch {}
+
+    if (items.length === 0) {
+      items = [{
+        cabinName: prorateModalInvoice.cabinName || 'Workspace',
+        noOfSeats: prorateModalInvoice.noOfSeats || 1,
+        ratePerAgreement: prorateModalInvoice.ratePerAgreement || prorateBaseMonthlyAmount,
+        amount: calc.proratedSubtotal,
+        gstPercent: prorateModalInvoice.gstPercent || 18,
+        totalAmount: calc.totalAmount,
+        baseMonthlyAmount: prorateBaseMonthlyAmount,
+        billingType: 'PRORATED',
+        isProrated: true,
+        activeDays: calc.activeDays,
+        totalMonthDays: calc.totalMonthDays,
+        proratedStartDate: prorateStartDate,
+        proratedEndDate: prorateEndDate,
+        prorateFormula: calc.formulaText,
+        note: calc.periodLabel,
+      }];
+    } else {
+      items = items.map((it) => {
+        const itemBase = Number(it.baseMonthlyAmount || it.amount || 0);
+        const ratio = prorateBaseMonthlyAmount > 0 ? (itemBase / prorateBaseMonthlyAmount) : (1 / items.length);
+        const itemSubtotal = Math.round(calc.proratedSubtotal * ratio * 100) / 100;
+        const itemGst = Math.round(itemSubtotal * (Number(it.gstPercent || 18) / 100) * 100) / 100;
+        return {
+          ...it,
+          baseMonthlyAmount: itemBase,
+          amount: itemSubtotal,
+          totalAmount: Math.round(itemSubtotal + itemGst),
+          billingType: 'PRORATED',
+          isProrated: true,
+          activeDays: calc.activeDays,
+          totalMonthDays: calc.totalMonthDays,
+          proratedStartDate: prorateStartDate,
+          proratedEndDate: prorateEndDate,
+          prorateFormula: calc.formulaText,
+          note: calc.periodLabel,
+        };
+      });
+    }
+
+    setProrateSaving(true);
+    try {
+      const res = await fetch(`/api/admin/Invoices/${prorateModalInvoice.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: calc.proratedSubtotal,
+          totalAmount: calc.totalAmount,
+          itemsJson: JSON.stringify(items),
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Invoice prorated successfully to ₹${calc.totalAmount.toLocaleString('en-IN')} (${calc.activeDays} of ${calc.totalMonthDays} Days)! 🎉`);
+        setProrateModalInvoice(null);
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to update prorated invoice');
+      }
+    } catch {
+      toast.error('Network error saving prorated invoice');
+    } finally {
+      setProrateSaving(false);
+    }
+  };
+
+  const handleResetFullMonth = async () => {
+    if (!prorateModalInvoice) return;
+    const gstAmt = Math.round(prorateBaseMonthlyAmount * 0.18);
+    const totAmt = prorateBaseMonthlyAmount + gstAmt;
+
+    let items: any[] = [];
+    try {
+      if (prorateModalInvoice.itemsJson) {
+        items = JSON.parse(prorateModalInvoice.itemsJson);
+      }
+    } catch {}
+
+    items = items.map((it) => ({
+      ...it,
+      amount: it.baseMonthlyAmount || it.amount,
+      totalAmount: Math.round((Number(it.baseMonthlyAmount || it.amount)) * 1.18),
+      billingType: 'STANDARD',
+      isProrated: false,
+      activeDays: undefined,
+      totalMonthDays: undefined,
+      proratedStartDate: undefined,
+      proratedEndDate: undefined,
+      prorateFormula: undefined,
+      note: undefined,
+    }));
+
+    setProrateSaving(true);
+    try {
+      const res = await fetch(`/api/admin/Invoices/${prorateModalInvoice.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: prorateBaseMonthlyAmount,
+          totalAmount: totAmt,
+          itemsJson: items.length > 0 ? JSON.stringify(items) : null,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Reset invoice back to full month (₹${totAmt.toLocaleString('en-IN')})!`);
+        setProrateModalInvoice(null);
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to reset invoice');
+      }
+    } catch {
+      toast.error('Network error resetting invoice');
+    } finally {
+      setProrateSaving(false);
     }
   };
 
@@ -2326,6 +2666,20 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                         <div className="font-black text-sm text-[var(--primary)]">
                           ₹{Number(invoice.totalAmount || 0).toLocaleString('en-IN')}
                         </div>
+                        {hasProration(invoice) && (() => {
+                          const summary = getProrationSummary(invoice);
+                          return (
+                            <div className="mt-1 flex flex-col items-end">
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9px] font-bold"
+                                title={summary?.formula || 'Prorated invoice amount'}
+                              >
+                                <CalendarDays size={9} className="text-amber-700" />
+                                <span>Prorated: {summary?.label || 'Custom Days'}</span>
+                              </span>
+                            </div>
+                          );
+                        })()}
                         {Number(invoice.lateFeeAmount || 0) > 0 ? (
                           <div className="text-[9px] text-red-600 font-bold">
                             Includes ₹{Number(invoice.lateFeeAmount).toLocaleString('en-IN')} Late Fee
@@ -2389,6 +2743,23 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                                   className="px-3 py-1.5 bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1 w-full justify-center shadow-xs"
                                 >
                                   <Send size={11} /> Send to Accountant
+                                </button>
+                              )}
+
+                              {/* Prorate Days Action for CM */}
+                              {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenProrateModal(invoice)}
+                                  className={`px-2.5 py-1 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors rounded ${
+                                    hasProration(invoice)
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
+                                      : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
+                                  }`}
+                                  title="Prorate days if client occupied fewer days in month"
+                                >
+                                  <CalendarDays size={10} className="text-amber-700" />
+                                  <span>{hasProration(invoice) ? 'Adjust Prorated Days' : '⚡ Prorate Days'}</span>
                                 </button>
                               )}
 
@@ -3235,7 +3606,14 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
 
                                 <div>
                                   <div className="font-bold uppercase text-[#616161] text-[9px]">Amount (₹)</div>
-                                  <div className="font-bold text-blue-700 mt-0.5">₹{Number(p.amount || 0).toLocaleString('en-IN')}</div>
+                                  <div className="font-bold text-blue-700 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                    <span>₹{Number(p.amount || 0).toLocaleString('en-IN')}</span>
+                                    {p.billingType === 'PRORATED' && (
+                                      <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded font-bold">
+                                        Prorated ({p.activeDays || 'Custom'}d)
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
 
                                 <div>
@@ -3298,6 +3676,14 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                           <div className="font-black text-base text-[var(--primary)] mt-0.5">
                             ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
                           </div>
+                          {hasProration(entryToViewDetails) && (() => {
+                            const ps = getProrationSummary(entryToViewDetails);
+                            return (
+                              <div className="text-[9.5px] font-bold text-amber-800 mt-0.5">
+                                Prorated: {ps?.label || 'Custom Days'}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -4396,6 +4782,72 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                           </div>
                         </div>
 
+                        {/* Sub-Invoice Prorate Days Control & Summary */}
+                        {(() => {
+                          const mInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
+                          const incDays = (group.startDate && group.endDate)
+                            ? calculateInclusiveDays(group.startDate, group.endDate)
+                            : mInfo.totalDays;
+                          const isFewerDays = incDays > 0 && incDays < mInfo.totalDays;
+
+                          return (
+                            <div className="bg-white p-2 border border-purple-100 rounded text-[10px] space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-500 font-medium">
+                                  Duration: <strong className="text-purple-950 font-bold">{incDays} Days</strong> ({incDays} of {mInfo.totalDays})
+                                </span>
+                                {group.isProrated ? (
+                                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded font-bold text-[9px] flex items-center gap-1">
+                                    <CalendarDays size={9} className="text-amber-700" /> Prorated ({group.activeDays}d)
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 pt-1 border-t border-dashed border-purple-100">
+                                {group.isProrated ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleResetSplitGroupProrate(group.id)}
+                                    className="text-[9.5px] text-purple-700 hover:text-purple-900 underline font-semibold flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <RotateCcw size={10} /> Reset to Full Month
+                                  </button>
+                                ) : isFewerDays ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleProrateSplitGroup(group.id)}
+                                    className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                                    title={`Calculate prorated amount for ${incDays} days out of ${mInfo.totalDays} days`}
+                                  >
+                                    <CalendarDays size={10} /> ⚡ Prorate ({incDays} Days)
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleProrateSplitGroup(group.id)}
+                                    className="text-[9.5px] text-amber-800 hover:text-amber-950 font-bold flex items-center gap-1 cursor-pointer"
+                                    title="Prorate this sub-invoice for the dates entered above"
+                                  >
+                                    <CalendarDays size={10} /> Prorate Days
+                                  </button>
+                                )}
+
+                                <div className="text-right">
+                                  <span className="text-[9px] text-gray-500 block">Sub-Invoice Total:</span>
+                                  <span className="font-mono font-bold text-teal-800 text-xs">
+                                    ₹{Number(group.totalAmount || 0).toLocaleString('en-IN')}
+                                  </span>
+                                </div>
+                              </div>
+                              {group.prorateFormula && (
+                                <div className="text-[9px] text-neutral-500 italic bg-neutral-50 px-1.5 py-0.5 border border-neutral-200 rounded font-mono">
+                                  {group.prorateFormula}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                         <div className="flex items-center justify-between bg-white p-2 border border-purple-100 rounded text-[11px]">
                           <div>
                             <span className="text-neutral-500">Seats:</span> <strong className="text-neutral-800">{group.noOfSeats}</strong>
@@ -4403,7 +4855,7 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                             <span className="text-neutral-500">Items:</span> <strong className="text-neutral-800">{group.productIndices.length}</strong>
                           </div>
                           <div className="font-mono font-bold text-teal-800">
-                            ₹{Number(group.totalAmount || 0).toLocaleString('en-IN')}
+                            Total: ₹{Number(group.totalAmount || 0).toLocaleString('en-IN')}
                           </div>
                         </div>
                       </div>
@@ -4523,6 +4975,265 @@ const formatOneTimeBillingMonth = (inv: InvoiceRecord): string => {
                   >
                     {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                     <span>Save Split Invoices</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL 8.5: PRORATE & ADJUST BILLING DAYS (STANDALONE CM REVIEW) */}
+      <AnimatePresence>
+        {prorateModalInvoice && (
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
+                <div>
+                  <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
+                    <CalendarDays size={20} className="text-amber-600" />
+                    <span>Prorate &amp; Adjust Billing Period</span>
+                  </h3>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    Adjust invoice amount when client occupied workspace for fewer days (e.g. 11 days of 30 days).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setProrateModalInvoice(null)}
+                  className="text-neutral-400 hover:text-neutral-700 p-1 cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Client & Month Overview */}
+              <div className="bg-[#F8F9FA] p-3.5 border border-amber-200/80 rounded-sm flex flex-wrap items-center justify-between gap-3 shrink-0">
+                <div>
+                  <div className="font-extrabold text-[#1B1C1C] text-sm">{prorateModalInvoice.companyName}</div>
+                  <div className="text-neutral-500 text-[11px] mt-0.5">
+                    SR #{prorateModalInvoice.srNo} • Billing Cycle: <strong className="text-neutral-800">{prorateModalInvoice.billingMonth || 'Current Month'}</strong>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] uppercase font-bold text-gray-500">Standard Monthly Base</div>
+                  <div className="font-mono font-bold text-neutral-800 text-xs">
+                    ₹{prorateBaseMonthlyAmount.toLocaleString('en-IN')} + 18% GST (₹{Math.round(prorateBaseMonthlyAmount * 1.18).toLocaleString('en-IN')})
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+                {/* Step 1: Active Usage Dates */}
+                <div className="p-4 bg-white border border-neutral-200 rounded-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                      <Calendar size={13} className="text-amber-600" /> Active Usage Period
+                    </label>
+                    <span className="text-[10px] text-neutral-500">
+                      Total Month Days: <strong className="text-neutral-800">{prorateTotalMonthDays} Days</strong>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
+                        Usage Start Date
+                      </label>
+                      <input
+                        type="date"
+                        value={prorateStartDate}
+                        onChange={(e) => handleProrateDateChange(e.target.value, prorateEndDate)}
+                        className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1.5 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9.5px] font-bold uppercase text-neutral-500 mb-1">
+                        Usage End Date
+                      </label>
+                      <input
+                        type="date"
+                        value={prorateEndDate}
+                        onChange={(e) => handleProrateDateChange(prorateStartDate, e.target.value)}
+                        className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1.5 text-xs font-mono rounded focus:bg-white focus:border-amber-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9.5px] font-bold uppercase text-amber-700 mb-1">
+                        Active Days Count
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={1}
+                          max={prorateTotalMonthDays}
+                          value={prorateActiveDays}
+                          onChange={(e) => handleProrateActiveDaysChange(parseInt(e.target.value, 10) || 1)}
+                          className="w-full bg-amber-50/50 border border-amber-300 px-2 py-1.5 text-xs font-mono font-bold text-amber-900 rounded focus:bg-white focus:border-amber-600 focus:outline-none text-center"
+                        />
+                        <span className="text-[10px] font-bold text-neutral-500 shrink-0">/ {prorateTotalMonthDays}d</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Preset Buttons */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[9.5px] text-neutral-500 font-bold uppercase mr-1">Presets:</span>
+                    {[
+                      { label: 'Full Month (30d)', days: prorateTotalMonthDays },
+                      { label: '11 Days (e.g. Harsha Daulani)', days: 11 },
+                      { label: '15 Days (Half Month)', days: Math.round(prorateTotalMonthDays / 2) },
+                      { label: '10 Days', days: 10 },
+                      { label: '7 Days (1 Week)', days: 7 },
+                    ].map((p, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleProrateActiveDaysChange(p.days)}
+                        className={`px-2 py-0.5 text-[9.5px] font-bold rounded border cursor-pointer transition-colors ${
+                          prorateActiveDays === p.days
+                            ? 'bg-amber-600 text-white border-amber-600'
+                            : 'bg-neutral-100 text-neutral-700 border-neutral-200 hover:bg-neutral-200'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Step 2: Live Calculation Breakdown */}
+                {(() => {
+                  const calc = calculateProratedBilling({
+                    monthlyAmount: prorateBaseMonthlyAmount,
+                    totalMonthDays: prorateTotalMonthDays,
+                    activeDays: prorateActiveDays,
+                    startDateStr: prorateStartDate,
+                    endDateStr: prorateEndDate,
+                    customSubtotal: prorateCustomSubtotal ? parseFloat(prorateCustomSubtotal) : null,
+                  });
+
+                  return (
+                    <div className="p-4 bg-amber-50/60 border border-amber-300 rounded-sm space-y-3 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <div className="font-bold text-xs uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                          <Calculator size={13} className="text-amber-700" /> Prorated Billing Calculation
+                        </div>
+                        <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded">
+                          {calc.activeDays} of {calc.totalMonthDays} Days Billed
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-white p-3 border border-amber-200 rounded text-xs">
+                        <div>
+                          <div className="text-[9px] uppercase font-bold text-gray-500">Daily Base Rate</div>
+                          <div className="font-mono font-bold text-neutral-800 mt-0.5">
+                            ₹{calc.dailyRate.toLocaleString('en-IN')}/day
+                          </div>
+                          <div className="text-[8.5px] text-gray-400 mt-0.5">₹{prorateBaseMonthlyAmount.toLocaleString('en-IN')} ÷ {calc.totalMonthDays}d</div>
+                        </div>
+
+                        <div>
+                          <div className="text-[9px] uppercase font-bold text-gray-500">Prorated Subtotal</div>
+                          <div className="font-mono font-bold text-amber-900 mt-0.5">
+                            ₹{calc.proratedSubtotal.toLocaleString('en-IN')}
+                          </div>
+                          <div className="text-[8.5px] text-gray-400 mt-0.5">{calc.activeDays}d × ₹{calc.dailyRate.toLocaleString('en-IN')}</div>
+                        </div>
+
+                        <div>
+                          <div className="text-[9px] uppercase font-bold text-gray-500">18% GST (9%+9%)</div>
+                          <div className="font-mono font-bold text-neutral-800 mt-0.5">
+                            ₹{calc.gstAmount.toLocaleString('en-IN')}
+                          </div>
+                          <div className="text-[8.5px] text-gray-400 mt-0.5">CGST ₹{Math.round(calc.gstAmount / 2).toLocaleString('en-IN')} + SGST ₹{Math.round(calc.gstAmount / 2).toLocaleString('en-IN')}</div>
+                        </div>
+
+                        <div>
+                          <div className="text-[9px] uppercase font-bold text-teal-800">Total Payable</div>
+                          <div className="font-mono font-black text-sm text-teal-900 mt-0.5">
+                            ₹{calc.totalAmount.toLocaleString('en-IN')}
+                          </div>
+                          <div className="text-[8.5px] text-teal-700 font-medium mt-0.5">Subtotal + GST</div>
+                        </div>
+                      </div>
+
+                      {/* Formula Verification Banner */}
+                      <div className="bg-amber-100/70 border border-amber-300 p-2.5 rounded text-[10px] text-amber-950 flex items-start gap-2">
+                        <FileCheck size={14} className="text-amber-800 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold">Formula Applied:</div>
+                          <div className="font-mono text-[10.5px] mt-0.5 font-bold">
+                            ₹{prorateBaseMonthlyAmount.toLocaleString('en-IN')} ÷ {calc.totalMonthDays} days × {calc.activeDays} days = ₹{calc.proratedSubtotal.toLocaleString('en-IN')} Base + ₹{calc.gstAmount.toLocaleString('en-IN')} (18% GST) = <span className="text-teal-900 underline">₹{calc.totalAmount.toLocaleString('en-IN')} Total</span>
+                          </div>
+                          <div className="text-[9.5px] text-amber-800 mt-0.5">
+                            {calc.periodLabel}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Optional Fine-Tuning Override */}
+                      <div className="pt-2 border-t border-amber-200/80 flex items-center justify-between text-[10px]">
+                        <span className="text-gray-600">
+                          Custom Subtotal adjustment (optional fine-tuning):
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono">₹</span>
+                          <input
+                            type="number"
+                            step="any"
+                            placeholder={String(calc.proratedSubtotal)}
+                            value={prorateCustomSubtotal}
+                            onChange={(e) => setProrateCustomSubtotal(e.target.value)}
+                            className="w-24 bg-white border border-amber-300 px-1.5 py-0.5 text-[10px] font-mono text-right rounded focus:outline-none focus:border-amber-600"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex items-center justify-between pt-3 border-t border-neutral-200 shrink-0">
+                <div>
+                  {hasProration(prorateModalInvoice) && (
+                    <button
+                      type="button"
+                      onClick={handleResetFullMonth}
+                      disabled={prorateSaving}
+                      className="px-3 py-2 bg-neutral-100 text-neutral-700 hover:bg-neutral-200 text-[11px] font-bold uppercase tracking-wider rounded transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    >
+                      <RotateCcw size={12} /> Reset to Full Month (₹{Math.round(prorateBaseMonthlyAmount * 1.18).toLocaleString('en-IN')})
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setProrateModalInvoice(null)}
+                    disabled={prorateSaving}
+                    className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100 rounded cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveProration}
+                    disabled={prorateSaving}
+                    className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
+                  >
+                    {prorateSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                    <span>Save &amp; Apply Prorated Amount</span>
                   </button>
                 </div>
               </div>
