@@ -143,7 +143,7 @@ export function NotificationBell() {
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/agreement-notifications');
+      const res = await fetch('/api/admin/agreement-notifications', { credentials: 'include' });
       if (res.ok) {
         const json = await res.json();
         if (json.success) {
@@ -173,8 +173,8 @@ export function NotificationBell() {
           }
         }
       }
-    } catch (err) {
-      console.error('Failed to load notifications', err);
+    } catch {
+      // Quiet fail during dev hot-reloads, network disruptions, or page transitions to prevent Next.js console error modal
     } finally {
       setLoading(false);
     }

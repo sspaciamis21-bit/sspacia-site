@@ -275,3 +275,38 @@ export async function syncOldInvoiceActual(oldInvoiceId: number, customActualDat
     return { success: false, error: String(err) };
   }
 }
+
+/**
+ * ── 4. DAILY FMS PAYMENT CHECK ACTUAL (Triggered when Accountant confirms daily Yes/No before 10:30 AM) ──
+ * Updates Column R (Actual) starting from row 6 (R6:R) with the exact operational timestamp
+ * Keeping Planned (Q), Status (S), and TimeDelay (T) empty as requested.
+ * Spreadsheet: https://docs.google.com/spreadsheets/d/1a7ajEb9clt8ORnM73rtKem0_bT9Ifl8T5J6mifoonX0/edit#gid=270862341 (tab: 'Accounts')
+ */
+export async function syncAccountsDailyFmsActual(customDate?: Date | string) {
+  try {
+    const actualDateObj = customDate instanceof Date ? customDate : (customDate ? new Date(customDate) : new Date());
+    const istDate = new Date(actualDateObj.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const month = istDate.getMonth() + 1;
+    const day = istDate.getDate();
+    const year = istDate.getFullYear();
+    const hours = istDate.getHours();
+    const minutes = String(istDate.getMinutes()).padStart(2, '0');
+    const seconds = String(istDate.getSeconds()).padStart(2, '0');
+    // Format: M/D/YYYY HH:mm:ss (e.g. "9/11/2026 17:15:20" matching screenshot row 18)
+    const actualTimestamp = `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
+
+    const payload = {
+      action: 'accounts_daily_fms_check',
+      sheetName: 'Accounts',
+      actual: actualTimestamp,
+      date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+    };
+
+    console.log(`[Accounts FMS Sync] 📤 Dispatching Daily FMS Actual for Column R: ${actualTimestamp}`);
+    return await postToSheet(payload);
+  } catch (err) {
+    console.error('[Accounts FMS Sync] Error syncing daily fms actual:', err);
+    return { success: false, error: String(err) };
+  }
+}
+

@@ -79,7 +79,7 @@ export function AgreementAlertPopup() {
     if (!isEligibleUser) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/agreement-notifications');
+      const res = await fetch('/api/admin/agreement-notifications', { credentials: 'include' });
       if (res.ok) {
         const json = await res.json();
         if (json.success) {
@@ -96,8 +96,8 @@ export function AgreementAlertPopup() {
           }
         }
       }
-    } catch (err) {
-      console.error('Failed to fetch agreement and lock-in alerts:', err);
+    } catch {
+      // Quiet fail during dev hot-reloads, network disruptions, or page transitions to prevent Next.js console error modal
     } finally {
       setLoading(false);
     }
