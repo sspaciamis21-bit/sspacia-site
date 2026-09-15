@@ -16,9 +16,14 @@ import {
   AlertCircle,
   Plus,
   Trash2,
+  Landmark,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { LiveApprovedInvoice } from './invoice-payment-management';
+import { BankRulesModal } from './bank-rules-modal';
+import { BankStatementModal } from './bank-statement-modal';
+import type { BankRulesState } from '@/app/api/admin/bank-rules/route';
 
 // Format INR currency
 function formatCurrency(amt: number | string | null | undefined): string {
@@ -70,6 +75,8 @@ interface ManagePaymentModalProps {
   onDailyCheckSaved: (check: DailyFmsCheckItem) => void;
   locations?: { id: number; name: string }[];
   availableMonths?: string[];
+  isAdmin?: boolean;
+  isAccountant?: boolean;
 }
 
 export function ManagePaymentModal({
@@ -81,8 +88,33 @@ export function ManagePaymentModal({
   onDailyCheckSaved,
   locations = [],
   availableMonths = [],
+  isAdmin = true,
+  isAccountant = true,
 }: ManagePaymentModalProps) {
   const [mounted, setMounted] = useState(false);
+
+  // 3 Accounts & Bank Rules Modals
+  const [isBankRulesOpen, setIsBankRulesOpen] = useState(false);
+  const [isBankStatementOpen, setIsBankStatementOpen] = useState(false);
+  const [bankRules, setBankRules] = useState<BankRulesState | null>(null);
+
+  const fetchBankRules = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/bank-rules');
+      const data = await res.json();
+      if (data.success && data.rules) {
+        setBankRules(data.rules);
+      }
+    } catch (e) {
+      console.warn('Could not load bank rules', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchBankRules();
+    }
+  }, [isOpen, fetchBankRules]);
 
   // Step state: 'CHECK' (Yes/No Question) | 'PENDING_TABLE' (Excel Table of Pending Invoices)
   const [step, setStep] = useState<'CHECK' | 'PENDING_TABLE'>('CHECK');
@@ -946,6 +978,28 @@ export function ManagePaymentModal({
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                   <span>Live Auto-Save Active</span>
                 </span>
+
+                {/* 3 Accounts: Bank Rules Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsBankRulesOpen(true)}
+                  className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-[#37474f] hover:bg-[#263238] text-white border border-[#263238] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                  title="Configure 3 Accounts & Bank Circulation Rules"
+                >
+                  <SlidersHorizontal size={13} className="text-cyan-300" />
+                  <span>Bank Rules</span>
+                </button>
+
+                {/* Bank Statement Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsBankStatementOpen(true)}
+                  className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-[#283593] hover:bg-[#1a237e] text-white border border-[#1a237e] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                  title="View ICICI Bank Account Statement"
+                >
+                  <Landmark size={13} className="text-orange-300" />
+                  <span>Bank Statement</span>
+                </button>
               </div>
 
               {/* Status summary */}
@@ -961,7 +1015,7 @@ export function ManagePaymentModal({
 
             {/* The Excel-style Grid */}
             <div className="overflow-x-auto flex-1 overflow-y-auto border-b border-neutral-200">
-              <table className="w-full text-left border-collapse text-xs min-w-[1850px]">
+              <table className="w-full text-left border-collapse text-xs min-w-[2850px]">
                 <thead className="sticky top-0 z-10 bg-neutral-100 text-gray-700 font-mono text-[9.5px] uppercase tracking-wider border-b border-neutral-300 shadow-2xs">
                   <tr>
                     <th className="py-2.5 px-2 w-12 text-center border-r border-neutral-200">Sr.</th>
@@ -989,6 +1043,46 @@ export function ManagePaymentModal({
                     <th className="py-2.5 px-2 min-w-[110px] border-r border-neutral-200">TDS Amount</th>
                     <th className="py-2.5 px-2 min-w-[150px] border-r border-neutral-200 text-center">Bank Advice / UTR Receipt</th>
                     <th className="py-2.5 px-2 min-w-[175px] border-r border-neutral-200">Settlement Notes / Remarks</th>
+
+                    {/* ── 3 ACCOUNTS: CR ACCOUNT COLUMNS ── */}
+                    <th className="py-2.5 px-2 min-w-[100px] border-r border-neutral-200 bg-purple-50/90 text-purple-950 font-bold whitespace-nowrap">
+                      CR BANK
+                    </th>
+                    <th className="py-2.5 px-2 min-w-[135px] border-r border-neutral-200 bg-purple-50/90 text-purple-950 font-bold whitespace-nowrap font-mono">
+                      CR A/C
+                    </th>
+                    <th className="py-2.5 px-2 min-w-[100px] border-r border-neutral-200 bg-purple-50/90 text-purple-950 font-bold whitespace-nowrap">
+                      CR METHOD
+                    </th>
+                    <th className="py-2.5 px-2 min-w-[100px] text-right border-r border-neutral-200 bg-purple-50/90 text-purple-950 font-bold whitespace-nowrap">
+                      CR AMOUNT
+                    </th>
+                    <th className="py-2.5 px-2.5 min-w-[120px] text-right border-r border-neutral-200 bg-purple-100 text-purple-950 font-black whitespace-nowrap">
+                      CR ALLOCATED (₹)
+                    </th>
+
+                    {/* ── 3 ACCOUNTS: VARIABLE + FIXED COLUMNS ── */}
+                    <th className="py-2.5 px-2 min-w-[120px] border-r border-neutral-200 bg-emerald-50/90 text-emerald-950 font-bold whitespace-nowrap">
+                      VAR + FIXED BANK
+                    </th>
+                    <th className="py-2.5 px-2 min-w-[135px] border-r border-neutral-200 bg-emerald-50/90 text-emerald-950 font-bold whitespace-nowrap font-mono">
+                      VAR + FIXED A/C
+                    </th>
+                    <th className="py-2.5 px-2 min-w-[110px] border-r border-neutral-200 bg-emerald-50/90 text-emerald-950 font-bold whitespace-nowrap">
+                      VAR + FIXED METHOD
+                    </th>
+                    <th className="py-2.5 px-2 min-w-[100px] text-right border-r border-neutral-200 bg-emerald-50/90 text-emerald-950 font-bold whitespace-nowrap">
+                      VAR + FIXED AMT
+                    </th>
+                    <th className="py-2.5 px-2.5 min-w-[125px] text-right border-r border-neutral-200 bg-emerald-100 text-emerald-950 font-black whitespace-nowrap">
+                      VAR + FIXED ALLOC (₹)
+                    </th>
+
+                    {/* ── 3 ACCOUNTS: PRIMARY REMAINING BALANCE ── */}
+                    <th className="py-2.5 px-2.5 min-w-[135px] text-right border-r border-neutral-200 bg-blue-100 text-blue-950 font-black whitespace-nowrap">
+                      PRIMARY BALANCE (₹)
+                    </th>
+
                     <th className="py-2.5 px-3 min-w-[135px] text-center whitespace-nowrap bg-neutral-100 border-l border-neutral-200 font-mono text-[9.5px] uppercase tracking-wider text-gray-700">
                       <div className="flex items-center justify-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -1000,7 +1094,7 @@ export function ManagePaymentModal({
                 <tbody className="divide-y divide-neutral-200 font-sans text-xs">
                   {displayInvoices.length === 0 ? (
                     <tr>
-                      <td colSpan={16} className="p-8 text-center text-gray-500 font-sans">
+                      <td colSpan={27} className="p-8 text-center text-gray-500 font-sans">
                         <CheckCircle2 size={24} className="text-emerald-600 mx-auto mb-2" />
                         <p className="font-bold text-sm text-gray-700">No pending invoices found.</p>
                         <p className="text-xs text-gray-400 mt-0.5">
@@ -1271,6 +1365,85 @@ export function ManagePaymentModal({
                               />
                             </td>
 
+                            {/* ── 3 ACCOUNTS COMPUTED CELLS ── */}
+                            {(() => {
+                              const recAmtNum = parseFloat(part.receiveAmount) || 0;
+
+                              // Calculate CR Split
+                              const crMethod = bankRules?.crAccount?.method || 'NONE';
+                              const crVal = Number(bankRules?.crAccount?.value) || 0;
+                              let crAlloc = 0;
+                              if (crMethod === 'PERCENT' && crVal > 0 && recAmtNum > 0) {
+                                crAlloc = Math.round(recAmtNum * (crVal / 100) * 100) / 100;
+                              } else if (crMethod === 'FIXED' && crVal > 0 && recAmtNum > 0) {
+                                crAlloc = Math.min(crVal, recAmtNum);
+                              }
+
+                              // Calculate Variable + Fixed Split
+                              const vfMethod = bankRules?.variableFixedAccount?.method || 'NONE';
+                              const vfVal = Number(bankRules?.variableFixedAccount?.value) || 0;
+                              let vfAlloc = 0;
+                              if (vfMethod === 'PERCENT' && vfVal > 0 && recAmtNum > 0) {
+                                vfAlloc = Math.round(recAmtNum * (vfVal / 100) * 100) / 100;
+                              } else if (vfMethod === 'FIXED' && vfVal > 0 && recAmtNum > 0) {
+                                vfAlloc = Math.min(vfVal, Math.max(0, recAmtNum - crAlloc));
+                              }
+
+                              // Calculate Primary Net Remaining Balance
+                              const primaryBal = recAmtNum > 0 ? Math.max(0, recAmtNum - crAlloc - vfAlloc) : 0;
+
+                              return (
+                                <>
+                                  {/* CR Bank */}
+                                  <td className="py-1.5 px-2 border-r border-neutral-200 bg-purple-50/30 font-semibold text-gray-800 whitespace-nowrap text-[11px]">
+                                    AU Bank
+                                  </td>
+                                  {/* CR A/C */}
+                                  <td className="py-1.5 px-2 border-r border-neutral-200 bg-purple-50/30 font-mono text-gray-700 whitespace-nowrap text-[10.5px]">
+                                    1212129825030862
+                                  </td>
+                                  {/* CR Method */}
+                                  <td className="py-1.5 px-2 border-r border-neutral-200 bg-purple-50/30 text-[10.5px] font-bold text-purple-900 whitespace-nowrap">
+                                    {crMethod === 'PERCENT' ? '%' : crMethod === 'FIXED' ? 'Fixed ₹' : 'None'}
+                                  </td>
+                                  {/* CR Amount (Rule Value) */}
+                                  <td className="py-1.5 px-2 text-right border-r border-neutral-200 bg-purple-50/30 font-mono text-[11px] text-gray-800 whitespace-nowrap">
+                                    {crMethod === 'PERCENT' ? `${crVal}%` : crMethod === 'FIXED' ? formatCurrency(crVal) : '-'}
+                                  </td>
+                                  {/* CR Allocated (₹) */}
+                                  <td className="py-1.5 px-2.5 text-right border-r border-neutral-200 bg-purple-100/60 font-mono font-black text-purple-900 whitespace-nowrap text-xs">
+                                    {recAmtNum > 0 ? formatCurrency(crAlloc) : '-'}
+                                  </td>
+
+                                  {/* Var + Fixed Bank */}
+                                  <td className="py-1.5 px-2 border-r border-neutral-200 bg-emerald-50/30 font-semibold text-gray-800 whitespace-nowrap text-[11px]">
+                                    AU Bank
+                                  </td>
+                                  {/* Var + Fixed A/C */}
+                                  <td className="py-1.5 px-2 border-r border-neutral-200 bg-emerald-50/30 font-mono text-gray-700 whitespace-nowrap text-[10.5px]">
+                                    2121219825030862
+                                  </td>
+                                  {/* Var + Fixed Method */}
+                                  <td className="py-1.5 px-2 border-r border-neutral-200 bg-emerald-50/30 text-[10.5px] font-bold text-emerald-900 whitespace-nowrap">
+                                    {vfMethod === 'PERCENT' ? '%' : vfMethod === 'FIXED' ? 'Fixed ₹' : 'None'}
+                                  </td>
+                                  {/* Var + Fixed Amount (Rule Value) */}
+                                  <td className="py-1.5 px-2 text-right border-r border-neutral-200 bg-emerald-50/30 font-mono text-[11px] text-gray-800 whitespace-nowrap">
+                                    {vfMethod === 'PERCENT' ? `${vfVal}%` : vfMethod === 'FIXED' ? formatCurrency(vfVal) : '-'}
+                                  </td>
+                                  {/* Var + Fixed Allocated (₹) */}
+                                  <td className="py-1.5 px-2.5 text-right border-r border-neutral-200 bg-emerald-100/60 font-mono font-black text-emerald-900 whitespace-nowrap text-xs">
+                                    {recAmtNum > 0 ? formatCurrency(vfAlloc) : '-'}
+                                  </td>
+
+                                  {/* Primary Balance (₹) */}
+                                  <td className="py-1.5 px-2.5 text-right border-r border-neutral-200 bg-blue-50/70 font-mono font-black text-blue-950 whitespace-nowrap text-xs">
+                                    {recAmtNum > 0 ? formatCurrency(primaryBal) : '-'}
+                                  </td>
+                                </>
+                              );
+                            })()}
+
                             {/* 16. Action: Live Auto-Save Status */}
                             <td className="py-1.5 px-3 min-w-[135px] text-center whitespace-nowrap bg-white border-l border-neutral-200">
                               {isFirstPart ? (
@@ -1339,6 +1512,21 @@ export function ManagePaymentModal({
           </div>
         )}
       </div>
+
+      {/* ── 3 ACCOUNTS: BANK RULES CONFIGURATION MODAL ── */}
+      <BankRulesModal
+        isOpen={isBankRulesOpen}
+        onClose={() => setIsBankRulesOpen(false)}
+        onRulesSaved={(updated) => setBankRules(updated)}
+      />
+
+      {/* ── BANK STATEMENT MODAL ── */}
+      <BankStatementModal
+        isOpen={isBankStatementOpen}
+        onClose={() => setIsBankStatementOpen(false)}
+        isAdmin={isAdmin}
+        isAccountant={isAccountant}
+      />
     </div>,
     document.body
   );

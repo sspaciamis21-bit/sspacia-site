@@ -412,45 +412,40 @@ export function BankStatementModal({
               <button
                 type="button"
                 onClick={() => setFilterType("ALL")}
-                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${
-                  filterType === "ALL" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
-                }`}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${filterType === "ALL" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                  }`}
               >
                 All
               </button>
               <button
                 type="button"
                 onClick={() => setFilterType("MONTH")}
-                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${
-                  filterType === "MONTH" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
-                }`}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${filterType === "MONTH" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                  }`}
               >
                 Month
               </button>
               <button
                 type="button"
                 onClick={() => setFilterType("YEAR")}
-                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${
-                  filterType === "YEAR" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
-                }`}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${filterType === "YEAR" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                  }`}
               >
                 Year
               </button>
               <button
                 type="button"
                 onClick={() => setFilterType("DATE")}
-                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${
-                  filterType === "DATE" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
-                }`}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${filterType === "DATE" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                  }`}
               >
                 Date
               </button>
               <button
                 type="button"
                 onClick={() => setFilterType("CUSTOM")}
-                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${
-                  filterType === "CUSTOM" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
-                }`}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${filterType === "CUSTOM" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                  }`}
               >
                 Custom Range
               </button>
@@ -617,9 +612,8 @@ export function BankStatementModal({
                     {filteredTransactions.map((tx, idx) => (
                       <tr
                         key={tx.id || idx}
-                        className={`hover:bg-indigo-50/30 transition-colors ${
-                          idx % 2 === 0 ? "bg-white" : "bg-[#fafafa]"
-                        }`}
+                        className={`hover:bg-indigo-50/30 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-[#fafafa]"
+                          }`}
                       >
                         <td className="py-2.5 px-3 text-center font-mono text-gray-600 text-[11px] whitespace-nowrap border-r border-gray-100">
                           {tx.valueDate}

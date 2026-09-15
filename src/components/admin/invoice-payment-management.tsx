@@ -34,11 +34,15 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronUp,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
 import { OldInvoicesArchive } from '@/components/admin/old-invoices-archive';
 import { ManagePaymentModal, type DailyFmsCheckItem } from '@/components/admin/manage-payment-modal';
+import { BankRulesModal } from '@/components/admin/bank-rules-modal';
+import { BankStatementModal } from '@/components/admin/bank-statement-modal';
+import type { BankRulesState } from '@/app/api/admin/bank-rules/route';
 
 export interface DailyPaymentCheckEntry {
   date: string; // YYYY-MM-DD
@@ -142,6 +146,8 @@ export function InvoicePaymentManagement({
   currentUserLocationId = null,
   currentUserLocationName = null,
 }: InvoicePaymentManagementProps) {
+  const isAccountant = canAccessAccountant || userRoleView === 'ACCOUNTANT';
+
   // Main view toggle: 'LIVE_APPROVED' vs 'OLD_ARCHIVE'
   const [activeTab, setActiveTab] = useState<'LIVE_APPROVED' | 'OLD_ARCHIVE'>('LIVE_APPROVED');
 
@@ -175,6 +181,79 @@ export function InvoicePaymentManagement({
   // Manage Payment Modal & Today's Daily FMS Check State
   const [isManagePaymentModalOpen, setIsManagePaymentModalOpen] = useState<boolean>(false);
   const [todayFmsCheck, setTodayFmsCheck] = useState<DailyFmsCheckItem | null>(null);
+
+  // 3 Accounts & Bank Rules / Statement Modals
+  const [isBankRulesModalOpen, setIsBankRulesModalOpen] = useState<boolean>(false);
+  const [isBankStatementModalOpen, setIsBankStatementModalOpen] = useState<boolean>(false);
+  const [bankRules, setBankRules] = useState<BankRulesState | null>(null);
+
+  const fetchBankRules = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/bank-rules');
+      const data = await res.json();
+      if (data.success && data.rules) {
+        setBankRules(data.rules);
+      }
+    } catch (e) {
+      console.warn('Could not load bank rules', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBankRules();
+  }, [fetchBankRules]);
+
+  function compute3AccountsSplit(receivedAmt: number, rules: BankRulesState | null) {
+    if (!receivedAmt || receivedAmt <= 0) {
+      return {
+        crBank: 'AU Bank',
+        crAccount: '1212129825030862',
+        crMethod: rules?.crAccount?.method || 'NONE',
+        crValue: rules?.crAccount?.value || 0,
+        crAllocated: 0,
+        vfBank: 'AU Bank',
+        vfAccount: '2121219825030862',
+        vfMethod: rules?.variableFixedAccount?.method || 'NONE',
+        vfValue: rules?.variableFixedAccount?.value || 0,
+        vfAllocated: 0,
+        primaryBalance: 0,
+      };
+    }
+
+    const crMethod = rules?.crAccount?.method || 'NONE';
+    const crVal = Number(rules?.crAccount?.value) || 0;
+    let crAlloc = 0;
+    if (crMethod === 'PERCENT' && crVal > 0) {
+      crAlloc = Math.round((receivedAmt * (crVal / 100)) * 100) / 100;
+    } else if (crMethod === 'FIXED' && crVal > 0) {
+      crAlloc = Math.min(crVal, receivedAmt);
+    }
+
+    const vfMethod = rules?.variableFixedAccount?.method || 'NONE';
+    const vfVal = Number(rules?.variableFixedAccount?.value) || 0;
+    let vfAlloc = 0;
+    if (vfMethod === 'PERCENT' && vfVal > 0) {
+      vfAlloc = Math.round((receivedAmt * (vfVal / 100)) * 100) / 100;
+    } else if (vfMethod === 'FIXED' && vfVal > 0) {
+      vfAlloc = Math.min(vfVal, Math.max(0, receivedAmt - crAlloc));
+    }
+
+    const primaryBalance = Math.max(0, receivedAmt - crAlloc - vfAlloc);
+
+    return {
+      crBank: 'AU Bank',
+      crAccount: '1212129825030862',
+      crMethod,
+      crValue: crVal,
+      crAllocated: crAlloc,
+      vfBank: 'AU Bank',
+      vfAccount: '2121219825030862',
+      vfMethod,
+      vfValue: vfVal,
+      vfAllocated: vfAlloc,
+      primaryBalance,
+    };
+  }
 
   // Excel-Style Per-Column Filters
   const [colFilterSrNo, setColFilterSrNo] = useState<string>('');
@@ -1396,26 +1475,50 @@ export function InvoicePaymentManagement({
             </div>
             {/* Manage Payment Button (Accountant / Super Admin) */}
             {userRoleView !== 'CM' && (
-              <button
-                type="button"
-                onClick={() => setIsManagePaymentModalOpen(true)}
-                className="px-3.5 py-1.5 bg-[#006064] hover:bg-[#004D40] text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-xs border border-[#004D40] cursor-pointer transition-all hover:shadow-sm"
-              >
-                <CreditCard size={14} className="text-cyan-200" />
-                <span>Manage Payment</span>
-                {todayFmsCheck && (
-                  <span
-                    className={`text-[9.5px] font-mono font-bold px-1.5 py-0.2 rounded-xs flex items-center gap-1 ${
-                      todayFmsCheck.status === 'YES'
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-neutral-600 text-white'
-                    }`}
-                  >
-                    <Check size={10} />
-                    {todayFmsCheck.status}
-                  </span>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* 3 Accounts: Bank Rules Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsBankRulesModalOpen(true)}
+                  className="px-3 py-1.5 bg-[#37474f] hover:bg-[#263238] text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-xs border border-[#263238] cursor-pointer transition-all hover:shadow-sm"
+                  title="Configure 3 Accounts & Bank Circulation Rules"
+                >
+                  <SlidersHorizontal size={13} className="text-cyan-300" />
+                  <span>Bank Rules</span>
+                </button>
+
+                {/* Bank Statement Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsBankStatementModalOpen(true)}
+                  className="px-3 py-1.5 bg-[#283593] hover:bg-[#1a237e] text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-xs border border-[#1a237e] cursor-pointer transition-all hover:shadow-sm"
+                  title="View ICICI Bank Account Statement"
+                >
+                  <Landmark size={13} className="text-orange-300" />
+                  <span>Bank Statement</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsManagePaymentModalOpen(true)}
+                  className="px-3.5 py-1.5 bg-[#006064] hover:bg-[#004D40] text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-xs border border-[#004D40] cursor-pointer transition-all hover:shadow-sm"
+                >
+                  <CreditCard size={14} className="text-cyan-200" />
+                  <span>Manage Payment</span>
+                  {todayFmsCheck && (
+                    <span
+                      className={`text-[9.5px] font-mono font-bold px-1.5 py-0.2 rounded-xs flex items-center gap-1 ${
+                        todayFmsCheck.status === 'YES'
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-neutral-600 text-white'
+                      }`}
+                    >
+                      <Check size={10} />
+                      {todayFmsCheck.status}
+                    </span>
+                  )}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1650,7 +1753,7 @@ export function InvoicePaymentManagement({
 
               {/* Scrollable container with frozen headers */}
               <div className="overflow-auto max-h-[72vh] relative">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-xs min-w-[2850px]">
                   <thead className="sticky top-0 z-20 bg-neutral-100 shadow-[0_2px_4px_rgba(0,0,0,0.06)] border-b border-neutral-300">
                     {/* Row 1: Sortable Column Headers */}
                     <tr className="bg-neutral-100 border-b border-neutral-300 text-neutral-800 font-bold uppercase tracking-wider text-[10px]">
@@ -1722,8 +1825,47 @@ export function InvoicePaymentManagement({
                       <th className="py-2.5 px-2 min-w-[140px] text-center bg-emerald-50/70 border-r border-neutral-200 text-emerald-950 font-bold">
                         Bank Advice / UTR Receipt
                       </th>
-                      <th className="py-2.5 px-2.5 min-w-[160px] bg-emerald-50/70 text-emerald-950 font-bold">
+                      <th className="py-2.5 px-2.5 min-w-[160px] bg-emerald-50/70 border-r border-neutral-200 text-emerald-950 font-bold">
                         Settlement Notes / Remarks
+                      </th>
+
+                      {/* ── 3 ACCOUNTS: CR ACCOUNT COLUMNS ── */}
+                      <th className="py-2.5 px-2 min-w-[100px] border-r border-neutral-200 bg-purple-50/90 text-purple-950 font-bold whitespace-nowrap">
+                        CR BANK
+                      </th>
+                      <th className="py-2.5 px-2 min-w-[135px] border-r border-neutral-200 bg-purple-50/90 text-purple-950 font-bold whitespace-nowrap font-mono">
+                        CR A/C
+                      </th>
+                      <th className="py-2.5 px-2 min-w-[100px] border-r border-neutral-200 bg-purple-50/90 text-purple-950 font-bold whitespace-nowrap">
+                        CR METHOD
+                      </th>
+                      <th className="py-2.5 px-2 min-w-[100px] text-right border-r border-neutral-200 bg-purple-50/90 text-purple-950 font-bold whitespace-nowrap">
+                        CR AMOUNT
+                      </th>
+                      <th className="py-2.5 px-2.5 min-w-[120px] text-right border-r border-neutral-200 bg-purple-100 text-purple-950 font-black whitespace-nowrap">
+                        CR ALLOCATED (₹)
+                      </th>
+
+                      {/* ── 3 ACCOUNTS: VARIABLE + FIXED COLUMNS ── */}
+                      <th className="py-2.5 px-2 min-w-[120px] border-r border-neutral-200 bg-emerald-50/90 text-emerald-950 font-bold whitespace-nowrap">
+                        VAR + FIXED BANK
+                      </th>
+                      <th className="py-2.5 px-2 min-w-[135px] border-r border-neutral-200 bg-emerald-50/90 text-emerald-950 font-bold whitespace-nowrap font-mono">
+                        VAR + FIXED A/C
+                      </th>
+                      <th className="py-2.5 px-2 min-w-[110px] border-r border-neutral-200 bg-emerald-50/90 text-emerald-950 font-bold whitespace-nowrap">
+                        VAR + FIXED METHOD
+                      </th>
+                      <th className="py-2.5 px-2 min-w-[100px] text-right border-r border-neutral-200 bg-emerald-50/90 text-emerald-950 font-bold whitespace-nowrap">
+                        VAR + FIXED AMT
+                      </th>
+                      <th className="py-2.5 px-2.5 min-w-[125px] text-right border-r border-neutral-200 bg-emerald-100 text-emerald-950 font-black whitespace-nowrap">
+                        VAR + FIXED ALLOC (₹)
+                      </th>
+
+                      {/* ── 3 ACCOUNTS: PRIMARY REMAINING BALANCE ── */}
+                      <th className="py-2.5 px-2.5 min-w-[135px] text-right bg-blue-100 text-blue-950 font-black whitespace-nowrap">
+                        PRIMARY BALANCE (₹)
                       </th>
                     </tr>
 
@@ -1918,7 +2060,7 @@ export function InvoicePaymentManagement({
                         </select>
                       </th>
                       {/* Remarks Filter & Reset Button */}
-                      <th className="p-1 bg-emerald-50/60 flex items-center gap-1">
+                      <th className="p-1 bg-emerald-50/60 border-r border-neutral-200 flex items-center gap-1">
                         <input
                           type="text"
                           value={colFilterRemarks}
@@ -1937,19 +2079,34 @@ export function InvoicePaymentManagement({
                           </button>
                         )}
                       </th>
+
+                      {/* ── 3 Accounts Filter Row Fillers ── */}
+                      <th className="p-1 bg-purple-50/60 border-r border-neutral-200 text-center text-[9px] text-purple-900 font-mono">AU Bank</th>
+                      <th className="p-1 bg-purple-50/60 border-r border-neutral-200 text-center text-[9px] text-purple-900 font-mono">1212...</th>
+                      <th className="p-1 bg-purple-50/60 border-r border-neutral-200 text-center text-[9px] text-purple-900 font-mono">CR</th>
+                      <th className="p-1 bg-purple-50/60 border-r border-neutral-200 text-center text-[9px] text-purple-900 font-mono">Rule</th>
+                      <th className="p-1 bg-purple-50/60 border-r border-neutral-200 text-center text-[9px] text-purple-900 font-mono">Allocated</th>
+
+                      <th className="p-1 bg-emerald-50/60 border-r border-neutral-200 text-center text-[9px] text-emerald-900 font-mono">AU Bank</th>
+                      <th className="p-1 bg-emerald-50/60 border-r border-neutral-200 text-center text-[9px] text-emerald-900 font-mono">2121...</th>
+                      <th className="p-1 bg-emerald-50/60 border-r border-neutral-200 text-center text-[9px] text-emerald-900 font-mono">Var+Fix</th>
+                      <th className="p-1 bg-emerald-50/60 border-r border-neutral-200 text-center text-[9px] text-emerald-900 font-mono">Rule</th>
+                      <th className="p-1 bg-emerald-50/60 border-r border-neutral-200 text-center text-[9px] text-emerald-900 font-mono">Allocated</th>
+
+                      <th className="p-1 bg-blue-50/60 text-center text-[9px] text-blue-900 font-mono">Net ICICI</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-200/70 font-mono text-[11px]">
                     {loading ? (
                       <tr>
-                        <td colSpan={17} className="p-6 text-center text-gray-500 font-sans">
+                        <td colSpan={28} className="p-6 text-center text-gray-500 font-sans">
                           <Loader2 size={22} className="animate-spin text-[#006064] mx-auto mb-1.5" />
                           <span>Loading approved invoice payment records...</span>
                         </td>
                       </tr>
                     ) : sortedInvoices.length === 0 ? (
                       <tr>
-                        <td colSpan={17} className="p-8 text-center text-gray-400 font-sans">
+                        <td colSpan={28} className="p-8 text-center text-gray-400 font-sans">
                           <Building2 size={28} className="text-gray-300 mx-auto mb-2" />
                           <p className="font-semibold text-gray-700">No approved invoices found</p>
                           <p className="text-xs text-gray-400 mt-1">
@@ -2323,7 +2480,7 @@ export function InvoicePaymentManagement({
                                   </td>
 
                                   {/* 17. Settlement Notes / Remarks */}
-                                  <td className="py-1.5 px-2.5 font-sans bg-emerald-50/15">
+                                  <td className="py-1.5 px-2.5 font-sans bg-emerald-50/15 border-r border-neutral-200">
                                     {isEditable ? (
                                       <input
                                         type="text"
@@ -2337,6 +2494,62 @@ export function InvoicePaymentManagement({
                                       <div className="text-[10px] text-gray-700 truncate max-w-[155px]" title={part1.remarks}>{part1.remarks || '—'}</div>
                                     )}
                                   </td>
+
+                                  {/* ── 3 ACCOUNTS COMPUTED CELLS (SINGLE PART) ── */}
+                                  {(() => {
+                                    const recAmtNum = parseFloat(part1.receiveAmount) || 0;
+                                    const split = compute3AccountsSplit(recAmtNum, bankRules);
+                                    return (
+                                      <>
+                                        {/* CR Bank */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-purple-50/30 font-semibold text-gray-800 whitespace-nowrap text-[11px]">
+                                          {split.crBank}
+                                        </td>
+                                        {/* CR A/C */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-purple-50/30 font-mono text-gray-700 whitespace-nowrap text-[10.5px]">
+                                          {split.crAccount}
+                                        </td>
+                                        {/* CR Method */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-purple-50/30 text-[10.5px] font-bold text-purple-900 whitespace-nowrap">
+                                          {split.crMethod === 'PERCENT' ? '%' : split.crMethod === 'FIXED' ? 'Fixed ₹' : 'None'}
+                                        </td>
+                                        {/* CR Amount (Rule Value) */}
+                                        <td className="py-1.5 px-2 text-right border-r border-neutral-200 bg-purple-50/30 font-mono text-[11px] text-gray-800 whitespace-nowrap">
+                                          {split.crMethod === 'PERCENT' ? `${split.crValue}%` : split.crMethod === 'FIXED' ? `₹${split.crValue}` : '-'}
+                                        </td>
+                                        {/* CR Allocated (₹) */}
+                                        <td className="py-1.5 px-2.5 text-right border-r border-neutral-200 bg-purple-100/60 font-mono font-black text-purple-900 whitespace-nowrap text-xs">
+                                          {recAmtNum > 0 ? `₹${Number(split.crAllocated).toLocaleString('en-IN')}` : '-'}
+                                        </td>
+
+                                        {/* Var + Fixed Bank */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-emerald-50/30 font-semibold text-gray-800 whitespace-nowrap text-[11px]">
+                                          {split.vfBank}
+                                        </td>
+                                        {/* Var + Fixed A/C */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-emerald-50/30 font-mono text-gray-700 whitespace-nowrap text-[10.5px]">
+                                          {split.vfAccount}
+                                        </td>
+                                        {/* Var + Fixed Method */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-emerald-50/30 text-[10.5px] font-bold text-emerald-900 whitespace-nowrap">
+                                          {split.vfMethod === 'PERCENT' ? '%' : split.vfMethod === 'FIXED' ? 'Fixed ₹' : 'None'}
+                                        </td>
+                                        {/* Var + Fixed Amount (Rule Value) */}
+                                        <td className="py-1.5 px-2 text-right border-r border-neutral-200 bg-emerald-50/30 font-mono text-[11px] text-gray-800 whitespace-nowrap">
+                                          {split.vfMethod === 'PERCENT' ? `${split.vfValue}%` : split.vfMethod === 'FIXED' ? `₹${split.vfValue}` : '-'}
+                                        </td>
+                                        {/* Var + Fixed Allocated (₹) */}
+                                        <td className="py-1.5 px-2.5 text-right border-r border-neutral-200 bg-emerald-100/60 font-mono font-black text-emerald-900 whitespace-nowrap text-xs">
+                                          {recAmtNum > 0 ? `₹${Number(split.vfAllocated).toLocaleString('en-IN')}` : '-'}
+                                        </td>
+
+                                        {/* Primary Balance (₹) */}
+                                        <td className="py-1.5 px-2.5 text-right bg-blue-50/70 font-mono font-black text-blue-950 whitespace-nowrap text-xs">
+                                          {recAmtNum > 0 ? `₹${Number(split.primaryBalance).toLocaleString('en-IN')}` : '-'}
+                                        </td>
+                                      </>
+                                    );
+                                  })()}
                                 </>
                               ) : (
                                 <>
@@ -2436,11 +2649,66 @@ export function InvoicePaymentManagement({
                                   </td>
 
                                   {/* 17. Settlement Notes / Remarks */}
-                                  <td className="py-2 px-2.5 font-sans">
+                                  <td className="py-2 px-2.5 font-sans border-r border-neutral-200">
                                     <div className="text-[10px] text-gray-700 truncate max-w-[155px]" title={draft.parts.map((p) => p.remarks).filter(Boolean).join(' | ')}>
                                       {draft.parts.map((p) => p.remarks).filter(Boolean).join(' | ') || '—'}
                                     </div>
                                   </td>
+
+                                  {/* ── 3 ACCOUNTS COMPUTED CELLS (MULTI-PART SUMMARY) ── */}
+                                  {(() => {
+                                    const split = compute3AccountsSplit(currentTotalRec, bankRules);
+                                    return (
+                                      <>
+                                        {/* CR Bank */}
+                                        <td className="py-2 px-2 border-r border-neutral-200 bg-purple-50/30 font-semibold text-gray-800 whitespace-nowrap text-[11px]">
+                                          {split.crBank}
+                                        </td>
+                                        {/* CR A/C */}
+                                        <td className="py-2 px-2 border-r border-neutral-200 bg-purple-50/30 font-mono text-gray-700 whitespace-nowrap text-[10.5px]">
+                                          {split.crAccount}
+                                        </td>
+                                        {/* CR Method */}
+                                        <td className="py-2 px-2 border-r border-neutral-200 bg-purple-50/30 text-[10.5px] font-bold text-purple-900 whitespace-nowrap">
+                                          {split.crMethod === 'PERCENT' ? '%' : split.crMethod === 'FIXED' ? 'Fixed ₹' : 'None'}
+                                        </td>
+                                        {/* CR Amount (Rule Value) */}
+                                        <td className="py-2 px-2 text-right border-r border-neutral-200 bg-purple-50/30 font-mono text-[11px] text-gray-800 whitespace-nowrap">
+                                          {split.crMethod === 'PERCENT' ? `${split.crValue}%` : split.crMethod === 'FIXED' ? `₹${split.crValue}` : '-'}
+                                        </td>
+                                        {/* CR Allocated (₹) */}
+                                        <td className="py-2 px-2.5 text-right border-r border-neutral-200 bg-purple-100/60 font-mono font-black text-purple-900 whitespace-nowrap text-xs">
+                                          {currentTotalRec > 0 ? `₹${Number(split.crAllocated).toLocaleString('en-IN')}` : '-'}
+                                        </td>
+
+                                        {/* Var + Fixed Bank */}
+                                        <td className="py-2 px-2 border-r border-neutral-200 bg-emerald-50/30 font-semibold text-gray-800 whitespace-nowrap text-[11px]">
+                                          {split.vfBank}
+                                        </td>
+                                        {/* Var + Fixed A/C */}
+                                        <td className="py-2 px-2 border-r border-neutral-200 bg-emerald-50/30 font-mono text-gray-700 whitespace-nowrap text-[10.5px]">
+                                          {split.vfAccount}
+                                        </td>
+                                        {/* Var + Fixed Method */}
+                                        <td className="py-2 px-2 border-r border-neutral-200 bg-emerald-50/30 text-[10.5px] font-bold text-emerald-900 whitespace-nowrap">
+                                          {split.vfMethod === 'PERCENT' ? '%' : split.vfMethod === 'FIXED' ? 'Fixed ₹' : 'None'}
+                                        </td>
+                                        {/* Var + Fixed Amount (Rule Value) */}
+                                        <td className="py-2 px-2 text-right border-r border-neutral-200 bg-emerald-50/30 font-mono text-[11px] text-gray-800 whitespace-nowrap">
+                                          {split.vfMethod === 'PERCENT' ? `${split.vfValue}%` : split.vfMethod === 'FIXED' ? `₹${split.vfValue}` : '-'}
+                                        </td>
+                                        {/* Var + Fixed Allocated (₹) */}
+                                        <td className="py-2 px-2.5 text-right border-r border-neutral-200 bg-emerald-100/60 font-mono font-black text-emerald-900 whitespace-nowrap text-xs">
+                                          {currentTotalRec > 0 ? `₹${Number(split.vfAllocated).toLocaleString('en-IN')}` : '-'}
+                                        </td>
+
+                                        {/* Primary Balance (₹) */}
+                                        <td className="py-2 px-2.5 text-right bg-blue-50/70 font-mono font-black text-blue-950 whitespace-nowrap text-xs">
+                                          {currentTotalRec > 0 ? `₹${Number(split.primaryBalance).toLocaleString('en-IN')}` : '-'}
+                                        </td>
+                                      </>
+                                    );
+                                  })()}
                                 </>
                               )}
                             </tr>
@@ -2663,7 +2931,7 @@ export function InvoicePaymentManagement({
                                   </td>
 
                                   {/* 17. Settlement Notes / Remarks */}
-                                  <td className="py-1.5 px-2.5 font-sans bg-emerald-50/15">
+                                  <td className="py-1.5 px-2.5 font-sans bg-emerald-50/15 border-r border-neutral-200">
                                     {isEditable ? (
                                       <input
                                         type="text"
@@ -2677,13 +2945,69 @@ export function InvoicePaymentManagement({
                                       <div className="text-[10px] text-gray-700 truncate max-w-[160px]" title={p.remarks}>{p.remarks || '—'}</div>
                                     )}
                                   </td>
+
+                                  {/* ── 3 ACCOUNTS COMPUTED CELLS (SUB-PART) ── */}
+                                  {(() => {
+                                    const recAmtNum = parseFloat(p.receiveAmount) || 0;
+                                    const split = compute3AccountsSplit(recAmtNum, bankRules);
+                                    return (
+                                      <>
+                                        {/* CR Bank */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-purple-50/25 font-semibold text-gray-800 whitespace-nowrap text-[11px]">
+                                          {split.crBank}
+                                        </td>
+                                        {/* CR A/C */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-purple-50/25 font-mono text-gray-700 whitespace-nowrap text-[10.5px]">
+                                          {split.crAccount}
+                                        </td>
+                                        {/* CR Method */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-purple-50/25 text-[10.5px] font-bold text-purple-900 whitespace-nowrap">
+                                          {split.crMethod === 'PERCENT' ? '%' : split.crMethod === 'FIXED' ? 'Fixed ₹' : 'None'}
+                                        </td>
+                                        {/* CR Amount (Rule Value) */}
+                                        <td className="py-1.5 px-2 text-right border-r border-neutral-200 bg-purple-50/25 font-mono text-[11px] text-gray-800 whitespace-nowrap">
+                                          {split.crMethod === 'PERCENT' ? `${split.crValue}%` : split.crMethod === 'FIXED' ? `₹${split.crValue}` : '-'}
+                                        </td>
+                                        {/* CR Allocated (₹) */}
+                                        <td className="py-1.5 px-2.5 text-right border-r border-neutral-200 bg-purple-100/60 font-mono font-black text-purple-900 whitespace-nowrap text-xs">
+                                          {recAmtNum > 0 ? `₹${Number(split.crAllocated).toLocaleString('en-IN')}` : '-'}
+                                        </td>
+
+                                        {/* Var + Fixed Bank */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-emerald-50/25 font-semibold text-gray-800 whitespace-nowrap text-[11px]">
+                                          {split.vfBank}
+                                        </td>
+                                        {/* Var + Fixed A/C */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-emerald-50/25 font-mono text-gray-700 whitespace-nowrap text-[10.5px]">
+                                          {split.vfAccount}
+                                        </td>
+                                        {/* Var + Fixed Method */}
+                                        <td className="py-1.5 px-2 border-r border-neutral-200 bg-emerald-50/25 text-[10.5px] font-bold text-emerald-900 whitespace-nowrap">
+                                          {split.vfMethod === 'PERCENT' ? '%' : split.vfMethod === 'FIXED' ? 'Fixed ₹' : 'None'}
+                                        </td>
+                                        {/* Var + Fixed Amount (Rule Value) */}
+                                        <td className="py-1.5 px-2 text-right border-r border-neutral-200 bg-emerald-50/25 font-mono text-[11px] text-gray-800 whitespace-nowrap">
+                                          {split.vfMethod === 'PERCENT' ? `${split.vfValue}%` : split.vfMethod === 'FIXED' ? `₹${split.vfValue}` : '-'}
+                                        </td>
+                                        {/* Var + Fixed Allocated (₹) */}
+                                        <td className="py-1.5 px-2.5 text-right border-r border-neutral-200 bg-emerald-100/60 font-mono font-black text-emerald-900 whitespace-nowrap text-xs">
+                                          {recAmtNum > 0 ? `₹${Number(split.vfAllocated).toLocaleString('en-IN')}` : '-'}
+                                        </td>
+
+                                        {/* Primary Balance (₹) */}
+                                        <td className="py-1.5 px-2.5 text-right bg-blue-50/70 font-mono font-black text-blue-950 whitespace-nowrap text-xs">
+                                          {recAmtNum > 0 ? `₹${Number(split.primaryBalance).toLocaleString('en-IN')}` : '-'}
+                                        </td>
+                                      </>
+                                    );
+                                  })()}
                                 </tr>
                               ))}
 
                             {/* + Add Another Part row if expanded */}
                             {isExpanded && hasMultipleParts && isEditable && (
                               <tr className="bg-teal-50/15 border-b border-neutral-200">
-                                <td colSpan={17} className="py-1 px-4 text-left">
+                                <td colSpan={28} className="py-1 px-4 text-left">
                                   <button
                                     type="button"
                                     onClick={() => handleAddTablePart(inv.id)}
@@ -2805,6 +3129,51 @@ export function InvoicePaymentManagement({
                         }}
                       />
                     </div>
+
+                    {/* 3 Accounts Real-Time Allocation Summary */}
+                    {modalSummary.totalRec > 0 && (() => {
+                      const split = compute3AccountsSplit(modalSummary.totalRec, bankRules);
+                      return (
+                        <div className="mt-2.5 p-2 bg-gradient-to-r from-blue-50/70 via-purple-50/70 to-emerald-50/70 border border-neutral-300 rounded-xs shadow-2xs">
+                          <div className="text-[9.5px] font-bold uppercase tracking-wider text-neutral-700 mb-1 flex items-center justify-between">
+                            <span className="flex items-center gap-1 font-sans">
+                              <Landmark size={11} className="text-[#006064]" />
+                              <span>3 Accounts Live Circulation Split</span>
+                            </span>
+                            <span className="text-[9px] font-mono text-neutral-600 font-bold">
+                              Received: ₹{modalSummary.totalRec.toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-xs">
+                            <div className="bg-white p-1.5 border border-blue-200 rounded-2xs shadow-2xs">
+                              <div className="text-[8.5px] font-bold text-blue-900 uppercase font-sans">1. Primary ICICI (Net Rem.)</div>
+                              <div className="text-[9px] text-gray-400">136705002010</div>
+                              <div className="text-xs font-black text-blue-950 mt-0.5">
+                                ₹{Number(split.primaryBalance).toLocaleString('en-IN')}
+                              </div>
+                            </div>
+                            <div className="bg-white p-1.5 border border-purple-200 rounded-2xs shadow-2xs">
+                              <div className="text-[8.5px] font-bold text-purple-900 uppercase font-sans">2. AU Bank (CR)</div>
+                              <div className="text-[9px] text-gray-400">
+                                1212... • {split.crMethod === 'PERCENT' ? `${split.crValue}%` : split.crMethod === 'FIXED' ? `Fixed ₹${split.crValue}` : 'None'}
+                              </div>
+                              <div className="text-xs font-black text-purple-950 mt-0.5">
+                                ₹{Number(split.crAllocated).toLocaleString('en-IN')}
+                              </div>
+                            </div>
+                            <div className="bg-white p-1.5 border border-emerald-200 rounded-2xs shadow-2xs">
+                              <div className="text-[8.5px] font-bold text-emerald-900 uppercase font-sans">3. AU Bank (Var + Fixed)</div>
+                              <div className="text-[9px] text-gray-400">
+                                2121... • {split.vfMethod === 'PERCENT' ? `${split.vfValue}%` : split.vfMethod === 'FIXED' ? `Fixed ₹${split.vfValue}` : 'None'}
+                              </div>
+                              <div className="text-xs font-black text-emerald-950 mt-0.5">
+                                ₹{Number(split.vfAllocated).toLocaleString('en-IN')}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Modal Body: Multi-Part Payment Cards */}
@@ -3177,6 +3546,51 @@ export function InvoicePaymentManagement({
                         </div>
                       </div>
                     </div>
+
+                    {/* 3 Accounts Circulation Allocation */}
+                    {viewingPaymentInvoice.receiveAmount > 0 && (() => {
+                      const split = compute3AccountsSplit(viewingPaymentInvoice.receiveAmount, bankRules);
+                      return (
+                        <div className="p-3 bg-gradient-to-r from-blue-50/70 via-purple-50/70 to-emerald-50/70 border border-neutral-300 rounded-xs shadow-2xs">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-700 mb-1.5 flex items-center justify-between">
+                            <span className="flex items-center gap-1 font-sans">
+                              <Landmark size={12} className="text-[#006064]" />
+                              <span>3 Accounts Circulation Allocation</span>
+                            </span>
+                            <span className="text-[9.5px] font-mono text-neutral-600 font-bold">
+                              Received: ₹{viewingPaymentInvoice.receiveAmount.toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-xs">
+                            <div className="bg-white p-2 border border-blue-200 rounded-2xs shadow-2xs">
+                              <div className="text-[9px] font-bold text-blue-900 uppercase font-sans">1. Primary ICICI (Net Rem.)</div>
+                              <div className="text-[9.5px] text-gray-400">136705002010</div>
+                              <div className="text-xs font-black text-blue-950 mt-0.5">
+                                ₹{Number(split.primaryBalance).toLocaleString('en-IN')}
+                              </div>
+                            </div>
+                            <div className="bg-white p-2 border border-purple-200 rounded-2xs shadow-2xs">
+                              <div className="text-[9px] font-bold text-purple-900 uppercase font-sans">2. AU Bank (CR)</div>
+                              <div className="text-[9.5px] text-gray-400">
+                                1212... • {split.crMethod === 'PERCENT' ? `${split.crValue}%` : split.crMethod === 'FIXED' ? `Fixed ₹${split.crValue}` : 'None'}
+                              </div>
+                              <div className="text-xs font-black text-purple-950 mt-0.5">
+                                ₹{Number(split.crAllocated).toLocaleString('en-IN')}
+                              </div>
+                            </div>
+                            <div className="bg-white p-2 border border-emerald-200 rounded-2xs shadow-2xs">
+                              <div className="text-[9px] font-bold text-emerald-900 uppercase font-sans">3. AU Bank (Var + Fixed)</div>
+                              <div className="text-[9.5px] text-gray-400">
+                                2121... • {split.vfMethod === 'PERCENT' ? `${split.vfValue}%` : split.vfMethod === 'FIXED' ? `Fixed ₹${split.vfValue}` : 'None'}
+                              </div>
+                              <div className="text-xs font-black text-emerald-950 mt-0.5">
+                                ₹{Number(split.vfAllocated).toLocaleString('en-IN')}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Payment Breakdown / Parts */}
                     <div className="space-y-3">
@@ -3572,6 +3986,23 @@ export function InvoicePaymentManagement({
         }}
         locations={locations}
         availableMonths={availableMonths}
+        isAdmin={isSuperAdmin}
+        isAccountant={isAccountant}
+      />
+
+      {/* ── 3 Accounts: Bank Rules Modal ── */}
+      <BankRulesModal
+        isOpen={isBankRulesModalOpen}
+        onClose={() => setIsBankRulesModalOpen(false)}
+        onRulesSaved={(updated) => setBankRules(updated)}
+      />
+
+      {/* ── ICICI Bank Statement Modal ── */}
+      <BankStatementModal
+        isOpen={isBankStatementModalOpen}
+        onClose={() => setIsBankStatementModalOpen(false)}
+        isAdmin={isSuperAdmin}
+        isAccountant={isAccountant}
       />
     </div>
   );
