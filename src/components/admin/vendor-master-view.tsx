@@ -25,6 +25,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useSidebar } from '@/context/SidebarContext';
 
 export interface VendorRecord {
   id: number;
@@ -85,6 +86,44 @@ export function VendorMasterView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [centreFilter, setCentreFilter] = useState('ALL');
+
+  // Auto-shrink sidebar on Vendor Master page mount
+  const { setIsSidebarOpen } = useSidebar();
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [setIsSidebarOpen]);
+
+  // Excel-Style Column Filters
+  const [colFilterSrNo, setColFilterSrNo] = useState('');
+  const [colFilterName, setColFilterName] = useState('');
+  const [colFilterMobile, setColFilterMobile] = useState('');
+  const [colFilterEmail, setColFilterEmail] = useState('');
+  const [colFilterAddress, setColFilterAddress] = useState('');
+  const [colFilterCentre, setColFilterCentre] = useState('');
+  const [colFilterGstPan, setColFilterGstPan] = useState('');
+  const [colFilterStatus, setColFilterStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+
+  const hasActiveColFilters = Boolean(
+    colFilterSrNo ||
+    colFilterName ||
+    colFilterMobile ||
+    colFilterEmail ||
+    colFilterAddress ||
+    colFilterCentre ||
+    colFilterGstPan ||
+    colFilterStatus !== 'ALL'
+  );
+
+  const handleClearAllColFilters = () => {
+    setColFilterSrNo('');
+    setColFilterName('');
+    setColFilterMobile('');
+    setColFilterEmail('');
+    setColFilterAddress('');
+    setColFilterCentre('');
+    setColFilterGstPan('');
+    setColFilterStatus('ALL');
+  };
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -319,17 +358,17 @@ export function VendorMasterView() {
 
   // Filtered list
   const filteredVendors = useMemo(() => {
-    return vendors.filter((v) => {
-      // Status Filter
+    return vendors.filter((v, idx) => {
+      // Status Filter (Top toolbar)
       if (statusFilter === 'ACTIVE' && !v.isActive) return false;
       if (statusFilter === 'INACTIVE' && v.isActive) return false;
 
-      // Centre Filter
+      // Centre Filter (Top toolbar)
       if (centreFilter !== 'ALL') {
         if (v.locationName !== centreFilter) return false;
       }
 
-      // Search Query
+      // Search Query (Top toolbar)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = v.vendorName?.toLowerCase().includes(q);
@@ -338,19 +377,82 @@ export function VendorMasterView() {
         const matchesAddress = v.address?.toLowerCase().includes(q);
         const matchesGstin = v.gstin?.toLowerCase().includes(q);
         const matchesCentre = v.locationName?.toLowerCase().includes(q);
-        return (
-          matchesName ||
-          matchesMobile ||
-          matchesEmail ||
-          matchesAddress ||
-          matchesGstin ||
-          matchesCentre
-        );
+        if (
+          !matchesName &&
+          !matchesMobile &&
+          !matchesEmail &&
+          !matchesAddress &&
+          !matchesGstin &&
+          !matchesCentre
+        ) {
+          return false;
+        }
       }
+
+      // Column Filters (Excel-Style Table Header)
+      if (colFilterSrNo.trim()) {
+        const q = colFilterSrNo.trim();
+        const matchesIndex = String(idx + 1).includes(q);
+        const matchesId = String(v.id).includes(q);
+        if (!matchesIndex && !matchesId) return false;
+      }
+
+      if (colFilterName.trim()) {
+        if (!v.vendorName?.toLowerCase().includes(colFilterName.toLowerCase().trim())) {
+          return false;
+        }
+      }
+
+      if (colFilterMobile.trim()) {
+        if (!(v.mobileNo || '').toLowerCase().includes(colFilterMobile.toLowerCase().trim())) {
+          return false;
+        }
+      }
+
+      if (colFilterEmail.trim()) {
+        if (!(v.email || '').toLowerCase().includes(colFilterEmail.toLowerCase().trim())) {
+          return false;
+        }
+      }
+
+      if (colFilterAddress.trim()) {
+        if (!(v.address || '').toLowerCase().includes(colFilterAddress.toLowerCase().trim())) {
+          return false;
+        }
+      }
+
+      if (colFilterCentre.trim()) {
+        if (!(v.locationName || '').toLowerCase().includes(colFilterCentre.toLowerCase().trim())) {
+          return false;
+        }
+      }
+
+      if (colFilterGstPan.trim()) {
+        const q = colFilterGstPan.toLowerCase().trim();
+        const matchesGst = (v.gstin || '').toLowerCase().includes(q);
+        const matchesPan = (v.pan || '').toLowerCase().includes(q);
+        if (!matchesGst && !matchesPan) return false;
+      }
+
+      if (colFilterStatus === 'ACTIVE' && !v.isActive) return false;
+      if (colFilterStatus === 'INACTIVE' && v.isActive) return false;
 
       return true;
     });
-  }, [vendors, searchQuery, statusFilter, centreFilter]);
+  }, [
+    vendors,
+    searchQuery,
+    statusFilter,
+    centreFilter,
+    colFilterSrNo,
+    colFilterName,
+    colFilterMobile,
+    colFilterEmail,
+    colFilterAddress,
+    colFilterCentre,
+    colFilterGstPan,
+    colFilterStatus,
+  ]);
 
   // KPI Metrics
   const metrics = useMemo(() => {
@@ -527,11 +629,27 @@ export function VendorMasterView() {
           </div>
         </div>
 
+        {/* ── ACTIVE COLUMN FILTERS BANNER ── */}
+        {hasActiveColFilters && (
+          <div className="mt-3 px-3 py-1.5 bg-neutral-100 border border-neutral-300 flex items-center justify-between text-[11px] text-neutral-700">
+            <span className="font-semibold">
+              Showing {filteredVendors.length} of {vendors.length} vendor records matching column filters
+            </span>
+            <button
+              type="button"
+              onClick={handleClearAllColFilters}
+              className="text-red-700 hover:text-red-900 font-bold underline cursor-pointer text-[10px]"
+            >
+              Clear all column filters
+            </button>
+          </div>
+        )}
+
         {/* ── TABLE VIEW ── */}
-        <div className="mt-4 bg-white border border-neutral-200 shadow-2xs overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="mt-4 bg-white border border-neutral-300 shadow-2xs overflow-hidden">
+          <div className="overflow-auto max-h-[72vh] relative">
             <table className="w-full text-left text-xs text-gray-700 border-collapse">
-              <thead>
+              <thead className="sticky top-0 z-20 bg-[#f0f4f5] shadow-[0_2px_4px_rgba(0,0,0,0.06)] border-b border-neutral-300">
                 <tr className="bg-[#f0f4f5] text-gray-800 uppercase tracking-wider text-[10px] font-bold border-b border-neutral-300">
                   <th className="py-2.5 px-3 w-12 text-center">#</th>
                   <th className="py-2.5 px-3 min-w-[200px]">Vendor Name</th>
@@ -542,6 +660,100 @@ export function VendorMasterView() {
                   <th className="py-2.5 px-3 min-w-[130px]">GSTIN / PAN</th>
                   <th className="py-2.5 px-3 text-center w-24">Status</th>
                   <th className="py-2.5 px-3 text-right w-24">Actions</th>
+                </tr>
+                {/* Column Filter Row */}
+                <tr className="bg-neutral-50/95 border-b border-neutral-200">
+                  <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                    <input
+                      type="text"
+                      value={colFilterSrNo}
+                      onChange={(e) => setColFilterSrNo(e.target.value)}
+                      placeholder="#"
+                      className="w-full text-center px-1 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064] font-mono"
+                    />
+                  </th>
+                  <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                    <input
+                      type="text"
+                      value={colFilterName}
+                      onChange={(e) => setColFilterName(e.target.value)}
+                      placeholder="Filter name..."
+                      className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064]"
+                    />
+                  </th>
+                  <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                    <input
+                      type="text"
+                      value={colFilterMobile}
+                      onChange={(e) => setColFilterMobile(e.target.value)}
+                      placeholder="Filter mobile..."
+                      className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064] font-mono"
+                    />
+                  </th>
+                  <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                    <input
+                      type="text"
+                      value={colFilterEmail}
+                      onChange={(e) => setColFilterEmail(e.target.value)}
+                      placeholder="Filter email..."
+                      className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064]"
+                    />
+                  </th>
+                  <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                    <input
+                      type="text"
+                      value={colFilterAddress}
+                      onChange={(e) => setColFilterAddress(e.target.value)}
+                      placeholder="Filter address..."
+                      className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064]"
+                    />
+                  </th>
+                  <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                    <select
+                      value={colFilterCentre}
+                      onChange={(e) => setColFilterCentre(e.target.value)}
+                      className="w-full px-1 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064] cursor-pointer"
+                    >
+                      <option value="">All</option>
+                      {locations.map((loc) => (
+                        <option key={loc.id} value={loc.name}>
+                          {loc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                    <input
+                      type="text"
+                      value={colFilterGstPan}
+                      onChange={(e) => setColFilterGstPan(e.target.value)}
+                      placeholder="Filter GST/PAN..."
+                      className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064] font-mono"
+                    />
+                  </th>
+                  <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                    <select
+                      value={colFilterStatus}
+                      onChange={(e) => setColFilterStatus(e.target.value as any)}
+                      className="w-full px-1 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064] cursor-pointer"
+                    >
+                      <option value="ALL">All</option>
+                      <option value="ACTIVE">Active</option>
+                      <option value="INACTIVE">Inactive</option>
+                    </select>
+                  </th>
+                  <th className="p-1 text-center bg-neutral-100/90">
+                    {hasActiveColFilters && (
+                      <button
+                        type="button"
+                        onClick={handleClearAllColFilters}
+                        className="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-2xs text-[9px] font-bold uppercase transition-colors cursor-pointer"
+                        title="Reset column filters"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200">

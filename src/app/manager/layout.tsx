@@ -60,6 +60,19 @@ export default function ManagerLayout({
     };
   }, []);
 
+  // Auto-shrink sidebar on data-heavy pages (Expenses, Invoices, Client Master, Vendor Master) to maximize screen width
+  useEffect(() => {
+    const p = (pathname || '').toLowerCase();
+    if (
+      p.includes('/expenses') ||
+      p.includes('/invoices') ||
+      p.includes('/client-master') ||
+      p.includes('/vendor-master')
+    ) {
+      setIsSidebarOpen(false);
+    }
+  }, [pathname, setIsSidebarOpen]);
+
   const isAccountant =
     user?.email?.toLowerCase() === 'ssinfrazone21@gmail.com' ||
     user?.role?.toUpperCase() === 'ACCOUNTS' ||

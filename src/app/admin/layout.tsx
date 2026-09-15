@@ -94,9 +94,17 @@ export default function AdminLayout({
     }
   }, [user, isLoading, router, isRole]);
 
-  // Auto-shrink sidebar on Occupancy CAD page to maximize architectural canvas
+  // Auto-shrink sidebar on data-heavy pages (Client Master, Invoices, Expenses, Vendor Master, Occupancy CAD) to maximize screen width
   useEffect(() => {
-    if (pathname?.includes('/admin/occupancy')) {
+    const p = (pathname || '').toLowerCase();
+    if (
+      p.includes('/admin/client-master') ||
+      p.includes('/admin/invoices') ||
+      p.includes('/admin/old-invoices') ||
+      p.includes('/admin/expenses') ||
+      p.includes('/admin/vendor-master') ||
+      p.includes('/admin/occupancy')
+    ) {
       setIsSidebarOpen(false);
     }
   }, [pathname, setIsSidebarOpen]);

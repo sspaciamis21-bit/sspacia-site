@@ -284,6 +284,47 @@ export default function ClientMasterRegistryPage() {
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('ALL');
 
+  // Excel-Style Column Filters
+  const [colFilterSrNo, setColFilterSrNo] = useState('');
+  const [colFilterCompany, setColFilterCompany] = useState('');
+  const [colFilterNode, setColFilterNode] = useState('');
+  const [colFilterClientId, setColFilterClientId] = useState('');
+  const [colFilterGst, setColFilterGst] = useState('');
+  const [colFilterContact, setColFilterContact] = useState('');
+  const [colFilterAgreement, setColFilterAgreement] = useState('');
+  const [colFilterCabin, setColFilterCabin] = useState('');
+  const [colFilterAmount, setColFilterAmount] = useState('');
+  const [colFilterTotalAmt, setColFilterTotalAmt] = useState('');
+  const [colFilterStatus, setColFilterStatus] = useState('');
+
+  const hasActiveColFilters = Boolean(
+    colFilterSrNo ||
+    colFilterCompany ||
+    colFilterNode ||
+    colFilterClientId ||
+    colFilterGst ||
+    colFilterContact ||
+    colFilterAgreement ||
+    colFilterCabin ||
+    colFilterAmount ||
+    colFilterTotalAmt ||
+    colFilterStatus
+  );
+
+  const handleClearAllColFilters = () => {
+    setColFilterSrNo('');
+    setColFilterCompany('');
+    setColFilterNode('');
+    setColFilterClientId('');
+    setColFilterGst('');
+    setColFilterContact('');
+    setColFilterAgreement('');
+    setColFilterCabin('');
+    setColFilterAmount('');
+    setColFilterTotalAmt('');
+    setColFilterStatus('');
+  };
+
   // Multi-select for manual dispatch
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [dispatching, setDispatching] = useState(false);
@@ -324,7 +365,11 @@ export default function ClientMasterRegistryPage() {
   // Big Popup Modal for Add Client / Edit Client
   const [showAddClientModal, setShowAddClientModal] = useState(false);
 
-  // Auto-collapse sidebar when Add/Edit modal is opened
+  // Auto-collapse sidebar on page mount and when Add/Edit modal is opened
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [setIsSidebarOpen]);
+
   useEffect(() => {
     if (showAddClientModal) {
       setIsSidebarOpen(false);
@@ -1388,8 +1433,9 @@ export default function ClientMasterRegistryPage() {
 
   // Filtered Entries
   const filteredEntries = useMemo(() => {
-    return entries.filter((e) => {
+    return entries.filter((e, idx) => {
       const matchesSearch =
+        !searchTerm ||
         e.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (e.gstNo && e.gstNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (e.clientId && e.clientId.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -1405,9 +1451,97 @@ export default function ClientMasterRegistryPage() {
         (selectedClientTypeFilter === 'VIRTUAL_OFFICE' && e.clientType === 'VIRTUAL_OFFICE') ||
         (selectedClientTypeFilter === 'DEFAULT' && (!e.clientType || e.clientType === 'DEFAULT'));
 
-      return matchesSearch && matchesClientStatus && matchesClientType;
+      // Column Filters
+      const matchesColSrNo =
+        !colFilterSrNo ||
+        String(idx + 1).includes(colFilterSrNo) ||
+        `#${idx + 1}`.includes(colFilterSrNo);
+
+      const matchesColCompany =
+        !colFilterCompany ||
+        e.companyName.toLowerCase().includes(colFilterCompany.toLowerCase()) ||
+        (e.hoAddress && e.hoAddress.toLowerCase().includes(colFilterCompany.toLowerCase()));
+
+      const matchesColNode =
+        !colFilterNode ||
+        (e.createdBy?.assignedLocations &&
+          e.createdBy.assignedLocations.some((l) =>
+            l.location?.name?.toLowerCase().includes(colFilterNode.toLowerCase())
+          )) ||
+        (e.createdBy?.name && e.createdBy.name.toLowerCase().includes(colFilterNode.toLowerCase()));
+
+      const matchesColClientId =
+        !colFilterClientId || (e.clientId && e.clientId.toLowerCase().includes(colFilterClientId.toLowerCase()));
+
+      const matchesColGst =
+        !colFilterGst ||
+        (e.gstNo && e.gstNo.toLowerCase().includes(colFilterGst.toLowerCase())) ||
+        (e.tanNo && e.tanNo.toLowerCase().includes(colFilterGst.toLowerCase()));
+
+      const matchesColContact =
+        !colFilterContact ||
+        e.contactPersons.some(
+          (cp) =>
+            cp.name.toLowerCase().includes(colFilterContact.toLowerCase()) ||
+            (cp.email && cp.email.toLowerCase().includes(colFilterContact.toLowerCase())) ||
+            (cp.mobileNo && cp.mobileNo.toLowerCase().includes(colFilterContact.toLowerCase()))
+        );
+
+      const matchesColAgreement =
+        !colFilterAgreement ||
+        (e.agreementStartDate && e.agreementStartDate.toLowerCase().includes(colFilterAgreement.toLowerCase())) ||
+        (e.agreementEndDate && e.agreementEndDate.toLowerCase().includes(colFilterAgreement.toLowerCase()));
+
+      const matchesColCabin =
+        !colFilterCabin ||
+        (e.cabinName && e.cabinName.toLowerCase().includes(colFilterCabin.toLowerCase())) ||
+        (e.noOfSeats && String(e.noOfSeats).includes(colFilterCabin));
+
+      const matchesColAmount =
+        !colFilterAmount ||
+        (e.amount !== null && e.amount !== undefined && String(e.amount).includes(colFilterAmount)) ||
+        (e.ratePerAgreement !== null && e.ratePerAgreement !== undefined && String(e.ratePerAgreement).includes(colFilterAmount));
+
+      const matchesColTotalAmt =
+        !colFilterTotalAmt || (e.totalAmount && String(e.totalAmount).includes(colFilterTotalAmt));
+
+      const matchesColStatus =
+        !colFilterStatus || colFilterStatus === 'ALL' || e.clientStatus?.toLowerCase() === colFilterStatus.toLowerCase();
+
+      return (
+        matchesSearch &&
+        matchesClientStatus &&
+        matchesClientType &&
+        matchesColSrNo &&
+        matchesColCompany &&
+        matchesColNode &&
+        matchesColClientId &&
+        matchesColGst &&
+        matchesColContact &&
+        matchesColAgreement &&
+        matchesColCabin &&
+        matchesColAmount &&
+        matchesColTotalAmt &&
+        matchesColStatus
+      );
     });
-  }, [entries, searchTerm, selectedClientStatusFilter, selectedClientTypeFilter]);
+  }, [
+    entries,
+    searchTerm,
+    selectedClientStatusFilter,
+    selectedClientTypeFilter,
+    colFilterSrNo,
+    colFilterCompany,
+    colFilterNode,
+    colFilterClientId,
+    colFilterGst,
+    colFilterContact,
+    colFilterAgreement,
+    colFilterCabin,
+    colFilterAmount,
+    colFilterTotalAmt,
+    colFilterStatus,
+  ]);
 
   // KPIs
   const kpis = useMemo(() => {
@@ -1677,33 +1811,173 @@ export default function ClientMasterRegistryPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[#F8F9FA] text-[#616161] uppercase tracking-wider border-b border-[var(--outline-variant)] font-bold">
-                    <th className="p-3 w-10 text-center">
-                      <button onClick={toggleSelectAll} className="text-neutral-500 hover:text-black">
-                        {selectedIds.length === filteredEntries.length && filteredEntries.length > 0 ? (
-                          <CheckSquare size={16} className="text-[#006064]" />
-                        ) : (
-                          <Square size={16} />
+            <div className="space-y-2">
+              {hasActiveColFilters && (
+                <div className="px-3 py-1.5 bg-cyan-50 border border-cyan-200 flex items-center justify-between text-xs text-cyan-900 shadow-2xs">
+                  <span className="font-bold">
+                    Showing {filteredEntries.length} of {entries.length} master records (column filters active)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearAllColFilters}
+                    className="text-xs font-bold text-cyan-800 hover:text-cyan-950 underline cursor-pointer"
+                  >
+                    Clear all column filters
+                  </button>
+                </div>
+              )}
+              <div className="overflow-auto max-h-[72vh] relative border border-neutral-300 shadow-2xs">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="sticky top-0 z-20 bg-[#F8F9FA] shadow-[0_2px_4px_rgba(0,0,0,0.06)] border-b border-neutral-300">
+                    <tr className="bg-[#F8F9FA] text-[#616161] uppercase tracking-wider border-b border-neutral-300 font-bold text-[10px]">
+                      <th className="p-2.5 w-10 text-center border-r border-neutral-200">
+                        <button onClick={toggleSelectAll} className="text-neutral-500 hover:text-black">
+                          {selectedIds.length === filteredEntries.length && filteredEntries.length > 0 ? (
+                            <CheckSquare size={16} className="text-[#006064]" />
+                          ) : (
+                            <Square size={16} />
+                          )}
+                        </button>
+                      </th>
+                      <th className="p-2.5 w-12 text-center border-r border-neutral-200 whitespace-nowrap">SR.No</th>
+                      <th className="p-2.5 min-w-[200px] border-r border-neutral-200 whitespace-nowrap">Company & Address</th>
+                      {isAdmin && <th className="p-2.5 min-w-[140px] border-r border-neutral-200 whitespace-nowrap">Node / Created By</th>}
+                      <th className="p-2.5 min-w-[120px] border-r border-neutral-200 whitespace-nowrap">Client ID</th>
+                      <th className="p-2.5 min-w-[140px] border-r border-neutral-200 whitespace-nowrap">GST Details</th>
+                      <th className="p-2.5 min-w-[180px] border-r border-neutral-200 whitespace-nowrap">Contact Persons</th>
+                      <th className="p-2.5 min-w-[140px] border-r border-neutral-200 whitespace-nowrap">Agreement Dates</th>
+                      <th className="p-2.5 min-w-[120px] border-r border-neutral-200 whitespace-nowrap">Cabin & Seats</th>
+                      <th className="p-2.5 min-w-[100px] text-right border-r border-neutral-200 whitespace-nowrap">Amount (₹)</th>
+                      <th className="p-2.5 min-w-[100px] text-right border-r border-neutral-200 whitespace-nowrap">Total Amt (₹)</th>
+                      <th className="p-2.5 min-w-[110px] border-r border-neutral-200 whitespace-nowrap">Status</th>
+                      <th className="p-2.5 text-center w-36 whitespace-nowrap">Actions</th>
+                    </tr>
+
+                    {/* Row 2: Excel-Style Column Filters */}
+                    <tr className="bg-neutral-50/95 border-b border-neutral-300 text-[10px] font-sans">
+                      <th className="p-1 text-center bg-neutral-100/90 border-r border-neutral-200">
+                        {/* Checkbox filler */}
+                      </th>
+                      <th className="p-1 text-center bg-neutral-100/90 border-r border-neutral-200">
+                        <input
+                          type="text"
+                          value={colFilterSrNo}
+                          onChange={(e) => setColFilterSrNo(e.target.value)}
+                          placeholder="No."
+                          className="w-full text-center px-1 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064]"
+                        />
+                      </th>
+                      <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                        <input
+                          type="text"
+                          value={colFilterCompany}
+                          onChange={(e) => setColFilterCompany(e.target.value)}
+                          placeholder="Filter company..."
+                          className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064]"
+                        />
+                      </th>
+                      {isAdmin && (
+                        <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                          <input
+                            type="text"
+                            value={colFilterNode}
+                            onChange={(e) => setColFilterNode(e.target.value)}
+                            placeholder="Filter node..."
+                            className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064]"
+                          />
+                        </th>
+                      )}
+                      <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                        <input
+                          type="text"
+                          value={colFilterClientId}
+                          onChange={(e) => setColFilterClientId(e.target.value)}
+                          placeholder="Filter ID..."
+                          className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064] font-mono"
+                        />
+                      </th>
+                      <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                        <input
+                          type="text"
+                          value={colFilterGst}
+                          onChange={(e) => setColFilterGst(e.target.value)}
+                          placeholder="Filter GST/PAN..."
+                          className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064] font-mono"
+                        />
+                      </th>
+                      <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                        <input
+                          type="text"
+                          value={colFilterContact}
+                          onChange={(e) => setColFilterContact(e.target.value)}
+                          placeholder="Filter contact..."
+                          className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064]"
+                        />
+                      </th>
+                      <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                        <input
+                          type="text"
+                          value={colFilterAgreement}
+                          onChange={(e) => setColFilterAgreement(e.target.value)}
+                          placeholder="Filter dates..."
+                          className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064]"
+                        />
+                      </th>
+                      <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                        <input
+                          type="text"
+                          value={colFilterCabin}
+                          onChange={(e) => setColFilterCabin(e.target.value)}
+                          placeholder="Filter cabin..."
+                          className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064]"
+                        />
+                      </th>
+                      <th className="p-1 bg-neutral-100/90 border-r border-neutral-200 text-right">
+                        <input
+                          type="text"
+                          value={colFilterAmount}
+                          onChange={(e) => setColFilterAmount(e.target.value)}
+                          placeholder="₹ rent"
+                          className="w-full text-right px-1 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064] font-mono"
+                        />
+                      </th>
+                      <th className="p-1 bg-neutral-100/90 border-r border-neutral-200 text-right">
+                        <input
+                          type="text"
+                          value={colFilterTotalAmt}
+                          onChange={(e) => setColFilterTotalAmt(e.target.value)}
+                          placeholder="₹ total"
+                          className="w-full text-right px-1 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064] font-mono"
+                        />
+                      </th>
+                      <th className="p-1 bg-neutral-100/90 border-r border-neutral-200">
+                        <select
+                          value={colFilterStatus}
+                          onChange={(e) => setColFilterStatus(e.target.value)}
+                          className="w-full px-1 py-0.5 text-[10px] bg-white border border-neutral-300 rounded-2xs focus:outline-none focus:border-[#006064] cursor-pointer"
+                        >
+                          <option value="">All</option>
+                          {CLIENT_STATUS_OPTIONS.map((st) => (
+                            <option key={st} value={st}>
+                              {st}
+                            </option>
+                          ))}
+                        </select>
+                      </th>
+                      <th className="p-1 text-center bg-neutral-100/90">
+                        {hasActiveColFilters && (
+                          <button
+                            type="button"
+                            onClick={handleClearAllColFilters}
+                            className="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-2xs text-[9px] font-bold uppercase transition-colors cursor-pointer"
+                            title="Reset column filters"
+                          >
+                            Reset
+                          </button>
                         )}
-                      </button>
-                    </th>
-                    <th className="p-3 w-12 text-center">SR.No</th>
-                    <th className="p-3">Company & Address</th>
-                    {isAdmin && <th className="p-3">Node / Created By</th>}
-                    <th className="p-3">Client ID</th>
-                    <th className="p-3">GST Details</th>
-                    <th className="p-3">Contact Persons</th>
-                    <th className="p-3">Agreement Dates</th>
-                    <th className="p-3">Cabin & Seats</th>
-                    <th className="p-3 text-right">Amount (₹)</th>
-                    <th className="p-3 text-right">Total Amt (₹)</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3 text-center w-36">Actions</th>
-                  </tr>
-                </thead>
+                      </th>
+                    </tr>
+                  </thead>
                 <tbody className="divide-y divide-neutral-100 font-medium">
                   {filteredEntries.map((entry, index) => {
                     const isSelected = selectedIds.includes(entry.id);
@@ -2059,6 +2333,7 @@ export default function ClientMasterRegistryPage() {
                 </tbody>
               </table>
             </div>
+          </div>
           )}
         </div>
       </FadeUp>
