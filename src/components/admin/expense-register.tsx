@@ -97,7 +97,7 @@ export const ACCOUNTANT_EXPENSE_COLUMNS: ExpenseColumnDef[] = [
   { id: "utrNumber", label: "UTR No.", defaultWidth: 155, minWidth: 90, align: "center", phase: "3", mono: true },
   { id: "payDate", label: "Payment Date", defaultWidth: 110, minWidth: 75, align: "center", phase: "3", mono: true },
   { id: "emailAlert", label: "Email Alert", defaultWidth: 115, minWidth: 75, align: "center", phase: "3" },
-  { id: "actions", label: "Actions", defaultWidth: 135, minWidth: 90, align: "right", phase: "3" },
+  { id: "actions", label: "Actions & Disbursal", defaultWidth: 310, minWidth: 240, align: "center", phase: "3" },
 ];
 
 export const getExpenseCellValue = (rec: ExpenseRecordItem, colId: string, idx: number): string => {
@@ -1509,8 +1509,8 @@ export function ExpenseRegister({
     if (!canEditOrDeleteEntry(rec)) {
       toast.error(
         isAccountant
-          ? "Accountants can only edit their own expense entries."
-          : "Community Managers can only edit their own expense entries."
+          ? "Accountants cannot edit expenses entered by Community Managers. Use 'Enter Vendor & Billing Breakdown' to add vendor and billing details."
+          : "Community Managers cannot edit expenses entered by Accountants."
       );
       return;
     }
@@ -2173,8 +2173,8 @@ export function ExpenseRegister({
     if (target && !canEditOrDeleteEntry(target)) {
       toast.error(
         isAccountant
-          ? "Accountants can only delete their own expense entries."
-          : "Community Managers can only delete their own expense entries."
+          ? "Accountants cannot delete expenses entered by Community Managers."
+          : "Community Managers cannot delete expenses entered by Accountants."
       );
       return;
     }
@@ -3912,9 +3912,62 @@ export function ExpenseRegister({
                       {(() => {
                         const s = getColStyle("actions");
                         if (!s) return null;
+                        const isApproved = rec.approvalStatus === "APPROVED";
+                        const hasBillBreakdown = Boolean(rec.vendorInvoiceUrl || rec.vendorName || (rec.quantity && rec.quantity > 1));
+                        const isPaid = rec.paymentStatus === "PAID" || Boolean(rec.utrNumber);
+
                         return (
-                          <td style={s.style} className={`py-3 px-3 text-right whitespace-nowrap bg-emerald-50/10 ${s.className}`}>
-                            <div className="inline-flex items-center justify-end gap-1.5">
+                          <td style={s.style} className={`py-2 px-3 text-center whitespace-nowrap bg-emerald-50/10 ${s.className}`}>
+                            <div className="inline-flex items-center justify-center gap-1.5 flex-wrap">
+                              {/* Dedicated Button 1: Enter Vendor & Billing Breakdown Against Expense */}
+                              <button
+                                type="button"
+                                onClick={() => openSettleModal(rec)}
+                                className={`px-2.5 py-1 text-[9.5px] font-bold uppercase transition-all cursor-pointer shadow-2xs flex items-center gap-1 border ${
+                                  hasBillBreakdown
+                                    ? "bg-sky-50 text-sky-900 border-sky-300 hover:bg-sky-100"
+                                    : "bg-[#006064] text-white border-[#004d40] hover:bg-[#004d40]"
+                                }`}
+                                title="Enter Vendor & Billing Breakdown Against Expense (Tax Inv, Qty, Rate, Vendor)"
+                              >
+                                <FileSpreadsheet className="w-3 h-3" />
+                                <span>{hasBillBreakdown ? "Edit Breakdown" : "Enter Breakdown"}</span>
+                              </button>
+
+                              {/* Dedicated Button 2: Record Disbursal & UTR Details */}
+                              {isApproved ? (
+                                isPaid ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openApproveModal(rec)}
+                                    className="px-2.5 py-1 text-[9.5px] font-bold uppercase bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                                    title="View or update payment disbursal and UTR details"
+                                  >
+                                    <Edit3 className="w-2.5 h-2.5 text-gray-600" />
+                                    <span>Edit UTR</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => openApproveModal(rec)}
+                                    className="px-2.5 py-1 text-[9.5px] font-bold uppercase bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1 border border-emerald-700 animate-pulse"
+                                    title="Sir has approved! Click to record payment disbursal and UTR details"
+                                  >
+                                    <CreditCard className="w-3 h-3" />
+                                    <span>Record Disbursal & UTR</span>
+                                  </button>
+                                )
+                              ) : (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[9px] text-gray-400 font-mono bg-gray-50 px-2 py-1 border border-gray-200 cursor-not-allowed select-none"
+                                  title="Payment Disbursal and UTR details unlock after Super Admin approval"
+                                >
+                                  <Lock className="w-2.5 h-2.5 text-gray-400" />
+                                  <span>UTR (Locked)</span>
+                                </span>
+                              )}
+
+                              {/* Resubmit button if rejected and user is creator */}
                               {(rec.approvalStatus === "REJECTED_BY_ACCOUNTANT" || rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN") && canEditOrDeleteEntry(rec) && (
                                 <button
                                   type="button"
@@ -3926,45 +3979,13 @@ export function ExpenseRegister({
                                 </button>
                               )}
 
-                              {rec.approvalStatus === "APPROVED" && (
-                                <>
-                                  {rec.paymentStatus === "PAID" || rec.utrNumber ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => openApproveModal(rec)}
-                                      className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 transition-all cursor-pointer"
-                                      title="Edit UTR or Disbursal Details"
-                                    >
-                                      Edit UTR
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => openApproveModal(rec)}
-                                      className="px-2 py-1 text-[9.5px] font-bold uppercase bg-emerald-700 hover:bg-emerald-800 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1"
-                                      title="Sir has approved; record UTR and payment details"
-                                    >
-                                      <CreditCard className="w-2.5 h-2.5" /> Disburse
-                                    </button>
-                                  )}
-
-                                  <button
-                                    type="button"
-                                    onClick={() => openSettleModal(rec)}
-                                    className="px-2 py-1 text-[9.5px] font-bold uppercase bg-gray-100 text-gray-800 hover:bg-gray-200 border border-gray-300 transition-all cursor-pointer"
-                                    title="Enter Vendor & Billing Breakdown"
-                                  >
-                                    Enter Bill
-                                  </button>
-                                </>
-                              )}
-
+                              {/* Base Expense Edit & Delete: ONLY for the creator or Super Admin */}
                               {canEditOrDeleteEntry(rec) && (
-                                <>
+                                <div className="inline-flex items-center gap-0.5 ml-0.5 border-l border-gray-300 pl-1">
                                   <button
                                     type="button"
                                     onClick={() => openEditModal(rec)}
-                                    title="Edit Expense Entry"
+                                    title="Edit Base Expense Entry"
                                     className="p-1 text-gray-500 hover:text-[#006064] hover:bg-cyan-50 border border-transparent hover:border-cyan-200 transition-all cursor-pointer"
                                   >
                                     <Edit3 className="w-3.5 h-3.5" />
@@ -3982,7 +4003,7 @@ export function ExpenseRegister({
                                       <Trash2 className="w-3.5 h-3.5" />
                                     )}
                                   </button>
-                                </>
+                                </div>
                               )}
                             </div>
                           </td>
