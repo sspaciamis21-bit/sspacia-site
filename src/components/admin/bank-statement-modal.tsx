@@ -605,34 +605,34 @@ export function BankStatementModal({
   if (!isOpen || !mounted || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/65 p-2 sm:p-4 backdrop-blur-sm overflow-hidden">
-      <div className="bg-white border border-gray-300 w-full max-w-[1340px] max-h-[96vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 font-sans my-auto overflow-hidden">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/65 p-1 sm:p-2.5 backdrop-blur-sm overflow-hidden">
+      <div className="bg-white border border-gray-300 w-full max-w-[1380px] h-[97vh] max-h-[97vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 font-sans my-auto overflow-hidden">
         {/* ── TOP ICICI BRANDED BANNER & HEADER ── */}
-        <div className="bg-[#283593] text-white p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="bg-white p-2 rounded-sm text-[#283593] shadow-xs">
-              <Landmark className="w-6 h-6" />
+        <div className="bg-[#283593] text-white py-1.5 px-3 sm:px-4 flex items-center justify-between gap-3 shrink-0 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-white p-1 rounded-sm text-[#283593] shadow-xs">
+              <Landmark className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-display font-black tracking-wide uppercase">
+              <h2 className="text-sm sm:text-base font-display font-bold tracking-wide uppercase leading-tight">
                 {config.bankName}
               </h2>
-              <p className="text-xs text-indigo-200 mt-0.5 font-mono">
+              <p className="text-[11px] text-indigo-200 font-mono">
                 A/C NO: <span className="font-bold text-white tracking-wider">{config.accountNo}</span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {/* Edit Opening Balance Button (Accountant / Super Admin) */}
             {(isAccountant || isAdmin) && (
               <button
                 type="button"
                 onClick={() => setIsEditingBalance(true)}
-                className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 text-xs font-bold uppercase tracking-wider border border-white/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                className="bg-white/10 hover:bg-white/20 text-white px-2 py-1 text-[11px] font-bold uppercase tracking-wider border border-white/30 transition-all flex items-center gap-1 cursor-pointer"
                 title="Define initial Brought Forward balance"
               >
-                <Edit3 className="w-3.5 h-3.5 text-amber-300" />
+                <Edit3 className="w-3 h-3 text-amber-300" />
                 <span>Opening Balance</span>
               </button>
             )}
@@ -642,92 +642,92 @@ export function BankStatementModal({
               type="button"
               onClick={() => fetchStatement(false)}
               disabled={refreshing}
-              className="bg-white/10 hover:bg-white/20 text-white p-2 border border-white/30 transition-all cursor-pointer"
+              className="bg-white/10 hover:bg-white/20 text-white p-1.5 border border-white/30 transition-all cursor-pointer"
               title="Refresh Statement"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} />
             </button>
 
             {/* Print Statement */}
             <button
               type="button"
               onClick={() => window.print()}
-              className="bg-white/10 hover:bg-white/20 text-white p-2 border border-white/30 transition-all cursor-pointer"
+              className="bg-white/10 hover:bg-white/20 text-white p-1.5 border border-white/30 transition-all cursor-pointer"
               title="Print Bank Statement"
             >
-              <Printer className="w-3.5 h-3.5" />
+              <Printer className="w-3 h-3" />
             </button>
 
             {/* Close */}
             <button
               type="button"
               onClick={onClose}
-              className="bg-white/20 hover:bg-red-600 text-white p-2 rounded-xs transition-colors cursor-pointer ml-1"
+              className="bg-white/20 hover:bg-red-600 text-white p-1.5 rounded-xs transition-colors cursor-pointer ml-0.5"
               title="Close Bank Statement"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
         {/* ── ACCOUNT SUMMARY STRIP ── */}
-        <div className="bg-indigo-50/70 border-b border-indigo-100 p-2.5 px-5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
-          <div className="flex items-center gap-4 flex-wrap">
+        <div className="bg-indigo-50/70 border-b border-indigo-100 py-1 px-3 sm:px-4 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
             <div>
-              <span className="text-gray-500 font-medium">Brought Forward: </span>
-              <span className="font-bold text-gray-900 font-mono text-sm">
+              <span className="text-gray-500 font-medium text-[11px]">Brought Forward: </span>
+              <span className="font-bold text-gray-900 font-mono text-xs">
                 {formatCurrency(summary.broughtForward)}
               </span>
             </div>
-            <div className="h-4 w-px bg-gray-300 hidden sm:block" />
+            <div className="h-3.5 w-px bg-gray-300 hidden sm:block" />
             <div>
-              <span className="text-gray-500 font-medium">Total Debits: </span>
-              <span className="font-bold text-red-700 font-mono text-sm">
+              <span className="text-gray-500 font-medium text-[11px]">Total Debits: </span>
+              <span className="font-bold text-red-700 font-mono text-xs">
                 -{formatCurrency(filteredSummary.totalDebits)}
               </span>
             </div>
-            <div className="h-4 w-px bg-gray-300 hidden sm:block" />
+            <div className="h-3.5 w-px bg-gray-300 hidden sm:block" />
             <div>
-              <span className="text-gray-500 font-medium">Current Balance: </span>
-              <span className="font-bold text-emerald-700 font-mono text-base bg-emerald-50 px-2 py-0.5 border border-emerald-200">
-                ₹{formatCurrency(filteredSummary.closingBalance)}
+              <span className="text-gray-500 font-medium text-[11px]">Current Balance: </span>
+              <span className="font-bold text-emerald-700 font-mono text-xs bg-emerald-50 px-1.5 py-0.5 border border-emerald-200">
+                {formatCurrency(filteredSummary.closingBalance)}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-gray-500">
+          <div className="flex items-center gap-1.5 text-[10.5px] text-gray-500">
             <span>Source:</span>
-            <span className="font-semibold text-gray-800">
+            <span className="font-semibold text-gray-700">
               Super Admin Disbursements & Client Payment Receipts
             </span>
           </div>
         </div>
 
         {/* ── COMPREHENSIVE FILTER STRIP ── */}
-        <div className="bg-white border-b border-gray-200 p-2.5 px-5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="bg-white border-b border-gray-200 py-1.5 px-3 sm:px-4 flex flex-wrap items-center justify-between gap-2 shrink-0">
           {/* Quick Search */}
-          <div className="relative w-72 sm:w-80">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <div className="relative w-64 sm:w-72">
+            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search narration, UTR, vendor, or amount..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-300 focus:bg-white focus:outline-none focus:border-[#283593] transition-colors"
+              className="w-full pl-8 pr-2.5 py-1 text-xs bg-gray-50 border border-gray-300 focus:bg-white focus:outline-none focus:border-[#283593] transition-colors h-7"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
             )}
           </div>
 
           {/* Filter Modes */}
-          <div className="flex items-center gap-2 flex-wrap text-xs">
+          <div className="flex items-center gap-1.5 flex-wrap text-xs">
             <div className="flex border border-gray-300 overflow-hidden">
               {(["ALL", "MONTH", "YEAR", "DATE", "CUSTOM"] as const).map((type) => (
                 <button
@@ -743,7 +743,7 @@ export function BankStatementModal({
                       setToDate("");
                     }
                   }}
-                  className={`px-3 py-1 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                  className={`px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
                     filterType === type ? "bg-[#283593] text-white" : "bg-white text-gray-700 hover:bg-gray-100"
                   }`}
                 >
@@ -852,16 +852,16 @@ export function BankStatementModal({
         </div>
 
         {/* ── SPREADSHEET TOOLBAR: FREEZE CONTROLS, ACTIVE FILTERS & COLUMN RESIZING ── */}
-        <div className="bg-gray-100 border-b border-gray-200 px-5 py-1.5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0 select-none">
-          <div className="flex items-center gap-3 flex-wrap">
+        <div className="bg-gray-100 border-b border-gray-200 px-3 sm:px-4 py-1 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 select-none">
+          <div className="flex items-center gap-2 flex-wrap">
             {/* Freeze Controls */}
-            <div className="flex items-center gap-1.5 bg-white border border-gray-300 px-2 py-1 shadow-2xs">
+            <div className="flex items-center gap-1 bg-white border border-gray-300 px-1.5 py-0.5 shadow-2xs">
               <Lock className="w-3 h-3 text-indigo-800" />
-              <span className="text-[11px] font-bold text-gray-700">Freeze:</span>
+              <span className="text-[10.5px] font-bold text-gray-700">Freeze:</span>
               <select
                 value={frozenColCount}
                 onChange={(e) => setFrozenColCount(Number(e.target.value))}
-                className="text-[11px] font-semibold text-indigo-950 bg-transparent outline-none cursor-pointer"
+                className="text-[10.5px] font-semibold text-indigo-950 bg-transparent outline-none cursor-pointer"
               >
                 <option value={0}>No Frozen Columns</option>
                 <option value={1}>1 Col (Value Date)</option>
@@ -875,7 +875,7 @@ export function BankStatementModal({
             <button
               type="button"
               onClick={() => setFrozenColCount((prev) => (prev > 0 ? 0 : 1))}
-              className="text-[11px] font-medium text-gray-700 hover:text-indigo-900 bg-white border border-gray-300 px-2 py-1 shadow-2xs flex items-center gap-1 cursor-pointer"
+              className="text-[10.5px] font-medium text-gray-700 hover:text-indigo-900 bg-white border border-gray-300 px-1.5 py-0.5 shadow-2xs flex items-center gap-1 cursor-pointer"
               title="Toggle column freezing"
             >
               {frozenColCount > 0 ? (
@@ -895,7 +895,7 @@ export function BankStatementModal({
             <button
               type="button"
               onClick={handleResetColumnWidths}
-              className="text-[11px] font-medium text-gray-700 hover:text-indigo-900 bg-white border border-gray-300 px-2 py-1 shadow-2xs flex items-center gap-1 cursor-pointer"
+              className="text-[10.5px] font-medium text-gray-700 hover:text-indigo-900 bg-white border border-gray-300 px-1.5 py-0.5 shadow-2xs flex items-center gap-1 cursor-pointer"
               title="Reset column widths to default"
             >
               <RotateCcw className="w-3 h-3 text-gray-500" />
@@ -906,7 +906,7 @@ export function BankStatementModal({
           {/* Active Column Filters Indicator */}
           <div className="flex items-center gap-2">
             {activeFiltersCount > 0 && (
-              <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 px-2 py-0.5 text-[11px] text-amber-900 font-medium">
+              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 px-1.5 py-0.5 text-[10.5px] text-amber-900 font-medium">
                 <Filter className="w-3 h-3 text-amber-700" />
                 <span>
                   <strong>{activeFiltersCount}</strong> column filter{activeFiltersCount > 1 ? "s" : ""} active
@@ -922,7 +922,7 @@ export function BankStatementModal({
             )}
 
             {sortConfig && (
-              <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[11px] text-indigo-950 font-medium">
+              <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 text-[10.5px] text-indigo-950 font-medium">
                 <span>Sorted by <strong>{STATEMENT_COLUMNS.find((c) => c.id === sortConfig.colId)?.label}</strong></span>
                 {sortConfig.direction === "asc" ? (
                   <ArrowUp className="w-3 h-3 text-indigo-700" />
@@ -939,14 +939,14 @@ export function BankStatementModal({
               </div>
             )}
 
-            <div className="text-[11px] text-gray-500 font-mono">
+            <div className="text-[10.5px] text-gray-500 font-mono">
               Showing <strong>{filteredTransactions.length}</strong> of {transactions.length} rows
             </div>
           </div>
         </div>
 
         {/* ── SCROLLABLE STATEMENT TABLE WITH PERMANENTLY FROZEN HEADERS & COLUMNS ── */}
-        <div className="flex-1 overflow-auto max-h-[56vh] bg-white relative border-b border-gray-300">
+        <div className="flex-1 overflow-auto bg-white relative border-b border-gray-300 min-h-0">
           {loading ? (
             <div className="py-20 text-center text-gray-500 text-xs">
               <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#283593] mb-2" />
@@ -1470,42 +1470,42 @@ export function BankStatementModal({
         </div>
 
         {/* ── STATEMENT SUMMARY TABLE & FOOTER ── */}
-        <div className="p-3 sm:p-4 bg-gray-50/60 border-t border-gray-200 shrink-0 space-y-2.5">
+        <div className="p-2 px-3 sm:px-4 bg-gray-50/70 border-t border-gray-200 shrink-0 space-y-1.5">
           <div className="border border-indigo-900 bg-white overflow-hidden shadow-xs">
-            <div className="bg-[#283593] text-white px-4 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
+            <div className="bg-[#283593] text-white px-3 py-1 text-[11px] font-bold uppercase tracking-wider flex items-center justify-between">
               <span>Statement Summary : {statementPeriodLabel}</span>
-              <span className="text-indigo-200 text-[11px]">Account No: {config.accountNo}</span>
+              <span className="text-indigo-200 text-[10.5px]">Account No: {config.accountNo}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-center border-collapse text-xs">
                 <thead>
-                  <tr className="bg-gray-100 text-gray-700 font-bold border-b border-gray-200 text-[11px]">
-                    <th className="py-2 px-3 border-r border-gray-200">Brought Forward (₹)</th>
-                    <th className="py-2 px-3 border-r border-gray-200">Dr Count</th>
-                    <th className="py-2 px-3 border-r border-gray-200">Cr Count</th>
-                    <th className="py-2 px-3 border-r border-gray-200">Total Debits (₹)</th>
-                    <th className="py-2 px-3 border-r border-gray-200">Total Credits (₹)</th>
-                    <th className="py-2 px-3 font-black text-[#283593]">Closing Balance (₹)</th>
+                  <tr className="bg-gray-100 text-gray-700 font-bold border-b border-gray-200 text-[10.5px]">
+                    <th className="py-1 px-2 border-r border-gray-200">Brought Forward (₹)</th>
+                    <th className="py-1 px-2 border-r border-gray-200">Dr Count</th>
+                    <th className="py-1 px-2 border-r border-gray-200">Cr Count</th>
+                    <th className="py-1 px-2 border-r border-gray-200">Total Debits (₹)</th>
+                    <th className="py-1 px-2 border-r border-gray-200">Total Credits (₹)</th>
+                    <th className="py-1 px-2 font-black text-[#283593]">Closing Balance (₹)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="font-mono text-xs font-bold text-gray-900">
-                    <td className="py-2 px-3 border-r border-gray-200">
+                  <tr className="font-mono text-[11px] font-bold text-gray-900">
+                    <td className="py-1 px-2 border-r border-gray-200">
                       {formatCurrency(filteredSummary.broughtForward)} CR
                     </td>
-                    <td className="py-2 px-3 border-r border-gray-200 text-red-700">
+                    <td className="py-1 px-2 border-r border-gray-200 text-red-700">
                       {filteredSummary.drCount}
                     </td>
-                    <td className="py-2 px-3 border-r border-gray-200 text-emerald-700">
+                    <td className="py-1 px-2 border-r border-gray-200 text-emerald-700">
                       {filteredSummary.crCount}
                     </td>
-                    <td className="py-2 px-3 border-r border-gray-200 text-red-700 font-black">
+                    <td className="py-1 px-2 border-r border-gray-200 text-red-700 font-black">
                       {Number(filteredSummary.totalDebits).toFixed(2)}
                     </td>
-                    <td className="py-2 px-3 border-r border-gray-200 text-emerald-700 font-black">
+                    <td className="py-1 px-2 border-r border-gray-200 text-emerald-700 font-black">
                       {Number(filteredSummary.totalCredits).toFixed(2)}
                     </td>
-                    <td className="py-2 px-3 bg-indigo-50 font-black text-indigo-950 text-sm">
+                    <td className="py-1 px-2 bg-indigo-50 font-black text-indigo-950 text-xs">
                       {formatCurrency(filteredSummary.closingBalance)} CR
                     </td>
                   </tr>
@@ -1514,14 +1514,11 @@ export function BankStatementModal({
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-gray-500">
-            <p className="italic">
-              • Computer generated bank statement from SSPāCIA ICICI portal • Drag column dividers to resize • Click column filter icons to filter like Google Sheets.
-            </p>
+          <div className="flex items-center justify-end">
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 border border-gray-300 cursor-pointer bg-white shadow-2xs"
+              className="px-3.5 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 border border-gray-300 cursor-pointer bg-white shadow-2xs rounded-xs"
             >
               Close Statement
             </button>
