@@ -2619,51 +2619,6 @@ export function ExpenseRegister({
             <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500" />
           </div>
         </div>
-
-        {/* Accountant Pending Validation Alert Banner */}
-        {(isAccountant || isAdmin) && pendingAccountantCount > 0 && (
-          <div className="bg-amber-50 border border-amber-300 p-2.5 flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 text-amber-900 font-bold">
-              <Clock className="w-4 h-4 text-amber-600 animate-pulse shrink-0" />
-              <span>
-                {pendingAccountantCount} expense {pendingAccountantCount === 1 ? "entry" : "entries"} entered by Community Managers awaiting {isAdmin ? "Accountant validation" : "your validation"}!
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectedApprovalStatus("PENDING_ACCOUNTANT_APPROVAL")}
-              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold uppercase text-[10px] tracking-wider transition-all cursor-pointer shadow-2xs whitespace-nowrap"
-            >
-              Review Pending Checks ({pendingAccountantCount})
-            </button>
-          </div>
-        )}
-
-        {/* ── ACTIVE FILTER FINANCIAL SUMMARY BANNER (REPLACES SPREADSHEET FORMULA ROW) ── */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-cyan-50/60 p-2.5 border border-cyan-200">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-[#006064]" />
-              <span className="text-xs font-bold text-gray-900">
-                Selected View:{" "}
-                <span className="text-[#006064] uppercase font-black tracking-wide">
-                  {activeMonthMeta.label}
-                </span>
-              </span>
-            </div>
-
-
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="px-2.5 py-0.5 text-xs font-mono font-bold bg-[#006064] text-white">
-              {activeMonthMeta.count} Expenses
-            </span>
-            <span className="text-sm font-display font-black text-gray-900 bg-white px-3 py-0.5 border border-cyan-300 shadow-2xs">
-              Month Total: {formatCurrency(activeMonthMeta.total)}
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* ── STRUCTURED EXPENSE DATA TABLE WITH FROZEN HEADERS & COLUMN CONTROLS ── */}
@@ -2750,8 +2705,17 @@ export function ExpenseRegister({
               </div>
             )}
 
-            <span className="text-[10.5px] font-mono text-gray-500">
-              Showing <strong>{finalDisplayRecords.length}</strong> of {records.length} records
+            {/* Small & Sleek View Summary (Leaves table completely visible) */}
+            <div className="inline-flex items-center gap-2 text-[10.5px] text-gray-600 bg-white px-2.5 py-0.5 border border-gray-300 shadow-2xs">
+              <span className="text-gray-500">View: <strong className="text-[#006064] uppercase font-bold">{activeMonthMeta.label}</strong></span>
+              <span className="text-gray-300">|</span>
+              <span className="font-bold text-gray-800">{activeMonthMeta.count} Expenses</span>
+              <span className="text-gray-300">|</span>
+              <span>Month Total: <strong className="text-emerald-900 font-mono font-black">{formatCurrency(activeMonthMeta.total)}</strong></span>
+            </div>
+
+            <span className="text-[10px] font-mono text-gray-400">
+              ({finalDisplayRecords.length} of {records.length} shown)
             </span>
           </div>
         </div>
