@@ -210,46 +210,96 @@ export async function PUT(
     if (body.approvalRemarks !== undefined) {
       updateData.approvalRemarks = body.approvalRemarks ? String(body.approvalRemarks).trim() : null;
     }
-
-    // Accountant Settlement Fields
-    if (body.payReceiveDate !== undefined) {
-      updateData.payReceiveDate = body.payReceiveDate ? String(body.payReceiveDate).trim() : null;
+    if (body.accountantApprovalStatus !== undefined) {
+      updateData.accountantApprovalStatus = body.accountantApprovalStatus;
     }
-    if (body.receiveAmount !== undefined) {
-      updateData.receiveAmount = body.receiveAmount ? parseFloat(String(body.receiveAmount)) : null;
+    if (body.accountantRemarks !== undefined) {
+      updateData.accountantRemarks = body.accountantRemarks ? String(body.accountantRemarks).trim() : null;
     }
-    if (body.accPaymentMode !== undefined) {
-      updateData.accPaymentMode = body.accPaymentMode || null;
+    if (body.superAdminApprovalStatus !== undefined) {
+      updateData.superAdminApprovalStatus = body.superAdminApprovalStatus;
     }
-    if (body.utrNumber !== undefined) {
-      updateData.utrNumber = body.utrNumber ? String(body.utrNumber).trim() : null;
+    if (body.superAdminRemarks !== undefined) {
+      updateData.superAdminRemarks = body.superAdminRemarks ? String(body.superAdminRemarks).trim() : null;
     }
-
-    // Auto-sync UTR date to payReceiveDate if payReceiveDate changed and utrDate is not explicitly different
-    if (body.utrDate !== undefined) {
-      updateData.utrDate = body.utrDate ? String(body.utrDate).trim() : null;
-    } else if (updateData.payReceiveDate && !existing.utrDate) {
-      updateData.utrDate = updateData.payReceiveDate;
+    if (body.rejectionStage !== undefined) {
+      updateData.rejectionStage = body.rejectionStage;
+    }
+    if (body.rejectionRemarks !== undefined) {
+      updateData.rejectionRemarks = body.rejectionRemarks;
     }
 
-    if (body.utrFileUrl !== undefined) {
-      updateData.utrFileUrl = body.utrFileUrl || null;
-    }
-    if (body.tdsDeducted !== undefined) {
-      updateData.tdsDeducted = body.tdsDeducted || 'No';
-    }
-    if (body.tdsAmount !== undefined) {
-      updateData.tdsAmount = body.tdsAmount ? parseFloat(String(body.tdsAmount)) : null;
+    // Handle Resubmission of Rejected Records
+    const isCurrentlyRejected =
+      existing.approvalStatus === 'REJECTED_BY_ACCOUNTANT' ||
+      existing.approvalStatus === 'REJECTED_BY_SUPER_ADMIN' ||
+      existing.approvalStatus === 'REJECTED';
+
+    if (body.resubmit || (isCurrentlyRejected && body.approvalStatus === undefined)) {
+      if (existing.createdByRole === 'ACCOUNTANT' || isAccountant) {
+        updateData.approvalStatus = 'PENDING_SUPER_ADMIN_APPROVAL';
+        updateData.accountantApprovalStatus = 'APPROVED';
+        updateData.superAdminApprovalStatus = 'PENDING';
+      } else {
+        updateData.approvalStatus = 'PENDING_ACCOUNTANT_APPROVAL';
+        updateData.accountantApprovalStatus = 'PENDING';
+        updateData.superAdminApprovalStatus = 'PENDING';
+      }
+      updateData.rejectionStage = null;
+      updateData.rejectionRemarks = null;
     }
 
-    // Determine status
-    if (body.paymentStatus !== undefined) {
-      updateData.paymentStatus = body.paymentStatus;
+    // Accountant Settlement Fields (only applicable once approved by Super Admin)
+    const canDisburse = existing.approvalStatus === 'APPROVED' || updateData.approvalStatus === 'APPROVED' || isSuperAdmin;
+
+    if (canDisburse) {
+      if (body.payReceiveDate !== undefined) {
+        updateData.payReceiveDate = body.payReceiveDate ? String(body.payReceiveDate).trim() : null;
+      }
+      if (body.receiveAmount !== undefined) {
+        updateData.receiveAmount = body.receiveAmount ? parseFloat(String(body.receiveAmount)) : null;
+      }
+      if (body.accPaymentMode !== undefined) {
+        updateData.accPaymentMode = body.accPaymentMode || null;
+      }
+      if (body.utrNumber !== undefined) {
+        updateData.utrNumber = body.utrNumber ? String(body.utrNumber).trim() : null;
+      }
+
+      // Auto-sync UTR date to payReceiveDate if payReceiveDate changed and utrDate is not explicitly different
+      if (body.utrDate !== undefined) {
+        updateData.utrDate = body.utrDate ? String(body.utrDate).trim() : null;
+      } else if (updateData.payReceiveDate && !existing.utrDate) {
+        updateData.utrDate = updateData.payReceiveDate;
+      }
+
+      if (body.utrFileUrl !== undefined) {
+        updateData.utrFileUrl = body.utrFileUrl || null;
+      }
+      if (body.tdsDeducted !== undefined) {
+        updateData.tdsDeducted = body.tdsDeducted || 'No';
+      }
+      if (body.tdsAmount !== undefined) {
+        updateData.tdsAmount = body.tdsAmount ? parseFloat(String(body.tdsAmount)) : null;
+      }
+
+      // Determine payment status
+      if (body.paymentStatus !== undefined) {
+        updateData.paymentStatus = body.paymentStatus;
+      } else {
+        const finalUtr = updateData.utrNumber !== undefined ? updateData.utrNumber : existing.utrNumber;
+        const finalPayDate = updateData.payReceiveDate !== undefined ? updateData.payReceiveDate : existing.payReceiveDate;
+        const isSettled = Boolean(finalUtr || finalPayDate);
+        updateData.paymentStatus = isSettled ? 'PAID' : 'PENDING';
+      }
     } else {
-      const finalUtr = updateData.utrNumber !== undefined ? updateData.utrNumber : existing.utrNumber;
-      const finalPayDate = updateData.payReceiveDate !== undefined ? updateData.payReceiveDate : existing.payReceiveDate;
-      const isSettled = Boolean(finalUtr || finalPayDate);
-      updateData.paymentStatus = isSettled ? 'PAID' : 'PENDING';
+      // Strictly prevent setting or modifying payment details before Super Admin approval
+      delete updateData.payReceiveDate;
+      delete updateData.utrNumber;
+      delete updateData.utrDate;
+      delete updateData.accPaymentMode;
+      delete updateData.utrFileUrl;
+      updateData.paymentStatus = 'PENDING';
     }
 
     const updated = await (prisma as any).expenseRecord.update({

@@ -1326,8 +1326,25 @@ model ExpenseRecord {
   paymentProofUrl  String?   @db.Text // Uploaded payment proof / UTR receipt
   uploadedInBankPortal Boolean @default(false) // Checkbox for bank portal upload
 
-  // Super Admin Approval & Disbursement Flow
-  approvalStatus   String    @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  // Multi-tier Approval & Disbursement Flow
+  approvalStatus             String    @default("PENDING_ACCOUNTANT_APPROVAL") // "PENDING_ACCOUNTANT_APPROVAL" | "PENDING_SUPER_ADMIN_APPROVAL" | "APPROVED" | "REJECTED_BY_ACCOUNTANT" | "REJECTED_BY_SUPER_ADMIN"
+  
+  accountantApprovalStatus   String?   @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  accountantApprovedById     Int?
+  accountantApprovedByName   String?
+  accountantApprovedAt       DateTime?
+  accountantRemarks          String?   @db.Text
+
+  superAdminApprovalStatus   String?   @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  superAdminApprovedById     Int?
+  superAdminApprovedByName   String?
+  superAdminApprovedAt       DateTime?
+  superAdminRemarks          String?   @db.Text
+
+  rejectionStage             String?   // "ACCOUNTANT" | "SUPER_ADMIN"
+  rejectionRemarks           String?   @db.Text
+
+  // Legacy approval fields (kept for backward compatibility & easy reference)
   approvedById     Int?
   approvedByName   String?
   approvedAt       DateTime?

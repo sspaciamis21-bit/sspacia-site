@@ -6,6 +6,7 @@ export interface SendEmailOptions {
   subject: string;
   html: string;
   text?: string;
+  fromName?: string;
   attachments?: {
     filename: string;
     content?: string | Buffer;
@@ -38,12 +39,13 @@ export function getEmailTransporter() {
 /**
  * Sends an email using the configured SMTP server
  */
-export async function sendEmail({ to, cc, subject, html, text, attachments }: SendEmailOptions) {
+export async function sendEmail({ to, cc, subject, html, text, fromName, attachments }: SendEmailOptions) {
   try {
     const { transporter, sender } = getEmailTransporter();
+    const senderName = fromName || "SSPACIA Coworking";
 
     const mailOptions: nodemailer.SendMailOptions = {
-      from: `"SSPāCIA Community & Operations" <${sender}>`,
+      from: `"${senderName}" <${sender}>`,
       to: Array.isArray(to) ? to.join(', ') : to,
       subject,
       text: text || '',

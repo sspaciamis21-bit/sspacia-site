@@ -99,7 +99,17 @@ export async function GET(request: Request) {
 
     // Approval status filter
     if (approvalStatusParam && approvalStatusParam !== 'ALL') {
-      where.approvalStatus = approvalStatusParam;
+      if (approvalStatusParam === 'PENDING') {
+        where.approvalStatus = {
+          in: ['PENDING_ACCOUNTANT_APPROVAL', 'PENDING_SUPER_ADMIN_APPROVAL', 'PENDING', 'PENDING_APPROVAL'],
+        };
+      } else if (approvalStatusParam === 'REJECTED') {
+        where.approvalStatus = {
+          in: ['REJECTED_BY_ACCOUNTANT', 'REJECTED_BY_SUPER_ADMIN', 'REJECTED'],
+        };
+      } else {
+        where.approvalStatus = approvalStatusParam;
+      }
     }
 
     // Search filter
@@ -346,9 +356,40 @@ export async function POST(request: Request) {
       finalUtrDate = payReceiveDate;
     }
 
-    const isSettled = Boolean(utrNumber || payReceiveDate || (receiveAmount && receiveAmount > 0));
+    let calculatedApprovalStatus = 'PENDING_ACCOUNTANT_APPROVAL';
+    let initialAccApprovalStatus = 'PENDING';
+    let initialAdminApprovalStatus = 'PENDING';
+    let initialApprovedById: number | null = null;
+    let initialApprovedByName: string | null = null;
+    let initialApprovedAt: Date | null = null;
+    let accApprovedById: number | null = null;
+    let accApprovedByName: string | null = null;
+    let accApprovedAt: Date | null = null;
+
+    if (isSuperAdmin) {
+      calculatedApprovalStatus = customApprovalStatus || 'APPROVED';
+      initialAccApprovalStatus = 'APPROVED';
+      initialAdminApprovalStatus = 'APPROVED';
+      initialApprovedById = user.id;
+      initialApprovedByName = user.name;
+      initialApprovedAt = new Date();
+    } else if (isAccountant) {
+      // Accountant enters expense -> straight to Super Admin for approval
+      calculatedApprovalStatus = 'PENDING_SUPER_ADMIN_APPROVAL';
+      initialAccApprovalStatus = 'APPROVED';
+      accApprovedById = user.id;
+      accApprovedByName = user.name;
+      accApprovedAt = new Date();
+      initialAdminApprovalStatus = 'PENDING';
+    } else {
+      // CM enters expense -> starts at Accountant validation
+      calculatedApprovalStatus = 'PENDING_ACCOUNTANT_APPROVAL';
+      initialAccApprovalStatus = 'PENDING';
+      initialAdminApprovalStatus = 'PENDING';
+    }
+
+    const isSettled = isSuperAdmin && Boolean(utrNumber || payReceiveDate || (receiveAmount && receiveAmount > 0));
     const calculatedStatus = customPaymentStatus || (isSettled ? 'PAID' : 'PENDING');
-    const calculatedApprovalStatus = customApprovalStatus || (isSettled ? 'APPROVED' : 'PENDING');
 
     const createdRecord = await (prisma as any).expenseRecord.create({
       data: {
@@ -375,15 +416,25 @@ export async function POST(request: Request) {
         vendorInvoiceUrl: vendorInvoiceUrl ? String(vendorInvoiceUrl).trim() : null,
         paymentProofUrl: paymentProofUrl || null,
         uploadedInBankPortal: Boolean(uploadedInBankPortal),
-        approvalStatus: calculatedApprovalStatus,
 
-        // Accountant details
-        payReceiveDate: payReceiveDate || null,
-        receiveAmount: receiveAmount ? parseFloat(String(receiveAmount)) : null,
-        accPaymentMode: accPaymentMode || null,
-        utrNumber: utrNumber ? utrNumber.trim() : null,
-        utrDate: finalUtrDate,
-        utrFileUrl: utrFileUrl || null,
+        // Multi-tier Approval fields
+        approvalStatus: calculatedApprovalStatus,
+        accountantApprovalStatus: initialAccApprovalStatus,
+        accountantApprovedById: accApprovedById,
+        accountantApprovedByName: accApprovedByName,
+        accountantApprovedAt: accApprovedAt,
+        superAdminApprovalStatus: initialAdminApprovalStatus,
+        approvedById: initialApprovedById,
+        approvedByName: initialApprovedByName,
+        approvedAt: initialApprovedAt,
+
+        // Accountant details (only settable if superadmin or already approved)
+        payReceiveDate: isSuperAdmin ? (payReceiveDate || null) : null,
+        receiveAmount: isSuperAdmin && receiveAmount ? parseFloat(String(receiveAmount)) : null,
+        accPaymentMode: isSuperAdmin ? (accPaymentMode || null) : null,
+        utrNumber: isSuperAdmin && utrNumber ? utrNumber.trim() : null,
+        utrDate: isSuperAdmin ? finalUtrDate : null,
+        utrFileUrl: isSuperAdmin ? (utrFileUrl || null) : null,
         tdsDeducted: tdsDeducted || 'No',
         tdsAmount: tdsAmount ? parseFloat(String(tdsAmount)) : null,
         paymentStatus: calculatedStatus,

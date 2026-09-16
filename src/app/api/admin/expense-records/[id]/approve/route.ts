@@ -4,8 +4,6 @@ import prisma from '@/lib/prisma';
 import { verifyToken } from '@/lib/jwt';
 import { sendEmail } from '@/lib/email';
 
-const DEFAULT_ALERT_EMAIL = 't6565154@gmail.com';
-
 async function getAuthUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get('auth-token')?.value;
@@ -73,24 +71,160 @@ export async function POST(
       return NextResponse.json({ error: 'Expense record not found' }, { status: 404 });
     }
 
-    // If the requisition is not yet approved, only Super Admin can grant initial approval
-    if (record.approvalStatus !== 'APPROVED' && !isSuperAdmin) {
-      return NextResponse.json(
-        { error: 'This expense requisition requires Super Admin approval before payment disbursal can be recorded.' },
-        { status: 403 }
-      );
-    }
-
     const body = await request.json();
     const {
+      action, // 'ACCOUNTANT_APPROVE' | 'ACCOUNTANT_REJECT' | 'SUPER_ADMIN_APPROVE' | 'SUPER_ADMIN_REJECT' | 'DISBURSE_PAYMENT'
+      remarks,
+      rejectionRemarks,
       paymentDate,
       utrNumber,
       paymentMode,
       paymentProofUrl,
       approvalRemarks,
       sendAlertEmail = true,
-      alertEmailRecipient = DEFAULT_ALERT_EMAIL,
+      alertEmailRecipient = null,
     } = body;
+
+    // ── 1. ACCOUNTANT ACTIONS ──
+    if (action === 'ACCOUNTANT_APPROVE') {
+      if (!isAccountant && !isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Only Accountant or Super Admin can perform Accountant validation.' },
+          { status: 403 }
+        );
+      }
+
+      const updated = await (prisma as any).expenseRecord.update({
+        where: { id: recordId },
+        data: {
+          approvalStatus: 'PENDING_SUPER_ADMIN_APPROVAL',
+          accountantApprovalStatus: 'APPROVED',
+          accountantApprovedById: user.id,
+          accountantApprovedByName: user.name,
+          accountantApprovedAt: new Date(),
+          accountantRemarks: remarks ? String(remarks).trim() : null,
+          rejectionStage: null,
+          rejectionRemarks: null,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        message: 'Expense validated and approved by Accountant! Forwarded to Super Admin for final approval.',
+      });
+    }
+
+    if (action === 'ACCOUNTANT_REJECT') {
+      if (!isAccountant && !isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Only Accountant or Super Admin can reject during Accountant validation.' },
+          { status: 403 }
+        );
+      }
+
+      const reason = (remarks || rejectionRemarks || '').trim();
+      if (!reason) {
+        return NextResponse.json(
+          { error: 'Rejection remarks/reason are required so the creator knows what needs correction.' },
+          { status: 400 }
+        );
+      }
+
+      const updated = await (prisma as any).expenseRecord.update({
+        where: { id: recordId },
+        data: {
+          approvalStatus: 'REJECTED_BY_ACCOUNTANT',
+          accountantApprovalStatus: 'REJECTED',
+          rejectionStage: 'ACCOUNTANT',
+          rejectionRemarks: reason,
+          accountantRemarks: reason,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        message: 'Expense rejected by Accountant with remarks and returned for correction.',
+      });
+    }
+
+    // ── 2. SUPER ADMIN ACTIONS ──
+    if (action === 'SUPER_ADMIN_APPROVE') {
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Only Super Admin can grant final approval.' },
+          { status: 403 }
+        );
+      }
+
+      const updated = await (prisma as any).expenseRecord.update({
+        where: { id: recordId },
+        data: {
+          approvalStatus: 'APPROVED',
+          superAdminApprovalStatus: 'APPROVED',
+          superAdminApprovedById: user.id,
+          superAdminApprovedByName: user.name,
+          superAdminApprovedAt: new Date(),
+          superAdminRemarks: remarks ? String(remarks).trim() : null,
+          approvedById: user.id,
+          approvedByName: user.name,
+          approvedAt: new Date(),
+          approvalRemarks: remarks ? String(remarks).trim() : null,
+          rejectionStage: null,
+          rejectionRemarks: null,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        message: 'Expense approved by Super Admin! Ready for payment disbursement.',
+      });
+    }
+
+    if (action === 'SUPER_ADMIN_REJECT') {
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Only Super Admin can reject at the final approval stage.' },
+          { status: 403 }
+        );
+      }
+
+      const reason = (remarks || rejectionRemarks || '').trim();
+      if (!reason) {
+        return NextResponse.json(
+          { error: 'Rejection remarks/reason are required so the creator knows what needs correction.' },
+          { status: 400 }
+        );
+      }
+
+      const updated = await (prisma as any).expenseRecord.update({
+        where: { id: recordId },
+        data: {
+          approvalStatus: 'REJECTED_BY_SUPER_ADMIN',
+          superAdminApprovalStatus: 'REJECTED',
+          rejectionStage: 'SUPER_ADMIN',
+          rejectionRemarks: reason,
+          superAdminRemarks: reason,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        message: 'Expense rejected by Super Admin with remarks and returned for correction.',
+      });
+    }
+
+    // ── 3. DISBURSEMENT / PAYMENT RECORDING ACTION ──
+    // Strictly gated: must be APPROVED by Super Admin before payment details can be entered
+    if (record.approvalStatus !== 'APPROVED') {
+      return NextResponse.json(
+        { error: 'Payment details and UTR cannot be recorded yet. This expense must first receive Super Admin approval.' },
+        { status: 400 }
+      );
+    }
 
     const finalUtr = utrNumber ? String(utrNumber).trim() : (record.utrNumber ? String(record.utrNumber).trim() : '');
     if (!finalUtr) {
@@ -103,159 +237,66 @@ export async function POST(
     const finalPayDate = paymentDate ? String(paymentDate).trim() : (record.utrDate || record.payReceiveDate || new Date().toISOString().split('T')[0]);
     const finalMode = paymentMode ? String(paymentMode).trim() : (record.accPaymentMode || record.paymentMode || 'Bank Transfer');
 
-    // Update expense record
-    const updated = await (prisma as any).expenseRecord.update({
-      where: { id: recordId },
-      data: {
-        approvalStatus: 'APPROVED',
-        paymentStatus: 'PAID',
-        utrNumber: finalUtr,
-        utrDate: finalPayDate,
-        payReceiveDate: finalPayDate,
-        receiveAmount: record.amount,
-        accPaymentMode: finalMode,
-        paymentProofUrl: paymentProofUrl || record.paymentProofUrl || null,
-        approvalRemarks: approvalRemarks !== undefined ? (approvalRemarks ? String(approvalRemarks).trim() : null) : record.approvalRemarks,
-        approvedById: record.approvedById || user.id,
-        approvedByName: record.approvedByName || user.name,
-        approvedAt: record.approvedAt || new Date(),
-        alertEmailSent: Boolean(sendAlertEmail) || Boolean(record.alertEmailSent),
-        alertEmailSentTo: sendAlertEmail ? (alertEmailRecipient || DEFAULT_ALERT_EMAIL) : record.alertEmailSentTo,
-      },
-    });
+    // Resolve real vendor email from input or VendorMaster database
+    let recipientEmail: string | null = null;
+    if (alertEmailRecipient && typeof alertEmailRecipient === 'string' && alertEmailRecipient.includes('@')) {
+      recipientEmail = alertEmailRecipient.trim();
+    }
+
+    if (!recipientEmail && record.vendorId) {
+      const vm = await (prisma as any).vendorMaster.findUnique({
+        where: { id: record.vendorId },
+        select: { email: true, vendorName: true },
+      });
+      if (vm?.email && vm.email.trim()) {
+        recipientEmail = vm.email.trim();
+      }
+    }
+
+    if (!recipientEmail && record.vendorName) {
+      const vm = await (prisma as any).vendorMaster.findFirst({
+        where: { vendorName: { equals: record.vendorName.trim(), mode: 'insensitive' } },
+        select: { email: true, vendorName: true },
+      });
+      if (vm?.email && vm.email.trim()) {
+        recipientEmail = vm.email.trim();
+      }
+    }
 
     let emailSent = false;
     let emailError: string | null = null;
 
-    if (sendAlertEmail) {
-      const recipient = alertEmailRecipient || DEFAULT_ALERT_EMAIL;
+    if (sendAlertEmail && recipientEmail) {
       const formattedAmount = `₹${record.amount.toLocaleString('en-IN', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}`;
 
-      const emailSubject = `Payment Advice: ${record.vendorName || 'Vendor'} - ${formattedAmount} | Ref: ${finalUtr}`;
+      const emailSubject = `Payment Acknowledgement - ${record.vendorName || 'Vendor'} - ${formattedAmount}`;
 
-      const emailText = `PAYMENT ADVICE & REMITTANCE CONFIRMATION - SSPACIA
---------------------------------------------------
+      const emailText = `Dear ${record.vendorName || 'Sir / Madam'},
 
-Dear ${record.vendorName || 'Vendor'},
+We have processed the payment of ${formattedAmount} towards ${record.description}${record.receiptNo ? ` (Invoice / Bill Ref: ${record.receiptNo})` : ''}.
 
-This is an automated payment confirmation from SSPāCIA Coworking Spaces.
-A payment of ${formattedAmount} has been approved and disbursed to your bank account.
-
-TRANSACTION DETAILS:
-- Beneficiary / Vendor: ${record.vendorName || 'Not Specified'}
-- Amount Credited: ${formattedAmount}
+Payment Details:
+- Amount: ${formattedAmount}
 - UTR / Reference No: ${finalUtr}
 - Payment Date: ${finalPayDate}
 - Payment Mode: ${finalMode}
-- Coworking Center: ${record.locationName || record.location?.name || 'General HQ'}
-${record.receiptNo ? `- Invoice / Ref No: ${record.receiptNo}\n` : ''}${record.accountNo ? `- Credited Bank A/C: ${record.accountNo}\n` : ''}- Description / Purpose: ${record.description}
+- Center: ${record.locationName || record.location?.name || 'SSPACIA'}
+${record.accountNo ? `- Bank Account: ${record.accountNo}\n` : ''}
+Please verify the receipt in your account and acknowledge.
 
-Kindly verify the credit in your bank account and proceed with fulfillment of the corresponding goods/services as agreed.
-
-If you have any questions, please reply directly to this email or contact our accounts desk at cm@sspacia.com.
-
-Warm regards,
-Finance & Accounts Department
-SSPāCIA Coworking Spaces
-cm@sspacia.com | www.sspacia.com
+Thanks & Regards,
+SSPACIA Coworking
 `;
 
-      const emailHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>${emailSubject}</title>
-</head>
-<body style="margin: 0; padding: 20px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.5; color: #222222; background-color: #f7f7f7;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 4px;">
-    <tr>
-      <td style="padding: 22px 26px; border-bottom: 2px solid #006064;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-          <tr>
-            <td>
-              <h2 style="margin: 0; font-size: 20px; font-weight: bold; color: #006064; text-transform: uppercase; letter-spacing: 0.5px;">SSPāCIA</h2>
-              <p style="margin: 4px 0 0 0; font-size: 12px; color: #666666;">Payment Advice & Remittance Confirmation</p>
-            </td>
-            <td align="right" style="vertical-align: top;">
-              <span style="font-size: 11px; font-weight: bold; color: #0d6832; background-color: #e6f4ea; padding: 4px 8px; border: 1px solid #b7e1cd;">PAYMENT PROCESSED</span>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding: 24px 26px;">
-        <p style="margin: 0 0 14px 0; font-size: 14px; color: #333333;">
-          Dear <strong>${record.vendorName || 'Vendor'}</strong>,
-        </p>
-        <p style="margin: 0 0 18px 0; font-size: 13.5px; color: #444444; line-height: 1.5;">
-          This is to confirm that a payment of <strong style="color: #006064;">${formattedAmount}</strong> has been processed and disbursed by SSPāCIA towards the invoice/expense details mentioned below.
-        </p>
-
-        <table role="presentation" width="100%" cellpadding="8" cellspacing="0" border="0" style="border-collapse: collapse; font-size: 13px; margin-bottom: 20px; border: 1px solid #eeeeee;">
-          <tr style="background-color: #f9f9f9;">
-            <td width="38%" style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Payment Amount</td>
-            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #006064; font-size: 15px;">${formattedAmount}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">UTR / Ref Number</td>
-            <td style="border: 1px solid #eeeeee; font-family: monospace; font-size: 13px; color: #111111; font-weight: bold;">${finalUtr}</td>
-          </tr>
-          <tr style="background-color: #f9f9f9;">
-            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Payment Date</td>
-            <td style="border: 1px solid #eeeeee; color: #333333;">${finalPayDate}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Payment Mode</td>
-            <td style="border: 1px solid #eeeeee; color: #333333;">${finalMode}</td>
-          </tr>
-          <tr style="background-color: #f9f9f9;">
-            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Center / Location</td>
-            <td style="border: 1px solid #eeeeee; color: #333333;">${record.locationName || record.location?.name || 'General HQ'}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Expense Description</td>
-            <td style="border: 1px solid #eeeeee; color: #333333;">${record.description}</td>
-          </tr>
-          ${record.receiptNo ? `
-          <tr style="background-color: #f9f9f9;">
-            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Invoice / Bill Ref.</td>
-            <td style="border: 1px solid #eeeeee; color: #333333;">${record.receiptNo}</td>
-          </tr>` : ''}
-          ${record.accountNo ? `
-          <tr>
-            <td style="border: 1px solid #eeeeee; font-weight: bold; color: #555555;">Credited Account</td>
-            <td style="border: 1px solid #eeeeee; font-family: monospace; color: #333333;">${record.accountNo}</td>
-          </tr>` : ''}
-        </table>
-
-        <p style="margin: 0 0 16px 0; font-size: 13px; color: #444444; line-height: 1.5;">
-          Kindly verify the credit in your bank account and proceed with the order fulfillment / delivery as agreed. If you have any queries, please reply directly to this email.
-        </p>
-
-        <p style="margin: 20px 0 0 0; font-size: 13px; color: #333333;">
-          Warm regards,<br>
-          <strong>Finance & Accounts Team</strong><br>
-          SSPāCIA Coworking Spaces<br>
-          <span style="font-size: 12px; color: #777777;">cm@sspacia.com | www.sspacia.com</span>
-        </p>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding: 12px 26px; background-color: #fafafa; border-top: 1px solid #eeeeee; font-size: 11px; color: #888888; text-align: center;">
-        This is an official transactional payment advice from SSPāCIA. Please retain this email for your accounting records.
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+      const emailHtml = `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.6; color: #222222; white-space: pre-wrap;">${emailText}</div>`;
 
       try {
         const mailResult = await sendEmail({
-          to: recipient,
+          to: recipientEmail,
+          fromName: 'SSPACIA Coworking',
           subject: emailSubject,
           text: emailText,
           html: emailHtml,
@@ -269,14 +310,41 @@ cm@sspacia.com | www.sspacia.com
         console.error('[EXPENSE_APPROVAL_EMAIL_ERROR]', err);
         emailError = err?.message || 'Error dispatching approval email';
       }
+    } else if (sendAlertEmail && !recipientEmail) {
+      emailError = `No email address on file for vendor "${record.vendorName || 'Vendor'}". Please update Vendor Master with the vendor's email.`;
     }
+
+    // Update expense record with payment details and email status
+    const updated = await (prisma as any).expenseRecord.update({
+      where: { id: recordId },
+      data: {
+        paymentStatus: 'PAID',
+        utrNumber: finalUtr,
+        utrDate: finalPayDate,
+        payReceiveDate: finalPayDate,
+        receiveAmount: record.amount,
+        accPaymentMode: finalMode,
+        paymentProofUrl: paymentProofUrl || record.paymentProofUrl || null,
+        approvalRemarks: approvalRemarks !== undefined ? (approvalRemarks ? String(approvalRemarks).trim() : null) : record.approvalRemarks,
+        alertEmailSent: emailSent || Boolean(record.alertEmailSent),
+        alertEmailSentTo: emailSent && recipientEmail ? recipientEmail : record.alertEmailSentTo,
+      },
+    });
+
+    const statusMsg = `Expense approved successfully! Payment UTR: ${finalUtr}${
+      emailSent
+        ? ` | Alert email sent to ${recipientEmail}`
+        : emailError
+        ? ` | Email note: ${emailError}`
+        : ''
+    }`;
 
     return NextResponse.json({
       success: true,
       data: updated,
       emailSent,
       emailError,
-      message: `Expense approved successfully! Payment UTR: ${finalUtr}${emailSent ? ' | Alert email sent to ' + (alertEmailRecipient || DEFAULT_ALERT_EMAIL) : ''}`,
+      message: statusMsg,
     });
   } catch (error: any) {
     console.error('[EXPENSE_RECORD_APPROVE_ERROR]', error);
