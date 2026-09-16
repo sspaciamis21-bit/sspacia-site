@@ -45,6 +45,26 @@ function formatDateDDMMYYYY(dateInput: any): string {
   return `${day}/${month}/${year}`;
 }
 
+function resolveOldInvoiceDate(partOrInvDate: any, monthStr: string | null, createdAt: any): { rawTimestamp: number; formattedDate: string } {
+  if (partOrInvDate) {
+    const d = new Date(partOrInvDate);
+    if (!isNaN(d.getTime())) {
+      return { rawTimestamp: d.getTime(), formattedDate: formatDateDDMMYYYY(d) };
+    }
+  }
+  if (monthStr) {
+    const parts = String(monthStr).trim().split(/\s+/);
+    if (parts.length >= 2) {
+      const d = new Date(`${parts[0]} 05, ${parts[1]} 10:00:00`);
+      if (!isNaN(d.getTime())) {
+        return { rawTimestamp: d.getTime(), formattedDate: formatDateDDMMYYYY(d) };
+      }
+    }
+  }
+  const fallbackDate = new Date(createdAt || Date.now());
+  return { rawTimestamp: fallbackDate.getTime(), formattedDate: formatDateDDMMYYYY(fallbackDate) };
+}
+
 // GET /api/admin/bank-statement
 // Retrieves bank configuration, running credits (client payments & web purchases) & debits (vendor payments & 3-account fund circulations)
 export async function GET() {
@@ -257,7 +277,8 @@ export async function GET() {
       clientName: string,
       ref: string,
       invId: number,
-      partNum: number
+      partNum: number,
+      prefix: string = ''
     ) {
       if (totalReceived <= 0) return;
 
@@ -271,7 +292,7 @@ export async function GET() {
       }
 
       if (crAlloc > 0) {
-        const crRef = `IFT/CR/${invId}${partNum > 0 ? `P${partNum}` : ''}`;
+        const crRef = `IFT/CR/${prefix ? `${prefix}/` : ''}${invId}${partNum > 0 ? `P${partNum}` : ''}`;
         rawTransactions.push({
           type: 'DEBIT',
           rawDate: new Date(rawDate).getTime() + 1, // slight offset to order after credit
@@ -296,7 +317,7 @@ export async function GET() {
       }
 
       if (vfAlloc > 0) {
-        const vfRef = `IFT/VF/${invId}${partNum > 0 ? `P${partNum}` : ''}`;
+        const vfRef = `IFT/VF/${prefix ? `${prefix}/` : ''}${invId}${partNum > 0 ? `P${partNum}` : ''}`;
         rawTransactions.push({
           type: 'DEBIT',
           rawDate: new Date(rawDate).getTime() + 2, // slight offset to order after credit
@@ -310,6 +331,122 @@ export async function GET() {
           accountNo: bankRules.variableFixedAccount.accountNo,
         });
       }
+    }
+
+    // 4b. FETCH CREDITS: Old Invoices & Past Records Archive Payments Received (April, May, June, July, etc.)
+    try {
+      const paidOldInvoices = await (prisma as any).oldInvoiceHistory.findMany({
+        where: {
+          NOT: [
+            { month: { contains: 'August' } },
+            { month: { contains: 'September' } },
+          ],
+          OR: [
+            { receiveAmount: { gt: 0 } },
+            { utrNumber: { not: null } },
+            { payReceiveDate: { not: null } },
+          ],
+        },
+        orderBy: [
+          { createdAt: 'asc' },
+          { id: 'asc' },
+        ],
+      });
+
+      // Track already credited live invoice signatures (company + month or UTR) to avoid double-counting
+      const liveCreditedKeys = new Set<string>();
+      approvedInvoices.forEach((inv: any) => {
+        const cName = (inv.companyName || '').trim().toLowerCase();
+        const bMonth = (inv.billingMonth || '').trim().toLowerCase();
+        if (cName && bMonth) {
+          liveCreditedKeys.add(`${cName}|${bMonth}`);
+        }
+        if (inv.utrNumber) {
+          liveCreditedKeys.add(inv.utrNumber.trim().toLowerCase());
+        }
+      });
+
+      paidOldInvoices.forEach((inv: any) => {
+        const clientName = (inv.companyName || 'CLIENT').trim().toUpperCase();
+        const billingMonth = inv.month ? `[${inv.month}]` : '';
+        const cKey = (inv.companyName || '').trim().toLowerCase();
+        const mKey = (inv.month || '').trim().toLowerCase();
+        const utrKey = (inv.utrNumber || '').trim().toLowerCase();
+
+        // If this invoice payment is already credited via live invoiceRecord with same company+month or same UTR, skip to avoid duplicates
+        if ((cKey && mKey && liveCreditedKeys.has(`${cKey}|${mKey}`)) || (utrKey && liveCreditedKeys.has(utrKey))) {
+          return;
+        }
+
+        // Check for multi-part payments in paymentsJson
+        let parsedParts: any[] = [];
+        if (inv.paymentsJson) {
+          try {
+            const parsed = JSON.parse(inv.paymentsJson);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              parsedParts = parsed;
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        if (parsedParts.length > 0) {
+          parsedParts.forEach((part: any, pIdx: number) => {
+            const partAmt = parseFloat(String(part.receiveAmount || part.amount || '0')) || 0;
+            if (partAmt <= 0) return;
+
+            const rawDateInput = part.payReceiveDate || part.utrDate || inv.payReceiveDate || inv.utrDate;
+            const { rawTimestamp, formattedDate } = resolveOldInvoiceDate(rawDateInput, inv.month, inv.createdAt);
+            const mode = (part.paymentMode || inv.paymentMode || 'NEFT').toUpperCase();
+            const ref = part.utrNumber || inv.utrNumber || `OLDINV${inv.id}P${pIdx + 1}`;
+
+            rawTransactions.push({
+              type: 'CREDIT',
+              rawDate: rawTimestamp,
+              valueDate: formattedDate,
+              postDate: formattedDate,
+              details: `DEP TFR ${mode}/${ref}/${clientName} - INVOICE ${billingMonth} PAYMENT RECEIVED`,
+              refNo: ref,
+              debit: null,
+              credit: partAmt,
+              source: 'OLD_INVOICE_PAYMENT',
+              clientName: inv.companyName,
+              oldInvoiceId: inv.id,
+              invoiceUrl: inv.invoiceUrl,
+            });
+
+            applyCirculationSplits(partAmt, rawTimestamp, formattedDate, clientName, ref, inv.id, pIdx + 1, 'OLD');
+          });
+        } else {
+          const recAmt = parseFloat(String(inv.receiveAmount || 0)) || 0;
+          if (recAmt > 0) {
+            const rawDateInput = inv.payReceiveDate || inv.utrDate;
+            const { rawTimestamp, formattedDate } = resolveOldInvoiceDate(rawDateInput, inv.month, inv.createdAt);
+            const mode = (inv.paymentMode || 'NEFT').toUpperCase();
+            const ref = inv.utrNumber || `OLDINV${inv.id}`;
+
+            rawTransactions.push({
+              type: 'CREDIT',
+              rawDate: rawTimestamp,
+              valueDate: formattedDate,
+              postDate: formattedDate,
+              details: `DEP TFR ${mode}/${ref}/${clientName} - INVOICE ${billingMonth} PAYMENT RECEIVED`,
+              refNo: ref,
+              debit: null,
+              credit: recAmt,
+              source: 'OLD_INVOICE_PAYMENT',
+              clientName: inv.companyName,
+              oldInvoiceId: inv.id,
+              invoiceUrl: inv.invoiceUrl,
+            });
+
+            applyCirculationSplits(recAmt, rawTimestamp, formattedDate, clientName, ref, inv.id, 0, 'OLD');
+          }
+        }
+      });
+    } catch (oldInvErr) {
+      console.warn('[BANK_STATEMENT_OLD_INVOICES_LOAD_WARN]', oldInvErr);
     }
 
     // 5. FETCH CREDITS: Website Online Bookings / Visits / Room Purchases

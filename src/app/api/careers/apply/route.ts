@@ -120,25 +120,42 @@ export async function POST(req: Request) {
     }
 
     try {
-        const bytes = await cvFile.arrayBuffer();
-        cvBuffer = Buffer.from(bytes);
-        cvMimeType = cvFile.type || 'application/pdf';
-        cvFileName = cvFile.name || 'Candidate_Resume.pdf';
+      const bytes = await cvFile.arrayBuffer();
+      cvBuffer = Buffer.from(bytes);
+      cvMimeType = cvFile.type || 'application/pdf';
+      cvFileName = cvFile.name || 'Candidate_Resume.pdf';
 
+      const safeFileName = cvFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const diskFileName = `${Date.now()}_${safeFileName}`;
+
+      // 1. Store permanently in MySQL StoredDocument table (Serverless & Hostinger safe)
+      const storedDoc = await (prisma as any).storedDocument.create({
+        data: {
+          fileName: safeFileName,
+          mimeType: cvMimeType,
+          fileData: cvBuffer,
+          fileSize: cvBuffer.length,
+          uploadedById: 1,
+        },
+      });
+
+      // Primary URL points to the stored document endpoint
+      cvUrl = `/api/admin/stored-documents/${storedDoc.id}`;
+
+      // 2. Also save a disk copy in public/uploads/resumes if writeable
+      try {
         const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'resumes');
         if (!fs.existsSync(uploadDir)) {
           fs.mkdirSync(uploadDir, { recursive: true });
         }
-
-        const safeFileName = cvFileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const diskFileName = `${Date.now()}_${safeFileName}`;
         const diskFilePath = path.join(uploadDir, diskFileName);
-
         await fs.promises.writeFile(diskFilePath, cvBuffer);
-        cvUrl = `/uploads/resumes/${diskFileName}`;
-      } catch (uploadErr) {
-        console.error('[Careers Apply] CV file save error:', uploadErr);
+      } catch (diskErr) {
+        console.warn('[Careers Apply] Disk write notice (DB copy safely saved):', diskErr);
       }
+    } catch (uploadErr) {
+      console.error('[Careers Apply] CV file save error:', uploadErr);
+    }
 
     // 3. Direct Database Storage in CareerApplication
     const validJobId = jobPositionId && !isNaN(Number(jobPositionId)) ? Number(jobPositionId) : null;
