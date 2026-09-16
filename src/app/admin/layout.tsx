@@ -189,7 +189,7 @@ export default function AdminLayout({
           </AnimatePresence>
         </div>
 
-        <nav className="flex-1 px-3 md:px-4 py-4 md:py-8 space-y-1.5 overflow-y-auto no-scrollbar">
+        <nav className="flex-1 px-3 md:px-4 py-4 md:py-8 space-y-1.5 overflow-y-auto admin-nav-scrollbar pr-1.5 md:pr-2">
           {sidebarItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/admin/dashboard' && pathname?.startsWith(item.href + '/'));
             return (

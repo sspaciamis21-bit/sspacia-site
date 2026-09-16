@@ -60,6 +60,30 @@
   background: rgba(0, 96, 100, 0.5);
 }
 
+/* Sleek Visible Scrollbar (Up/Down line) for Admin & Sidebar Navigation */
+.admin-nav-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #555555 #f3f4f6;
+}
+
+.admin-nav-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.admin-nav-scrollbar::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 9999px;
+}
+
+.admin-nav-scrollbar::-webkit-scrollbar-thumb {
+  background: #555555;
+  border-radius: 9999px;
+}
+
+.admin-nav-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #2b2b2b;
+}
+
 :root {
   --background: #f8f9fa;
   --foreground: #212121;
