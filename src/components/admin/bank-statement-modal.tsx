@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   Landmark,
@@ -18,6 +18,16 @@ import {
   ArrowUpRight,
   ShieldCheck,
   HelpCircle,
+  Filter,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Lock,
+  Unlock,
+  RotateCcw,
+  CheckSquare,
+  Square,
+  SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
@@ -38,6 +48,7 @@ export interface BankTransactionItem {
   expenseId?: number;
   invoiceUrl?: string | null;
   receiptUrl?: string | null;
+  source?: string;
 }
 
 export interface BankConfig {
@@ -62,6 +73,25 @@ interface BankStatementModalProps {
   isAdmin: boolean;
   isAccountant: boolean;
 }
+
+export interface ColumnDefinition {
+  id: string;
+  label: string;
+  defaultWidth: number;
+  minWidth: number;
+  align: "left" | "center" | "right";
+  mono?: boolean;
+}
+
+export const STATEMENT_COLUMNS: ColumnDefinition[] = [
+  { id: "valueDate", label: "Value Date", defaultWidth: 120, minWidth: 95, align: "center", mono: true },
+  { id: "postDate", label: "Post Date", defaultWidth: 120, minWidth: 95, align: "center", mono: true },
+  { id: "details", label: "Details / Transaction Narration", defaultWidth: 390, minWidth: 220, align: "left" },
+  { id: "refNo", label: "Ref No/ Cheque No", defaultWidth: 230, minWidth: 140, align: "center", mono: true },
+  { id: "debit", label: "₹ Debit", defaultWidth: 120, minWidth: 90, align: "right", mono: true },
+  { id: "credit", label: "₹ Credit", defaultWidth: 120, minWidth: 90, align: "right", mono: true },
+  { id: "balance", label: "Balance (₹)", defaultWidth: 135, minWidth: 100, align: "right", mono: true },
+];
 
 export function BankStatementModal({
   isOpen,
@@ -97,6 +127,26 @@ export function BankStatementModal({
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
+  // ── SPREADSHEET FEATURES: COLUMN RESIZE, FREEZE & GOOGLE SHEETS FILTERS ──
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    STATEMENT_COLUMNS.forEach((c) => {
+      initial[c.id] = c.defaultWidth;
+    });
+    return initial;
+  });
+
+  const [frozenColCount, setFrozenColCount] = useState<number>(1); // Default: Freeze Value Date
+  const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({});
+  const [activeColMenu, setActiveColMenu] = useState<string | null>(null);
+  const [tempFilterValues, setTempFilterValues] = useState<string[]>([]);
+  const [filterSearchQuery, setFilterSearchQuery] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ colId: string; direction: "asc" | "desc" } | null>(null);
+
+  const colMenuRef = useRef<HTMLDivElement>(null);
+  const isResizingRef = useRef(false);
+  const resizeDataRef = useRef<{ colId: string; startX: number; startWidth: number } | null>(null);
+
   // Edit Opening Balance Modal
   const [isEditingBalance, setIsEditingBalance] = useState(false);
   const [newOpeningBalance, setNewOpeningBalance] = useState("50000");
@@ -113,6 +163,73 @@ export function BankStatementModal({
       fetchStatement(true);
     }
   }, [isOpen]);
+
+  // Click outside listener for column menu popover
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
+        setActiveColMenu(null);
+      }
+    };
+    if (activeColMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [activeColMenu]);
+
+  // Global mousemove/mouseup listener for Excel-style column resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingRef.current || !resizeDataRef.current) return;
+      const { colId, startX, startWidth } = resizeDataRef.current;
+      const colDef = STATEMENT_COLUMNS.find((c) => c.id === colId);
+      const minWidth = colDef?.minWidth || 75;
+      const delta = e.clientX - startX;
+      const newWidth = Math.max(minWidth, startWidth + delta);
+
+      setColumnWidths((prev) => ({
+        ...prev,
+        [colId]: newWidth,
+      }));
+    };
+
+    const handleMouseUp = () => {
+      if (isResizingRef.current) {
+        isResizingRef.current = false;
+        resizeDataRef.current = null;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  const handleStartResize = (colId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const currentWidth = columnWidths[colId] || STATEMENT_COLUMNS.find((c) => c.id === colId)?.defaultWidth || 120;
+    isResizingRef.current = true;
+    resizeDataRef.current = { colId, startX: e.clientX, startWidth: currentWidth };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  const handleResetColumnWidths = () => {
+    const reset: Record<string, number> = {};
+    STATEMENT_COLUMNS.forEach((c) => {
+      reset[c.id] = c.defaultWidth;
+    });
+    setColumnWidths(reset);
+    toast.info("Column widths reset to default");
+  };
 
   const fetchStatement = async (isInitial = false) => {
     try {
@@ -206,8 +323,30 @@ export function BankStatementModal({
     return Array.from(yearsSet).sort().reverse();
   }, [transactions]);
 
-  // Filtered transactions
-  const filteredTransactions = useMemo(() => {
+  // Helper to extract raw cell value as string
+  const getCellValue = (tx: BankTransactionItem, colId: string): string => {
+    switch (colId) {
+      case "valueDate":
+        return tx.valueDate || "";
+      case "postDate":
+        return tx.postDate || "";
+      case "details":
+        return tx.details || "";
+      case "refNo":
+        return tx.refNo || "-";
+      case "debit":
+        return tx.debit ? Number(tx.debit).toFixed(2) : "-";
+      case "credit":
+        return tx.credit ? Number(tx.credit).toFixed(2) : "-";
+      case "balance":
+        return tx.balance !== undefined && tx.balance !== null ? Number(tx.balance).toFixed(2) : "-";
+      default:
+        return "";
+    }
+  };
+
+  // Base filtered transactions (from top-level Date / Search bar)
+  const baseTransactions = useMemo(() => {
     return transactions.filter((t) => {
       // 1. Search match
       if (searchQuery.trim()) {
@@ -244,6 +383,170 @@ export function BankStatementModal({
     });
   }, [transactions, searchQuery, filterType, selectedMonth, selectedYear, selectedDate, fromDate, toDate]);
 
+  // Unique values and counts for each column
+  const getColumnUniqueValues = (colId: string) => {
+    const counts: Record<string, number> = {};
+    baseTransactions.forEach((tx) => {
+      const val = getCellValue(tx, colId);
+      counts[val] = (counts[val] || 0) + 1;
+    });
+
+    const uniqueList = Object.keys(counts).sort((a, b) => {
+      if (colId === "valueDate" || colId === "postDate") {
+        const pA = a.split("/").map(Number);
+        const pB = b.split("/").map(Number);
+        if (pA.length === 3 && pB.length === 3) {
+          const timeA = new Date(pA[2], pA[1] - 1, pA[0]).getTime();
+          const timeB = new Date(pB[2], pB[1] - 1, pB[0]).getTime();
+          return timeA - timeB;
+        }
+      }
+      if (colId === "debit" || colId === "credit" || colId === "balance") {
+        const numA = parseFloat(a) || 0;
+        const numB = parseFloat(b) || 0;
+        return numA - numB;
+      }
+      return a.localeCompare(b);
+    });
+
+    return { uniqueList, counts };
+  };
+
+  // Google Sheets Filter Handlers
+  const handleOpenColumnFilter = (colId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const { uniqueList } = getColumnUniqueValues(colId);
+    if (columnFilters[colId]) {
+      setTempFilterValues(columnFilters[colId]);
+    } else {
+      setTempFilterValues(uniqueList);
+    }
+    setFilterSearchQuery("");
+    setActiveColMenu(activeColMenu === colId ? null : colId);
+  };
+
+  const handleToggleFilterValue = (val: string) => {
+    setTempFilterValues((prev) => {
+      if (prev.includes(val)) {
+        return prev.filter((v) => v !== val);
+      } else {
+        return [...prev, val];
+      }
+    });
+  };
+
+  const handleSelectAllFilterValues = (values: string[]) => {
+    setTempFilterValues(values);
+  };
+
+  const handleClearAllFilterValues = () => {
+    setTempFilterValues([]);
+  };
+
+  const handleApplyColumnFilter = (colId: string) => {
+    const { uniqueList } = getColumnUniqueValues(colId);
+    if (tempFilterValues.length === uniqueList.length) {
+      // All selected = filter is cleared for this column
+      setColumnFilters((prev) => {
+        const next = { ...prev };
+        delete next[colId];
+        return next;
+      });
+    } else {
+      setColumnFilters((prev) => ({
+        ...prev,
+        [colId]: tempFilterValues,
+      }));
+    }
+    setActiveColMenu(null);
+  };
+
+  const handleResetColumnFilter = (colId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setColumnFilters((prev) => {
+      const next = { ...prev };
+      delete next[colId];
+      return next;
+    });
+    setActiveColMenu(null);
+  };
+
+  const handleClearAllColumnFilters = () => {
+    setColumnFilters({});
+    setSortConfig(null);
+    toast.info("Cleared all column filters & sorts");
+  };
+
+  const handleSortColumn = (colId: string, direction: "asc" | "desc") => {
+    if (sortConfig?.colId === colId && sortConfig.direction === direction) {
+      setSortConfig(null); // Toggle off
+    } else {
+      setSortConfig({ colId, direction });
+    }
+    setActiveColMenu(null);
+  };
+
+  // Sticky horizontal offset calculator for frozen columns
+  const getStickyLeftOffset = (colIdx: number): number => {
+    if (colIdx >= frozenColCount) return 0;
+    let offset = 0;
+    for (let i = 0; i < colIdx; i++) {
+      const col = STATEMENT_COLUMNS[i];
+      offset += columnWidths[col.id] || col.defaultWidth;
+    }
+    return offset;
+  };
+
+  const isColFrozen = (colIdx: number) => colIdx < frozenColCount;
+  const isLastFrozenCol = (colIdx: number) => colIdx === frozenColCount - 1 && frozenColCount > 0;
+
+  // Filtered transactions (combining top date filters + column filters)
+  const columnFilteredTransactions = useMemo(() => {
+    const activeColFilterKeys = Object.keys(columnFilters);
+    if (activeColFilterKeys.length === 0) return baseTransactions;
+
+    return baseTransactions.filter((tx) => {
+      for (const colId of activeColFilterKeys) {
+        const allowed = columnFilters[colId];
+        if (allowed && allowed.length >= 0) {
+          const cellVal = getCellValue(tx, colId);
+          if (!allowed.includes(cellVal)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+  }, [baseTransactions, columnFilters]);
+
+  // Final sorted transactions
+  const filteredTransactions = useMemo(() => {
+    if (!sortConfig) return columnFilteredTransactions;
+    const { colId, direction } = sortConfig;
+    const factor = direction === "asc" ? 1 : -1;
+
+    return [...columnFilteredTransactions].sort((a, b) => {
+      const valA = getCellValue(a, colId);
+      const valB = getCellValue(b, colId);
+
+      if (colId === "valueDate" || colId === "postDate") {
+        const pA = valA.split("/").map(Number);
+        const pB = valB.split("/").map(Number);
+        if (pA.length === 3 && pB.length === 3) {
+          const timeA = new Date(pA[2], pA[1] - 1, pA[0]).getTime();
+          const timeB = new Date(pB[2], pB[1] - 1, pB[0]).getTime();
+          return (timeA - timeB) * factor;
+        }
+      }
+      if (colId === "debit" || colId === "credit" || colId === "balance") {
+        const numA = parseFloat(valA) || 0;
+        const numB = parseFloat(valB) || 0;
+        return (numA - numB) * factor;
+      }
+      return valA.localeCompare(valB) * factor;
+    });
+  }, [columnFilteredTransactions, sortConfig]);
+
   // Filtered summary
   const filteredSummary = useMemo(() => {
     const isFiltered =
@@ -253,7 +556,8 @@ export function BankStatementModal({
       selectedYear !== "ALL" ||
       selectedDate !== "" ||
       fromDate !== "" ||
-      toDate !== "";
+      toDate !== "" ||
+      Object.keys(columnFilters).length > 0;
 
     if (!isFiltered) {
       return summary;
@@ -268,7 +572,7 @@ export function BankStatementModal({
       totalCredits: Math.round(crSum * 100) / 100,
       closingBalance: Math.round((summary.broughtForward - drSum + crSum) * 100) / 100,
     };
-  }, [filteredTransactions, summary, filterType, searchQuery, selectedMonth, selectedYear, selectedDate, fromDate, toDate]);
+  }, [filteredTransactions, summary, filterType, searchQuery, selectedMonth, selectedYear, selectedDate, fromDate, toDate, columnFilters]);
 
   // Dynamic Statement Period Label for the Summary Box Header
   const statementPeriodLabel = useMemo(() => {
@@ -291,13 +595,15 @@ export function BankStatementModal({
     return `${config.asOfDate.split("-").reverse().join("/")} TO ${new Date().toISOString().split("T")[0].split("-").reverse().join("/")}`;
   }, [filterType, selectedMonth, selectedYear, selectedDate, fromDate, toDate, availableMonths, config.asOfDate]);
 
+  const activeFiltersCount = Object.keys(columnFilters).length;
+
   if (!isOpen || !mounted || typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/65 p-2 sm:p-4 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border border-gray-300 w-full max-w-6xl max-h-[94vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 font-sans my-auto">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/65 p-2 sm:p-4 backdrop-blur-sm overflow-hidden">
+      <div className="bg-white border border-gray-300 w-full max-w-[1340px] max-h-[96vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 font-sans my-auto overflow-hidden">
         {/* ── TOP ICICI BRANDED BANNER & HEADER ── */}
-        <div className="bg-[#283593] text-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-xs">
+        <div className="bg-[#283593] text-white p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-xs">
           <div className="flex items-center gap-3">
             <div className="bg-white p-2 rounded-sm text-[#283593] shadow-xs">
               <Landmark className="w-6 h-6" />
@@ -360,7 +666,7 @@ export function BankStatementModal({
         </div>
 
         {/* ── ACCOUNT SUMMARY STRIP ── */}
-        <div className="bg-indigo-50/60 border-b border-indigo-100 p-3 px-5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+        <div className="bg-indigo-50/70 border-b border-indigo-100 p-2.5 px-5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
           <div className="flex items-center gap-4 flex-wrap">
             <div>
               <span className="text-gray-500 font-medium">Brought Forward: </span>
@@ -378,80 +684,70 @@ export function BankStatementModal({
             <div className="h-4 w-px bg-gray-300 hidden sm:block" />
             <div>
               <span className="text-gray-500 font-medium">Current Balance: </span>
-              <span className="font-black text-[#006064] font-mono text-base bg-white px-2.5 py-0.5 border border-indigo-200 shadow-2xs">
-                {formatCurrency(filteredSummary.closingBalance)}
+              <span className="font-bold text-emerald-700 font-mono text-base bg-emerald-50 px-2 py-0.5 border border-emerald-200">
+                ₹{formatCurrency(filteredSummary.closingBalance)}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-gray-500">
-              Source: <strong className="text-gray-700">Super Admin Approved Expense Disbursements</strong>
+          <div className="flex items-center gap-2 text-[11px] text-gray-500">
+            <span>Source:</span>
+            <span className="font-semibold text-gray-800">
+              Super Admin Disbursements & Client Payment Receipts
             </span>
           </div>
         </div>
 
-        {/* ── SEARCH & COMPREHENSIVE MULTI-MODE FILTER BAR ── */}
-        <div className="p-3 px-5 bg-white border-b border-gray-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3 flex-1 min-w-[240px] max-w-sm">
-            <div className="relative w-full">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search narration, UTR, vendor, or amount..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-300 focus:outline-none focus:border-[#283593] bg-gray-50/50"
-              />
-            </div>
+        {/* ── COMPREHENSIVE FILTER STRIP ── */}
+        <div className="bg-white border-b border-gray-200 p-2.5 px-5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          {/* Quick Search */}
+          <div className="relative w-72 sm:w-80">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search narration, UTR, vendor, or amount..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-300 focus:bg-white focus:outline-none focus:border-[#283593] transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center flex-wrap gap-2">
-            {/* Filter Mode Selector */}
-            <div className="flex items-center gap-1 bg-gray-100 p-0.5 border border-gray-300 text-xs">
-              <button
-                type="button"
-                onClick={() => setFilterType("ALL")}
-                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${filterType === "ALL" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+          {/* Filter Modes */}
+          <div className="flex items-center gap-2 flex-wrap text-xs">
+            <div className="flex border border-gray-300 overflow-hidden">
+              {(["ALL", "MONTH", "YEAR", "DATE", "CUSTOM"] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => {
+                    setFilterType(type);
+                    if (type === "ALL") {
+                      setSelectedMonth("ALL");
+                      setSelectedYear("ALL");
+                      setSelectedDate("");
+                      setFromDate("");
+                      setToDate("");
+                    }
+                  }}
+                  className={`px-3 py-1 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                    filterType === type ? "bg-[#283593] text-white" : "bg-white text-gray-700 hover:bg-gray-100"
                   }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterType("MONTH")}
-                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${filterType === "MONTH" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
-                  }`}
-              >
-                Month
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterType("YEAR")}
-                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${filterType === "YEAR" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
-                  }`}
-              >
-                Year
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterType("DATE")}
-                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${filterType === "DATE" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
-                  }`}
-              >
-                Date
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterType("CUSTOM")}
-                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all ${filterType === "CUSTOM" ? "bg-[#283593] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
-                  }`}
-              >
-                Custom Range
-              </button>
+                >
+                  {type === "CUSTOM" ? "Custom Range" : type}
+                </button>
+              ))}
             </div>
 
-            {/* Sub-filters based on Filter Mode */}
+            {/* Dynamic Controls based on selected mode */}
             {filterType === "MONTH" && (
               <div className="flex items-center gap-1.5 animate-in fade-in">
                 <Calendar className="w-3.5 h-3.5 text-gray-500" />
@@ -460,7 +756,7 @@ export function BankStatementModal({
                   onChange={(e) => setSelectedMonth(e.target.value)}
                   className="border border-gray-300 px-2.5 py-1 text-xs font-semibold text-gray-800 bg-white focus:outline-none focus:border-[#283593] cursor-pointer"
                 >
-                  <option value="ALL">All Months ({transactions.length})</option>
+                  <option value="ALL">All Months ({availableMonths.length})</option>
                   {availableMonths.map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.label}
@@ -520,7 +816,14 @@ export function BankStatementModal({
             )}
 
             {/* Clear Filters button if filtered */}
-            {(filterType !== "ALL" || searchQuery || selectedMonth !== "ALL" || selectedYear !== "ALL" || selectedDate || fromDate || toDate) && (
+            {(filterType !== "ALL" ||
+              searchQuery ||
+              selectedMonth !== "ALL" ||
+              selectedYear !== "ALL" ||
+              selectedDate ||
+              fromDate ||
+              toDate ||
+              activeFiltersCount > 0) && (
               <button
                 type="button"
                 onClick={() => {
@@ -531,196 +834,620 @@ export function BankStatementModal({
                   setSelectedDate("");
                   setFromDate("");
                   setToDate("");
+                  setColumnFilters({});
+                  setSortConfig(null);
                 }}
                 className="text-[11px] text-red-600 hover:text-red-800 underline font-bold px-1 cursor-pointer ml-1"
                 title="Reset all filters"
               >
-                Reset
+                Reset All
               </button>
             )}
           </div>
         </div>
 
-        {/* ── STATEMENT TABLE (AUTHENTIC ICICI BANK FORMAT) ── */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-gray-50/40">
-          {loading ? (
-            <div className="py-16 text-center text-gray-500 text-xs">
-              <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#283593] mb-2" />
-              <span>Generating ICICI Bank Statement...</span>
+        {/* ── SPREADSHEET TOOLBAR: FREEZE CONTROLS, ACTIVE FILTERS & COLUMN RESIZING ── */}
+        <div className="bg-gray-100 border-b border-gray-200 px-5 py-1.5 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0 select-none">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Freeze Controls */}
+            <div className="flex items-center gap-1.5 bg-white border border-gray-300 px-2 py-1 shadow-2xs">
+              <Lock className="w-3 h-3 text-indigo-800" />
+              <span className="text-[11px] font-bold text-gray-700">Freeze:</span>
+              <select
+                value={frozenColCount}
+                onChange={(e) => setFrozenColCount(Number(e.target.value))}
+                className="text-[11px] font-semibold text-indigo-950 bg-transparent outline-none cursor-pointer"
+              >
+                <option value={0}>No Frozen Columns</option>
+                <option value={1}>1 Col (Value Date)</option>
+                <option value={2}>2 Cols (Value + Post Date)</option>
+                <option value={3}>3 Cols (+ Narration)</option>
+                <option value={4}>4 Cols (+ Ref No)</option>
+              </select>
             </div>
-          ) : filteredTransactions.length === 0 ? (
-            <div className="py-16 text-center text-gray-500 text-xs bg-white border border-gray-200 p-8">
-              <Landmark className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-              <h4 className="font-bold text-gray-800 text-sm">No Transactions Recorded Yet</h4>
-              <p className="text-gray-500 mt-1 max-w-md mx-auto">
-                Once Super Admin approves vendor expense payments, they will automatically populate as official debit entries in this ICICI Bank Statement.
-              </p>
-            </div>
-          ) : (
-            <div className="bg-white border border-gray-300 shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  {/* ── PURPLE / INDIGO BANK HEADER ── */}
-                  <thead>
-                    <tr className="bg-[#283593] text-white font-mono text-[11px] uppercase tracking-wider">
-                      <th className="py-3 px-3 whitespace-nowrap text-center border-r border-indigo-700 w-24">
-                        Value Date
-                      </th>
-                      <th className="py-3 px-3 whitespace-nowrap text-center border-r border-indigo-700 w-24">
-                        Post Date
-                      </th>
-                      <th className="py-3 px-4 min-w-[280px] border-r border-indigo-700">
-                        Details / Transaction Narration
-                      </th>
-                      <th className="py-3 px-3 whitespace-nowrap text-center border-r border-indigo-700 font-mono">
-                        Ref No/ Cheque No
-                      </th>
-                      <th className="py-3 px-3 text-right whitespace-nowrap border-r border-indigo-700 w-28">
-                        ₹ Debit
-                      </th>
-                      <th className="py-3 px-3 text-right whitespace-nowrap border-r border-indigo-700 w-28">
-                        ₹ Credit
-                      </th>
-                      <th className="py-3 px-3 text-right whitespace-nowrap font-bold w-32">
-                        Balance (₹)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {/* Opening Balance Row */}
-                    <tr className="bg-amber-50/50 font-mono text-gray-800 border-b border-amber-200">
-                      <td className="py-2.5 px-3 text-center text-gray-500 text-[11px]">
-                        {config.asOfDate.split("-").reverse().join("/")}
-                      </td>
-                      <td className="py-2.5 px-3 text-center text-gray-500 text-[11px]">
-                        {config.asOfDate.split("-").reverse().join("/")}
-                      </td>
-                      <td className="py-2.5 px-4 font-bold text-amber-900 tracking-wide text-[11px]">
-                        OPENING BALANCE BROUGHT FORWARD
-                      </td>
-                      <td className="py-2.5 px-3 text-center text-gray-400 font-mono">-</td>
-                      <td className="py-2.5 px-3 text-right text-gray-400 font-mono">-</td>
-                      <td className="py-2.5 px-3 text-right text-emerald-700 font-mono font-bold">
-                        {formatCurrency(summary.broughtForward)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900 bg-amber-50">
-                        {formatCurrency(summary.broughtForward)}
-                      </td>
-                    </tr>
 
-                    {/* Transaction Rows */}
-                    {filteredTransactions.map((tx, idx) => (
-                      <tr
-                        key={tx.id || idx}
-                        className={`hover:bg-indigo-50/30 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-[#fafafa]"
-                          }`}
-                      >
-                        <td className="py-2.5 px-3 text-center font-mono text-gray-600 text-[11px] whitespace-nowrap border-r border-gray-100">
-                          {tx.valueDate}
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-mono text-gray-600 text-[11px] whitespace-nowrap border-r border-gray-100">
-                          {tx.postDate}
-                        </td>
-                        <td className="py-2.5 px-4 text-gray-800 border-r border-gray-100 leading-relaxed">
-                          <div className="font-mono text-[11.5px] font-semibold text-gray-900">
-                            {tx.details}
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500">
-                            <span className="font-medium text-[#283593]">{tx.category}</span>
-                            <span>•</span>
-                            <span>{tx.locationName}</span>
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-mono text-gray-700 text-[11px] border-r border-gray-100 whitespace-nowrap">
-                          {tx.refNo || "-"}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-red-700 border-r border-gray-100 whitespace-nowrap">
-                          {tx.debit ? Number(tx.debit).toFixed(2) : "-"}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 border-r border-gray-100 whitespace-nowrap">
-                          {tx.credit ? Number(tx.credit).toFixed(2) : "-"}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-gray-900 bg-gray-50/60 whitespace-nowrap">
-                          {Number(tx.balance).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+            {/* Quick Unfreeze / Freeze Toggle */}
+            <button
+              type="button"
+              onClick={() => setFrozenColCount((prev) => (prev > 0 ? 0 : 1))}
+              className="text-[11px] font-medium text-gray-700 hover:text-indigo-900 bg-white border border-gray-300 px-2 py-1 shadow-2xs flex items-center gap-1 cursor-pointer"
+              title="Toggle column freezing"
+            >
+              {frozenColCount > 0 ? (
+                <>
+                  <Unlock className="w-3 h-3 text-amber-600" />
+                  <span>Unfreeze Columns</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3 h-3 text-indigo-700" />
+                  <span>Freeze Value Date</span>
+                </>
+              )}
+            </button>
 
-          {/* ── STATEMENT SUMMARY TABLE (MATCHING EXACT ICICI SUMMARY BOX IN IMAGE 1) ── */}
-          <div className="mt-6 space-y-3">
-            <div className="border border-indigo-900 bg-white overflow-hidden shadow-xs">
-              <div className="bg-[#283593] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
+            {/* Reset Column Widths */}
+            <button
+              type="button"
+              onClick={handleResetColumnWidths}
+              className="text-[11px] font-medium text-gray-700 hover:text-indigo-900 bg-white border border-gray-300 px-2 py-1 shadow-2xs flex items-center gap-1 cursor-pointer"
+              title="Reset column widths to default"
+            >
+              <RotateCcw className="w-3 h-3 text-gray-500" />
+              <span>Reset Widths</span>
+            </button>
+          </div>
+
+          {/* Active Column Filters Indicator */}
+          <div className="flex items-center gap-2">
+            {activeFiltersCount > 0 && (
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 px-2 py-0.5 text-[11px] text-amber-900 font-medium">
+                <Filter className="w-3 h-3 text-amber-700" />
                 <span>
-                  Statement Summary : {statementPeriodLabel}
+                  <strong>{activeFiltersCount}</strong> column filter{activeFiltersCount > 1 ? "s" : ""} active
                 </span>
-                <span className="text-indigo-200 text-[11px]">
-                  Account No: {config.accountNo}
-                </span>
+                <button
+                  type="button"
+                  onClick={handleClearAllColumnFilters}
+                  className="text-red-700 hover:underline font-bold ml-1 cursor-pointer"
+                >
+                  Clear
+                </button>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-center border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-gray-100 text-gray-700 font-bold border-b border-gray-200 text-[11px]">
-                      <th className="py-2.5 px-3 border-r border-gray-200">Brought Forward (₹)</th>
-                      <th className="py-2.5 px-3 border-r border-gray-200">Dr Count</th>
-                      <th className="py-2.5 px-3 border-r border-gray-200">Cr Count</th>
-                      <th className="py-2.5 px-3 border-r border-gray-200">Total Debits (₹)</th>
-                      <th className="py-2.5 px-3 border-r border-gray-200">Total Credits (₹)</th>
-                      <th className="py-2.5 px-3 font-black text-[#283593]">Closing Balance (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="font-mono text-xs font-bold text-gray-900">
-                      <td className="py-3 px-3 border-r border-gray-200">
-                        {formatCurrency(filteredSummary.broughtForward)} CR
-                      </td>
-                      <td className="py-3 px-3 border-r border-gray-200 text-red-700">
-                        {filteredSummary.drCount}
-                      </td>
-                      <td className="py-3 px-3 border-r border-gray-200 text-emerald-700">
-                        {filteredSummary.crCount}
-                      </td>
-                      <td className="py-3 px-3 border-r border-gray-200 text-red-700 font-black">
-                        {Number(filteredSummary.totalDebits).toFixed(2)}
-                      </td>
-                      <td className="py-3 px-3 border-r border-gray-200 text-emerald-700 font-black">
-                        {Number(filteredSummary.totalCredits).toFixed(2)}
-                      </td>
-                      <td className="py-3 px-3 bg-indigo-50 font-black text-indigo-950 text-sm">
-                        {formatCurrency(filteredSummary.closingBalance)} CR
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            )}
 
-            {/* Regulatory Footer Note */}
-            <div className="p-3 bg-gray-50 border border-gray-200 text-[10.5px] text-gray-500 space-y-0.5">
-              <p>• Please do not share your ATM, Debit/Credit Card number, PIN, OTP, Username or Password with anyone.</p>
-              <p>• If your account is operated by a Power of Attorney holder, please review the transactions with extra care.</p>
-              <p className="font-medium text-gray-600">• This is a computer generated bank statement from SSPāCIA ICICI portal and does not require a physical signature.</p>
+            {sortConfig && (
+              <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[11px] text-indigo-950 font-medium">
+                <span>Sorted by <strong>{STATEMENT_COLUMNS.find((c) => c.id === sortConfig.colId)?.label}</strong></span>
+                {sortConfig.direction === "asc" ? (
+                  <ArrowUp className="w-3 h-3 text-indigo-700" />
+                ) : (
+                  <ArrowDown className="w-3 h-3 text-indigo-700" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSortConfig(null)}
+                  className="text-gray-500 hover:text-red-700 cursor-pointer ml-0.5"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+
+            <div className="text-[11px] text-gray-500 font-mono">
+              Showing <strong>{filteredTransactions.length}</strong> of {transactions.length} rows
             </div>
           </div>
         </div>
 
-        {/* ── MODAL FOOTER ── */}
-        <div className="p-3 px-5 border-t border-gray-200 bg-white flex items-center justify-between shrink-0">
-          <div className="text-[11px] text-gray-500">
-            Showing <strong className="text-gray-900">{filteredTransactions.length}</strong> transactions
+        {/* ── SCROLLABLE STATEMENT TABLE WITH PERMANENTLY FROZEN HEADERS & COLUMNS ── */}
+        <div className="flex-1 overflow-auto max-h-[56vh] bg-white relative border-b border-gray-300">
+          {loading ? (
+            <div className="py-20 text-center text-gray-500 text-xs">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#283593] mb-2" />
+              <span>Generating ICICI Bank Statement...</span>
+            </div>
+          ) : filteredTransactions.length === 0 ? (
+            <div className="py-20 text-center text-gray-500 text-xs bg-white p-8">
+              <Landmark className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+              <h4 className="font-bold text-gray-800 text-sm">No Transactions Match Current Filters</h4>
+              <p className="text-gray-500 mt-1 max-w-md mx-auto">
+                Try clearing column filters, expanding date ranges, or removing search queries.
+              </p>
+              {(activeFiltersCount > 0 || searchQuery || filterType !== "ALL") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterType("ALL");
+                    setSearchQuery("");
+                    setColumnFilters({});
+                    setSortConfig(null);
+                  }}
+                  className="mt-3 px-3 py-1.5 bg-[#283593] text-white text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs"
+                >
+                  Reset All Filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse text-xs table-fixed">
+              {/* Column Width Definitions */}
+              <colgroup>
+                {STATEMENT_COLUMNS.map((col) => (
+                  <col
+                    key={col.id}
+                    style={{ width: `${columnWidths[col.id] || col.defaultWidth}px` }}
+                  />
+                ))}
+              </colgroup>
+
+              {/* ── PURPLE / INDIGO BANK HEADER (PERMANENTLY FROZEN AT TOP) ── */}
+              <thead className="sticky top-0 z-30 bg-[#283593] text-white font-mono text-[11px] uppercase tracking-wider shadow-xs">
+                <tr>
+                  {STATEMENT_COLUMNS.map((col, colIdx) => {
+                    const frozen = isColFrozen(colIdx);
+                    const lastFrozen = isLastFrozenCol(colIdx);
+                    const leftOffset = getStickyLeftOffset(colIdx);
+                    const isFiltered = Boolean(columnFilters[col.id]);
+                    const isSorted = sortConfig?.colId === col.id;
+
+                    return (
+                      <th
+                        key={col.id}
+                        style={{
+                          width: `${columnWidths[col.id] || col.defaultWidth}px`,
+                          left: frozen ? `${leftOffset}px` : undefined,
+                        }}
+                        className={`py-3 px-3 select-none relative group border-r border-indigo-700 ${
+                          col.align === "right"
+                            ? "text-right"
+                            : col.align === "center"
+                            ? "text-center"
+                            : "text-left"
+                        } ${
+                          frozen ? "sticky top-0 z-40 bg-[#283593]" : "sticky top-0 z-30 bg-[#283593]"
+                        } ${lastFrozen ? "border-r-2 border-indigo-400 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.35)]" : ""}`}
+                      >
+                        <div className={`flex items-center gap-1.5 ${
+                          col.align === "right"
+                            ? "justify-end"
+                            : col.align === "center"
+                            ? "justify-center"
+                            : "justify-between"
+                        }`}>
+                          {/* Column Title */}
+                          <span
+                            onClick={() => handleSortColumn(col.id, isSorted && sortConfig.direction === "asc" ? "desc" : "asc")}
+                            className="font-bold tracking-wider cursor-pointer hover:text-indigo-200 transition-colors truncate"
+                            title={`Click to sort by ${col.label}`}
+                          >
+                            {col.label}
+                          </span>
+
+                          {/* Sort Indicator */}
+                          {isSorted && (
+                            <span className="text-amber-300 font-bold shrink-0">
+                              {sortConfig.direction === "asc" ? "▲" : "▼"}
+                            </span>
+                          )}
+
+                          {/* Google Sheets Filter Icon Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenColumnFilter(col.id, e)}
+                            className={`p-1 rounded-xs transition-colors cursor-pointer shrink-0 ${
+                              isFiltered
+                                ? "bg-amber-400 text-indigo-950 font-bold shadow-xs"
+                                : "text-indigo-300 hover:text-white hover:bg-white/10"
+                            }`}
+                            title={`Filter by ${col.label}`}
+                          >
+                            <Filter className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {/* ── GOOGLE SHEETS STYLE COLUMN FILTER DROPDOWN POPOVER ── */}
+                        {activeColMenu === col.id && (
+                          <div
+                            ref={colMenuRef}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              left: colIdx > 4 ? "auto" : "0px",
+                              right: colIdx > 4 ? "0px" : "auto",
+                            }}
+                            className="absolute top-full mt-1 w-72 bg-white text-gray-800 shadow-2xl border border-gray-300 rounded-sm z-50 font-sans normal-case tracking-normal overflow-hidden animate-in fade-in duration-100"
+                          >
+                            {/* Popover Header */}
+                            <div className="bg-[#283593] text-white p-2 px-3 flex items-center justify-between text-xs font-bold">
+                              <span className="truncate">{col.label} Filter</span>
+                              <div className="flex items-center gap-1.5">
+                                {isFiltered && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleResetColumnFilter(col.id, e)}
+                                    className="text-[10px] text-amber-300 hover:underline"
+                                  >
+                                    Reset
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveColMenu(null)}
+                                  className="text-white/80 hover:text-white cursor-pointer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Sort Actions */}
+                            <div className="p-1.5 border-b border-gray-200 bg-gray-50/70 text-xs space-y-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleSortColumn(col.id, "asc")}
+                                className="w-full px-2.5 py-1 text-left flex items-center gap-2 hover:bg-indigo-50 text-gray-700 hover:text-indigo-900 rounded-xs font-medium cursor-pointer"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5 text-indigo-700" />
+                                <span>
+                                  Sort Ascending ({col.mono ? "Oldest → Newest" : "A → Z"})
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSortColumn(col.id, "desc")}
+                                className="w-full px-2.5 py-1 text-left flex items-center gap-2 hover:bg-indigo-50 text-gray-700 hover:text-indigo-900 rounded-xs font-medium cursor-pointer"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5 text-indigo-700" />
+                                <span>
+                                  Sort Descending ({col.mono ? "Newest → Oldest" : "Z → A"})
+                                </span>
+                              </button>
+
+                              {/* Column Freeze Toggle */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (frozen) {
+                                    setFrozenColCount(0);
+                                  } else {
+                                    setFrozenColCount(colIdx + 1);
+                                  }
+                                  setActiveColMenu(null);
+                                }}
+                                className="w-full px-2.5 py-1 text-left flex items-center gap-2 hover:bg-indigo-50 text-gray-700 hover:text-indigo-900 rounded-xs font-medium cursor-pointer"
+                              >
+                                {frozen ? (
+                                  <>
+                                    <Unlock className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Unfreeze this column</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Lock className="w-3.5 h-3.5 text-indigo-700" />
+                                    <span>Freeze up to {col.label}</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {/* Filter by Values (Google Sheets style) */}
+                            <div className="p-2 space-y-2">
+                              <div className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wider">
+                                Filter by Values
+                              </div>
+
+                              {/* Search Values inside Filter */}
+                              <div className="relative">
+                                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                                <input
+                                  type="text"
+                                  placeholder="Search values..."
+                                  value={filterSearchQuery}
+                                  onChange={(e) => setFilterSearchQuery(e.target.value)}
+                                  className="w-full pl-8 pr-2.5 py-1 text-xs bg-gray-50 border border-gray-300 focus:bg-white focus:border-[#283593] focus:outline-none"
+                                />
+                                {filterSearchQuery && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setFilterSearchQuery("")}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Quick Actions: Select All / Clear */}
+                              {(() => {
+                                const { uniqueList, counts } = getColumnUniqueValues(col.id);
+                                const filteredValues = filterSearchQuery.trim()
+                                  ? uniqueList.filter((v) =>
+                                      v.toLowerCase().includes(filterSearchQuery.toLowerCase())
+                                    )
+                                  : uniqueList;
+
+                                return (
+                                  <>
+                                    <div className="flex items-center justify-between text-[11px] font-bold text-indigo-900 px-1 pt-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSelectAllFilterValues(filteredValues)}
+                                        className="hover:underline cursor-pointer"
+                                      >
+                                        Select All
+                                      </button>
+                                      <span className="text-gray-300">|</span>
+                                      <button
+                                        type="button"
+                                        onClick={handleClearAllFilterValues}
+                                        className="hover:underline text-gray-600 hover:text-red-700 cursor-pointer"
+                                      >
+                                        Clear (Untick All)
+                                      </button>
+                                    </div>
+
+                                    {/* Scrollable List of Checkboxes with Frequency Counts */}
+                                    <div className="max-h-40 overflow-y-auto border border-gray-200 bg-gray-50/50 p-1 space-y-0.5 text-xs">
+                                      {filteredValues.length === 0 ? (
+                                        <div className="p-3 text-center text-gray-400 text-xs italic">
+                                          No matching values
+                                        </div>
+                                      ) : (
+                                        filteredValues.map((val) => {
+                                          const isChecked = tempFilterValues.includes(val);
+                                          const count = counts[val] || 0;
+
+                                          return (
+                                            <label
+                                              key={val}
+                                              className="flex items-center gap-2 px-2 py-1 hover:bg-indigo-50 rounded-xs cursor-pointer select-none text-xs text-gray-800"
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={() => handleToggleFilterValue(val)}
+                                                className="rounded-xs text-[#283593] focus:ring-0 cursor-pointer h-3.5 w-3.5"
+                                              />
+                                              <span className="truncate flex-1 font-mono text-[11px]">
+                                                {val}
+                                              </span>
+                                              <span className="text-[10px] text-gray-400 font-mono">
+                                                ({count})
+                                              </span>
+                                            </label>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+
+                                    {/* Footer OK / Cancel */}
+                                    <div className="pt-1 flex items-center justify-end gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveColMenu(null)}
+                                        className="px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 border border-gray-300 cursor-pointer"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApplyColumnFilter(col.id)}
+                                        className="px-4 py-1 bg-[#283593] hover:bg-indigo-900 text-white font-bold text-xs cursor-pointer shadow-2xs"
+                                      >
+                                        OK
+                                      </button>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── EXCEL STYLE COLUMN RESIZER HANDLE (DRAG DIVIDER) ── */}
+                        <div
+                          onMouseDown={(e) => handleStartResize(col.id, e)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize select-none flex items-center justify-center hover:bg-white/20 active:bg-amber-400 transition-colors z-50 group"
+                          title="Click & drag to resize column width"
+                        >
+                          <div className="w-[1.5px] h-3/4 bg-indigo-400/50 group-hover:bg-amber-300 group-active:bg-amber-400" />
+                        </div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+
+              {/* ── STATEMENT TABLE BODY ── */}
+              <tbody className="divide-y divide-gray-200">
+                {/* Opening Balance Row */}
+                <tr className="bg-amber-50/60 font-mono text-gray-800 border-b border-amber-200 hover:bg-amber-50">
+                  {STATEMENT_COLUMNS.map((col, colIdx) => {
+                    const frozen = isColFrozen(colIdx);
+                    const lastFrozen = isLastFrozenCol(colIdx);
+                    const leftOffset = getStickyLeftOffset(colIdx);
+
+                    let content: React.ReactNode = "-";
+                    let alignClass = "text-center";
+                    let textClass = "text-gray-400";
+
+                    if (col.id === "valueDate" || col.id === "postDate") {
+                      content = config.asOfDate.split("-").reverse().join("/");
+                      textClass = "text-gray-600 text-[11px]";
+                    } else if (col.id === "details") {
+                      content = "OPENING BALANCE BROUGHT FORWARD";
+                      alignClass = "text-left";
+                      textClass = "font-bold text-amber-900 tracking-wide text-[11px]";
+                    } else if (col.id === "credit") {
+                      content = formatCurrency(summary.broughtForward);
+                      alignClass = "text-right";
+                      textClass = "text-emerald-700 font-bold";
+                    } else if (col.id === "balance") {
+                      content = formatCurrency(summary.broughtForward);
+                      alignClass = "text-right";
+                      textClass = "font-bold text-gray-900 bg-amber-100/50";
+                    }
+
+                    return (
+                      <td
+                        key={col.id}
+                        style={{
+                          left: frozen ? `${leftOffset}px` : undefined,
+                        }}
+                        className={`py-2.5 px-3 whitespace-nowrap border-r border-gray-100 ${alignClass} ${textClass} ${
+                          frozen ? "sticky left-0 z-20 bg-amber-50" : ""
+                        } ${lastFrozen ? "border-r-2 border-indigo-300 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)]" : ""}`}
+                      >
+                        {content}
+                      </td>
+                    );
+                  })}
+                </tr>
+
+                {/* Transaction Rows */}
+                {filteredTransactions.map((tx, idx) => (
+                  <tr
+                    key={tx.id || idx}
+                    className={`hover:bg-indigo-50/40 transition-colors ${
+                      idx % 2 === 0 ? "bg-white" : "bg-[#fafafa]"
+                    }`}
+                  >
+                    {STATEMENT_COLUMNS.map((col, colIdx) => {
+                      const frozen = isColFrozen(colIdx);
+                      const lastFrozen = isLastFrozenCol(colIdx);
+                      const leftOffset = getStickyLeftOffset(colIdx);
+                      const rowBg = idx % 2 === 0 ? "bg-white" : "bg-[#fafafa]";
+
+                      let cellContent: React.ReactNode = null;
+                      let alignClass = "text-left";
+
+                      switch (col.id) {
+                        case "valueDate":
+                          alignClass = "text-center font-mono text-gray-600 text-[11px] whitespace-nowrap";
+                          cellContent = tx.valueDate;
+                          break;
+                        case "postDate":
+                          alignClass = "text-center font-mono text-gray-600 text-[11px] whitespace-nowrap";
+                          cellContent = tx.postDate;
+                          break;
+                        case "details":
+                          alignClass = "text-left leading-relaxed";
+                          cellContent = (
+                            <div>
+                              <div className="font-mono text-[11.5px] font-semibold text-gray-900 break-words">
+                                {tx.details}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500">
+                                {tx.category && (
+                                  <span className="font-medium text-[#283593]">{tx.category}</span>
+                                )}
+                                {tx.locationName && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{tx.locationName}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                          break;
+                        case "refNo":
+                          alignClass = "text-center font-mono text-gray-700 text-[11px] whitespace-nowrap";
+                          cellContent = tx.refNo || "-";
+                          break;
+                        case "debit":
+                          alignClass = "text-right font-mono font-bold text-red-700 whitespace-nowrap";
+                          cellContent = tx.debit ? Number(tx.debit).toFixed(2) : "-";
+                          break;
+                        case "credit":
+                          alignClass = "text-right font-mono font-bold text-emerald-700 whitespace-nowrap";
+                          cellContent = tx.credit ? Number(tx.credit).toFixed(2) : "-";
+                          break;
+                        case "balance":
+                          alignClass = "text-right font-mono font-bold text-gray-900 bg-gray-50/60 whitespace-nowrap";
+                          cellContent = Number(tx.balance).toFixed(2);
+                          break;
+                      }
+
+                      return (
+                        <td
+                          key={col.id}
+                          style={{
+                            left: frozen ? `${leftOffset}px` : undefined,
+                          }}
+                          className={`py-2.5 px-3 border-r border-gray-100 ${alignClass} ${
+                            frozen ? `sticky left-0 z-20 ${rowBg}` : ""
+                          } ${lastFrozen ? "border-r-2 border-indigo-300 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]" : ""}`}
+                        >
+                          {cellContent}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* ── STATEMENT SUMMARY TABLE & FOOTER ── */}
+        <div className="p-3 sm:p-4 bg-gray-50/60 border-t border-gray-200 shrink-0 space-y-2.5">
+          <div className="border border-indigo-900 bg-white overflow-hidden shadow-xs">
+            <div className="bg-[#283593] text-white px-4 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center justify-between">
+              <span>Statement Summary : {statementPeriodLabel}</span>
+              <span className="text-indigo-200 text-[11px]">Account No: {config.accountNo}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-center border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-700 font-bold border-b border-gray-200 text-[11px]">
+                    <th className="py-2 px-3 border-r border-gray-200">Brought Forward (₹)</th>
+                    <th className="py-2 px-3 border-r border-gray-200">Dr Count</th>
+                    <th className="py-2 px-3 border-r border-gray-200">Cr Count</th>
+                    <th className="py-2 px-3 border-r border-gray-200">Total Debits (₹)</th>
+                    <th className="py-2 px-3 border-r border-gray-200">Total Credits (₹)</th>
+                    <th className="py-2 px-3 font-black text-[#283593]">Closing Balance (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="font-mono text-xs font-bold text-gray-900">
+                    <td className="py-2 px-3 border-r border-gray-200">
+                      {formatCurrency(filteredSummary.broughtForward)} CR
+                    </td>
+                    <td className="py-2 px-3 border-r border-gray-200 text-red-700">
+                      {filteredSummary.drCount}
+                    </td>
+                    <td className="py-2 px-3 border-r border-gray-200 text-emerald-700">
+                      {filteredSummary.crCount}
+                    </td>
+                    <td className="py-2 px-3 border-r border-gray-200 text-red-700 font-black">
+                      {Number(filteredSummary.totalDebits).toFixed(2)}
+                    </td>
+                    <td className="py-2 px-3 border-r border-gray-200 text-emerald-700 font-black">
+                      {Number(filteredSummary.totalCredits).toFixed(2)}
+                    </td>
+                    <td className="py-2 px-3 bg-indigo-50 font-black text-indigo-950 text-sm">
+                      {formatCurrency(filteredSummary.closingBalance)} CR
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 border border-gray-300 cursor-pointer"
-          >
-            Close Statement
-          </button>
+
+          <div className="flex items-center justify-between text-[11px] text-gray-500">
+            <p className="italic">
+              • Computer generated bank statement from SSPāCIA ICICI portal • Drag column dividers to resize • Click column filter icons to filter like Google Sheets.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 border border-gray-300 cursor-pointer bg-white shadow-2xs"
+            >
+              Close Statement
+            </button>
+          </div>
         </div>
       </div>
 
