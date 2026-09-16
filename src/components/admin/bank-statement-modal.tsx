@@ -84,13 +84,13 @@ export interface ColumnDefinition {
 }
 
 export const STATEMENT_COLUMNS: ColumnDefinition[] = [
-  { id: "valueDate", label: "Value Date", defaultWidth: 120, minWidth: 95, align: "center", mono: true },
-  { id: "postDate", label: "Post Date", defaultWidth: 120, minWidth: 95, align: "center", mono: true },
-  { id: "details", label: "Details / Transaction Narration", defaultWidth: 390, minWidth: 220, align: "left" },
-  { id: "refNo", label: "Ref No/ Cheque No", defaultWidth: 230, minWidth: 140, align: "center", mono: true },
-  { id: "debit", label: "₹ Debit", defaultWidth: 120, minWidth: 90, align: "right", mono: true },
-  { id: "credit", label: "₹ Credit", defaultWidth: 120, minWidth: 90, align: "right", mono: true },
-  { id: "balance", label: "Balance (₹)", defaultWidth: 135, minWidth: 100, align: "right", mono: true },
+  { id: "valueDate", label: "Value Date", defaultWidth: 110, minWidth: 50, align: "center", mono: true },
+  { id: "postDate", label: "Post Date", defaultWidth: 110, minWidth: 50, align: "center", mono: true },
+  { id: "details", label: "Details / Transaction Narration", defaultWidth: 380, minWidth: 100, align: "left" },
+  { id: "refNo", label: "Ref No/ Cheque No", defaultWidth: 230, minWidth: 70, align: "center", mono: true },
+  { id: "debit", label: "₹ Debit", defaultWidth: 115, minWidth: 65, align: "right", mono: true },
+  { id: "credit", label: "₹ Credit", defaultWidth: 115, minWidth: 65, align: "right", mono: true },
+  { id: "balance", label: "Balance (₹)", defaultWidth: 130, minWidth: 70, align: "right", mono: true },
 ];
 
 export function BankStatementModal({
@@ -185,7 +185,7 @@ export function BankStatementModal({
       if (!isResizingRef.current || !resizeDataRef.current) return;
       const { colId, startX, startWidth } = resizeDataRef.current;
       const colDef = STATEMENT_COLUMNS.find((c) => c.id === colId);
-      const minWidth = colDef?.minWidth || 75;
+      const minWidth = colDef?.minWidth || 50;
       const delta = e.clientX - startX;
       const newWidth = Math.max(minWidth, startWidth + delta);
 
@@ -573,6 +573,11 @@ export function BankStatementModal({
       closingBalance: Math.round((summary.broughtForward - drSum + crSum) * 100) / 100,
     };
   }, [filteredTransactions, summary, filterType, searchQuery, selectedMonth, selectedYear, selectedDate, fromDate, toDate, columnFilters]);
+
+  // Total table width calculated dynamically from all column widths
+  const totalTableWidth = useMemo(() => {
+    return STATEMENT_COLUMNS.reduce((sum, col) => sum + (columnWidths[col.id] || col.defaultWidth), 0);
+  }, [columnWidths]);
 
   // Dynamic Statement Period Label for the Summary Box Header
   const statementPeriodLabel = useMemo(() => {
@@ -970,15 +975,21 @@ export function BankStatementModal({
               )}
             </div>
           ) : (
-            <table className="w-full text-left border-collapse text-xs table-fixed">
+            <table
+              className="w-full text-left border-collapse text-xs table-fixed"
+              style={{ minWidth: `${totalTableWidth}px` }}
+            >
               {/* Column Width Definitions */}
               <colgroup>
-                {STATEMENT_COLUMNS.map((col) => (
-                  <col
-                    key={col.id}
-                    style={{ width: `${columnWidths[col.id] || col.defaultWidth}px` }}
-                  />
-                ))}
+                {STATEMENT_COLUMNS.map((col) => {
+                  const w = columnWidths[col.id] || col.defaultWidth;
+                  return (
+                    <col
+                      key={col.id}
+                      style={{ width: `${w}px`, minWidth: `${w}px`, maxWidth: `${w}px` }}
+                    />
+                  );
+                })}
               </colgroup>
 
               {/* ── PURPLE / INDIGO BANK HEADER (PERMANENTLY FROZEN AT TOP) ── */}
@@ -991,14 +1002,18 @@ export function BankStatementModal({
                     const isFiltered = Boolean(columnFilters[col.id]);
                     const isSorted = sortConfig?.colId === col.id;
 
+                    const colWidth = columnWidths[col.id] || col.defaultWidth;
+
                     return (
                       <th
                         key={col.id}
                         style={{
-                          width: `${columnWidths[col.id] || col.defaultWidth}px`,
+                          width: `${colWidth}px`,
+                          minWidth: `${colWidth}px`,
+                          maxWidth: `${colWidth}px`,
                           left: frozen ? `${leftOffset}px` : undefined,
                         }}
-                        className={`py-3 px-3 select-none relative group border-r border-indigo-700 ${
+                        className={`py-3 px-2 select-none relative group border-r border-indigo-700 ${
                           col.align === "right"
                             ? "text-right"
                             : col.align === "center"
@@ -1008,7 +1023,7 @@ export function BankStatementModal({
                           frozen ? "sticky top-0 z-40 bg-[#283593]" : "sticky top-0 z-30 bg-[#283593]"
                         } ${lastFrozen ? "border-r-2 border-indigo-400 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.35)]" : ""}`}
                       >
-                        <div className={`flex items-center gap-1.5 ${
+                        <div className={`flex items-center gap-1.5 w-full min-w-0 ${
                           col.align === "right"
                             ? "justify-end"
                             : col.align === "center"
@@ -1018,7 +1033,7 @@ export function BankStatementModal({
                           {/* Column Title */}
                           <span
                             onClick={() => handleSortColumn(col.id, isSorted && sortConfig.direction === "asc" ? "desc" : "asc")}
-                            className="font-bold tracking-wider cursor-pointer hover:text-indigo-200 transition-colors truncate"
+                            className="font-bold tracking-wider cursor-pointer hover:text-indigo-200 transition-colors whitespace-normal leading-tight min-w-0 flex-1 break-words"
                             title={`Click to sort by ${col.label}`}
                           >
                             {col.label}
@@ -1267,24 +1282,33 @@ export function BankStatementModal({
                     const frozen = isColFrozen(colIdx);
                     const lastFrozen = isLastFrozenCol(colIdx);
                     const leftOffset = getStickyLeftOffset(colIdx);
+                    const colWidth = columnWidths[col.id] || col.defaultWidth;
 
                     let content: React.ReactNode = "-";
                     let alignClass = "text-center";
                     let textClass = "text-gray-400";
+                    let rawTooltip = "-";
 
                     if (col.id === "valueDate" || col.id === "postDate") {
-                      content = config.asOfDate.split("-").reverse().join("/");
+                      const d = config.asOfDate.split("-").reverse().join("/");
+                      content = d;
+                      rawTooltip = d;
                       textClass = "text-gray-600 text-[11px]";
                     } else if (col.id === "details") {
                       content = "OPENING BALANCE BROUGHT FORWARD";
+                      rawTooltip = "OPENING BALANCE BROUGHT FORWARD";
                       alignClass = "text-left";
                       textClass = "font-bold text-amber-900 tracking-wide text-[11px]";
                     } else if (col.id === "credit") {
-                      content = formatCurrency(summary.broughtForward);
+                      const formatted = formatCurrency(summary.broughtForward);
+                      content = formatted;
+                      rawTooltip = formatted;
                       alignClass = "text-right";
                       textClass = "text-emerald-700 font-bold";
                     } else if (col.id === "balance") {
-                      content = formatCurrency(summary.broughtForward);
+                      const formatted = formatCurrency(summary.broughtForward);
+                      content = formatted;
+                      rawTooltip = formatted;
                       alignClass = "text-right";
                       textClass = "font-bold text-gray-900 bg-amber-100/50";
                     }
@@ -1293,13 +1317,18 @@ export function BankStatementModal({
                       <td
                         key={col.id}
                         style={{
+                          width: `${colWidth}px`,
+                          minWidth: `${colWidth}px`,
+                          maxWidth: `${colWidth}px`,
                           left: frozen ? `${leftOffset}px` : undefined,
                         }}
-                        className={`py-2.5 px-3 whitespace-nowrap border-r border-gray-100 ${alignClass} ${textClass} ${
-                          frozen ? "sticky left-0 z-20 bg-amber-50" : ""
+                        className={`py-2 px-2.5 overflow-hidden border-r border-gray-100 align-top ${alignClass} ${textClass} ${
+                          frozen ? "sticky z-20 bg-amber-50" : ""
                         } ${lastFrozen ? "border-r-2 border-indigo-300 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)]" : ""}`}
                       >
-                        {content}
+                        <div className="w-full block whitespace-normal break-words [overflow-wrap:anywhere] leading-snug" title={rawTooltip}>
+                          {content}
+                        </div>
                       </td>
                     );
                   })}
@@ -1318,55 +1347,101 @@ export function BankStatementModal({
                       const lastFrozen = isLastFrozenCol(colIdx);
                       const leftOffset = getStickyLeftOffset(colIdx);
                       const rowBg = idx % 2 === 0 ? "bg-white" : "bg-[#fafafa]";
+                      const colWidth = columnWidths[col.id] || col.defaultWidth;
 
                       let cellContent: React.ReactNode = null;
                       let alignClass = "text-left";
 
                       switch (col.id) {
                         case "valueDate":
-                          alignClass = "text-center font-mono text-gray-600 text-[11px] whitespace-nowrap";
-                          cellContent = tx.valueDate;
+                          alignClass = "text-center";
+                          cellContent = (
+                            <div
+                              className="font-mono text-gray-600 text-[11px] whitespace-normal break-words leading-tight"
+                              title={tx.valueDate}
+                            >
+                              {tx.valueDate}
+                            </div>
+                          );
                           break;
                         case "postDate":
-                          alignClass = "text-center font-mono text-gray-600 text-[11px] whitespace-nowrap";
-                          cellContent = tx.postDate;
+                          alignClass = "text-center";
+                          cellContent = (
+                            <div
+                              className="font-mono text-gray-600 text-[11px] whitespace-normal break-words leading-tight"
+                              title={tx.postDate}
+                            >
+                              {tx.postDate}
+                            </div>
+                          );
                           break;
                         case "details":
-                          alignClass = "text-left leading-relaxed";
+                          alignClass = "text-left";
                           cellContent = (
-                            <div>
-                              <div className="font-mono text-[11.5px] font-semibold text-gray-900 break-words">
+                            <div className="w-full min-w-0" title={tx.details}>
+                              <div className="font-mono text-[11.5px] font-semibold text-gray-900 break-words [overflow-wrap:anywhere] whitespace-normal leading-snug">
                                 {tx.details}
                               </div>
-                              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500">
-                                {tx.category && (
-                                  <span className="font-medium text-[#283593]">{tx.category}</span>
-                                )}
-                                {tx.locationName && (
-                                  <>
-                                    <span>•</span>
+                              {(tx.category || tx.locationName) && (
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[10px] text-gray-500">
+                                  {tx.category && (
+                                    <span className="font-medium text-[#283593]">{tx.category}</span>
+                                  )}
+                                  {tx.category && tx.locationName && <span>•</span>}
+                                  {tx.locationName && (
                                     <span>{tx.locationName}</span>
-                                  </>
-                                )}
-                              </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                           break;
                         case "refNo":
-                          alignClass = "text-center font-mono text-gray-700 text-[11px] whitespace-nowrap";
-                          cellContent = tx.refNo || "-";
+                          alignClass = "text-center";
+                          cellContent = (
+                            <div
+                              className="font-mono text-gray-700 text-[11px] break-all [overflow-wrap:anywhere] whitespace-normal w-full block select-all leading-tight"
+                              title={tx.refNo || "-"}
+                            >
+                              {tx.refNo || "-"}
+                            </div>
+                          );
                           break;
                         case "debit":
-                          alignClass = "text-right font-mono font-bold text-red-700 whitespace-nowrap";
-                          cellContent = tx.debit ? Number(tx.debit).toFixed(2) : "-";
+                          alignClass = "text-right";
+                          const debitStr = tx.debit ? Number(tx.debit).toFixed(2) : "-";
+                          cellContent = (
+                            <div
+                              className="font-mono font-bold text-red-700 whitespace-normal break-all leading-tight"
+                              title={tx.debit ? `₹${Number(tx.debit).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "-"}
+                            >
+                              {debitStr}
+                            </div>
+                          );
                           break;
                         case "credit":
-                          alignClass = "text-right font-mono font-bold text-emerald-700 whitespace-nowrap";
-                          cellContent = tx.credit ? Number(tx.credit).toFixed(2) : "-";
+                          alignClass = "text-right";
+                          const creditStr = tx.credit ? Number(tx.credit).toFixed(2) : "-";
+                          cellContent = (
+                            <div
+                              className="font-mono font-bold text-emerald-700 whitespace-normal break-all leading-tight"
+                              title={tx.credit ? `₹${Number(tx.credit).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "-"}
+                            >
+                              {creditStr}
+                            </div>
+                          );
                           break;
                         case "balance":
-                          alignClass = "text-right font-mono font-bold text-gray-900 bg-gray-50/60 whitespace-nowrap";
-                          cellContent = Number(tx.balance).toFixed(2);
+                          alignClass = "text-right bg-gray-50/60";
+                          const balanceStr = Number(tx.balance).toFixed(2);
+                          cellContent = (
+                            <div
+                              className="font-mono font-bold text-gray-900 whitespace-normal break-all leading-tight"
+                              title={`₹${Number(tx.balance).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
+                            >
+                              {balanceStr}
+                            </div>
+                          );
                           break;
                       }
 
@@ -1374,10 +1449,13 @@ export function BankStatementModal({
                         <td
                           key={col.id}
                           style={{
+                            width: `${colWidth}px`,
+                            minWidth: `${colWidth}px`,
+                            maxWidth: `${colWidth}px`,
                             left: frozen ? `${leftOffset}px` : undefined,
                           }}
-                          className={`py-2.5 px-3 border-r border-gray-100 ${alignClass} ${
-                            frozen ? `sticky left-0 z-20 ${rowBg}` : ""
+                          className={`py-2 px-2.5 border-r border-gray-100 overflow-hidden align-top ${alignClass} ${
+                            frozen ? `sticky z-20 ${rowBg}` : ""
                           } ${lastFrozen ? "border-r-2 border-indigo-300 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]" : ""}`}
                         >
                           {cellContent}
