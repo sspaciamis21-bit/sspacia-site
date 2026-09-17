@@ -170,13 +170,44 @@ export async function PUT(
       updateData.attachmentUrl = body.attachmentUrl || null;
     }
     if (body.remarks !== undefined) {
-      updateData.remarks = body.remarks ? body.remarks.trim() : null;
+      if (!body.remarks || !body.remarks.trim()) {
+        return NextResponse.json({ error: 'Remarks is required' }, { status: 400 });
+      }
+      updateData.remarks = body.remarks.trim();
+    }
+    if (body.vendorId !== undefined && body.vendorName !== undefined) {
+      if (!body.vendorId && (!body.vendorName || !body.vendorName.trim())) {
+        return NextResponse.json({ error: 'Vendor / Supplier is required' }, { status: 400 });
+      }
     }
     if (body.vendorId !== undefined) {
       updateData.vendorId = body.vendorId ? Number(body.vendorId) : null;
     }
     if (body.vendorName !== undefined) {
       updateData.vendorName = body.vendorName ? body.vendorName.trim() : null;
+    }
+
+    // Payment Due Date Tracking & Late Fee Avoidance
+    if (body.dueDate !== undefined) {
+      if (body.dueDate) {
+        const d = new Date(body.dueDate);
+        if (!isNaN(d.getTime())) {
+          updateData.dueDate = d;
+          const day = String(d.getDate()).padStart(2, '0');
+          const month = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+          const year = d.getFullYear();
+          updateData.dueDateStr = `${day} ${month} ${year}`;
+        } else {
+          updateData.dueDate = null;
+          updateData.dueDateStr = null;
+        }
+      } else {
+        updateData.dueDate = null;
+        updateData.dueDateStr = null;
+      }
+    }
+    if (body.dueDateStr !== undefined && body.dueDate === undefined) {
+      updateData.dueDateStr = body.dueDateStr ? String(body.dueDateStr).trim() : null;
     }
 
     // Vendor Bill Fields

@@ -379,6 +379,9 @@ export async function POST(request: Request) {
       remarks,
       vendorId,
       vendorName,
+      // Payment Due Date Tracking & Late Fee Avoidance
+      dueDate,
+      dueDateStr,
       // Vendor bill & quantity/rate
       accountNo,
       quantity,
@@ -401,11 +404,33 @@ export async function POST(request: Request) {
       paymentStatus: customPaymentStatus,
     } = body;
 
+    let parsedDueDate: Date | null = null;
+    let finalDueDateStr: string | null = null;
+    if (dueDate) {
+      const d = new Date(dueDate);
+      if (!isNaN(d.getTime())) {
+        parsedDueDate = d;
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+        const year = d.getFullYear();
+        finalDueDateStr = `${day} ${month} ${year}`;
+      }
+    }
+    if (dueDateStr && !finalDueDateStr) {
+      finalDueDateStr = dueDateStr;
+    }
+
     if (!locationId) {
       return NextResponse.json({ error: 'Please select a Center' }, { status: 400 });
     }
     if (!description || !description.trim()) {
       return NextResponse.json({ error: 'Expense description is required' }, { status: 400 });
+    }
+    if (!vendorId && (!vendorName || !vendorName.trim())) {
+      return NextResponse.json({ error: 'Vendor / Supplier is required' }, { status: 400 });
+    }
+    if (!remarks || !remarks.trim()) {
+      return NextResponse.json({ error: 'Remarks is required' }, { status: 400 });
     }
 
     const loc = await prisma.location.findUnique({
@@ -472,6 +497,10 @@ export async function POST(request: Request) {
         remarks: remarks ? remarks.trim() : null,
         vendorId: vendorId ? Number(vendorId) : null,
         vendorName: vendorName ? vendorName.trim() : null,
+
+        // Payment Due Date Tracking & Late Fee Avoidance
+        dueDate: parsedDueDate,
+        dueDateStr: finalDueDateStr,
 
         // Vendor Bill fields
         accountNo: accountNo ? accountNo.trim() : null,

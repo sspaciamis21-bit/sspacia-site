@@ -30,22 +30,13 @@ export async function GET(request: Request) {
       select: { email: true, role: { select: { name: true } } },
     });
 
-    if (
+    const isAccountant =
       currentUser?.email?.toLowerCase() === 'ssinfrazone21@gmail.com' ||
       currentUser?.role?.name?.toUpperCase() === 'ACCOUNTS' ||
-      currentUser?.role?.name?.toUpperCase() === 'ACCOUNTANT'
-    ) {
-      return NextResponse.json({
-        success: true,
-        summary: { agreementCount: 0, lockinCount: 0, ticketCount: 0, totalCount: 0 },
-        agreements: [],
-        lockins: [],
-        escalatedTickets: [],
-      });
-    }
+      currentUser?.role?.name?.toUpperCase() === 'ACCOUNTANT';
 
     // Node-scoped user IDs filter for Community Managers / Admins
-    const scopedUserIds = await getNodeScopedUserIds(currentUserId);
+    const scopedUserIds = isAccountant ? null : await getNodeScopedUserIds(currentUserId);
     const where: any = {
       clientStatus: { in: ['Active', 'On Notice'] },
       OR: [
@@ -361,9 +352,76 @@ export async function GET(request: Request) {
       console.warn('Failed to query expense approval alerts:', expErr);
     }
 
+    // 6. EXPENSE PAYMENT DUE DATE ALERTS (7-day window to avoid late fee charges)
+    let expenseDueDateAlerts: any[] = [];
+    try {
+      let allowedExpenseLocationIds: number[] | null = null;
+      if (!isSuperOrAdmin && !isAccountant) {
+        const userLocs = await prisma.userLocation.findMany({
+          where: { userId: currentUserId },
+          select: { locationId: true },
+        });
+        allowedExpenseLocationIds = userLocs.map((ul) => ul.locationId);
+      }
+
+      const unpaidExpenses = await (prisma as any).expenseRecord.findMany({
+        where: {
+          dueDate: { not: null },
+          paymentStatus: { not: 'PAID' },
+          ...(allowedExpenseLocationIds !== null ? { locationId: { in: allowedExpenseLocationIds } } : {}),
+        },
+        include: {
+          location: { select: { id: true, name: true } },
+        },
+        orderBy: { dueDate: 'asc' },
+      });
+
+      const today = new Date();
+      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+
+      expenseDueDateAlerts = unpaidExpenses
+        .map((exp: any) => {
+          const due = new Date(exp.dueDate);
+          const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
+          const daysRemaining = Math.round((dueMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
+
+          const day = String(due.getDate()).padStart(2, '0');
+          const month = due.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+          const year = due.getFullYear();
+          const formattedDueDate = `${day} ${month} ${year}`; // e.g. "20 OCT 2026"
+
+          let statusTag: 'OVERDUE' | 'DUE_TODAY' | 'URGENT' | 'UPCOMING' = 'UPCOMING';
+          if (daysRemaining < 0) statusTag = 'OVERDUE';
+          else if (daysRemaining === 0) statusTag = 'DUE_TODAY';
+          else if (daysRemaining <= 3) statusTag = 'URGENT';
+
+          return {
+            id: exp.id,
+            receiptNo: exp.receiptNo,
+            description: exp.description,
+            vendorName: exp.vendorName || 'Vendor Bill',
+            locationName: exp.locationName || exp.location?.name || 'Center',
+            amount: Number(exp.amount || 0),
+            category: exp.category || 'OPERATING EXPENSE',
+            dueDate: exp.dueDate,
+            dueDateStr: exp.dueDateStr || formattedDueDate,
+            formattedDueDate,
+            daysRemaining,
+            statusTag,
+            type: 'EXPENSE_DUE',
+            title: `Expense Due: ${exp.vendorName || exp.category} (₹${Number(exp.amount || 0).toLocaleString('en-IN')})`,
+            message: `Payment due on ${formattedDueDate} (${daysRemaining <= 0 ? (daysRemaining === 0 ? 'Due Today' : `${Math.abs(daysRemaining)}d overdue`) : `${daysRemaining}d left`}). Process before due date to avoid late fee charges.`,
+          };
+        })
+        .filter((exp: any) => exp.daysRemaining <= 7);
+    } catch (expDueErr) {
+      console.warn('Failed to query expense due date alerts:', expDueErr);
+    }
+
     // Sort arrays
     agreementNotifications.sort((a, b) => a.daysRemaining - b.daysRemaining);
     lockinNotifications.sort((a, b) => a.daysRemaining - b.daysRemaining);
+    expenseDueDateAlerts.sort((a, b) => a.daysRemaining - b.daysRemaining);
 
     const summary = {
       agreementCount: agreementNotifications.length,
@@ -372,13 +430,15 @@ export async function GET(request: Request) {
       bufferAlertCount: bufferAlerts.length,
       paymentAlertCount: paymentAlerts.length,
       expenseApprovalCount: expenseApprovalAlerts.length,
+      expenseDueAlertCount: expenseDueDateAlerts.length,
       totalCount:
         agreementNotifications.length +
         lockinNotifications.length +
         (isSuperOrAdmin ? ticketEscalations.length : 0) +
         bufferAlerts.length +
         paymentAlerts.length +
-        expenseApprovalAlerts.length,
+        expenseApprovalAlerts.length +
+        expenseDueDateAlerts.length,
     };
 
     return NextResponse.json({
@@ -390,6 +450,7 @@ export async function GET(request: Request) {
       bufferAlerts,
       paymentAlerts,
       expenseApprovalAlerts,
+      expenseDueDateAlerts,
     });
   } catch (error) {
     console.error('Agreement, Lock-in & Ticket notifications error:', error);

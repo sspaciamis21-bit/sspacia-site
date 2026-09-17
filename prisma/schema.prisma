@@ -1360,6 +1360,11 @@ model ExpenseRecord {
   alertEmailSent   Boolean   @default(false)
   alertEmailSentTo String?
 
+  // Payment Due Date Tracking & Automated Late Fee Avoidance
+  dueDate               DateTime? // Target due date to pay before late fees
+  dueDateStr            String?   // Formatted due date string (e.g. "2026-10-20" or "20 OCT 2026")
+  dueDateAlertSentDates String?   @db.Text // JSON array of dates when 7-day daily alert email was sent (e.g. '["2026-10-13"]')
+
   // Accountant Payment Details
   payReceiveDate   String?
   receiveAmount    Float?
@@ -1384,6 +1389,7 @@ model ExpenseRecord {
 
   @@index([locationId])
   @@index([expenseDate])
+  @@index([dueDate])
   @@index([category])
   @@index([paymentStatus])
   @@index([approvalStatus])

@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { runDailyAgreementAlertEmails } from '@/lib/email-automation';
 import { autoDispatchIfLastDay } from '@/lib/auto-dispatch';
+import { runExpenseDueDateAlertEmails } from '@/lib/expense-due-automation';
 
 let isSchedulerStarted = false;
 
@@ -11,6 +12,7 @@ let isSchedulerStarted = false;
  * Schedules:
  * 1. Daily 12:00 AM (00:00) IST — Month-End Auto Invoice Dispatch for Active Clients
  * 2. Daily 9:00 AM IST — Agreement & Lock-In Expiry Alert Emails to cm@sspacia.com
+ * 3. Daily 10:00 AM IST — Operating Expense Due Date Warning Emails (7-day window to avoid late fee)
  */
 export function startCronScheduler() {
   // Prevent duplicate scheduling (e.g., hot-reload in dev mode)
@@ -57,7 +59,24 @@ export function startCronScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
+  // ── 3. DAILY 10:00 AM IST — Operating Expense Due Date Warning Emails ──
+  // Cron: '0 10 * * *' = 10:00 AM IST (Asia/Kolkata)
+  cron.schedule('0 10 * * *', async () => {
+    const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    console.log(`[CRON] ⏰ Daily expense due date alert email job triggered at ${timestamp}`);
+
+    try {
+      const result = await runExpenseDueDateAlertEmails();
+      console.log(`[CRON] ✅ Daily expense due alert emails sent — ${result.sentCount} email(s) sent, ${result.skippedCount} skipped.`);
+    } catch (error: any) {
+      console.error(`[CRON] ❌ Failed to send daily expense due alert emails:`, error?.message || error);
+    }
+  }, {
+    timezone: 'Asia/Kolkata',
+  });
+
   console.log('[CRON] ✅ Scheduler started:');
   console.log('       • 12:00 AM IST — Month-End Invoice Auto-Dispatch');
-  console.log('       • 9:00 AM IST — Daily Agreement & Lock-In Alert Emails');
+  console.log('       • 9:00 AM IST  — Daily Agreement & Lock-In Alert Emails');
+  console.log('       • 10:00 AM IST — Daily Expense Due Date Alert Emails (7-Day Late Fee Warning)');
 }

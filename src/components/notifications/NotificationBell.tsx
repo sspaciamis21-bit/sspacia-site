@@ -95,12 +95,31 @@ export interface InvoicePaymentAlert {
   message: string;
 }
 
+export interface ExpenseDueAlert {
+  id: number;
+  receiptNo?: string | null;
+  description: string;
+  vendorName: string;
+  locationName: string;
+  amount: number;
+  category: string;
+  dueDate: string;
+  dueDateStr: string;
+  formattedDueDate: string;
+  daysRemaining: number;
+  statusTag: 'OVERDUE' | 'DUE_TODAY' | 'URGENT' | 'UPCOMING';
+  type: 'EXPENSE_DUE';
+  title: string;
+  message: string;
+}
+
 interface NotificationSummary {
   agreementCount: number;
   lockinCount: number;
   ticketCount: number;
   bufferAlertCount?: number;
   paymentAlertCount?: number;
+  expenseDueAlertCount?: number;
   totalCount: number;
 }
 
@@ -116,7 +135,7 @@ export function NotificationBell() {
   
   const [isOpen, setIsOpen] = useState(false);
   const [isHoveredBell, setIsHoveredBell] = useState(false);
-  const [activeTab, setActiveTab] = useState<'AGREEMENT' | 'LOCK_IN' | 'TICKET' | 'BUFFER' | 'PAYMENT'>(
+  const [activeTab, setActiveTab] = useState<'AGREEMENT' | 'LOCK_IN' | 'TICKET' | 'BUFFER' | 'PAYMENT' | 'EXPENSE_DUE'>(
     isAccountant ? 'PAYMENT' : 'AGREEMENT'
   );
   
@@ -126,6 +145,7 @@ export function NotificationBell() {
     ticketCount: 0,
     bufferAlertCount: 0,
     paymentAlertCount: 0,
+    expenseDueAlertCount: 0,
     totalCount: 0,
   });
   const [agreements, setAgreements] = useState<NotificationItem[]>([]);
@@ -133,6 +153,7 @@ export function NotificationBell() {
   const [escalatedTickets, setEscalatedTickets] = useState<NotificationItem[]>([]);
   const [bufferAlerts, setBufferAlerts] = useState<ConsumedBufferAlert[]>([]);
   const [paymentAlerts, setPaymentAlerts] = useState<InvoicePaymentAlert[]>([]);
+  const [expenseDueAlerts, setExpenseDueAlerts] = useState<ExpenseDueAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [deliveringId, setDeliveringId] = useState<number | null>(null);
   
@@ -161,9 +182,18 @@ export function NotificationBell() {
           setEscalatedTickets(json.escalatedTickets || []);
           setBufferAlerts(json.bufferAlerts || []);
           setPaymentAlerts(json.paymentAlerts || []);
+          setExpenseDueAlerts(json.expenseDueDateAlerts || []);
 
-          if (isAccountant || ((sum.paymentAlertCount || 0) > 0 && sum.agreementCount === 0 && sum.lockinCount === 0)) {
+          if (isAccountant) {
+            if ((sum.expenseDueAlertCount || 0) > 0 && (sum.paymentAlertCount || 0) === 0) {
+              setActiveTab('EXPENSE_DUE');
+            } else {
+              setActiveTab('PAYMENT');
+            }
+          } else if ((sum.paymentAlertCount || 0) > 0 && sum.agreementCount === 0 && sum.lockinCount === 0) {
             setActiveTab('PAYMENT');
+          } else if ((sum.expenseDueAlertCount || 0) > 0 && sum.agreementCount === 0 && sum.lockinCount === 0 && (sum.paymentAlertCount || 0) === 0) {
+            setActiveTab('EXPENSE_DUE');
           } else if (sum.agreementCount === 0 && sum.lockinCount > 0) {
             setActiveTab('LOCK_IN');
           } else if (sum.agreementCount === 0 && sum.lockinCount === 0 && (sum.bufferAlertCount || 0) > 0) {
@@ -242,6 +272,12 @@ export function NotificationBell() {
     router.push(companyName ? `${targetPath}?search=${encodeURIComponent(companyName)}` : targetPath);
   };
 
+  const handleNavigateToExpenses = () => {
+    setIsOpen(false);
+    const targetPath = isRole('ADMIN') ? '/admin/expenses' : '/manager/expenses';
+    router.push(targetPath);
+  };
+
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return 'N/A';
     try {
@@ -258,6 +294,7 @@ export function NotificationBell() {
 
   const getActiveList = () => {
     if (activeTab === 'PAYMENT') return paymentAlerts;
+    if (activeTab === 'EXPENSE_DUE') return expenseDueAlerts;
     if (activeTab === 'AGREEMENT') return agreements;
     if (activeTab === 'LOCK_IN') return lockins;
     if (activeTab === 'BUFFER') return bufferAlerts as any[];
@@ -346,6 +383,15 @@ export function NotificationBell() {
 
                 <div className="flex items-center justify-between py-1 px-2 bg-neutral-800/80 border border-neutral-700/60">
                   <span className="flex items-center gap-1.5 text-neutral-200">
+                    <AlertTriangle size={12} className="text-rose-400" /> Expense Due (7d):
+                  </span>
+                  <span className={`font-bold font-mono ${(summary.expenseDueAlertCount || 0) > 0 ? 'text-rose-400 animate-pulse' : 'text-neutral-400'}`}>
+                    {summary.expenseDueAlertCount || 0}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between py-1 px-2 bg-neutral-800/80 border border-neutral-700/60">
+                  <span className="flex items-center gap-1.5 text-neutral-200">
                     <ShieldAlert size={12} className="text-red-400" /> Escalated Tickets (&gt;48h):
                   </span>
                   <span className={`font-bold font-mono ${summary.ticketCount > 0 ? 'text-red-400 animate-pulse' : 'text-neutral-400'}`}>
@@ -389,7 +435,7 @@ export function NotificationBell() {
                       )}
                     </h3>
                     <p className="text-[10px] text-teal-100 font-light mt-0.5">
-                      Agreements, Lock-ins, Buffer Stock &amp; 48h Escalations
+                      Agreements, Lock-ins, Due Expenses &amp; 48h Escalations
                     </p>
                   </div>
                 </div>
@@ -428,19 +474,19 @@ export function NotificationBell() {
               </div>
 
               {/* Section Tabs */}
-              <div className="grid grid-cols-4 sm:grid-cols-5 gap-1 bg-teal-950/70 p-1 border border-teal-700/60">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 bg-teal-950/70 p-1 border border-teal-700/60">
                 <button
                   type="button"
                   onClick={() => setActiveTab('PAYMENT')}
-                  className={`py-2 px-1 text-[8.5px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
+                  className={`py-2 px-1 text-[8px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
                     activeTab === 'PAYMENT'
                       ? 'bg-emerald-600 text-white shadow-xs font-black'
                       : 'text-emerald-200 hover:text-white hover:bg-emerald-900/40'
                   }`}
                 >
-                  <Receipt size={11} />
+                  <Receipt size={10} />
                   <span className="truncate">Payments</span>
-                  <span className={`px-1 rounded-full font-mono text-[8px] ${
+                  <span className={`px-1 rounded-full font-mono text-[7.5px] ${
                     activeTab === 'PAYMENT' ? 'bg-emerald-800 text-white' : 'bg-emerald-950 text-emerald-300'
                   }`}>
                     {summary.paymentAlertCount || 0}
@@ -449,16 +495,35 @@ export function NotificationBell() {
 
                 <button
                   type="button"
+                  onClick={() => setActiveTab('EXPENSE_DUE')}
+                  className={`py-2 px-1 text-[8px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
+                    activeTab === 'EXPENSE_DUE'
+                      ? 'bg-rose-600 text-white shadow-xs font-black'
+                      : 'text-rose-200 hover:text-white hover:bg-rose-900/40'
+                  }`}
+                  title="Operating Expenses Due in 7 Days (Late Fee Risk)"
+                >
+                  <AlertTriangle size={10} className={(summary.expenseDueAlertCount || 0) > 0 ? 'text-amber-300 animate-pulse' : ''} />
+                  <span className="truncate">Due Exp</span>
+                  <span className={`px-1 rounded-full font-mono text-[7.5px] ${
+                    activeTab === 'EXPENSE_DUE' ? 'bg-rose-900 text-white' : 'bg-rose-950 text-rose-300'
+                  }`}>
+                    {summary.expenseDueAlertCount || 0}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setActiveTab('AGREEMENT')}
-                  className={`py-2 px-1 text-[8.5px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
+                  className={`py-2 px-1 text-[8px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
                     activeTab === 'AGREEMENT'
                       ? 'bg-white text-[#006064] shadow-xs'
                       : 'text-teal-200 hover:text-white hover:bg-teal-800/50'
                   }`}
                 >
-                  <FileText size={11} />
+                  <FileText size={10} />
                   <span className="truncate">Agreements</span>
-                  <span className={`px-1 rounded-full font-mono text-[8px] ${
+                  <span className={`px-1 rounded-full font-mono text-[7.5px] ${
                     activeTab === 'AGREEMENT' ? 'bg-[#006064] text-white' : 'bg-teal-800 text-teal-100'
                   }`}>
                     {summary.agreementCount}
@@ -468,15 +533,15 @@ export function NotificationBell() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('LOCK_IN')}
-                  className={`py-2 px-1 text-[8.5px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
+                  className={`py-2 px-1 text-[8px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
                     activeTab === 'LOCK_IN'
                       ? 'bg-white text-amber-900 shadow-xs'
                       : 'text-amber-200 hover:text-white hover:bg-teal-800/50'
                   }`}
                 >
-                  <Lock size={11} />
+                  <Lock size={10} />
                   <span className="truncate">Lock-Ins</span>
-                  <span className={`px-1 rounded-full font-mono text-[8px] ${
+                  <span className={`px-1 rounded-full font-mono text-[7.5px] ${
                     activeTab === 'LOCK_IN' ? 'bg-amber-600 text-white' : 'bg-amber-900/80 text-amber-100'
                   }`}>
                     {summary.lockinCount}
@@ -486,13 +551,13 @@ export function NotificationBell() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('BUFFER')}
-                  className={`py-2 px-1 text-[8.5px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
+                  className={`py-2 px-1 text-[8px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
                     activeTab === 'BUFFER'
                       ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
                       : 'text-amber-200 hover:text-white hover:bg-amber-900/40'
                   }`}
                 >
-                  <AlertTriangle size={11} />
+                  <AlertTriangle size={10} />
                   <span className="truncate">Buffer ({summary.bufferAlertCount || 0})</span>
                 </button>
 
@@ -500,15 +565,15 @@ export function NotificationBell() {
                   <button
                     type="button"
                     onClick={() => setActiveTab('TICKET')}
-                    className={`py-2 px-1 text-[8.5px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
+                    className={`py-2 px-1 text-[8px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1 ${
                       activeTab === 'TICKET'
                         ? 'bg-red-600 text-white shadow-xs font-black'
                         : 'text-red-200 hover:text-white hover:bg-red-900/40'
                     }`}
                   >
-                    <ShieldAlert size={11} />
+                    <ShieldAlert size={10} />
                     <span className="truncate">48h SLA</span>
-                    <span className="px-1 rounded-full font-mono text-[8px] bg-red-800 text-white">
+                    <span className="px-1 rounded-full font-mono text-[7.5px] bg-red-800 text-white">
                       {summary.ticketCount}
                     </span>
                   </button>
@@ -533,6 +598,8 @@ export function NotificationBell() {
                     <h4 className="font-bold text-sm text-[#1B1C1C]">
                       {activeTab === 'PAYMENT'
                         ? 'All Approved Invoices Settled!'
+                        : activeTab === 'EXPENSE_DUE'
+                        ? 'No Upcoming Expense Due Dates!'
                         : activeTab === 'AGREEMENT'
                         ? 'No Agreements Ending Soon!'
                         : activeTab === 'LOCK_IN'
@@ -544,6 +611,8 @@ export function NotificationBell() {
                     <p className="text-xs text-neutral-500 font-light mt-1 max-w-xs mx-auto">
                       {activeTab === 'PAYMENT'
                         ? 'There are no approved invoices awaiting payment settlement details.'
+                        : activeTab === 'EXPENSE_DUE'
+                        ? 'No operating expenses are due in the next 7 days. Zero late fee risks!'
                         : activeTab === 'AGREEMENT'
                         ? 'No active client agreements are ending in the next 60 days.'
                         : activeTab === 'LOCK_IN'
@@ -596,6 +665,93 @@ export function NotificationBell() {
                     </div>
                   </div>
                 ))
+              ) : activeTab === 'EXPENSE_DUE' ? (
+                /* ⚠️ EXPENSE PAYMENT DUE DATE ALERTS (7-Day window to avoid late fee charges) */
+                expenseDueAlerts.map((item) => {
+                  const isOverdue = item.daysRemaining < 0;
+                  const isDueToday = item.daysRemaining === 0;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-4 hover:bg-rose-50/50 transition-colors relative space-y-2.5 ${
+                        isOverdue
+                          ? 'bg-rose-100/40 border-l-4 border-rose-600'
+                          : isDueToday
+                          ? 'bg-amber-100/40 border-l-4 border-amber-500'
+                          : 'bg-rose-50/20 border-l-4 border-rose-400'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.5 ${
+                                isOverdue
+                                  ? 'bg-rose-600 text-white animate-pulse'
+                                  : isDueToday
+                                  ? 'bg-amber-600 text-white animate-pulse'
+                                  : item.daysRemaining <= 3
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-300 font-bold'
+                                  : 'bg-amber-100 text-amber-800 border border-amber-300 font-bold'
+                              }`}
+                            >
+                              {isOverdue
+                                ? `${Math.abs(item.daysRemaining)}D OVERDUE`
+                                : isDueToday
+                                ? 'DUE TODAY'
+                                : `${item.daysRemaining} DAYS REMAINING`}
+                            </span>
+                            <span className="text-[9.5px] font-bold text-rose-700 uppercase bg-rose-50 px-1.5 py-0.5 border border-rose-200">
+                              Late Fee Risk
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-sm text-[#1B1C1C] flex items-center gap-1.5 mt-1">
+                            <Building2 size={13} className="text-[#006064] shrink-0" />
+                            <span>{item.vendorName}</span>
+                          </h4>
+                        </div>
+
+                        <span className="shrink-0 px-2 py-0.5 bg-rose-700 text-white text-[10px] font-black uppercase tracking-wider shadow-xs">
+                          ₹{Number(item.amount).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+
+                      {/* Detail Box */}
+                      <div className="text-xs text-neutral-700 bg-white p-2.5 border border-rose-200 space-y-1.5">
+                        <div className="text-[11px] font-medium text-neutral-900 border-b border-neutral-100 pb-1">
+                          <span className="text-gray-500 font-normal">Desc: </span>
+                          <strong className="text-gray-900">{item.description}</strong>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-gray-500 flex items-center gap-1">
+                            <MapPin size={10} className="text-[#006064]" /> {item.locationName}
+                          </span>
+                          <span className="text-rose-900 font-bold font-mono">
+                            Due: {item.formattedDueDate}
+                          </span>
+                        </div>
+                        <p className="text-[10.5px] text-rose-900 bg-rose-50 p-1.5 border border-rose-200 font-medium leading-relaxed">
+                          ⚠️ <strong>Action Required:</strong> Process payment on or before <strong>{item.formattedDueDate}</strong> to avoid late fee charges.
+                        </p>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-rose-200/60">
+                        <div className="text-[10px] text-gray-500 font-mono">
+                          Ref: #{item.id} {item.receiptNo ? `• ${item.receiptNo}` : ''}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleNavigateToExpenses}
+                          className="px-2.5 py-1 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                        >
+                          <span>View Expense Register</span> <ChevronRight size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
               ) : activeTab === 'BUFFER' ? (
                 /* 🛒 LOW STOCK BUFFER ALERTS LIST */
                 bufferAlerts.map((item) => (

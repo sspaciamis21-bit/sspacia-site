@@ -65,34 +65,63 @@ export interface ExpenseColumnDef {
   mono?: boolean;
 }
 
+export const formatExpenseDueDateDisplay = (dateInput?: string | Date | null): string => {
+  if (!dateInput) return "-";
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return String(dateInput);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = d.toLocaleString("en-US", { month: "short" }).toUpperCase();
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
+};
+
 export const CM_EXPENSE_COLUMNS: ExpenseColumnDef[] = [
+  // ── PHASE 1: EXPENSE ENTERED (DETAILS & PROOF) ──
   { id: "index", label: "#", defaultWidth: 45, minWidth: 35, align: "center", phase: "1", mono: true },
-  { id: "date", label: "Date", defaultWidth: 110, minWidth: 70, align: "left", phase: "1" },
-  { id: "category", label: "Category / Center", defaultWidth: 165, minWidth: 100, align: "left", phase: "1" },
-  { id: "description", label: "Expense Description", defaultWidth: 240, minWidth: 130, align: "left", phase: "1" },
+  { id: "center", label: "Coworking Center", defaultWidth: 140, minWidth: 95, align: "left", phase: "1" },
+  { id: "date", label: "Expense Date", defaultWidth: 110, minWidth: 70, align: "left", phase: "1" },
+  { id: "dueDate", label: "Payment Due Date", defaultWidth: 145, minWidth: 95, align: "center", phase: "1" },
+  { id: "vendor", label: "Vendor / Supplier", defaultWidth: 165, minWidth: 95, align: "left", phase: "1" },
+  { id: "category", label: "Expense Category", defaultWidth: 160, minWidth: 95, align: "left", phase: "1" },
+  { id: "paymentMode", label: "Payment Mode", defaultWidth: 115, minWidth: 75, align: "center", phase: "1" },
+  { id: "description", label: "Expense Description", defaultWidth: 230, minWidth: 130, align: "left", phase: "1" },
   { id: "amount", label: "Amount (₹)", defaultWidth: 110, minWidth: 75, align: "right", phase: "1", mono: true },
-  { id: "attachment", label: "Receipt / Bill Doc", defaultWidth: 120, minWidth: 80, align: "center", phase: "1" },
-  { id: "remarks", label: "Remarks", defaultWidth: 130, minWidth: 70, align: "left", phase: "1" },
+  { id: "receiptNo", label: "Receipt / Ref #", defaultWidth: 125, minWidth: 80, align: "left", phase: "1", mono: true },
+  { id: "attachment", label: "Receipt / Bill Doc", defaultWidth: 130, minWidth: 85, align: "center", phase: "1" },
+  { id: "remarks", label: "Remarks", defaultWidth: 140, minWidth: 75, align: "left", phase: "1" },
+
+  // ── PHASE 2: APPROVAL WORKFLOW (ACCOUNTANT → SUPER ADMIN) ──
   { id: "accCheck", label: "Step 1: Acc Check", defaultWidth: 130, minWidth: 85, align: "center", phase: "2" },
   { id: "saApproval", label: "Step 2: SA Approval", defaultWidth: 130, minWidth: 85, align: "center", phase: "2" },
-  { id: "vendor", label: "Vendor / Supplier", defaultWidth: 160, minWidth: 90, align: "left", phase: "3" },
+
+  // ── PHASE 3: PAYMENT DETAILS (SIR PAYS & DISBURSAL) ──
   { id: "utrDate", label: "UTR & Pay Date", defaultWidth: 140, minWidth: 85, align: "center", phase: "3" },
   { id: "paymentStatus", label: "Payment Status", defaultWidth: 110, minWidth: 70, align: "center", phase: "3" },
   { id: "actions", label: "Actions", defaultWidth: 105, minWidth: 80, align: "right", phase: "3" },
 ];
 
 export const ACCOUNTANT_EXPENSE_COLUMNS: ExpenseColumnDef[] = [
+  // ── PHASE 1: EXPENSE ENTERED (DETAILS & BILLING ITEMS) ──
   { id: "index", label: "S.n", defaultWidth: 45, minWidth: 35, align: "center", phase: "1", mono: true },
-  { id: "date", label: "Date", defaultWidth: 105, minWidth: 70, align: "left", phase: "1" },
-  { id: "category", label: "Category / Center", defaultWidth: 160, minWidth: 95, align: "left", phase: "1" },
+  { id: "center", label: "Coworking Center", defaultWidth: 135, minWidth: 95, align: "left", phase: "1" },
+  { id: "date", label: "Expense Date", defaultWidth: 105, minWidth: 70, align: "left", phase: "1" },
+  { id: "dueDate", label: "Payment Due Date", defaultWidth: 145, minWidth: 95, align: "center", phase: "1" },
+  { id: "vendor", label: "Vendor & Bank A/C", defaultWidth: 165, minWidth: 95, align: "left", phase: "1" },
+  { id: "category", label: "Expense Category", defaultWidth: 155, minWidth: 95, align: "left", phase: "1" },
+  { id: "paymentMode", label: "Payment Mode", defaultWidth: 115, minWidth: 75, align: "center", phase: "1" },
   { id: "description", label: "Description", defaultWidth: 220, minWidth: 120, align: "left", phase: "1" },
   { id: "quantity", label: "Qty & A/U", defaultWidth: 90, minWidth: 60, align: "center", phase: "1", mono: true },
   { id: "rate", label: "Rate", defaultWidth: 85, minWidth: 55, align: "right", phase: "1", mono: true },
   { id: "amount", label: "Amt (₹)", defaultWidth: 110, minWidth: 75, align: "right", phase: "1", mono: true },
-  { id: "attachedDocs", label: "Attached Docs", defaultWidth: 125, minWidth: 80, align: "center", phase: "1" },
+  { id: "receiptNo", label: "Receipt / Ref #", defaultWidth: 125, minWidth: 80, align: "left", phase: "1", mono: true },
+  { id: "attachedDocs", label: "Attached Docs", defaultWidth: 130, minWidth: 85, align: "center", phase: "1" },
+  { id: "remarks", label: "Remarks", defaultWidth: 135, minWidth: 75, align: "left", phase: "1" },
+
+  // ── PHASE 2: APPROVAL WORKFLOW (ACCOUNTANT → SUPER ADMIN) ──
   { id: "accCheck", label: "Step 1: Acc Check", defaultWidth: 125, minWidth: 80, align: "center", phase: "2" },
   { id: "saApproval", label: "Step 2: SA Approval", defaultWidth: 125, minWidth: 80, align: "center", phase: "2" },
-  { id: "vendor", label: "Vendor & Bank A/C", defaultWidth: 160, minWidth: 90, align: "left", phase: "3" },
+
+  // ── PHASE 3: PAYMENT DETAILS (SIR PAYS & DISBURSAL) ──
   { id: "bankPortal", label: "Bank Portal", defaultWidth: 90, minWidth: 65, align: "center", phase: "3" },
   { id: "utrNumber", label: "UTR No.", defaultWidth: 155, minWidth: 90, align: "center", phase: "3", mono: true },
   { id: "payDate", label: "Payment Date", defaultWidth: 110, minWidth: 75, align: "center", phase: "3", mono: true },
@@ -104,10 +133,18 @@ export const getExpenseCellValue = (rec: ExpenseRecordItem, colId: string, idx: 
   switch (colId) {
     case "index":
       return String(idx + 1);
+    case "center":
+      return rec.locationName || "HQ";
     case "date":
       return rec.expenseDateStr || (rec.expenseDate ? new Date(rec.expenseDate).toLocaleDateString("en-GB") : "-");
+    case "dueDate":
+      return rec.dueDateStr || formatExpenseDueDateDisplay(rec.dueDate);
+    case "vendor":
+      return rec.vendorName ? (rec.accountNo ? `${rec.vendorName} (${rec.accountNo})` : rec.vendorName) : "Unassigned";
     case "category":
-      return (rec.category || "GENERAL") + (rec.locationName ? ` (${rec.locationName})` : "");
+      return rec.category || "GENERAL EXPENSE";
+    case "paymentMode":
+      return rec.paymentMode || "-";
     case "description":
       return rec.description || "";
     case "quantity":
@@ -116,6 +153,8 @@ export const getExpenseCellValue = (rec: ExpenseRecordItem, colId: string, idx: 
       return rec.rate ? `₹${rec.rate}` : "-";
     case "amount":
       return String(rec.amount || 0);
+    case "receiptNo":
+      return rec.receiptNo || "-";
     case "attachment":
     case "attachedDocs": {
       const parts = [];
@@ -154,6 +193,53 @@ export const getExpenseCellValue = (rec: ExpenseRecordItem, colId: string, idx: 
   }
 };
 
+export const getExpenseDueDateBadge = (rec: ExpenseRecordItem) => {
+  if (!rec.dueDate && !rec.dueDateStr) return null;
+  const isPaid = rec.paymentStatus === "PAID";
+  if (isPaid) {
+    return {
+      text: "Paid",
+      className: "bg-emerald-50 text-emerald-700 border-emerald-300",
+      isRisk: false,
+    };
+  }
+
+  const due = rec.dueDate ? new Date(rec.dueDate) : null;
+  if (!due || isNaN(due.getTime())) return null;
+
+  const now = new Date();
+  const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const daysDiff = Math.round((dueMidnight - nowMidnight) / (1000 * 60 * 60 * 24));
+
+  if (daysDiff < 0) {
+    return {
+      text: `${Math.abs(daysDiff)}d Overdue (Late Fee)`,
+      className: "bg-rose-100 text-rose-800 border-rose-400 font-bold",
+      isRisk: true,
+    };
+  }
+  if (daysDiff === 0) {
+    return {
+      text: "Due Today (Late Fee Risk)",
+      className: "bg-amber-100 text-amber-900 border-amber-400 font-bold",
+      isRisk: true,
+    };
+  }
+  if (daysDiff <= 7) {
+    return {
+      text: `Due in ${daysDiff}d (Late Fee Risk)`,
+      className: "bg-rose-50 text-rose-700 border-rose-300 font-bold",
+      isRisk: true,
+    };
+  }
+  return {
+    text: `Due in ${daysDiff}d`,
+    className: "bg-slate-50 text-slate-600 border-slate-200",
+    isRisk: false,
+  };
+};
+
 export interface ExpenseRecordItem {
   id: number;
   expenseDate: string;
@@ -169,6 +255,11 @@ export interface ExpenseRecordItem {
   remarks: string | null;
   vendorId?: number | null;
   vendorName?: string | null;
+
+  // Payment Due Date Tracking & Late Fee Avoidance
+  dueDate?: string | Date | null;
+  dueDateStr?: string | null;
+  dueDateAlertSentDates?: string | null;
 
   // Vendor bill & QTY/Rate
   accountNo?: string | null;
@@ -412,8 +503,30 @@ export function ExpenseRegister({
     [...CM_EXPENSE_COLUMNS, ...ACCOUNTANT_EXPENSE_COLUMNS].forEach((c) => {
       initial[c.id] = c.defaultWidth;
     });
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("sspacia_expense_col_widths_v3");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return { ...initial, ...parsed };
+        }
+      } catch (e) {
+        console.error("Error reading saved column widths", e);
+      }
+    }
     return initial;
   });
+
+  // Persistent storage effect for column widths
+  useEffect(() => {
+    if (typeof window !== "undefined" && Object.keys(columnWidths).length > 0) {
+      try {
+        localStorage.setItem("sspacia_expense_col_widths_v3", JSON.stringify(columnWidths));
+      } catch (e) {
+        console.error("Error persisting column widths", e);
+      }
+    }
+  }, [columnWidths]);
 
   const [frozenColCount, setFrozenColCount] = useState<number>(0);
   const [hiddenColIds, setHiddenColIds] = useState<string[]>([]);
@@ -479,6 +592,16 @@ export function ExpenseRegister({
         resizeDataRef.current = null;
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
+        setColumnWidths((latest) => {
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem("sspacia_expense_col_widths_v3", JSON.stringify(latest));
+            } catch (e) {
+              console.error("Error saving column widths", e);
+            }
+          }
+          return latest;
+        });
       }
     };
 
@@ -506,6 +629,13 @@ export function ExpenseRegister({
       reset[c.id] = c.defaultWidth;
     });
     setColumnWidths(reset);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("sspacia_expense_col_widths_v3");
+      } catch (e) {
+        console.error("Error resetting column widths in storage", e);
+      }
+    }
     toast.info("Column widths reset to default");
   };
 
@@ -656,6 +786,23 @@ export function ExpenseRegister({
         const tB = b.expenseDate ? new Date(b.expenseDate).getTime() : 0;
         return (tA - tB) * factor;
       }
+      if (colId === "dueDate") {
+        const tA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        const tB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+        return (tA - tB) * factor;
+      }
+      if (colId === "center") {
+        return (a.locationName || "").localeCompare(b.locationName || "") * factor;
+      }
+      if (colId === "vendor") {
+        return (a.vendorName || "").localeCompare(b.vendorName || "") * factor;
+      }
+      if (colId === "receiptNo") {
+        return (a.receiptNo || "").localeCompare(b.receiptNo || "") * factor;
+      }
+      if (colId === "paymentMode") {
+        return (a.paymentMode || "").localeCompare(b.paymentMode || "") * factor;
+      }
       const valA = getExpenseCellValue(a, colId, 0);
       const valB = getExpenseCellValue(b, colId, 0);
       return valA.localeCompare(valB) * factor;
@@ -727,6 +874,11 @@ export function ExpenseRegister({
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
 
+  // Quick Due Date Modal state
+  const [dueDatePickerRecord, setDueDatePickerRecord] = useState<ExpenseRecordItem | null>(null);
+  const [dueDatePickerValue, setDueDatePickerValue] = useState<string>("");
+  const [savingDueDate, setSavingDueDate] = useState(false);
+
   // Portal mount state
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -744,7 +896,8 @@ export function ExpenseRegister({
       isApprovalsModalOpen ||
       isViewPaymentModalOpen ||
       isBankStatementOpen ||
-      isCategoryModalOpen
+      isCategoryModalOpen ||
+      dueDatePickerRecord
     );
     if (isAnyModalOpen) {
       const originalOverflow = document.body.style.overflow;
@@ -763,6 +916,7 @@ export function ExpenseRegister({
     isViewPaymentModalOpen,
     isBankStatementOpen,
     isCategoryModalOpen,
+    dueDatePickerRecord,
   ]);
 
   // Global pending approvals across ALL centres (irrespective of center/month filter)
@@ -775,6 +929,7 @@ export function ExpenseRegister({
   const [formData, setFormData] = useState({
     locationId: initialLocationId || "",
     expenseDate: new Date().toISOString().split("T")[0],
+    dueDate: "",
     category: FIXED_EXPENSE_TYPES[0],
     customCategory: "",
     description: "",
@@ -1536,31 +1691,130 @@ export function ExpenseRegister({
     }
   };
 
+  // State & Handler to update existing expense due date from table inline datepicker
+  const [updatingDueDateId, setUpdatingDueDateId] = useState<number | null>(null);
+
+  const handleUpdateExpenseDueDate = async (recordId: number, newDateVal: string) => {
+    let optimisticDueDate: string | null = newDateVal ? newDateVal : null;
+    let optimisticDueDateStr: string | null = null;
+    if (newDateVal) {
+      const d = new Date(newDateVal);
+      if (!isNaN(d.getTime())) {
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = d.toLocaleString("en-US", { month: "short" }).toUpperCase();
+        const year = d.getFullYear();
+        optimisticDueDateStr = `${day} ${month} ${year}`;
+      }
+    }
+
+    // Optimistically update
+    setRecords((prev) =>
+      prev.map((r) =>
+        r.id === recordId
+          ? {
+              ...r,
+              dueDate: optimisticDueDate,
+              dueDateStr: optimisticDueDateStr,
+            }
+          : r
+      )
+    );
+
+    try {
+      setUpdatingDueDateId(recordId);
+      const res = await fetch(`/api/admin/expense-records/${recordId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dueDate: newDateVal || null }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update payment due date");
+
+      if (data.data) {
+        setRecords((prev) =>
+          prev.map((r) =>
+            r.id === recordId
+              ? {
+                  ...r,
+                  dueDate: data.data.dueDate,
+                  dueDateStr: data.data.dueDateStr,
+                }
+              : r
+          )
+        );
+      }
+
+      if (newDateVal) {
+        toast.success(`Payment due date set to ${optimisticDueDateStr || newDateVal}`);
+      } else {
+        toast.info("Payment due date removed");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update payment due date");
+      fetchRecords(false);
+    } finally {
+      setUpdatingDueDateId(null);
+    }
+  };
+
+  // Quick Due Date Modal handlers
+
+  const openDueDatePicker = (rec: ExpenseRecordItem) => {
+    setDueDatePickerRecord(rec);
+    const rawYMD = rec.dueDate ? new Date(rec.dueDate).toISOString().split("T")[0] : "";
+    setDueDatePickerValue(rawYMD);
+  };
+
+  const applyDueDatePreset = (daysFromNow: number | "endOfMonth") => {
+    const d = new Date();
+    if (daysFromNow === "endOfMonth") {
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      setDueDatePickerValue(end.toISOString().split("T")[0]);
+    } else {
+      d.setDate(d.getDate() + daysFromNow);
+      setDueDatePickerValue(d.toISOString().split("T")[0]);
+    }
+  };
+
+  const handleSaveQuickDueDate = async () => {
+    if (!dueDatePickerRecord) return;
+    setSavingDueDate(true);
+    try {
+      await handleUpdateExpenseDueDate(dueDatePickerRecord.id, dueDatePickerValue);
+      setDueDatePickerRecord(null);
+    } finally {
+      setSavingDueDate(false);
+    }
+  };
+
 
 
   // Open Add Modal
   const openAddModal = () => {
     setEditingRecord(null);
-    const defaultLocId =
+    const today = new Date().toISOString().split("T")[0];
+    const initialLocation =
       selectedLocation !== "ALL"
-        ? Number(selectedLocation)
+        ? selectedLocation
         : locations.length > 0
-        ? locations[0].id
+        ? String(locations[0].id)
         : "";
 
-    const defaultCategory =
+    const fallbackCat =
       categoryHeaders.length > 0 ? categoryHeaders[0] : FIXED_EXPENSE_TYPES[0];
 
     setFormData({
-      locationId: defaultLocId,
-      expenseDate: new Date().toISOString().split("T")[0],
-      category: defaultCategory,
+      locationId: initialLocation,
+      expenseDate: today,
+      dueDate: "",
+      category: fallbackCat,
       customCategory: "",
       description: "",
       quantity: "1",
       rate: "",
       amount: "",
-      paymentMode: "", // Optional, not mandated
+      paymentMode: "", // Not mandated
       receiptNo: "",
       attachmentUrl: "",
       invoiceUrl: "",
@@ -1598,12 +1852,26 @@ export function ExpenseRegister({
       ? new Date(rec.expenseDate).toISOString().split("T")[0]
       : new Date().toISOString().split("T")[0];
 
+    let dueDateFormatted = "";
+    if (rec.dueDate) {
+      const d = new Date(rec.dueDate);
+      if (!isNaN(d.getTime())) {
+        dueDateFormatted = d.toISOString().split("T")[0];
+      }
+    } else if (rec.dueDateStr) {
+      const d = new Date(rec.dueDateStr);
+      if (!isNaN(d.getTime())) {
+        dueDateFormatted = d.toISOString().split("T")[0];
+      }
+    }
+
     const fallbackCat =
       categoryHeaders.length > 0 ? categoryHeaders[0] : FIXED_EXPENSE_TYPES[0];
 
     setFormData({
       locationId: rec.locationId || "",
       expenseDate: dateFormatted,
+      dueDate: dueDateFormatted,
       category: rec.category || fallbackCat,
       customCategory: "",
       description: rec.description || "",
@@ -1800,6 +2068,14 @@ export function ExpenseRegister({
       toast.error("Please enter a valid expense amount");
       return;
     }
+    if (!formData.vendorId && !formData.vendorName?.trim()) {
+      toast.error("Please select or register a Vendor / Supplier");
+      return;
+    }
+    if (!formData.remarks || !formData.remarks.trim()) {
+      toast.error("Please enter remarks");
+      return;
+    }
 
     const finalCategory = formData.category.trim().toUpperCase() || "GENERAL EXPENSE";
 
@@ -1811,6 +2087,7 @@ export function ExpenseRegister({
     const payload: any = {
       locationId: Number(formData.locationId),
       expenseDate: formData.expenseDate,
+      dueDate: formData.dueDate ? formData.dueDate : null,
       category: finalCategory,
       description: formData.description.trim(),
       amount: Number(formData.amount),
@@ -3375,7 +3652,21 @@ export function ExpenseRegister({
                           );
                         })()}
 
-                        {/* 2. Date */}
+                        {/* 2. Coworking Center */}
+                        {(() => {
+                          const s = getColStyle("center");
+                          if (!s) return null;
+                          return (
+                            <td style={s.style} className={`py-3 px-2.5 whitespace-nowrap ${s.className}`}>
+                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-800" title={rec.locationName || "HQ"}>
+                                <Building2 className="w-3.5 h-3.5 text-[#006064] shrink-0" />
+                                <span className="truncate max-w-[125px]">{rec.locationName || "HQ"}</span>
+                              </span>
+                            </td>
+                          );
+                        })()}
+
+                        {/* 3. Expense Date */}
                         {(() => {
                           const s = getColStyle("date");
                           if (!s) return null;
@@ -3386,33 +3677,122 @@ export function ExpenseRegister({
                           );
                         })()}
 
-                        {/* 3. Category / Center */}
+                        {/* 4. Payment Due Date (Interactive Picker for existing entries) */}
+                        {(() => {
+                          const s = getColStyle("dueDate");
+                          if (!s) return null;
+                          const badge = getExpenseDueDateBadge(rec);
+                          const formattedDueDate = rec.dueDateStr || (rec.dueDate ? formatExpenseDueDateDisplay(rec.dueDate) : null);
+
+                          return (
+                            <td style={s.style} className={`py-3 px-2.5 text-center whitespace-nowrap ${s.className}`}>
+                              {formattedDueDate ? (
+                                <div className="flex flex-col items-center justify-center gap-0.5">
+                                  <div className="inline-flex items-center gap-1 group">
+                                    <button
+                                      type="button"
+                                      onClick={() => openDueDatePicker(rec)}
+                                      className="inline-flex items-center gap-1 cursor-pointer hover:text-[#006064] transition-colors group/btn"
+                                      title="Click to edit payment due date"
+                                    >
+                                      <span className="font-mono font-bold text-gray-900 group-hover/btn:text-[#006064] text-[11px] underline decoration-dotted decoration-gray-400 group-hover/btn:decoration-[#006064]">
+                                        {formattedDueDate}
+                                      </span>
+                                      <Calendar className="w-2.5 h-2.5 text-gray-400 group-hover/btn:text-[#006064] shrink-0" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUpdateExpenseDueDate(rec.id, "");
+                                      }}
+                                      className="text-gray-300 hover:text-red-600 text-xs px-1 font-bold cursor-pointer transition-colors"
+                                      title="Clear payment due date"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  {badge && (
+                                    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[8.5px] border uppercase tracking-tight rounded-2xs ${badge.className}`}>
+                                      {badge.isRisk && <AlertTriangle className="w-2 h-2 shrink-0" />}
+                                      <span>{badge.text}</span>
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => openDueDatePicker(rec)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-cyan-50 hover:bg-cyan-100 text-[#006064] border border-dashed border-cyan-400 hover:border-[#006064] text-[10.5px] font-bold rounded-xs transition-all shadow-2xs cursor-pointer active:scale-95"
+                                  title="Click to set payment due date"
+                                >
+                                  <Calendar className="w-3 h-3 text-[#006064]" />
+                                  <span>+ Due Date</span>
+                                </button>
+                              )}
+                            </td>
+                          );
+                        })()}
+
+                        {/* 5. Vendor / Supplier */}
+                        {(() => {
+                          const s = getColStyle("vendor");
+                          if (!s) return null;
+                          return (
+                            <td style={s.style} className={`py-3 px-3 whitespace-nowrap ${s.className}`}>
+                              {rec.vendorName ? (
+                                <div className="text-xs">
+                                  <span className="font-bold text-gray-900 block truncate max-w-[155px]" title={rec.vendorName}>{rec.vendorName}</span>
+                                  {rec.accountNo && (
+                                    <span className="font-mono text-[10px] text-gray-500 block truncate max-w-[155px]">A/C: {rec.accountNo}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 italic text-[11px]">Unassigned</span>
+                              )}
+                            </td>
+                          );
+                        })()}
+
+                        {/* 6. Expense Category */}
                         {(() => {
                           const s = getColStyle("category");
                           if (!s) return null;
                           return (
                             <td style={s.style} className={`py-3 px-2.5 whitespace-nowrap ${s.className}`}>
-                              <div className="flex flex-col gap-1">
-                                <select
-                                  value={rec.category || "GENERAL"}
-                                  onChange={(e) => handleUpdateExpenseCategory(rec.id, e.target.value)}
-                                  disabled={updatingCategoryId === rec.id}
-                                  className="bg-cyan-50/80 hover:bg-cyan-100 text-[#006064] border border-cyan-300 text-[10px] font-bold uppercase py-0.5 px-1.5 focus:outline-none focus:border-[#006064] cursor-pointer max-w-[150px] truncate shadow-2xs"
-                                  title="Select / change category header"
-                                >
-                                  {Array.from(new Set([...officialCategoryOptions, ...(rec.category ? [rec.category] : [])])).map((cat) => (
-                                    <option key={cat} value={cat} className="bg-white text-gray-900 font-bold uppercase">{cat}</option>
-                                  ))}
-                                </select>
-                                <span className="text-[10px] text-gray-500 font-mono flex items-center gap-1">
-                                  <Building2 className="w-2.5 h-2.5 text-gray-400" /> {rec.locationName || "HQ"}
-                                </span>
-                              </div>
+                              <select
+                                value={rec.category || "GENERAL EXPENSE"}
+                                onChange={(e) => handleUpdateExpenseCategory(rec.id, e.target.value)}
+                                disabled={updatingCategoryId === rec.id}
+                                className="bg-cyan-50/80 hover:bg-cyan-100 text-[#006064] border border-cyan-300 text-[10px] font-bold uppercase py-1 px-1.5 focus:outline-none focus:border-[#006064] cursor-pointer max-w-[155px] truncate shadow-2xs"
+                                title="Select / change category header"
+                              >
+                                {Array.from(new Set([...officialCategoryOptions, ...(rec.category ? [rec.category] : [])])).map((cat) => (
+                                  <option key={cat} value={cat} className="bg-white text-gray-900 font-bold uppercase">{cat}</option>
+                                ))}
+                              </select>
                             </td>
                           );
                         })()}
 
-                        {/* 4. Description */}
+                        {/* 7. Payment Mode */}
+                        {(() => {
+                          const s = getColStyle("paymentMode");
+                          if (!s) return null;
+                          return (
+                            <td style={s.style} className={`py-3 px-2.5 text-center whitespace-nowrap ${s.className}`}>
+                              {rec.paymentMode ? (
+                                <span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-medium border border-gray-200 rounded-xs">
+                                  {rec.paymentMode}
+                                </span>
+                              ) : (
+                                <span className="text-gray-300 text-xs font-mono">-</span>
+                              )}
+                            </td>
+                          );
+                        })()}
+
+                        {/* 8. Expense Description */}
                         {(() => {
                           const s = getColStyle("description");
                           if (!s) return null;
@@ -3424,7 +3804,7 @@ export function ExpenseRegister({
                           );
                         })()}
 
-                        {/* 5. Amount */}
+                        {/* 9. Amount */}
                         {(() => {
                           const s = getColStyle("amount");
                           if (!s) return null;
@@ -3435,7 +3815,24 @@ export function ExpenseRegister({
                           );
                         })()}
 
-                        {/* 6. Receipt / Bill Doc */}
+                        {/* 10. Receipt / Ref # */}
+                        {(() => {
+                          const s = getColStyle("receiptNo");
+                          if (!s) return null;
+                          return (
+                            <td style={s.style} className={`py-3 px-2.5 whitespace-nowrap font-mono text-[11px] text-gray-700 ${s.className}`}>
+                              {rec.receiptNo ? (
+                                <span className="font-semibold text-gray-900 bg-gray-50 px-1.5 py-0.5 border border-gray-200 rounded-2xs">
+                                  {rec.receiptNo}
+                                </span>
+                              ) : (
+                                <span className="text-gray-300 text-xs">-</span>
+                              )}
+                            </td>
+                          );
+                        })()}
+
+                        {/* 11. Receipt / Bill Doc */}
                         {(() => {
                           const s = getColStyle("attachment");
                           if (!s) return null;
@@ -3458,7 +3855,7 @@ export function ExpenseRegister({
                           );
                         })()}
 
-                        {/* 7. Remarks */}
+                        {/* 12. Remarks */}
                         {(() => {
                           const s = getColStyle("remarks");
                           if (!s) return null;
@@ -3469,7 +3866,7 @@ export function ExpenseRegister({
                           );
                         })()}
 
-                        {/* 8. Acc Check */}
+                        {/* 13. Step 1: Acc Check */}
                         {(() => {
                           const s = getColStyle("accCheck");
                           if (!s) return null;
@@ -3504,7 +3901,7 @@ export function ExpenseRegister({
                           );
                         })()}
 
-                        {/* 9. SA Approval */}
+                        {/* 14. Step 2: SA Approval */}
                         {(() => {
                           const s = getColStyle("saApproval");
                           if (!s) return null;
@@ -3539,26 +3936,6 @@ export function ExpenseRegister({
                                   </span>
                                 )}
                               </div>
-                            </td>
-                          );
-                        })()}
-
-                        {/* 10. Vendor */}
-                        {(() => {
-                          const s = getColStyle("vendor");
-                          if (!s) return null;
-                          return (
-                            <td style={s.style} className={`py-3 px-3 whitespace-nowrap bg-emerald-50/10 ${s.className}`}>
-                              {rec.vendorName ? (
-                                <div className="text-xs">
-                                  <span className="font-bold text-gray-900 block">{rec.vendorName}</span>
-                                  {rec.accountNo && (
-                                    <span className="font-mono text-[10px] text-gray-500 block">A/C: {rec.accountNo}</span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-gray-400 italic text-[11px]">Unassigned</span>
-                              )}
                             </td>
                           );
                         })()}
@@ -3685,7 +4062,21 @@ export function ExpenseRegister({
                         );
                       })()}
 
-                      {/* 2. Date */}
+                      {/* 2. Coworking Center */}
+                      {(() => {
+                        const s = getColStyle("center");
+                        if (!s) return null;
+                        return (
+                          <td style={s.style} className={`py-3 px-2.5 whitespace-nowrap ${s.className}`}>
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-800" title={rec.locationName || "HQ"}>
+                              <Building2 className="w-3.5 h-3.5 text-[#006064] shrink-0" />
+                              <span className="truncate max-w-[125px]">{rec.locationName || "HQ"}</span>
+                            </span>
+                          </td>
+                        );
+                      })()}
+
+                      {/* 3. Expense Date */}
                       {(() => {
                         const s = getColStyle("date");
                         if (!s) return null;
@@ -3696,7 +4087,96 @@ export function ExpenseRegister({
                         );
                       })()}
 
-                      {/* 3. Category / Center */}
+                      {/* 4. Payment Due Date (Interactive inline picker for existing entries) */}
+                      {(() => {
+                        const s = getColStyle("dueDate");
+                        if (!s) return null;
+                        const badge = getExpenseDueDateBadge(rec);
+                        const formattedDueDate = rec.dueDateStr || (rec.dueDate ? formatExpenseDueDateDisplay(rec.dueDate) : null);
+
+                        return (
+                          <td style={s.style} className={`py-3 px-2.5 text-center whitespace-nowrap ${s.className}`}>
+                            {formattedDueDate ? (
+                              <div className="flex flex-col items-center justify-center gap-0.5">
+                                <div className="inline-flex items-center gap-1 group">
+                                  <button
+                                    type="button"
+                                    onClick={() => openDueDatePicker(rec)}
+                                    className="inline-flex items-center gap-1 cursor-pointer hover:text-[#006064] transition-colors group/btn"
+                                    title="Click to edit payment due date"
+                                  >
+                                    <span className="font-mono font-bold text-gray-900 group-hover/btn:text-[#006064] text-[11px] underline decoration-dotted decoration-gray-400 group-hover/btn:decoration-[#006064]">
+                                      {formattedDueDate}
+                                    </span>
+                                    <Calendar className="w-2.5 h-2.5 text-gray-400 group-hover/btn:text-[#006064] shrink-0" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUpdateExpenseDueDate(rec.id, "");
+                                    }}
+                                    className="text-gray-300 hover:text-red-600 text-xs px-1 font-bold cursor-pointer transition-colors"
+                                    title="Clear payment due date"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                                {badge && (
+                                  <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[8.5px] border uppercase tracking-tight rounded-2xs ${badge.className}`}>
+                                    {badge.isRisk && <AlertTriangle className="w-2 h-2 shrink-0" />}
+                                    <span>{badge.text}</span>
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openDueDatePicker(rec)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-cyan-50 hover:bg-cyan-100 text-[#006064] border border-dashed border-cyan-400 hover:border-[#006064] text-[10.5px] font-bold rounded-xs transition-all shadow-2xs cursor-pointer active:scale-95"
+                                title="Click to set payment due date"
+                              >
+                                <Calendar className="w-3 h-3 text-[#006064]" />
+                                <span>+ Due Date</span>
+                              </button>
+                            )}
+                          </td>
+                        );
+                      })()}
+
+                      {/* 5. Vendor & Bank A/C */}
+                      {(() => {
+                        const s = getColStyle("vendor");
+                        if (!s) return null;
+                        return (
+                          <td style={s.style} className={`py-3 px-3 whitespace-nowrap bg-emerald-50/10 ${s.className}`}>
+                            {rec.vendorName ? (
+                              <div className="font-semibold text-gray-900 text-[11.5px]">
+                                <span className="block truncate max-w-[155px]" title={rec.vendorName}>{rec.vendorName}</span>
+                                {rec.accountNo && (
+                                  <div className="text-[10px] font-mono text-gray-500 font-normal truncate max-w-[155px]">A/C: {rec.accountNo}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[9.5px] font-mono font-bold block mb-0.5">Accounts to Assign</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSettlingRecord(rec);
+                                    setIsNewVendorModalOpen(true);
+                                  }}
+                                  className="text-[9px] text-[#006064] hover:underline flex items-center gap-0.5 cursor-pointer font-bold"
+                                >
+                                  <Plus className="w-2.5 h-2.5" /> Add Vendor
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })()}
+
+                      {/* 6. Expense Category */}
                       {(() => {
                         const s = getColStyle("category");
                         if (!s) return null;
@@ -3704,25 +4184,39 @@ export function ExpenseRegister({
                           <td style={s.style} className={`py-3 px-2.5 whitespace-nowrap ${s.className}`}>
                             <div className="flex flex-col gap-1">
                               <select
-                                value={rec.category || "GENERAL"}
+                                value={rec.category || "GENERAL EXPENSE"}
                                 onChange={(e) => handleUpdateExpenseCategory(rec.id, e.target.value)}
                                 disabled={updatingCategoryId === rec.id}
-                                className="bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9.5px] font-bold uppercase py-0.5 px-1 focus:outline-none focus:border-emerald-600 cursor-pointer max-w-[140px] truncate shadow-2xs"
+                                className="bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9.5px] font-bold uppercase py-0.5 px-1 focus:outline-none focus:border-emerald-600 cursor-pointer max-w-[145px] truncate shadow-2xs"
                                 title="Select / change category header"
                               >
                                 {Array.from(new Set([...officialCategoryOptions, ...(rec.category ? [rec.category] : [])])).map((cat) => (
                                   <option key={cat} value={cat} className="bg-white text-gray-900 font-bold uppercase">{cat}</option>
                                 ))}
                               </select>
-                              <span className="text-[9.5px] text-gray-500 font-mono">
-                                {rec.locationName || "HQ"}
-                              </span>
                             </div>
                           </td>
                         );
                       })()}
 
-                      {/* 4. Description */}
+                      {/* 7. Payment Mode */}
+                      {(() => {
+                        const s = getColStyle("paymentMode");
+                        if (!s) return null;
+                        return (
+                          <td style={s.style} className={`py-3 px-2.5 text-center whitespace-nowrap ${s.className}`}>
+                            {rec.paymentMode ? (
+                              <span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-medium border border-gray-200 rounded-xs">
+                                {rec.paymentMode}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 text-xs font-mono">-</span>
+                            )}
+                          </td>
+                        );
+                      })()}
+
+                      {/* 8. Description */}
                       {(() => {
                         const s = getColStyle("description");
                         if (!s) return null;
@@ -3734,7 +4228,7 @@ export function ExpenseRegister({
                         );
                       })()}
 
-                      {/* 5. Qty & A/U */}
+                      {/* 9. Qty & A/U */}
                       {(() => {
                         const s = getColStyle("quantity");
                         if (!s) return null;
@@ -3746,7 +4240,7 @@ export function ExpenseRegister({
                         );
                       })()}
 
-                      {/* 6. Rate */}
+                      {/* 10. Rate */}
                       {(() => {
                         const s = getColStyle("rate");
                         if (!s) return null;
@@ -3757,7 +4251,7 @@ export function ExpenseRegister({
                         );
                       })()}
 
-                      {/* 7. Amt (₹) */}
+                      {/* 11. Amt (₹) */}
                       {(() => {
                         const s = getColStyle("amount");
                         if (!s) return null;
@@ -3768,12 +4262,29 @@ export function ExpenseRegister({
                         );
                       })()}
 
-                      {/* 8. Attached Docs (CM Invoices & Slips in Phase 1) */}
+                      {/* 12. Receipt / Ref # */}
+                      {(() => {
+                        const s = getColStyle("receiptNo");
+                        if (!s) return null;
+                        return (
+                          <td style={s.style} className={`py-3 px-2.5 whitespace-nowrap font-mono text-[11px] text-gray-700 ${s.className}`}>
+                            {rec.receiptNo ? (
+                              <span className="font-semibold text-gray-900 bg-gray-50 px-1.5 py-0.5 border border-gray-200 rounded-2xs">
+                                {rec.receiptNo}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 text-xs">-</span>
+                            )}
+                          </td>
+                        );
+                      })()}
+
+                      {/* 13. Attached Docs (CM Invoices & Slips in Phase 1) */}
                       {(() => {
                         const s = getColStyle("attachedDocs");
                         if (!s) return null;
                         return (
-                          <td style={s.style} className={`py-3 px-2.5 text-center bg-slate-50/50 border-r border-slate-200 ${s.className}`}>
+                          <td style={s.style} className={`py-3 px-2.5 text-center bg-slate-50/50 ${s.className}`}>
                             <div className="flex flex-col items-center justify-center gap-1 max-w-full">
                               {rec.vendorInvoiceUrl && !rec.vendorInvoiceUrl.includes("undefined") ? (
                                 <a href={rec.vendorInvoiceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all cursor-pointer shadow-2xs whitespace-nowrap" title="View Official Vendor Tax Invoice Uploaded by Accountant">
@@ -3796,7 +4307,18 @@ export function ExpenseRegister({
                         );
                       })()}
 
-                      {/* 8. Step 1: Acc Check */}
+                      {/* 14. Remarks */}
+                      {(() => {
+                        const s = getColStyle("remarks");
+                        if (!s) return null;
+                        return (
+                          <td style={s.style} className={`py-3 px-3 text-gray-600 max-w-xs text-[11px] border-r border-slate-200 ${s.className}`}>
+                            {rec.remarks ? <span className="italic">{rec.remarks}</span> : <span className="text-gray-300">-</span>}
+                          </td>
+                        );
+                      })()}
+
+                      {/* 15. Step 1: Acc Check */}
                       {(() => {
                         const s = getColStyle("accCheck");
                         if (!s) return null;
@@ -3849,7 +4371,7 @@ export function ExpenseRegister({
                         );
                       })()}
 
-                      {/* 9. Step 2: SA Approval */}
+                      {/* 16. Step 2: SA Approval */}
                       {(() => {
                         const s = getColStyle("saApproval");
                         if (!s) return null;
@@ -3897,38 +4419,6 @@ export function ExpenseRegister({
                               </div>
                             ) : (
                               <span className="text-[8.5px] text-gray-400 font-mono bg-gray-50 px-1.5 py-0.5 border border-gray-200">Waiting on Step 1</span>
-                            )}
-                          </td>
-                        );
-                      })()}
-
-                      {/* 10. Vendor & Bank A/C */}
-                      {(() => {
-                        const s = getColStyle("vendor");
-                        if (!s) return null;
-                        return (
-                          <td style={s.style} className={`py-3 px-3 whitespace-nowrap bg-emerald-50/10 ${s.className}`}>
-                            {rec.vendorName ? (
-                              <div className="font-semibold text-gray-900 text-[11.5px]">
-                                {rec.vendorName}
-                                {rec.accountNo && (
-                                  <div className="text-[10px] font-mono text-gray-500 font-normal">A/C: {rec.accountNo}</div>
-                                )}
-                              </div>
-                            ) : (
-                              <div>
-                                <span className="text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[9.5px] font-mono font-bold block mb-0.5">Accounts to Assign</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSettlingRecord(rec);
-                                    setIsNewVendorModalOpen(true);
-                                  }}
-                                  className="text-[9px] text-[#006064] hover:underline flex items-center gap-0.5 cursor-pointer font-bold"
-                                >
-                                  <Plus className="w-2.5 h-2.5" /> Add Vendor
-                                </button>
-                              </div>
                             )}
                           </td>
                         );
@@ -4213,6 +4703,192 @@ export function ExpenseRegister({
         </div>
       </div>
 
+      {/* ── QUICK DUE DATE PICKER MODAL ── */}
+      {mounted && typeof document !== "undefined" && dueDatePickerRecord && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="bg-white border border-gray-300 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-cyan-900 to-[#006064] text-white">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                  <Calendar className="w-4 h-4 text-cyan-200" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-display font-bold uppercase tracking-wide">
+                    Set Payment Due Date
+                  </h3>
+                  <p className="text-[11px] text-cyan-100/80">
+                    Avoid late fee • Daily 10 AM alert sent 7 days prior
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDueDatePickerRecord(null)}
+                className="p-1 text-white/70 hover:text-white cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-5 space-y-4 text-xs">
+              {/* Target Expense Summary Card */}
+              <div className="bg-slate-50 border border-slate-200 p-3 rounded-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] text-gray-500 uppercase font-semibold">
+                    Expense #{dueDatePickerRecord.id}
+                  </span>
+                  <span className="font-display font-black text-gray-900 text-sm">
+                    {formatCurrency(dueDatePickerRecord.amount)}
+                  </span>
+                </div>
+                <div className="font-semibold text-gray-900 text-xs">
+                  {dueDatePickerRecord.description}
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-gray-600 pt-1 border-t border-slate-200/80">
+                  <span className="inline-flex items-center gap-1">
+                    <Building2 className="w-3 h-3 text-[#006064]" />
+                    {dueDatePickerRecord.locationName || "HQ"}
+                  </span>
+                  {dueDatePickerRecord.vendorName && (
+                    <span className="inline-flex items-center gap-1 truncate max-w-[160px]">
+                      <Tag className="w-3 h-3 text-emerald-600" />
+                      {dueDatePickerRecord.vendorName}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Date Input */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-gray-800 uppercase tracking-wider text-[11px]">
+                  Select Due Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  autoFocus
+                  value={dueDatePickerValue}
+                  onChange={(e) => setDueDatePickerValue(e.target.value)}
+                  className="w-full border-2 border-[#006064] p-2.5 text-sm font-mono font-bold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#006064]/30 cursor-pointer"
+                />
+              </div>
+
+              {/* Quick Preset Shortcuts */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                  Quick Date Shortcuts:
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => applyDueDatePreset(0)}
+                    className="px-2 py-1.5 bg-gray-100 hover:bg-cyan-50 hover:border-cyan-300 border border-gray-200 text-gray-700 text-[10.5px] font-semibold rounded-xs transition-all cursor-pointer text-center"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDueDatePreset(3)}
+                    className="px-2 py-1.5 bg-gray-100 hover:bg-cyan-50 hover:border-cyan-300 border border-gray-200 text-gray-700 text-[10.5px] font-semibold rounded-xs transition-all cursor-pointer text-center"
+                  >
+                    +3 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDueDatePreset(7)}
+                    className="px-2 py-1.5 bg-cyan-50 hover:bg-cyan-100 border border-cyan-300 text-[#006064] text-[10.5px] font-bold rounded-xs transition-all cursor-pointer text-center"
+                  >
+                    +7 Days ⭐
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDueDatePreset(15)}
+                    className="px-2 py-1.5 bg-gray-100 hover:bg-cyan-50 hover:border-cyan-300 border border-gray-200 text-gray-700 text-[10.5px] font-semibold rounded-xs transition-all cursor-pointer text-center"
+                  >
+                    +15 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDueDatePreset(30)}
+                    className="px-2 py-1.5 bg-gray-100 hover:bg-cyan-50 hover:border-cyan-300 border border-gray-200 text-gray-700 text-[10.5px] font-semibold rounded-xs transition-all cursor-pointer text-center"
+                  >
+                    +30 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyDueDatePreset("endOfMonth")}
+                    className="px-2 py-1.5 bg-gray-100 hover:bg-cyan-50 hover:border-cyan-300 border border-gray-200 text-gray-700 text-[10.5px] font-semibold rounded-xs transition-all cursor-pointer text-center"
+                  >
+                    End of Month
+                  </button>
+                </div>
+              </div>
+
+              {/* Status / Alert preview */}
+              {dueDatePickerValue && (
+                <div className="bg-amber-50/80 border border-amber-200 p-2 text-[10.5px] text-amber-900 flex items-center gap-1.5 rounded-xs">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                  <span>
+                    Alert will be triggered 7 days prior to avoid late fees.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-2">
+              <div>
+                {dueDatePickerRecord.dueDate && (
+                  <button
+                    type="button"
+                    disabled={savingDueDate}
+                    onClick={async () => {
+                      setSavingDueDate(true);
+                      try {
+                        await handleUpdateExpenseDueDate(dueDatePickerRecord.id, "");
+                        setDueDatePickerRecord(null);
+                      } finally {
+                        setSavingDueDate(false);
+                      }
+                    }}
+                    className="px-2.5 py-1.5 text-[11px] font-bold text-rose-700 hover:text-rose-900 hover:bg-rose-50 border border-rose-200 rounded-xs transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    Clear Due Date
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={savingDueDate}
+                  onClick={() => setDueDatePickerRecord(null)}
+                  className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-gray-800 bg-white border border-gray-300 hover:bg-gray-100 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingDueDate || !dueDatePickerValue}
+                  onClick={handleSaveQuickDueDate}
+                  className="px-4 py-1.5 text-xs font-bold uppercase bg-[#006064] hover:bg-[#004d40] text-white transition-all cursor-pointer shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {savingDueDate ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  <span>Save Due Date</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* ── MODAL 1: RECORD / EDIT EXPENSE (NEW FORMAT) ── */}
       {mounted && typeof document !== "undefined" && isAddModalOpen && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
@@ -4261,9 +4937,9 @@ export function ExpenseRegister({
                 </div>
               )}
 
-              {/* Section 1: Center & Expense Date */}
+              {/* Section 1: Center, Expense Date & Payment Due Date */}
               <div className="space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Center Selector */}
                   <div>
                     <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
@@ -4318,11 +4994,34 @@ export function ExpenseRegister({
                     />
                   </div>
 
-                  {/* Vendor / Supplier (Optional) */}
-                  <div className="sm:col-span-2">
+                  {/* Payment Due Date */}
+                  <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block font-bold text-gray-700 uppercase tracking-wider text-[11px]">
-                        Vendor / Supplier <span className="text-gray-400 font-normal text-[10px] lowercase">(optional)</span>
+                        Payment Due Date
+                      </label>
+                      <span className="text-amber-700 font-bold text-[10px] lowercase">
+                        (avoid late fee)
+                      </span>
+                    </div>
+                    <input
+                      type="date"
+                      value={formData.dueDate || ""}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, dueDate: e.target.value }))
+                      }
+                      className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064] bg-white"
+                    />
+                    <span className="text-[10px] text-gray-400 mt-0.5 block">
+                      Optional. Daily alert sent 7 days prior at 10 AM.
+                    </span>
+                  </div>
+
+                  {/* Vendor / Supplier (Mandatory) */}
+                  <div className="sm:col-span-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-gray-700 uppercase tracking-wider text-[11px]">
+                        Vendor / Supplier <span className="text-red-500">*</span>
                       </label>
                       <button
                         type="button"
@@ -4335,9 +5034,10 @@ export function ExpenseRegister({
                     <select
                       value={formData.vendorId || ""}
                       onChange={(e) => handleVendorSelect(e.target.value)}
-                      className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064] cursor-pointer bg-white"
+                      required
+                      className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064] cursor-pointer bg-white font-medium"
                     >
-                      <option value="">-- Select Vendor (Optional) --</option>
+                      <option value="">-- Select Vendor * --</option>
                       {vendors.map((v) => (
                         <option key={v.id} value={v.id}>
                           {v.vendorName} {v.accountNo ? `(A/C: ${v.accountNo})` : ""}
@@ -4576,18 +5276,19 @@ export function ExpenseRegister({
                   * Operational expense documents attached by CM or Staff. Official Vendor Tax Invoices are uploaded by Accountant in Step 2: Payment Details.
                 </p>
 
-                {/* Remarks */}
+                {/* Remarks (Mandatory) */}
                 <div>
                   <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    Remarks
+                    Remarks <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     rows={2}
-                    placeholder="Enter any additional remarks or notes"
-                    value={formData.remarks}
+                    placeholder="Enter remarks or notes *"
+                    value={formData.remarks || ""}
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, remarks: e.target.value }))
                     }
+                    required
                     className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064]"
                   />
                 </div>
