@@ -53,21 +53,41 @@ export async function GET(req: NextRequest) {
 
     const userId = Number(payload.id || (payload as any).userId);
 
-    // Fetch full DB user to determine role & assigned locations
-    const dbUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: { select: { name: true } },
-        assignedLocations: {
-          select: {
-            location: { select: { id: true, name: true, slug: true, city: { select: { name: true } } } }
+    // Fetch full DB user to determine role & assigned locations with connection retry
+    let dbUser: any = null;
+    try {
+      dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: { select: { name: true } },
+          assignedLocations: {
+            select: {
+              location: { select: { id: true, name: true, slug: true, city: { select: { name: true } } } }
+            }
           }
         }
-      }
-    });
+      });
+    } catch (dbErr: any) {
+      console.warn('[EXPENSES_DB_USER_RETRY]', dbErr?.message);
+      await new Promise((r) => setTimeout(r, 400));
+      dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: { select: { name: true } },
+          assignedLocations: {
+            select: {
+              location: { select: { id: true, name: true, slug: true, city: { select: { name: true } } } }
+            }
+          }
+        }
+      });
+    }
 
     if (!dbUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -83,18 +103,28 @@ export async function GET(req: NextRequest) {
 
     let accessibleLocations: any[] = [];
 
-    // Fetch all locations in system
-    const allLocations = await prisma.location.findMany({
-      select: { id: true, name: true, slug: true, city: { select: { name: true } } },
-      orderBy: { id: 'asc' }
-    });
+    // Fetch all locations in system with connection retry
+    let allLocations: any[] = [];
+    try {
+      allLocations = await prisma.location.findMany({
+        select: { id: true, name: true, slug: true, city: { select: { name: true } } },
+        orderBy: { id: 'asc' }
+      });
+    } catch (dbErr: any) {
+      console.warn('[EXPENSES_ALL_LOCS_RETRY]', dbErr?.message);
+      await new Promise((r) => setTimeout(r, 400));
+      allLocations = await prisma.location.findMany({
+        select: { id: true, name: true, slug: true, city: { select: { name: true } } },
+        orderBy: { id: 'asc' }
+      });
+    }
 
     if (isSuperAdmin || isAccountant) {
       // Super Admin and Accountant can access all active location centers
       accessibleLocations = allLocations;
     } else {
       // Community Manager: check assigned locations first
-      const assignedLocations = dbUser.assignedLocations.map((ul) => ul.location).filter(Boolean);
+      const assignedLocations = (dbUser.assignedLocations || []).map((ul: any) => ul.location).filter(Boolean);
 
       if (assignedLocations.length > 0) {
         accessibleLocations = assignedLocations;

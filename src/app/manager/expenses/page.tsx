@@ -4,15 +4,10 @@ import React, { useState, useEffect } from "react";
 import {
   Building2,
   Loader2,
-  RefreshCcw,
   Receipt,
-  Table as TableIcon,
-  Sparkles,
-  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FadeUp } from "@/components/ui/fade-up";
-import { ExpenseSpreadsheet } from "@/components/admin/expense-spreadsheet";
 import { ExpenseRegister } from "@/components/admin/expense-register";
 import { useAuth } from "@/context/AuthContext";
 
@@ -23,28 +18,13 @@ interface LocationInfo {
   city?: { name: string };
 }
 
-interface ExpenseSheetData {
-  id: number;
-  locationId: number;
-  title: string;
-  columns: any[];
-  rows: any[];
-  location: LocationInfo;
-  updatedAt: string;
-}
-
 const ACCOUNTANT_EMAIL = "ssinfrazone21@gmail.com";
 
 export default function ManagerExpensesPage() {
   const { user, isRole } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [locations, setLocations] = useState<LocationInfo[]>([]);
-  const [sheets, setSheets] = useState<ExpenseSheetData[]>([]);
   const [activeLocationId, setActiveLocationId] = useState<number | null>(null);
-
-  // View mode: 'REGISTER' (Modern Format) or 'SPREADSHEET' (Legacy Table)
-  const [viewMode, setViewMode] = useState<"REGISTER" | "SPREADSHEET">("REGISTER");
 
   const userEmail = user?.email?.toLowerCase() || "";
   const userRoleUpper = user?.role?.toUpperCase() || "";
@@ -56,7 +36,6 @@ export default function ManagerExpensesPage() {
     isRole("ACCOUNTS") ||
     isRole("ACCOUNTANT");
   const isAdmin = isRole("ADMIN");
-  const userRoleView: "CM" | "ACCOUNTANT" = isAccountant ? "ACCOUNTANT" : "CM";
 
   useEffect(() => {
     fetchExpensesData(true);
@@ -66,41 +45,40 @@ export default function ManagerExpensesPage() {
     try {
       if (isInitial) {
         setLoading(true);
-      } else {
-        setRefreshing(true);
       }
       const res = await fetch("/api/admin/expenses");
       if (!res.ok) {
+        // Fallback to locations endpoint
+        const locRes = await fetch("/api/admin/locations");
+        if (locRes.ok) {
+          const locData = await locRes.json();
+          const fallbackLocs = locData.locations || locData || [];
+          setLocations(fallbackLocs);
+          if (fallbackLocs.length > 0 && !activeLocationId) {
+            setActiveLocationId(fallbackLocs[0].id);
+          }
+          return;
+        }
         throw new Error("Failed to load center expenses");
       }
       const data = await res.json();
       const fetchedLocations = data.locations || [];
       setLocations(fetchedLocations);
-      setSheets(data.sheets || []);
 
       if (fetchedLocations.length > 0 && !activeLocationId) {
         setActiveLocationId(fetchedLocations[0].id);
       }
     } catch (err: any) {
-      console.error(err);
-      if (isInitial) {
-        toast.error(err.message || "Failed to load expense data");
-      }
+      console.warn("[MANAGER_EXPENSES_WARNING]", err);
     } finally {
       if (isInitial) {
         setLoading(false);
-      } else {
-        setRefreshing(false);
       }
     }
   };
 
   const activeLocation =
     locations.find((l) => l.id === activeLocationId) || locations[0] || null;
-  const activeSheet =
-    sheets.find((s) => s.locationId === (activeLocation?.id ?? -1)) ||
-    sheets[0] ||
-    null;
 
   if (loading) {
     return (
@@ -134,126 +112,16 @@ export default function ManagerExpensesPage() {
                 : "Daily Center Operating Expenses, vendor invoices & settlement tracking"}
             </p>
           </div>
-
-          {/* View Switcher: Modern Register vs Spreadsheet */}
-          <div className="flex items-center gap-2">
-            <div className="inline-flex bg-gray-100 p-1 border border-gray-300">
-              <button
-                onClick={() => setViewMode("REGISTER")}
-                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === "REGISTER"
-                    ? "bg-[#1ab0bc] text-white shadow-xs"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Modern Register</span>
-              </button>
-
-              <button
-                onClick={() => setViewMode("SPREADSHEET")}
-                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === "SPREADSHEET"
-                    ? "bg-[#1ab0bc] text-white shadow-xs"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                <TableIcon className="w-3.5 h-3.5" />
-                <span>Legacy Grid</span>
-              </button>
-            </div>
-
-            {viewMode === "SPREADSHEET" && (
-              <button
-                onClick={() => fetchExpensesData(false)}
-                disabled={refreshing}
-                className="bg-white hover:bg-gray-100 text-gray-800 px-3 py-1.5 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-              >
-                <RefreshCcw
-                  className={`w-3.5 h-3.5 text-[#1ab0bc] ${refreshing ? "animate-spin" : ""}`}
-                />
-                <span>Refresh</span>
-              </button>
-            )}
-          </div>
         </div>
       </FadeUp>
 
-      {/* ── VIEW MODE 1: MODERN REGISTER (Default & Primary) ── */}
-      {viewMode === "REGISTER" && (
-        <ExpenseRegister
-          initialLocationId={activeLocation?.id || null}
-          isAccountant={isAccountant}
-          isAdmin={isAdmin}
-          currentUserName={user?.name || (isAccountant ? "Accountant" : "Community Manager")}
-          onSwitchToSpreadsheet={() => setViewMode("SPREADSHEET")}
-        />
-      )}
-
-      {/* ── VIEW MODE 2: LEGACY SPREADSHEET ── */}
-      {viewMode === "SPREADSHEET" && (
-        <div className="space-y-6">
-          {/* Center Tabs */}
-          {(isAccountant || locations.length > 1) && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-gray-200">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[#1ab0bc] shrink-0 mr-2 flex items-center gap-1">
-                  <Building2 className="w-4 h-4" /> SELECT CENTER:
-                </span>
-
-                {locations.map((loc) => {
-                  const isSelected =
-                    (activeLocationId ?? activeLocation?.id) === loc.id;
-                  return (
-                    <button
-                      key={loc.id}
-                      onClick={() => setActiveLocationId(loc.id)}
-                      className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 cursor-pointer ${
-                        isSelected
-                          ? "bg-[#1ab0bc] text-white border-[#1ab0bc] shadow-md scale-105"
-                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100 hover:text-gray-900"
-                      }`}
-                    >
-                      <Building2
-                        className={`w-4 h-4 ${isSelected ? "text-white" : "text-[#1ab0bc]"}`}
-                      />
-                      <span>{loc.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {activeLocation && activeSheet ? (
-            <ExpenseSpreadsheet
-              key={`${activeLocation.id}_${userRoleView}`}
-              locationId={activeLocation.id}
-              locationName={activeLocation.name}
-              initialColumns={activeSheet.columns || []}
-              initialRows={activeSheet.rows || []}
-              isSuperAdmin={isAdmin}
-              userRoleView={userRoleView}
-              currentUserName={
-                user?.name || (isAccountant ? "Accountant" : "Community Manager")
-              }
-              currentUserId={user?.id ? Number(user.id) : isAccountant ? 5 : 2}
-            />
-          ) : (
-            <div className="bg-white p-12 text-center border border-gray-200 shadow-sm max-w-2xl mx-auto my-12 space-y-4">
-              <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto border border-amber-200">
-                <Building2 className="w-8 h-8" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 uppercase tracking-tight">
-                No Center Assigned Yet
-              </h2>
-              <p className="text-xs text-gray-500 max-w-md mx-auto">
-                You are currently not assigned to any specific coworking location center.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+      {/* ── NEW FORMAT REGISTER (Client Master Style) ── */}
+      <ExpenseRegister
+        initialLocationId={activeLocation?.id || null}
+        isAccountant={isAccountant}
+        isAdmin={isAdmin}
+        currentUserName={user?.name || (isAccountant ? "Accountant" : "Community Manager")}
+      />
     </div>
   );
 }
