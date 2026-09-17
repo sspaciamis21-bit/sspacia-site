@@ -300,6 +300,10 @@ export async function syncAccountsDailyFmsActual(customDate?: Date | string) {
       sheetName: 'Accounts',
       actual: actualTimestamp,
       date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      targetDate: `${month}/${day}/${year}`,
+      targetDay: day,
+      targetMonth: month,
+      targetYear: year,
     };
 
     console.log(`[Accounts FMS Sync] 📤 Dispatching Daily FMS Actual for Column R: ${actualTimestamp}`);

@@ -296,6 +296,7 @@ SSPACIA Coworking
       try {
         const mailResult = await sendEmail({
           to: recipientEmail,
+          cc: 'praveen@sspacia.com',
           fromName: 'SSPACIA Coworking',
           subject: emailSubject,
           text: emailText,

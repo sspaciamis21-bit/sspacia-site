@@ -49,11 +49,18 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const locationIdParam = url.searchParams.get('locationId');
+    const dateTargetParam = (url.searchParams.get('dateTarget') || 'EXPENSE_DATE').toUpperCase(); // 'EXPENSE_DATE' | 'PAYMENT_DATE' | 'BOTH_MATCH'
     const monthParam = url.searchParams.get('month'); // e.g. "2026-04" or "ALL"
     const yearParam = url.searchParams.get('year'); // e.g. "2026" or "ALL"
     const dateParam = url.searchParams.get('date'); // e.g. "2026-04-12"
     const fromDateParam = url.searchParams.get('fromDate'); // e.g. "2026-04-01"
     const toDateParam = url.searchParams.get('toDate'); // e.g. "2026-04-30"
+
+    // Dedicated match params (selection of expense date AND payment date)
+    const expenseDateParam = url.searchParams.get('expenseDate')?.trim() || '';
+    const paymentDateParam = url.searchParams.get('paymentDate')?.trim() || '';
+    const matchSameDayParam = url.searchParams.get('matchSameDay') === 'true';
+
     const categoryParam = url.searchParams.get('category');
     const paymentStatusParam = url.searchParams.get('paymentStatus'); // "ALL" | "PAID" | "PENDING"
     const approvalStatusParam = url.searchParams.get('approvalStatus'); // "ALL" | "PENDING" | "APPROVED" | "REJECTED"
@@ -137,95 +144,149 @@ export async function GET(request: Request) {
       },
     });
 
-    // Extract available distinct months & distinct years
-    const monthCounts: Record<string, { count: number; total: number; label: string }> = {};
-    const yearCounts: Record<string, { count: number; total: number }> = {};
+    // Helper to safely parse dates to YYYY-MM-DD
+    function parseToYMD(raw: any): string | null {
+      if (!raw) return null;
+      if (raw instanceof Date) {
+        if (isNaN(raw.getTime())) return null;
+        return raw.toISOString().split('T')[0];
+      }
+      if (typeof raw === 'string') {
+        const s = raw.trim();
+        if (!s) return null;
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+          return s.substring(0, 10);
+        }
+        const ddmmyyyy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (ddmmyyyy) {
+          return `${ddmmyyyy[3]}-${ddmmyyyy[2].padStart(2, '0')}-${ddmmyyyy[1].padStart(2, '0')}`;
+        }
+        const d = new Date(s);
+        if (!isNaN(d.getTime())) {
+          return d.toISOString().split('T')[0];
+        }
+      }
+      return null;
+    }
+
+    const getRecordExpenseYMD = (rec: any): string | null => parseToYMD(rec.expenseDate);
+    const getRecordPaymentYMD = (rec: any): string | null => parseToYMD(rec.utrDate || rec.payReceiveDate);
+
+    // Extract available distinct months & distinct years for both Expense Date and Payment Date
     const monthNames = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
 
-    for (const rec of allRecords) {
-      const d = rec.expenseDate ? new Date(rec.expenseDate) : new Date();
-      const yr = String(d.getUTCFullYear());
-      const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
-      const key = `${yr}-${mo}`;
-      const label = `${monthNames[d.getUTCMonth()]} ${yr}`;
+    const buildMonthYearCounts = (dateGetter: (rec: any) => string | null) => {
+      const monthCounts: Record<string, { count: number; total: number; label: string }> = {};
+      const yearCounts: Record<string, { count: number; total: number }> = {};
 
-      if (!monthCounts[key]) {
-        monthCounts[key] = { count: 0, total: 0, label };
+      for (const rec of allRecords) {
+        const ymd = dateGetter(rec);
+        if (!ymd) continue;
+        const [yr, mo] = ymd.split('-');
+        if (!yr || !mo) continue;
+        const moIdx = parseInt(mo, 10) - 1;
+        const key = `${yr}-${mo}`;
+        const label = `${monthNames[moIdx] || mo} ${yr}`;
+
+        if (!monthCounts[key]) {
+          monthCounts[key] = { count: 0, total: 0, label };
+        }
+        monthCounts[key].count++;
+        monthCounts[key].total += rec.amount || 0;
+
+        if (!yearCounts[yr]) {
+          yearCounts[yr] = { count: 0, total: 0 };
+        }
+        yearCounts[yr].count++;
+        yearCounts[yr].total += rec.amount || 0;
       }
-      monthCounts[key].count++;
-      monthCounts[key].total += rec.amount || 0;
 
-      if (!yearCounts[yr]) {
-        yearCounts[yr] = { count: 0, total: 0 };
-      }
-      yearCounts[yr].count++;
-      yearCounts[yr].total += rec.amount || 0;
-    }
+      const availableMonths = Object.keys(monthCounts)
+        .sort()
+        .reverse()
+        .map((key) => ({
+          value: key,
+          label: monthCounts[key].label,
+          count: monthCounts[key].count,
+          total: Math.round(monthCounts[key].total * 100) / 100,
+        }));
 
-    const availableMonths = Object.keys(monthCounts)
-      .sort()
-      .reverse()
-      .map((key) => ({
-        value: key,
-        label: monthCounts[key].label,
-        count: monthCounts[key].count,
-        total: Math.round(monthCounts[key].total * 100) / 100,
-      }));
+      const availableYears = Object.keys(yearCounts)
+        .sort()
+        .reverse()
+        .map((y) => ({
+          value: y,
+          label: `Year ${y}`,
+          count: yearCounts[y].count,
+          total: Math.round(yearCounts[y].total * 100) / 100,
+        }));
 
-    const availableYears = Object.keys(yearCounts)
-      .sort()
-      .reverse()
-      .map((y) => ({
-        value: y,
-        label: `Year ${y}`,
-        count: yearCounts[y].count,
-        total: Math.round(yearCounts[y].total * 100) / 100,
-      }));
+      return { availableMonths, availableYears };
+    };
 
-    // If month/year/date/range filters are applied, filter the records
+    const expenseMonthYear = buildMonthYearCounts(getRecordExpenseYMD);
+    const paymentMonthYear = buildMonthYearCounts(getRecordPaymentYMD);
+
+    const availableMonths = dateTargetParam === 'PAYMENT_DATE' ? paymentMonthYear.availableMonths : expenseMonthYear.availableMonths;
+    const availableYears = dateTargetParam === 'PAYMENT_DATE' ? paymentMonthYear.availableYears : expenseMonthYear.availableYears;
+
+    // Filter records according to date filter and target
     let filteredRecords = allRecords;
 
-    if (monthParam && monthParam !== 'ALL') {
-      filteredRecords = filteredRecords.filter((rec: any) => {
-        const d = rec.expenseDate ? new Date(rec.expenseDate) : new Date();
-        const yr = d.getUTCFullYear();
-        const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
-        return `${yr}-${mo}` === monthParam;
-      });
-    }
+    if (dateTargetParam === 'BOTH_MATCH' || expenseDateParam || paymentDateParam || matchSameDayParam) {
+      if (expenseDateParam) {
+        filteredRecords = filteredRecords.filter((rec: any) => getRecordExpenseYMD(rec) === expenseDateParam);
+      }
+      if (paymentDateParam) {
+        filteredRecords = filteredRecords.filter((rec: any) => getRecordPaymentYMD(rec) === paymentDateParam);
+      }
+      if (matchSameDayParam) {
+        filteredRecords = filteredRecords.filter((rec: any) => {
+          const expYMD = getRecordExpenseYMD(rec);
+          const payYMD = getRecordPaymentYMD(rec);
+          return expYMD !== null && payYMD !== null && expYMD === payYMD;
+        });
+      }
+    } else {
+      const targetDateGetter = dateTargetParam === 'PAYMENT_DATE' ? getRecordPaymentYMD : getRecordExpenseYMD;
 
-    if (yearParam && yearParam !== 'ALL') {
-      filteredRecords = filteredRecords.filter((rec: any) => {
-        const d = rec.expenseDate ? new Date(rec.expenseDate) : new Date();
-        return String(d.getUTCFullYear()) === yearParam;
-      });
-    }
+      if (monthParam && monthParam !== 'ALL') {
+        filteredRecords = filteredRecords.filter((rec: any) => {
+          const ymd = targetDateGetter(rec);
+          return ymd ? ymd.startsWith(monthParam) : false;
+        });
+      }
 
-    if (dateParam && dateParam.trim()) {
-      filteredRecords = filteredRecords.filter((rec: any) => {
-        if (!rec.expenseDate) return false;
-        const d = new Date(rec.expenseDate).toISOString().split('T')[0];
-        return d === dateParam.trim();
-      });
-    }
+      if (yearParam && yearParam !== 'ALL') {
+        filteredRecords = filteredRecords.filter((rec: any) => {
+          const ymd = targetDateGetter(rec);
+          return ymd ? ymd.startsWith(yearParam) : false;
+        });
+      }
 
-    if (fromDateParam && fromDateParam.trim()) {
-      filteredRecords = filteredRecords.filter((rec: any) => {
-        if (!rec.expenseDate) return false;
-        const d = new Date(rec.expenseDate).toISOString().split('T')[0];
-        return d >= fromDateParam.trim();
-      });
-    }
+      if (dateParam && dateParam.trim()) {
+        filteredRecords = filteredRecords.filter((rec: any) => {
+          const ymd = targetDateGetter(rec);
+          return ymd ? ymd === dateParam.trim() : false;
+        });
+      }
 
-    if (toDateParam && toDateParam.trim()) {
-      filteredRecords = filteredRecords.filter((rec: any) => {
-        if (!rec.expenseDate) return false;
-        const d = new Date(rec.expenseDate).toISOString().split('T')[0];
-        return d <= toDateParam.trim();
-      });
+      if (fromDateParam && fromDateParam.trim()) {
+        filteredRecords = filteredRecords.filter((rec: any) => {
+          const ymd = targetDateGetter(rec);
+          return ymd ? ymd >= fromDateParam.trim() : false;
+        });
+      }
+
+      if (toDateParam && toDateParam.trim()) {
+        filteredRecords = filteredRecords.filter((rec: any) => {
+          const ymd = targetDateGetter(rec);
+          return ymd ? ymd <= toDateParam.trim() : false;
+        });
+      }
     }
 
     // Summary calculations
@@ -269,6 +330,11 @@ export async function GET(request: Request) {
       },
       availableMonths,
       availableYears,
+      availableExpenseMonths: expenseMonthYear.availableMonths,
+      availablePaymentMonths: paymentMonthYear.availableMonths,
+      availableExpenseYears: expenseMonthYear.availableYears,
+      availablePaymentYears: paymentMonthYear.availableYears,
+      dateTarget: dateTargetParam,
       categories,
       locations,
       userRole: isSuperAdmin ? 'SUPER_ADMIN' : isAccountant ? 'ACCOUNTANT' : 'COMMUNITY_MANAGER',

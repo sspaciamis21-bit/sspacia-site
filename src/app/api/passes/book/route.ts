@@ -467,16 +467,16 @@ export async function POST(req: NextRequest) {
       </div>
     `;
 
-    // Send email to praveen.agarwal1@gmail.com with CC to sales@sspacia.com
+    // Send email to praveen@sspacia.com with CC to sales@sspacia.com
     await sendEmail({
-      to: 'praveen.agarwal1@gmail.com',
+      to: 'praveen@sspacia.com',
       cc: 'sales@sspacia.com',
       subject: emailSubject,
       html: emailHtml,
     }).catch((err) => console.error('[EMAIL_NOTIFICATION_FAILED]', err));
 
     // Also dispatch copy to customer if not identical
-    if (effectiveEmail !== 'praveen.agarwal1@gmail.com' && effectiveEmail !== 'sales@sspacia.com') {
+    if (effectiveEmail !== 'praveen@sspacia.com' && effectiveEmail !== 'sales@sspacia.com') {
       await sendEmail({
         to: effectiveEmail,
         subject: `Your SSPACIA Flexi Desk Pass: ${bookingNumber}`,

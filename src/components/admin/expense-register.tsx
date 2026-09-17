@@ -349,14 +349,30 @@ export function ExpenseRegister({
   const [selectedLocation, setSelectedLocation] = useState<string>(
     initialLocationId ? String(initialLocationId) : "ALL"
   );
-  // Comprehensive Date Filters: Month-wise, Year-wise, Date-wise, Custom Date Range
-  const [filterType, setFilterType] = useState<"ALL" | "MONTH" | "YEAR" | "DATE" | "CUSTOM">("ALL");
+  // Comprehensive Date Filters: Month-wise, Year-wise, Date-wise, Custom Range, and Expense & Payment Match
+  const [dateTarget, setDateTarget] = useState<"EXPENSE_DATE" | "PAYMENT_DATE">("EXPENSE_DATE");
+  const [filterType, setFilterType] = useState<"ALL" | "MONTH" | "YEAR" | "DATE" | "CUSTOM" | "MATCH">("ALL");
   const [selectedMonth, setSelectedMonth] = useState<string>("ALL");
   const [selectedYear, setSelectedYear] = useState<string>("ALL");
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [fromDate, setFromDate] = useState<string>("");
   const [toDate, setToDate] = useState<string>("");
+  const [matchExpenseDate, setMatchExpenseDate] = useState<string>("");
+  const [matchPaymentDate, setMatchPaymentDate] = useState<string>("");
+  const [matchSameDay, setMatchSameDay] = useState<boolean>(false);
   const [availableYears, setAvailableYears] = useState<
+    { value: string; label: string; count: number; total: number }[]
+  >([]);
+  const [availableExpenseMonths, setAvailableExpenseMonths] = useState<
+    { value: string; label: string; count: number; total: number }[]
+  >([]);
+  const [availablePaymentMonths, setAvailablePaymentMonths] = useState<
+    { value: string; label: string; count: number; total: number }[]
+  >([]);
+  const [availableExpenseYears, setAvailableExpenseYears] = useState<
+    { value: string; label: string; count: number; total: number }[]
+  >([]);
+  const [availablePaymentYears, setAvailablePaymentYears] = useState<
     { value: string; label: string; count: number; total: number }[]
   >([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
@@ -1048,33 +1064,49 @@ export function ExpenseRegister({
     return !isRecordByAccountant && !isRecordByAdmin;
   };
 
+  const displayedAvailableMonths = useMemo(() => {
+    if (dateTarget === "PAYMENT_DATE") {
+      return availablePaymentMonths.length > 0 ? availablePaymentMonths : availableMonths;
+    }
+    return availableExpenseMonths.length > 0 ? availableExpenseMonths : availableMonths;
+  }, [dateTarget, availablePaymentMonths, availableExpenseMonths, availableMonths]);
+
+  const displayedAvailableYears = useMemo(() => {
+    if (dateTarget === "PAYMENT_DATE") {
+      return availablePaymentYears.length > 0 ? availablePaymentYears : availableYears;
+    }
+    return availableExpenseYears.length > 0 ? availableExpenseYears : availableYears;
+  }, [dateTarget, availablePaymentYears, availableExpenseYears, availableYears]);
+
   // Active Date Filter Meta (Total Count & Price for Filter selection)
   const activeMonthMeta = useMemo(() => {
+    const targetLabel = dateTarget === "PAYMENT_DATE" ? "Payment Date" : "Expense Date";
+
     if (filterType === "ALL") {
       return {
-        label: "All Expenses",
+        label: `All Expenses (${targetLabel})`,
         count: records.length,
         total: summary.totalAmount,
       };
     }
     if (filterType === "MONTH") {
       if (selectedMonth === "ALL") {
-        return { label: "All Months", count: records.length, total: summary.totalAmount };
+        return { label: `All Months (${targetLabel})`, count: records.length, total: summary.totalAmount };
       }
-      const found = availableMonths.find((m) => m.value === selectedMonth);
+      const found = displayedAvailableMonths.find((m) => m.value === selectedMonth);
       return {
-        label: found ? found.label : selectedMonth,
+        label: found ? `${found.label} (${targetLabel})` : `${selectedMonth} (${targetLabel})`,
         count: found ? found.count : records.length,
         total: found ? found.total : records.reduce((s, r) => s + (r.amount || 0), 0),
       };
     }
     if (filterType === "YEAR") {
       if (selectedYear === "ALL") {
-        return { label: "All Years", count: records.length, total: summary.totalAmount };
+        return { label: `All Years (${targetLabel})`, count: records.length, total: summary.totalAmount };
       }
-      const found = availableYears.find((y) => y.value === selectedYear);
+      const found = displayedAvailableYears.find((y) => y.value === selectedYear);
       return {
-        label: found ? found.label : `Year ${selectedYear}`,
+        label: found ? `${found.label} (${targetLabel})` : `Year ${selectedYear} (${targetLabel})`,
         count: found ? found.count : records.length,
         total: found ? found.total : records.reduce((s, r) => s + (r.amount || 0), 0),
       };
@@ -1082,7 +1114,7 @@ export function ExpenseRegister({
     if (filterType === "DATE") {
       const formatted = selectedDate ? selectedDate.split("-").reverse().join("/") : "Selected Date";
       return {
-        label: `Date: ${formatted}`,
+        label: `${targetLabel}: ${formatted}`,
         count: records.length,
         total: records.reduce((s, r) => s + (r.amount || 0), 0),
       };
@@ -1091,7 +1123,24 @@ export function ExpenseRegister({
       const f = fromDate ? fromDate.split("-").reverse().join("/") : "Start";
       const t = toDate ? toDate.split("-").reverse().join("/") : "End";
       return {
-        label: `Range: ${f} to ${t}`,
+        label: `${targetLabel} Range: ${f} to ${t}`,
+        count: records.length,
+        total: records.reduce((s, r) => s + (r.amount || 0), 0),
+      };
+    }
+    if (filterType === "MATCH") {
+      let label = "Matched Breakdown";
+      if (matchSameDay) {
+        label = "Same Day Disbursed (Expense Date = Payment Date)";
+      } else if (matchExpenseDate && matchPaymentDate) {
+        label = `Exp: ${matchExpenseDate.split("-").reverse().join("/")} & Pay: ${matchPaymentDate.split("-").reverse().join("/")}`;
+      } else if (matchExpenseDate) {
+        label = `Expense Date: ${matchExpenseDate.split("-").reverse().join("/")}`;
+      } else if (matchPaymentDate) {
+        label = `Payment Date: ${matchPaymentDate.split("-").reverse().join("/")}`;
+      }
+      return {
+        label,
         count: records.length,
         total: records.reduce((s, r) => s + (r.amount || 0), 0),
       };
@@ -1101,7 +1150,22 @@ export function ExpenseRegister({
       count: records.length,
       total: summary.totalAmount,
     };
-  }, [filterType, selectedMonth, selectedYear, selectedDate, fromDate, toDate, availableMonths, availableYears, records, summary]);
+  }, [
+    filterType,
+    dateTarget,
+    selectedMonth,
+    selectedYear,
+    selectedDate,
+    fromDate,
+    toDate,
+    matchExpenseDate,
+    matchPaymentDate,
+    matchSameDay,
+    displayedAvailableMonths,
+    displayedAvailableYears,
+    records,
+    summary,
+  ]);
 
   // Fetch vendors from VendorMaster
   const fetchVendors = async () => {
@@ -1122,12 +1186,18 @@ export function ExpenseRegister({
       if (showLoading) setLoading(true);
       const params = new URLSearchParams();
       if (selectedLocation !== "ALL") params.set("locationId", selectedLocation);
+      params.set("dateTarget", dateTarget);
       if (filterType === "MONTH" && selectedMonth !== "ALL") params.set("month", selectedMonth);
       if (filterType === "YEAR" && selectedYear !== "ALL") params.set("year", selectedYear);
       if (filterType === "DATE" && selectedDate.trim()) params.set("date", selectedDate.trim());
       if (filterType === "CUSTOM") {
         if (fromDate.trim()) params.set("fromDate", fromDate.trim());
         if (toDate.trim()) params.set("toDate", toDate.trim());
+      }
+      if (filterType === "MATCH") {
+        if (matchExpenseDate.trim()) params.set("expenseDate", matchExpenseDate.trim());
+        if (matchPaymentDate.trim()) params.set("paymentDate", matchPaymentDate.trim());
+        if (matchSameDay) params.set("matchSameDay", "true");
       }
       if (selectedCategory !== "ALL") params.set("category", selectedCategory);
       if (selectedStatus !== "ALL") params.set("paymentStatus", selectedStatus);
@@ -1143,6 +1213,10 @@ export function ExpenseRegister({
       setCategories(data.categories || []);
       setAvailableMonths(data.availableMonths || []);
       setAvailableYears(data.availableYears || []);
+      if (data.availableExpenseMonths) setAvailableExpenseMonths(data.availableExpenseMonths);
+      if (data.availablePaymentMonths) setAvailablePaymentMonths(data.availablePaymentMonths);
+      if (data.availableExpenseYears) setAvailableExpenseYears(data.availableExpenseYears);
+      if (data.availablePaymentYears) setAvailablePaymentYears(data.availablePaymentYears);
       setSummary(
         data.summary || {
           totalAmount: 0,
@@ -1175,11 +1249,15 @@ export function ExpenseRegister({
   }, [
     selectedLocation,
     filterType,
+    dateTarget,
     selectedMonth,
     selectedYear,
     selectedDate,
     fromDate,
     toDate,
+    matchExpenseDate,
+    matchPaymentDate,
+    matchSameDay,
     selectedCategory,
     selectedStatus,
     selectedApprovalStatus,
@@ -2407,10 +2485,40 @@ export function ExpenseRegister({
       <div className="bg-white border border-gray-200 p-4 space-y-3 shadow-2xs">
         {/* Date Filter Mode Selector */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-gray-100">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider mr-1">
-              Date Filter:
-            </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Target Basis Switcher */}
+            <div className="flex items-center gap-1 bg-amber-50/80 p-0.5 border border-amber-300/80 text-xs shadow-2xs">
+              <span className="text-[10.5px] font-bold text-amber-900 uppercase px-1.5 flex items-center gap-1">
+                <SlidersHorizontal className="w-3 h-3 text-amber-700" />
+                Target:
+              </span>
+              <button
+                type="button"
+                onClick={() => setDateTarget("EXPENSE_DATE")}
+                className={`px-2 py-0.5 text-[11px] font-bold uppercase cursor-pointer transition-all ${
+                  dateTarget === "EXPENSE_DATE"
+                    ? "bg-[#006064] text-white shadow-2xs"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-amber-100/50"
+                }`}
+                title="Filter records using the date expense was incurred / entered"
+              >
+                Expense Date
+              </button>
+              <button
+                type="button"
+                onClick={() => setDateTarget("PAYMENT_DATE")}
+                className={`px-2 py-0.5 text-[11px] font-bold uppercase cursor-pointer transition-all ${
+                  dateTarget === "PAYMENT_DATE"
+                    ? "bg-[#006064] text-white shadow-2xs"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-amber-100/50"
+                }`}
+                title="Filter records using the payment date (when Sir/Accountant paid & settled UTR)"
+              >
+                Payment Date
+              </button>
+            </div>
+
+            {/* Date Filter Modes */}
             <div className="flex items-center gap-1 bg-gray-100 p-0.5 border border-gray-300 text-xs">
               <button
                 type="button"
@@ -2457,20 +2565,33 @@ export function ExpenseRegister({
               >
                 Custom Range
               </button>
+              <button
+                type="button"
+                onClick={() => setFilterType("MATCH")}
+                className={`px-2.5 py-1 text-[11px] font-bold uppercase cursor-pointer transition-all flex items-center gap-1 ${
+                  filterType === "MATCH" ? "bg-[#006064] text-white shadow-2xs" : "text-gray-600 hover:text-gray-900"
+                }`}
+                title="Select both Expense Date and Payment Date to find exact matched entries or same day disbursals"
+              >
+                <Sparkles className="w-3 h-3 text-amber-300" />
+                Match Dates
+              </button>
             </div>
           </div>
 
           {/* Active Date Filter Inputs */}
           <div className="flex items-center gap-2 flex-wrap">
             {filterType === "MONTH" && (
-              <div className="relative min-w-[200px]">
+              <div className="relative min-w-[210px]">
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
                   className="w-full bg-[#fafafa] border border-[#006064] px-3 py-1.5 text-xs font-bold text-gray-900 focus:outline-none appearance-none cursor-pointer"
                 >
-                  <option value="ALL">All Months ({summary.totalRecords} Entries)</option>
-                  {availableMonths.map((m) => (
+                  <option value="ALL">
+                    All Months ({dateTarget === "PAYMENT_DATE" ? "Pay Date" : "Expense Date"})
+                  </option>
+                  {displayedAvailableMonths.map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.label} ({m.count} expenses)
                     </option>
@@ -2481,14 +2602,16 @@ export function ExpenseRegister({
             )}
 
             {filterType === "YEAR" && (
-              <div className="relative min-w-[160px]">
+              <div className="relative min-w-[170px]">
                 <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
                   className="w-full bg-[#fafafa] border border-[#006064] px-3 py-1.5 text-xs font-bold text-gray-900 focus:outline-none appearance-none cursor-pointer"
                 >
-                  <option value="ALL">All Years ({summary.totalRecords} Entries)</option>
-                  {availableYears.map((y) => (
+                  <option value="ALL">
+                    All Years ({dateTarget === "PAYMENT_DATE" ? "Pay Date" : "Expense Date"})
+                  </option>
+                  {displayedAvailableYears.map((y) => (
                     <option key={y.value} value={y.value}>
                       {y.label} ({y.count} expenses)
                     </option>
@@ -2501,6 +2624,9 @@ export function ExpenseRegister({
             {filterType === "DATE" && (
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-[#006064]" />
+                <span className="text-[10px] text-gray-500 font-bold uppercase">
+                  {dateTarget === "PAYMENT_DATE" ? "Pay Date:" : "Expense Date:"}
+                </span>
                 <input
                   type="date"
                   value={selectedDate}
@@ -2511,7 +2637,7 @@ export function ExpenseRegister({
                   <button
                     type="button"
                     onClick={() => setSelectedDate("")}
-                    className="p-1 text-gray-400 hover:text-red-600 text-xs font-bold"
+                    className="p-1 text-gray-400 hover:text-red-600 text-xs font-bold cursor-pointer"
                     title="Clear Date"
                   >
                     ×
@@ -2522,6 +2648,9 @@ export function ExpenseRegister({
 
             {filterType === "CUSTOM" && (
               <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-gray-500 font-bold uppercase">
+                  {dateTarget === "PAYMENT_DATE" ? "Pay Range:" : "Range:"}
+                </span>
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] text-gray-500 font-bold uppercase">From:</span>
                   <input
@@ -2547,10 +2676,83 @@ export function ExpenseRegister({
                       setFromDate("");
                       setToDate("");
                     }}
-                    className="px-2 py-1 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-[10.5px] font-bold border border-gray-300"
+                    className="px-2 py-1 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-[10.5px] font-bold border border-gray-300 cursor-pointer"
                     title="Clear Custom Range"
                   >
                     Clear Range
+                  </button>
+                )}
+              </div>
+            )}
+
+            {filterType === "MATCH" && (
+              <div className="flex items-center gap-2 flex-wrap bg-teal-50/80 px-2.5 py-1 border border-teal-300 shadow-2xs">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10.5px] text-[#006064] font-bold uppercase whitespace-nowrap">
+                    1. Expense Date:
+                  </span>
+                  <input
+                    type="date"
+                    value={matchExpenseDate}
+                    onChange={(e) => setMatchExpenseDate(e.target.value)}
+                    className="bg-white border border-[#006064] px-2 py-1 text-xs font-bold text-gray-900 focus:outline-none"
+                  />
+                  {matchExpenseDate && (
+                    <button
+                      type="button"
+                      onClick={() => setMatchExpenseDate("")}
+                      className="text-gray-400 hover:text-red-600 text-xs font-bold px-0.5 cursor-pointer"
+                      title="Clear Expense Date"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10.5px] text-[#006064] font-bold uppercase whitespace-nowrap">
+                    2. Payment Date:
+                  </span>
+                  <input
+                    type="date"
+                    value={matchPaymentDate}
+                    onChange={(e) => setMatchPaymentDate(e.target.value)}
+                    className="bg-white border border-[#006064] px-2 py-1 text-xs font-bold text-gray-900 focus:outline-none"
+                  />
+                  {matchPaymentDate && (
+                    <button
+                      type="button"
+                      onClick={() => setMatchPaymentDate("")}
+                      className="text-gray-400 hover:text-red-600 text-xs font-bold px-0.5 cursor-pointer"
+                      title="Clear Payment Date"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMatchSameDay(!matchSameDay)}
+                  className={`px-2.5 py-1 text-[10.5px] font-bold border transition-all cursor-pointer whitespace-nowrap ${
+                    matchSameDay
+                      ? "bg-[#006064] text-white border-[#006064] shadow-2xs"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
+                  title="Show only records where Expense Date and Payment Date match exactly"
+                >
+                  {matchSameDay ? "✓ Same Day Matched" : "Match Same Day (Exp = Pay)"}
+                </button>
+                {(matchExpenseDate || matchPaymentDate || matchSameDay) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMatchExpenseDate("");
+                      setMatchPaymentDate("");
+                      setMatchSameDay(false);
+                    }}
+                    className="px-2 py-1 bg-white hover:bg-red-50 text-red-600 text-[10.5px] font-bold border border-red-200 cursor-pointer"
+                    title="Reset Match Dates"
+                  >
+                    Reset
                   </button>
                 )}
               </div>

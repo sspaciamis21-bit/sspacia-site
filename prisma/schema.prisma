@@ -1006,6 +1006,14 @@ model ClientMaster {
   sdrRecdDate            DateTime?
   sdrPdfUrl              String?                @db.Text
   sdrPdfName             String?
+  sdrReceivedAmount      Decimal?               @db.Decimal(12, 2)
+  sdrPaymentStatus       String?                @default("PENDING") // "PENDING" | "PARTIAL" | "COMPLETED"
+  sdrPaymentMode         String?
+  sdrUtrNumber           String?
+  sdrUtrDate             DateTime?
+  sdrBankName            String?
+  sdrPaymentsJson        String?                @db.Text
+  sdrRemarks             String?                @db.Text
   paymentDueDay          Int?
   clientStatus           String?                @default("Active") // "Active" | "Inactive" | "On Notice" | "Terminated"
   clientType             String?                @default("DEFAULT") // "DEFAULT" | "VIRTUAL_OFFICE"

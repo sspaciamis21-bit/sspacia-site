@@ -338,7 +338,7 @@ export function ManagePaymentModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'NO',
-          remarks: 'Confirmed no client payments received today.',
+          remarks: 'Confirmed no client payments received yesterday.',
         }),
       });
       const data = await res.json();
@@ -348,7 +348,7 @@ export function ManagePaymentModal({
 
       onDailyCheckSaved(data.check);
       toast.success(
-        `Approved: No payments received today (${data.check.timestamp}). FMS timestamp logged.`,
+        `Approved: No payments received yesterday (${data.check.timestamp}). FMS timestamp logged.`,
         { duration: 5000 }
       );
       onClose();
@@ -801,7 +801,7 @@ export function ManagePaymentModal({
             {/* Clean Heading - No extra lines */}
             <div className="text-center py-4 border-y border-neutral-200">
               <h2 className="text-lg font-black text-neutral-900 font-display">
-                Has any client payment been received today?
+                Has any client payment been received yesterday?
               </h2>
             </div>
 
@@ -832,7 +832,7 @@ export function ManagePaymentModal({
                   </div>
                 </div>
                 <p className="text-xs text-gray-600 font-normal leading-snug">
-                  No client payments received today. Confirming will approve and close this dialog, logging the FMS check timestamp.
+                  No client payments received yesterday. Confirming will approve and close this dialog, logging the FMS check timestamp.
                 </p>
               </button>
 

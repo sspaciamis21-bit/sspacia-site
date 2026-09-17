@@ -48,6 +48,7 @@ import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
 import { useAuth } from '@/context/AuthContext';
 import { InvoicePaymentManagement } from '@/components/admin/invoice-payment-management';
+import { SdrReceiveManagement } from '@/components/admin/sdr-receive-management';
 import {
   getBillingMonthInfo,
   calculateInclusiveDays,
@@ -216,7 +217,14 @@ export default function AdminInvoicesWorkflowPage() {
     }
   }, [canAccessCM, canAccessAccountant, userRoleView]);
 
-  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES'>('ACTIVE_WORKFLOW');
+  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES' | 'SDR_MANAGEMENT'>('ACTIVE_WORKFLOW');
+
+  // Ensure Payment Receive Management and SDR Receive Management are strictly NOT accessible for CM
+  useEffect(() => {
+    if ((!canAccessAccountant || userRoleView === 'CM') && activeSection !== 'ACTIVE_WORKFLOW') {
+      setActiveSection('ACTIVE_WORKFLOW');
+    }
+  }, [canAccessAccountant, userRoleView, activeSection]);
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -2215,18 +2223,33 @@ export default function AdminInvoicesWorkflowPage() {
               </span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveSection('OLD_INVOICES')}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${activeSection === 'OLD_INVOICES'
-                ? 'bg-[var(--primary)] text-white shadow-xs'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-            >
-              <FolderArchive size={15} />
-              <span>Invoice Payment Receive Management</span>
-            </button>
+            {canAccessAccountant && userRoleView === 'ACCOUNTANT' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('OLD_INVOICES')}
+                  className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${activeSection === 'OLD_INVOICES'
+                    ? 'bg-[var(--primary)] text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                >
+                  <FolderArchive size={15} />
+                  <span>Invoice Payment Receive Management</span>
+                </button>
 
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('SDR_MANAGEMENT')}
+                  className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${activeSection === 'SDR_MANAGEMENT'
+                    ? 'bg-[#004d40] text-white shadow-xs'
+                    : 'text-emerald-800 bg-emerald-50/70 border border-emerald-200/80 hover:bg-emerald-100/80'
+                    }`}
+                >
+                  <Shield size={15} className={activeSection === 'SDR_MANAGEMENT' ? 'text-emerald-300' : 'text-emerald-600'} />
+                  <span>SDR Receive Management</span>
+                </button>
+              </>
+            )}
           </div>
 
           {canAccessCM && canAccessAccountant && (
@@ -2256,8 +2279,18 @@ export default function AdminInvoicesWorkflowPage() {
         </div>
       </FadeUp>
 
-      {/* ── RENDER INVOICE PAYMENT MANAGEMENT OR ACTIVE INVOICE WORKFLOW ── */}
-      {activeSection === 'OLD_INVOICES' ? (
+      {/* ── RENDER SDR MANAGEMENT, INVOICE PAYMENT MANAGEMENT OR ACTIVE INVOICE WORKFLOW ── */}
+      {canAccessAccountant && userRoleView === 'ACCOUNTANT' && activeSection === 'SDR_MANAGEMENT' ? (
+        <SdrReceiveManagement
+          isSuperAdmin={isAdmin}
+          userRoleView={userRoleView}
+          canAccessCM={canAccessCM}
+          canAccessAccountant={canAccessAccountant}
+          currentUserLocationId={(user as any)?.locationId || (user as any)?.assignedLocations?.[0]?.locationId}
+          currentUserLocationName={(user as any)?.location?.name || (user as any)?.assignedLocations?.[0]?.location?.name}
+          onBack={() => setActiveSection('OLD_INVOICES')}
+        />
+      ) : canAccessAccountant && userRoleView === 'ACCOUNTANT' && activeSection === 'OLD_INVOICES' ? (
         <InvoicePaymentManagement
           isSuperAdmin={isAdmin}
           userRoleView={userRoleView}
@@ -2265,6 +2298,7 @@ export default function AdminInvoicesWorkflowPage() {
           canAccessAccountant={canAccessAccountant}
           currentUserLocationId={(user as any)?.locationId || (user as any)?.assignedLocations?.[0]?.locationId}
           currentUserLocationName={(user as any)?.location?.name || (user as any)?.assignedLocations?.[0]?.location?.name}
+          onOpenSdrManagement={() => setActiveSection('SDR_MANAGEMENT')}
         />
       ) : (
 

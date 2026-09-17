@@ -317,7 +317,7 @@ export default function PassesClient() {
 
       toast.success('Pass Booked Successfully!', {
         id: toastId,
-        description: `Booking ID: ${json.booking.bookingNumber}. Notification email sent to praveen.agarwal1@gmail.com.`,
+        description: `Booking ID: ${json.booking.bookingNumber}. Notification email sent to praveen@sspacia.com.`,
       });
 
       router.push('/dashboard/bookings');
@@ -885,7 +885,7 @@ export default function PassesClient() {
                 </button>
 
                 <p className="text-[10px] text-gray-500 text-center leading-tight">
-                  Notification with client &amp; space details will be dispatched immediately to praveen.agarwal1@gmail.com and sales@sspacia.com.
+                  Notification with client &amp; space details will be dispatched immediately to praveen@sspacia.com and sales@sspacia.com.
                 </p>
               </div>
             </div>

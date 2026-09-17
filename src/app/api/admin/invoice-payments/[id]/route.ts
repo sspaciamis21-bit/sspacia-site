@@ -54,19 +54,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid invoice ID' }, { status: 400 });
     }
 
-    // Node scoping verification for non-admins / non-accountants
+    // Strict Role Access: Only Accounts and Super Admin can record or update invoice payments (not CM)
     if (!isAdmin && !isAccountant) {
-      const scopedUserIds = await getNodeScopedUserIds(userId);
-      if (scopedUserIds !== null) {
-        const existingRecord = await (prisma as any).invoiceRecord.findUnique({
-          where: { id: invoiceId },
-          select: { createdById: true },
-        });
-
-        if (!existingRecord || (existingRecord.createdById && !scopedUserIds.includes(existingRecord.createdById))) {
-          return NextResponse.json({ error: 'Forbidden: You cannot modify invoices from another center' }, { status: 403 });
-        }
-      }
+      return NextResponse.json(
+        { error: 'Forbidden: Only Accounts and Super Admin can record or update invoice payments' },
+        { status: 403 }
+      );
     }
 
     const body = await request.json();

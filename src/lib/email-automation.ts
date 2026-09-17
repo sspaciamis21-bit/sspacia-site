@@ -193,7 +193,7 @@ export async function runDailyAgreementAlertEmails(overrideReceiver?: string) {
       const mailOptions = {
         from: `"SSPACIA Control Room" <${sender}>`,
         to: recipient,
-        cc: 'praveen.agarwal1@gmail.com',
+        cc: 'praveen@sspacia.com',
         subject,
         html,
       };

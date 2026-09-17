@@ -42,6 +42,7 @@ import { OldInvoicesArchive } from '@/components/admin/old-invoices-archive';
 import { ManagePaymentModal, type DailyFmsCheckItem } from '@/components/admin/manage-payment-modal';
 import { BankRulesModal } from '@/components/admin/bank-rules-modal';
 import { BankStatementModal } from '@/components/admin/bank-statement-modal';
+import { SdrReceiveManagement } from '@/components/admin/sdr-receive-management';
 import type { BankRulesState } from '@/app/api/admin/bank-rules/route';
 
 export interface DailyPaymentCheckEntry {
@@ -125,6 +126,7 @@ interface InvoicePaymentManagementProps {
   canAccessAccountant?: boolean;
   currentUserLocationId?: number | null;
   currentUserLocationName?: string | null;
+  onOpenSdrManagement?: () => void;
 }
 
 const PAYMENT_MODES = [
@@ -145,8 +147,10 @@ export function InvoicePaymentManagement({
   canAccessAccountant = true,
   currentUserLocationId = null,
   currentUserLocationName = null,
+  onOpenSdrManagement,
 }: InvoicePaymentManagementProps) {
   const isAccountant = canAccessAccountant || userRoleView === 'ACCOUNTANT';
+  const [isSdrViewActive, setIsSdrViewActive] = useState(false);
 
   // Main view toggle: 'LIVE_APPROVED' vs 'OLD_ARCHIVE'
   const [activeTab, setActiveTab] = useState<'LIVE_APPROVED' | 'OLD_ARCHIVE'>('LIVE_APPROVED');
@@ -1424,6 +1428,20 @@ export function InvoicePaymentManagement({
     };
   }, [invoices]);
 
+  if (isSdrViewActive) {
+    return (
+      <SdrReceiveManagement
+        isSuperAdmin={isSuperAdmin}
+        userRoleView={userRoleView}
+        canAccessCM={canAccessCM}
+        canAccessAccountant={canAccessAccountant}
+        currentUserLocationId={currentUserLocationId}
+        currentUserLocationName={currentUserLocationName}
+        onBack={() => setIsSdrViewActive(false)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-3.5 pb-12">
       {/* ── Top Header & Sub-Navigation ── */}
@@ -1496,6 +1514,17 @@ export function InvoicePaymentManagement({
                 >
                   <Landmark size={13} className="text-orange-300" />
                   <span>Bank Statement</span>
+                </button>
+
+                {/* SDR Receive Management Button */}
+                <button
+                  type="button"
+                  onClick={onOpenSdrManagement || (() => setIsSdrViewActive(true))}
+                  className="px-3 py-1.5 bg-[#004d40] hover:bg-[#00382e] text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-xs border border-[#00382e] cursor-pointer transition-all hover:shadow-sm"
+                  title="Open SDR Receive Management (Security Deposit Collection)"
+                >
+                  <ShieldCheck size={13} className="text-amber-300" />
+                  <span>SDR Receive Management</span>
                 </button>
 
                 <button

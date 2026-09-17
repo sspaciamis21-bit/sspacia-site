@@ -91,15 +91,12 @@ export async function GET(request: Request) {
       status: 'APPROVED',
     };
 
-    // Node-based data isolation
-    if (currentUserId && !isSuperAdmin && !isAccountant) {
-      const scopedUserIds = await getNodeScopedUserIds(currentUserId);
-      if (scopedUserIds !== null) {
-        where.OR = [
-          { createdById: { in: scopedUserIds } },
-          { clientMaster: { createdById: { in: scopedUserIds } } },
-        ];
-      }
+    // Strict Role Access: Invoice Payment Receive Management is reserved for Accounts & Super Admin only (not CM)
+    if (!isSuperAdmin && !isAccountant) {
+      return NextResponse.json(
+        { error: 'Forbidden: Invoice Payment Receive Management is reserved for Accounts and Super Admin only' },
+        { status: 403 }
+      );
     }
 
     const invoices = await (prisma as any).invoiceRecord.findMany({
