@@ -217,11 +217,122 @@ export async function POST(
       });
     }
 
-    // ── 3. DISBURSEMENT / PAYMENT RECORDING ACTION ──
-    // Strictly gated: must be APPROVED by Super Admin before payment details can be entered
+    // ── 3. PAYMENT APPROVAL ACTIONS (2ND SUPER ADMIN APPROVAL: SIR PAYS & DISBURSAL) ──
+    const updatePaymentApprovalRecord = async (dataToUpdate: Record<string, any>) => {
+      try {
+        return await (prisma as any).expenseRecord.update({
+          where: { id: recordId },
+          data: dataToUpdate,
+        });
+      } catch (prismaErr: any) {
+        console.warn('[Expense Payment Approval] Prisma update fallback to raw query:', prismaErr?.message);
+        const setClauses: string[] = [];
+        const params: any[] = [];
+        for (const [k, v] of Object.entries(dataToUpdate)) {
+          setClauses.push(`\`${k}\` = ?`);
+          params.push(v);
+        }
+        if (setClauses.length > 0) {
+          params.push(recordId);
+          await (prisma as any).$executeRawUnsafe(
+            `UPDATE \`ExpenseRecord\` SET ${setClauses.join(', ')} WHERE \`id\` = ?`,
+            ...params
+          );
+        }
+        return await (prisma as any).expenseRecord.findUnique({ where: { id: recordId } });
+      }
+    };
+
+    if (action === 'REQUEST_PAYMENT_APPROVAL') {
+      if (record.approvalStatus !== 'APPROVED') {
+        return NextResponse.json(
+          { error: 'Cannot request payment approval. Base expense must first be approved by Super Admin.' },
+          { status: 400 }
+        );
+      }
+
+      const updated = await updatePaymentApprovalRecord({
+        paymentApprovalStatus: 'PENDING',
+        paymentApprovalRemarks: remarks ? String(remarks).trim() : null,
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        message: 'Payment approval request submitted to Super Admin (Sir)!',
+      });
+    }
+
+    if (action === 'PAYMENT_SUPER_ADMIN_APPROVE' || action === 'SUPER_ADMIN_APPROVE_PAYMENT') {
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Only Super Admin can approve payment disbursal.' },
+          { status: 403 }
+        );
+      }
+
+      if (record.approvalStatus !== 'APPROVED') {
+        return NextResponse.json(
+          { error: 'Base expense must first be approved by Super Admin before payment approval.' },
+          { status: 400 }
+        );
+      }
+
+      const updated = await updatePaymentApprovalRecord({
+        paymentApprovalStatus: 'APPROVED',
+        paymentApprovedById: user.id,
+        paymentApprovedByName: user.name,
+        paymentApprovedAt: new Date(),
+        paymentApprovalRemarks: remarks ? String(remarks).trim() : null,
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        message: 'Payment approved by Super Admin (Sir)! Accountant can now enter UTR, payment date, proof, and send vendor advice.',
+      });
+    }
+
+    if (action === 'PAYMENT_SUPER_ADMIN_REJECT' || action === 'SUPER_ADMIN_REJECT_PAYMENT') {
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Only Super Admin can reject payment requests.' },
+          { status: 403 }
+        );
+      }
+
+      const reason = (remarks || rejectionRemarks || '').trim();
+      if (!reason) {
+        return NextResponse.json(
+          { error: 'Rejection remarks/reason are required so the accountant knows what needs correction.' },
+          { status: 400 }
+        );
+      }
+
+      const updated = await updatePaymentApprovalRecord({
+        paymentApprovalStatus: 'REJECTED',
+        paymentApprovalRemarks: reason,
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        message: 'Payment rejected by Super Admin with remarks.',
+      });
+    }
+
+    // ── 4. DISBURSEMENT / PAYMENT RECORDING ACTION (FINAL STEP) ──
+    // Strictly gated: must have received Super Admin Payment Approval ("Sir Pays")
     if (record.approvalStatus !== 'APPROVED') {
       return NextResponse.json(
         { error: 'Payment details and UTR cannot be recorded yet. This expense must first receive Super Admin approval.' },
+        { status: 400 }
+      );
+    }
+
+    if (record.paymentApprovalStatus !== 'APPROVED' && !isSuperAdmin) {
+      return NextResponse.json(
+        { error: 'Payment details and UTR cannot be recorded yet. Super Admin must first approve the payment (Sir Pays).' },
         { status: 400 }
       );
     }
@@ -312,7 +423,8 @@ SSPACIA Coworking
         emailError = err?.message || 'Error dispatching approval email';
       }
     } else if (sendAlertEmail && !recipientEmail) {
-      emailError = `No email address on file for vendor "${record.vendorName || 'Vendor'}". Please update Vendor Master with the vendor's email.`;
+      // If no email on file for vendor, acknowledgement email is skipped cleanly
+      emailError = null;
     }
 
     // Update expense record with payment details and email status
@@ -335,7 +447,7 @@ SSPACIA Coworking
     const statusMsg = `Expense approved successfully! Payment UTR: ${finalUtr}${
       emailSent
         ? ` | Alert email sent to ${recipientEmail}`
-        : emailError
+        : recipientEmail && emailError
         ? ` | Email note: ${emailError}`
         : ''
     }`;

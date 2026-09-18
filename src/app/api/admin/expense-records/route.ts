@@ -457,15 +457,8 @@ export async function POST(request: Request) {
     let accApprovedByName: string | null = null;
     let accApprovedAt: Date | null = null;
 
-    if (isSuperAdmin) {
-      calculatedApprovalStatus = customApprovalStatus || 'APPROVED';
-      initialAccApprovalStatus = 'APPROVED';
-      initialAdminApprovalStatus = 'APPROVED';
-      initialApprovedById = user.id;
-      initialApprovedByName = user.name;
-      initialApprovedAt = new Date();
-    } else if (isAccountant) {
-      // Accountant enters expense -> straight to Super Admin for approval
+    if (isAccountant) {
+      // Accountant enters expense -> straight to Super Admin for approval (Step 1 self-verified)
       calculatedApprovalStatus = 'PENDING_SUPER_ADMIN_APPROVAL';
       initialAccApprovalStatus = 'APPROVED';
       accApprovedById = user.id;
@@ -473,7 +466,7 @@ export async function POST(request: Request) {
       accApprovedAt = new Date();
       initialAdminApprovalStatus = 'PENDING';
     } else {
-      // CM enters expense -> starts at Accountant validation
+      // CM or Super Admin enters expense -> starts at Step 1 (Accountant or Super Admin validation)
       calculatedApprovalStatus = 'PENDING_ACCOUNTANT_APPROVAL';
       initialAccApprovalStatus = 'PENDING';
       initialAdminApprovalStatus = 'PENDING';

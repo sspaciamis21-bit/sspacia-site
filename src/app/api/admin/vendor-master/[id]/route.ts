@@ -123,25 +123,11 @@ export async function PATCH(
       );
     }
 
-    if (mobileNo !== undefined && !mobileNo.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'Mobile Number cannot be empty.' },
-        { status: 400 }
-      );
-    }
-
-    if (email !== undefined && !email.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'Email Address cannot be empty.' },
-        { status: 400 }
-      );
-    }
-
     const updateData: any = {};
     if (vendorName !== undefined) updateData.vendorName = vendorName.trim();
     if (address !== undefined) updateData.address = address?.trim() || null;
-    if (email !== undefined) updateData.email = email.trim();
-    if (mobileNo !== undefined) updateData.mobileNo = mobileNo.trim();
+    if (email !== undefined) updateData.email = email && email.trim() ? email.trim() : null;
+    if (mobileNo !== undefined) updateData.mobileNo = mobileNo && mobileNo.trim() ? mobileNo.trim() : null;
     if (accountNo !== undefined) updateData.accountNo = accountNo?.trim() || null;
     if (ifscCode !== undefined) updateData.ifscCode = ifscCode?.trim() || null;
     if (bankName !== undefined) updateData.bankName = bankName?.trim() || null;

@@ -35,15 +35,43 @@ async function getAuthUser() {
   }
 }
 
+function parseDateRobust(input: any): Date | null {
+  if (!input) return null;
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
+  const s = String(input).trim();
+  if (!s) return null;
+
+  // Match DD-MM-YYYY or DD/MM/YYYY (e.g. 17-09-2026 or 17/09/2026)
+  const ddmmyyyy = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+  if (ddmmyyyy) {
+    const day = parseInt(ddmmyyyy[1], 10);
+    const month = parseInt(ddmmyyyy[2], 10) - 1;
+    const year = parseInt(ddmmyyyy[3], 10);
+    const d = new Date(year, month, day, 12, 0, 0);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // Match DD-Mon-YYYY (e.g. 17-Sep-2026 or 17 Sep 2026)
+  const ddMmmYyyy = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,})[-\s](\d{4})/);
+  if (ddMmmYyyy) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // ISO or standard format (YYYY-MM-DD)
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function formatDateDDMMYYYY(dateInput: any): string {
-  if (!dateInput) return '';
-  const d = new Date(dateInput);
-  if (isNaN(d.getTime())) return '';
+  const d = parseDateRobust(dateInput);
+  if (!d) return '';
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
   return `${day}/${month}/${year}`;
 }
+
 
 function resolveOldInvoiceDate(partOrInvDate: any, monthStr: string | null, createdAt: any): { rawTimestamp: number; formattedDate: string } {
   if (partOrInvDate) {
@@ -128,12 +156,13 @@ export async function GET() {
 
     const rawTransactions: any[] = [];
 
-    // 3. FETCH DEBITS: Approved / Paid Vendor Operating Expenses
+    // 3. FETCH DEBITS: Disbursed / Settled Vendor Operating Expenses
+    // An expense only reflects as a bank debit once disbursed with a UTR or marked PAID by Accountant
     const approvedExpenses = await (prisma as any).expenseRecord.findMany({
       where: {
         OR: [
-          { approvalStatus: 'APPROVED' },
           { paymentStatus: 'PAID' },
+          { utrNumber: { not: null } },
         ],
       },
       include: {
@@ -146,11 +175,20 @@ export async function GET() {
     });
 
     approvedExpenses.forEach((exp: any) => {
+      // Must be actually disbursed with UTR or marked PAID
+      const hasUtr = exp.utrNumber && String(exp.utrNumber).trim().length > 0;
+      const isPaid = exp.paymentStatus === 'PAID';
+      if (!hasUtr && !isPaid) return;
+
       const debitAmount = Number(exp.receiveAmount || exp.amount || 0);
       if (debitAmount <= 0) return;
 
-      const rawDate = exp.utrDate || exp.payReceiveDate || exp.expenseDate || exp.createdAt;
-      const formattedDate = formatDateDDMMYYYY(rawDate);
+      // CRITICAL: Debited date in bank statement MUST come from the payment date entered by Accountant
+      // (payReceiveDate or utrDate), NEVER the expense date!
+      const paymentDateInput = exp.payReceiveDate || exp.utrDate || exp.updatedAt;
+      const parsedPaymentDate = parseDateRobust(paymentDateInput) || new Date();
+      const formattedDate = formatDateDDMMYYYY(parsedPaymentDate);
+      const rawTimestamp = parsedPaymentDate.getTime();
       const mode = exp.accPaymentMode || exp.paymentMode || 'NEFT';
       const ref = exp.utrNumber || `CMS${exp.id}`;
       const vendor = exp.vendorName ? exp.vendorName.toUpperCase() : 'VENDOR';
@@ -159,7 +197,7 @@ export async function GET() {
 
       rawTransactions.push({
         type: 'DEBIT',
-        rawDate: new Date(rawDate).getTime(),
+        rawDate: rawTimestamp,
         valueDate: formattedDate,
         postDate: formattedDate,
         details: `WDL TFR ${mode}/${ref}/${vendor}/${center} - ${desc}`,

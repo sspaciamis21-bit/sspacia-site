@@ -54,10 +54,10 @@ interface LocationOption {
   cityName?: string | null;
 }
 
-// Validation helpers - MOBILE & EMAIL ARE STRICTLY MANDATORY
+// Validation helpers - Mobile & Email are optional, but format-checked if provided
 const validateMobile = (mobile: string): string | null => {
   if (!mobile || !mobile.trim()) {
-    return 'Mobile number is mandatory';
+    return null;
   }
   const clean = mobile.replace(/[\s\-\(\)]/g, '');
   // Indian mobile numbers (starts with optional +91 or 0, followed by 10 digits starting with 6, 7, 8, 9)
@@ -70,7 +70,7 @@ const validateMobile = (mobile: string): string | null => {
 
 const validateEmail = (email: string): string | null => {
   if (!email || !email.trim()) {
-    return 'Email address is mandatory';
+    return null;
   }
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   if (!emailRegex.test(email.trim())) {
@@ -1036,19 +1036,18 @@ export function VendorMasterView() {
                   />
                 </div>
 
-                {/* Mobile & Email in 2 columns (BOTH STRICTLY MANDATORY) */}
+                {/* Mobile & Email in 2 columns (Optional) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Mobile Input with Validation */}
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-800 mb-1">
-                      Mobile Number <span className="text-red-500">*</span>
+                      Mobile Number
                     </label>
                     <div className="relative">
                       <Phone size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
-                        required
-                        placeholder="e.g. 9876543210"
+                        placeholder="e.g. 9876543210 (optional)"
                         maxLength={13}
                         value={formData.mobileNo}
                         onChange={(e) => {
@@ -1078,14 +1077,13 @@ export function VendorMasterView() {
                   {/* Email Input with Validation */}
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-800 mb-1">
-                      Email Address <span className="text-red-500">*</span>
+                      Email Address
                     </label>
                     <div className="relative">
                       <Mail size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="email"
-                        required
-                        placeholder="e.g. vendor@example.com"
+                        placeholder="e.g. vendor@example.com (optional)"
                         value={formData.email}
                         onChange={(e) => {
                           const val = e.target.value;

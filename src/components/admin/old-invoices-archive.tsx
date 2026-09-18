@@ -143,6 +143,9 @@ export function OldInvoicesArchive({
     canAccessCM === false ? 'ACCOUNTANT' : initialRoleView
   );
 
+  // User with full center privileges (Super Admin or Accountant can upload and manage invoices for any center)
+  const canManageAnyCenter = isSuperAdmin || canAccessAccountant || roleView === 'ACCOUNTANT';
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -523,13 +526,14 @@ export function OldInvoicesArchive({
     }
   };
 
-  // Open Upload Modal with Smart Next Month detection
+  // Open Upload Modal with Smart Next Month and Center detection
   const handleOpenUploadModal = (prefillCompany?: string) => {
     setModalMode('upload');
     setEditingRecordId(null);
     setFormCompany(prefillCompany || '');
-    setFormLocationId(currentUserLocationId ? String(currentUserLocationId) : (locations[0]?.id ? String(locations[0].id) : ''));
-    setFormLocationName(currentUserLocationName || locations[0]?.name || '');
+
+    let targetLocId = currentUserLocationId ? String(currentUserLocationId) : (locations[0]?.id ? String(locations[0].id) : '');
+    let targetLocName = currentUserLocationName || locations[0]?.name || '';
 
     // Smart default: For old archives, suggest past month like July or April
     let defaultMonth = 'July';
@@ -540,6 +544,10 @@ export function OldInvoicesArchive({
         (inv) => inv.companyName.toLowerCase().trim() === prefillCompany.toLowerCase().trim()
       );
       if (existingInvoices.length > 0) {
+        if (existingInvoices[0].locationId) {
+          targetLocId = String(existingInvoices[0].locationId);
+          targetLocName = existingInvoices[0].locationName || targetLocName;
+        }
         const lastInv = existingInvoices[0];
         const parts = (lastInv.month || '').split(' ');
         if (parts.length === 2 && MONTH_NAMES.includes(parts[0])) {
@@ -555,6 +563,9 @@ export function OldInvoicesArchive({
         }
       }
     }
+
+    setFormLocationId(targetLocId);
+    setFormLocationName(targetLocName);
 
     setUploadItems([
       {
@@ -1444,16 +1455,15 @@ export function OldInvoicesArchive({
             )}
           </div>
 
-          {roleView === 'CM' && (
-            <button
-              type="button"
-              onClick={() => handleOpenUploadModal()}
-              className="px-4 py-2 bg-[#1ab0bc] hover:bg-teal-600 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs cursor-pointer"
-            >
-              <Upload size={14} />
-              <span>Upload Old Invoice</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => handleOpenUploadModal()}
+            className="px-4 py-2 bg-[#1ab0bc] hover:bg-teal-600 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs cursor-pointer"
+            title="Upload past client invoices for any center"
+          >
+            <Upload size={14} />
+            <span>Upload Old Invoice</span>
+          </button>
         </div>
       </div>
 
@@ -1597,16 +1607,14 @@ export function OldInvoicesArchive({
               ? 'No archived invoices match your active search and filter criteria.'
               : 'Start archiving past client invoices by clicking "Upload Old Invoice" above.'}
           </p>
-          {roleView === 'CM' && (
-            <button
-              type="button"
-              onClick={() => handleOpenUploadModal()}
-              className="mt-2 px-4 py-2 bg-[#1ab0bc] hover:bg-teal-600 text-white font-bold text-xs uppercase tracking-wider inline-flex items-center gap-2 cursor-pointer shadow-xs"
-            >
-              <Upload size={14} />
-              <span>Upload First Old Invoice</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => handleOpenUploadModal()}
+            className="mt-2 px-4 py-2 bg-[#1ab0bc] hover:bg-teal-600 text-white font-bold text-xs uppercase tracking-wider inline-flex items-center gap-2 cursor-pointer shadow-xs"
+          >
+            <Upload size={14} />
+            <span>Upload First Old Invoice</span>
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -1661,14 +1669,14 @@ export function OldInvoicesArchive({
                       </div>
                     )}
 
-                    {roleView === 'CM' && (
+                    {(roleView === 'CM' || canManageAnyCenter) && (
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleOpenUploadModal(group.companyName);
                         }}
-                        className="px-2.5 py-1 bg-white hover:bg-teal-50 border border-teal-300 text-[#1ab0bc] hover:text-teal-800 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs"
+                        className="px-2.5 py-1 bg-white hover:bg-teal-50 border border-teal-300 text-[#1ab0bc] hover:text-teal-800 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
                         title="Upload another monthly invoice for this company"
                       >
                         <Plus size={13} />
@@ -2330,8 +2338,8 @@ export function OldInvoicesArchive({
                                         <Download size={13} />
                                       </a>
 
-                                      {/* EDIT (CM OR SUPER ADMIN) */}
-                                      {(roleView === 'CM' || isSuperAdmin) && (
+                                      {/* EDIT (CM, ACCOUNTANT, OR SUPER ADMIN) */}
+                                      {(roleView === 'CM' || canManageAnyCenter) && (
                                         <button
                                           type="button"
                                           onClick={() => handleOpenEditModal(item)}
@@ -2342,8 +2350,8 @@ export function OldInvoicesArchive({
                                         </button>
                                       )}
 
-                                      {/* DELETE INVOICE (CM OR SUPER ADMIN) */}
-                                      {(roleView === 'CM' || isSuperAdmin) && (
+                                      {/* DELETE INVOICE (CM, ACCOUNTANT, OR SUPER ADMIN) */}
+                                      {(roleView === 'CM' || canManageAnyCenter) && (
                                         <button
                                           type="button"
                                           onClick={() => handleDeleteInvoice(item.id, item.companyName, item.month)}
@@ -2446,13 +2454,17 @@ export function OldInvoicesArchive({
                         {/* CENTER / LOCATION */}
                         <div>
                           <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
-                            Center / Location {isSuperAdmin ? '' : <span className="text-gray-400 font-normal">(Assigned)</span>}
+                            Center / Location {canManageAnyCenter ? '' : <span className="text-gray-400 font-normal">(Assigned)</span>}
                           </label>
-                          {isSuperAdmin ? (
+                          {canManageAnyCenter ? (
                             <select
                               value={formLocationId}
-                              onChange={(e) => setFormLocationId(e.target.value)}
-                              className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] cursor-pointer"
+                              onChange={(e) => {
+                                setFormLocationId(e.target.value);
+                                const selectedLoc = locations.find((l) => String(l.id) === e.target.value);
+                                if (selectedLoc) setFormLocationName(selectedLoc.name);
+                              }}
+                              className="w-full bg-white border border-gray-300 px-3 py-2 text-xs text-gray-900 outline-none focus:border-[#1ab0bc] cursor-pointer font-medium"
                             >
                               <option value="">All / Specific Center...</option>
                               {locations.map((loc) => (

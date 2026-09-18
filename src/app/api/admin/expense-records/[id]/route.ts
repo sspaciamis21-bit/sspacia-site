@@ -259,6 +259,21 @@ export async function PUT(
     if (body.rejectionRemarks !== undefined) {
       updateData.rejectionRemarks = body.rejectionRemarks;
     }
+    if (body.paymentApprovalStatus !== undefined) {
+      updateData.paymentApprovalStatus = body.paymentApprovalStatus;
+    }
+    if (body.paymentApprovalRemarks !== undefined) {
+      updateData.paymentApprovalRemarks = body.paymentApprovalRemarks ? String(body.paymentApprovalRemarks).trim() : null;
+    }
+    if (body.paymentApprovedById !== undefined) {
+      updateData.paymentApprovedById = body.paymentApprovedById ? Number(body.paymentApprovedById) : null;
+    }
+    if (body.paymentApprovedByName !== undefined) {
+      updateData.paymentApprovedByName = body.paymentApprovedByName ? String(body.paymentApprovedByName).trim() : null;
+    }
+    if (body.paymentApprovedAt !== undefined) {
+      updateData.paymentApprovedAt = body.paymentApprovedAt ? new Date(body.paymentApprovedAt) : null;
+    }
 
     // Handle Resubmission of Rejected Records
     const isCurrentlyRejected =
@@ -333,10 +348,29 @@ export async function PUT(
       updateData.paymentStatus = 'PENDING';
     }
 
-    const updated = await (prisma as any).expenseRecord.update({
-      where: { id: recordId },
-      data: updateData,
-    });
+    let updated;
+    try {
+      updated = await (prisma as any).expenseRecord.update({
+        where: { id: recordId },
+        data: updateData,
+      });
+    } catch (prismaErr: any) {
+      console.warn('[EXPENSE_RECORD_PUT] Fallback to raw query update:', prismaErr?.message);
+      const setClauses: string[] = [];
+      const params: any[] = [];
+      for (const [k, v] of Object.entries(updateData)) {
+        setClauses.push(`\`${k}\` = ?`);
+        params.push(v);
+      }
+      if (setClauses.length > 0) {
+        params.push(recordId);
+        await (prisma as any).$executeRawUnsafe(
+          `UPDATE \`ExpenseRecord\` SET ${setClauses.join(', ')} WHERE \`id\` = ?`,
+          ...params
+        );
+      }
+      updated = await (prisma as any).expenseRecord.findUnique({ where: { id: recordId } });
+    }
 
     return NextResponse.json({
       success: true,

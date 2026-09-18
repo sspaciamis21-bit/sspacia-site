@@ -123,6 +123,7 @@ export const ACCOUNTANT_EXPENSE_COLUMNS: ExpenseColumnDef[] = [
 
   // ── PHASE 3: PAYMENT DETAILS (SIR PAYS & DISBURSAL) ──
   { id: "bankPortal", label: "Bank Portal", defaultWidth: 90, minWidth: 65, align: "center", phase: "3" },
+  { id: "paymentApproval", label: "Payment Approval", defaultWidth: 135, minWidth: 90, align: "center", phase: "3" },
   { id: "utrNumber", label: "UTR No.", defaultWidth: 155, minWidth: 90, align: "center", phase: "3", mono: true },
   { id: "payDate", label: "Payment Date", defaultWidth: 110, minWidth: 75, align: "center", phase: "3", mono: true },
   { id: "emailAlert", label: "Email Alert", defaultWidth: 115, minWidth: 75, align: "center", phase: "3" },
@@ -172,18 +173,24 @@ export const getExpenseCellValue = (rec: ExpenseRecordItem, colId: string, idx: 
     case "saApproval":
       if (rec.approvalStatus === "APPROVED") return "Approved ✓";
       if (rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN") return "SA Rejected";
-      if (rec.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" || rec.approvalStatus === "PENDING_APPROVAL") return "Pending SA";
+      if (rec.accountantApprovalStatus === "APPROVED" || rec.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" || rec.approvalStatus === "PENDING_APPROVAL") return "Pending SA";
       return "Waiting on Step 1";
     case "vendor":
       return rec.vendorName || "Unassigned";
     case "bankPortal":
       return rec.uploadedInBankPortal ? "Uploaded" : "Pending";
+    case "paymentApproval":
+      if (rec.paymentApprovalStatus === "APPROVED" || rec.paymentStatus === "PAID" || rec.utrNumber) return "Approved ✓";
+      if (rec.paymentApprovalStatus === "REJECTED") return "SA Rejected";
+      if (rec.paymentApprovalStatus === "PENDING") return "Pending Sir Pay";
+      if (rec.approvalStatus === "APPROVED") return "Req Sir Pay";
+      return "Waiting on Step 2";
     case "utrNumber":
-      return rec.utrNumber || (rec.approvalStatus === "APPROVED" ? "Awaiting UTR" : "Locked");
+      return rec.utrNumber || (rec.paymentApprovalStatus === "APPROVED" || rec.paymentStatus === "PAID" ? "Awaiting UTR" : "Locked");
     case "utrDate":
-      return rec.utrNumber ? `${rec.utrNumber} (${rec.payReceiveDate || rec.utrDate || "Paid"})` : (rec.approvalStatus === "APPROVED" ? "Awaiting Disbursal" : "Locked");
+      return rec.utrNumber ? `${rec.utrNumber} (${rec.payReceiveDate || rec.utrDate || "Paid"})` : (rec.paymentApprovalStatus === "APPROVED" ? "Awaiting Disbursal" : "Locked");
     case "payDate":
-      return rec.payReceiveDate || rec.utrDate || (rec.approvalStatus === "APPROVED" ? "Pending Date" : "Locked");
+      return rec.payReceiveDate || rec.utrDate || (rec.paymentApprovalStatus === "APPROVED" ? "Pending Date" : "Locked");
     case "paymentStatus":
       return rec.paymentStatus === "PAID" || rec.utrNumber ? "Paid" : "Pending";
     case "emailAlert":
@@ -284,6 +291,13 @@ export interface ExpenseRecordItem {
   superAdminApprovedByName?: string | null;
   superAdminApprovedAt?: string | null;
   superAdminRemarks?: string | null;
+
+  // 2nd Super Admin Approval: Payment Disbursal Approval ("Sir Pays & Approves")
+  paymentApprovalStatus?: string | null; // "NOT_REQUESTED" | "PENDING" | "APPROVED" | "REJECTED"
+  paymentApprovedById?: number | null;
+  paymentApprovedByName?: string | null;
+  paymentApprovedAt?: string | null;
+  paymentApprovalRemarks?: string | null;
 
   rejectionStage?: string | null; // "ACCOUNTANT" | "SUPER_ADMIN"
   rejectionRemarks?: string | null;
@@ -391,9 +405,9 @@ export const COMMON_UNITS = [
   "Sets",
 ];
 
-// Validation helpers for inline quick-vendor
+// Validation helpers for inline quick-vendor (Mobile & Email optional, validated if entered)
 const validateInlineMobile = (mobile: string): string | null => {
-  if (!mobile || !mobile.trim()) return "Mobile number is mandatory";
+  if (!mobile || !mobile.trim()) return null;
   const clean = mobile.replace(/[\s\-\(\)]/g, "");
   const mobileRegex = /^(\+91|0)?[6-9]\d{9}$/;
   if (!mobileRegex.test(clean)) {
@@ -403,7 +417,7 @@ const validateInlineMobile = (mobile: string): string | null => {
 };
 
 const validateInlineEmail = (email: string): string | null => {
-  if (!email || !email.trim()) return "Email address is mandatory";
+  if (!email || !email.trim()) return null;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   if (!emailRegex.test(email.trim())) {
     return "Enter a valid email address";
@@ -851,6 +865,12 @@ export function ExpenseRegister({
   const [rejectingRecord, setRejectingRecord] = useState<ExpenseRecordItem | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string>("");
   const [isRejectingSubmitting, setIsRejectingSubmitting] = useState<boolean>(false);
+
+  // Super Admin Payment Rejection Modal State
+  const [rejectingPaymentRecord, setRejectingPaymentRecord] = useState<ExpenseRecordItem | null>(null);
+  const [paymentRejectionReason, setPaymentRejectionReason] = useState<string>("");
+  const [isRejectingPaymentSubmitting, setIsRejectingPaymentSubmitting] = useState<boolean>(false);
+
   const [isApprovalsModalOpen, setIsApprovalsModalOpen] = useState(false);
   const [isViewPaymentModalOpen, setIsViewPaymentModalOpen] = useState(false);
   const [viewingPaymentRecord, setViewingPaymentRecord] = useState<ExpenseRecordItem | null>(null);
@@ -891,6 +911,7 @@ export function ExpenseRegister({
       isAddModalOpen ||
       approvingRecord ||
       rejectingRecord ||
+      rejectingPaymentRecord ||
       isNewVendorModalOpen ||
       settlingRecord ||
       isApprovalsModalOpen ||
@@ -910,6 +931,7 @@ export function ExpenseRegister({
     isAddModalOpen,
     approvingRecord,
     rejectingRecord,
+    rejectingPaymentRecord,
     isNewVendorModalOpen,
     settlingRecord,
     isApprovalsModalOpen,
@@ -1052,10 +1074,16 @@ export function ExpenseRegister({
         const all: ExpenseRecordItem[] = data.records || [];
         const pending = all.filter(
           (r) =>
+            // Step 2: Base Expense Requisition Approvals
             r.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" ||
             r.approvalStatus === "PENDING_APPROVAL" ||
             (r.approvalStatus === "PENDING" &&
-              (r.accountantApprovalStatus === "APPROVED" || r.createdByRole === "ACCOUNTANT"))
+              (r.accountantApprovalStatus === "APPROVED" || r.createdByRole === "ACCOUNTANT")) ||
+            // Step 3: Payment Disbursal Approvals ("Sir Pays")
+            (r.approvalStatus === "APPROVED" &&
+              r.paymentApprovalStatus === "PENDING" &&
+              !r.utrNumber &&
+              r.paymentStatus !== "PAID")
         );
         setAllPendingApprovals(pending);
       }
@@ -1902,6 +1930,16 @@ export function ExpenseRegister({
 
   // Open Super Admin / Accountant Disbursal & UTR Modal
   const openApproveModal = (rec: ExpenseRecordItem) => {
+    const isPaymentApproved =
+      rec.paymentApprovalStatus === "APPROVED" ||
+      rec.paymentStatus === "PAID" ||
+      Boolean(rec.utrNumber);
+
+    if (!isPaymentApproved && !isAdmin) {
+      toast.error("Super Admin must approve payment (Sir Pays) before recording UTR and disbursal details.");
+      return;
+    }
+
     setApprovingRecord(rec);
     const today = new Date().toISOString().split("T")[0];
     const matchedVendor = vendors.find(
@@ -2103,7 +2141,7 @@ export function ExpenseRegister({
       vendorName: formData.vendorName ? formData.vendorName.trim() : null,
       accountNo: formData.accountNo ? formData.accountNo.trim() : null,
       ...(isCurrentlyRejected ? { resubmit: true } : {}),
-      ...(isAdmin && formData.approvalStatus ? { approvalStatus: formData.approvalStatus } : {}),
+      ...(isEdit && isAdmin && formData.approvalStatus ? { approvalStatus: formData.approvalStatus } : {}),
       // Only keep accountant fields if already populated and authorized
       ...(formData.payReceiveDate ? { payReceiveDate: formData.payReceiveDate } : {}),
       ...(formData.receiveAmount ? { receiveAmount: Number(formData.receiveAmount) } : {}),
@@ -2187,8 +2225,8 @@ export function ExpenseRegister({
     e.preventDefault();
     if (!settlingRecord) return;
 
-    const isAlreadyApproved =
-      settlingRecord.approvalStatus === "APPROVED" ||
+    const isAlreadyPaymentApproved =
+      settlingRecord.paymentApprovalStatus === "APPROVED" ||
       settlingRecord.paymentStatus === "PAID";
 
     try {
@@ -2205,9 +2243,11 @@ export function ExpenseRegister({
         vendorInvoiceUrl: settleData.vendorInvoiceUrl ? settleData.vendorInvoiceUrl.trim() : null,
         uploadedInBankPortal: Boolean(settleData.uploadedInBankPortal),
         remarks: settleData.remarks ? settleData.remarks.trim() : null,
-        approvalStatus: isAlreadyApproved ? "APPROVED" : "PENDING_SUPER_ADMIN_APPROVAL",
+        approvalStatus: "APPROVED",
         accountantApprovalStatus: "APPROVED",
-        ...(isAlreadyApproved && settleData.utrNumber
+        // If payment was already approved, keep APPROVED; otherwise set PENDING to request Sir's payment approval
+        paymentApprovalStatus: isAlreadyPaymentApproved ? "APPROVED" : "PENDING",
+        ...(isAlreadyPaymentApproved && settleData.utrNumber
           ? {
               utrNumber: settleData.utrNumber.trim(),
               utrDate: settleData.utrDate || settleData.payReceiveDate || new Date().toISOString().split("T")[0],
@@ -2241,8 +2281,8 @@ export function ExpenseRegister({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save billing details");
 
-      // If approved and UTR entered with sendAlertEmail checked, dispatch alert to vendor
-      if (isAlreadyApproved && settleData.utrNumber && settleData.sendAlertEmail) {
+      // If payment already approved and UTR entered with sendAlertEmail checked, dispatch alert to vendor
+      if (isAlreadyPaymentApproved && settleData.utrNumber && settleData.sendAlertEmail) {
         try {
           const matchedVendor = vendors.find(
             (v) =>
@@ -2255,6 +2295,7 @@ export function ExpenseRegister({
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
+                action: "DISBURSE_PAYMENT",
                 paymentDate: settleData.utrDate || new Date().toISOString().split("T")[0],
                 utrNumber: settleData.utrNumber,
                 sendAlertEmail: true,
@@ -2268,9 +2309,9 @@ export function ExpenseRegister({
       }
 
       toast.success(
-        isAlreadyApproved
+        isAlreadyPaymentApproved
           ? "Payment details updated successfully!"
-          : "Vendor and billing details submitted for Super Admin approval!",
+          : "Billing details saved! Payment approval request sent to Super Admin (Sir).",
         { duration: 4000 }
       );
       setSettlingRecord(null);
@@ -2308,7 +2349,7 @@ export function ExpenseRegister({
     }
   };
 
-  // One-click Super Admin Approval (Approves expense so Sir can pay & Accountant records UTR)
+  // Super Admin Approval for Base Expense Requisition (Step 2)
   const handleSuperAdminApprove = async (
     recordId: number,
     optionalUtr?: string,
@@ -2330,7 +2371,7 @@ export function ExpenseRegister({
       if (!res.ok) throw new Error(data.error || "Approval failed");
 
       toast.success(
-        "Expense Approved by Super Admin! Sir can now pay & Accountant can record UTR and payment details.",
+        "Expense Requisition Approved by Super Admin! Accountant can now enter Vendor Breakdown & request payment approval.",
         { duration: 4000 }
       );
 
@@ -2341,6 +2382,104 @@ export function ExpenseRegister({
       toast.error(err.message || "Approval failed");
     } finally {
       setApproving(false);
+    }
+  };
+
+  // Accountant Requests Super Admin Payment Approval (Sir Pays & Disbursal)
+  const handleRequestPaymentApproval = async (rec: ExpenseRecordItem) => {
+    try {
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.id === rec.id
+            ? { ...r, paymentApprovalStatus: "PENDING" }
+            : r
+        )
+      );
+
+      const res = await fetch(`/api/admin/expense-records/${rec.id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REQUEST_PAYMENT_APPROVAL" }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to request payment approval");
+
+      toast.success(
+        `Payment approval request submitted to Super Admin (Sir) for Expense #${rec.id}!`,
+        { duration: 4000 }
+      );
+      fetchRecords(false);
+      fetchAllPendingApprovals();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to request payment approval");
+      fetchRecords(false);
+    }
+  };
+
+  // Super Admin Approves Payment Disbursal ("Sir Pays")
+  const handleApprovePayment = async (recordId: number) => {
+    try {
+      setApproving(true);
+      const res = await fetch(`/api/admin/expense-records/${recordId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "PAYMENT_SUPER_ADMIN_APPROVE" }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Payment approval failed");
+
+      toast.success(
+        "Payment Approved by Super Admin (Sir)! Accountant can now enter UTR, payment date & disbursal remarks.",
+        { duration: 4000 }
+      );
+      await fetchAllPendingApprovals();
+      fetchRecords(false);
+    } catch (err: any) {
+      toast.error(err.message || "Payment approval failed");
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  // Super Admin Submits Payment Rejection with mandatory remarks
+  const handleSubmitPaymentRejection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectingPaymentRecord) return;
+    const reason = paymentRejectionReason.trim();
+    if (!reason) {
+      toast.error("Please provide remarks/reason for payment rejection.");
+      return;
+    }
+
+    try {
+      setIsRejectingPaymentSubmitting(true);
+      const res = await fetch(`/api/admin/expense-records/${rejectingPaymentRecord.id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "PAYMENT_SUPER_ADMIN_REJECT",
+          remarks: reason,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reject payment");
+
+      toast.success(
+        data.message || `Payment for Expense #${rejectingPaymentRecord.id} rejected with remarks.`,
+        { duration: 4000 }
+      );
+
+      setRejectingPaymentRecord(null);
+      setPaymentRejectionReason("");
+      fetchRecords(false);
+      fetchAllPendingApprovals();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to reject payment");
+    } finally {
+      setIsRejectingPaymentSubmitting(false);
     }
   };
 
@@ -3926,7 +4065,7 @@ export function ExpenseRegister({
                                       </span>
                                     )}
                                   </div>
-                                ) : rec.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" || rec.approvalStatus === "PENDING_APPROVAL" ? (
+                                ) : (rec.accountantApprovalStatus === "APPROVED" || rec.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" || rec.approvalStatus === "PENDING_APPROVAL") ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
                                     <Clock className="w-2.5 h-2.5 text-purple-700" /> Pending SA
                                   </span>
@@ -4324,33 +4463,7 @@ export function ExpenseRegister({
                         if (!s) return null;
                         return (
                           <td style={s.style} className={`py-3 px-3 text-center whitespace-nowrap bg-purple-50/20 ${s.className}`}>
-                            {rec.approvalStatus === "PENDING_ACCOUNTANT_APPROVAL" ? (
-                              (isAccountant || isAdmin) ? (
-                                <div className="inline-flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAccountantValidateAndApprove(rec)}
-                                    className="px-2 py-1 text-[9.5px] font-bold uppercase bg-teal-600 hover:bg-teal-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1"
-                                    title="Verify this CM expense is valid and forward to Super Admin"
-                                  >
-                                    <Check className="w-2.5 h-2.5" /> Validate
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setRejectingRecord(rec);
-                                      setRejectionReason("");
-                                    }}
-                                    className="px-1.5 py-1 text-[9.5px] font-bold uppercase bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-300 transition-all cursor-pointer flex items-center gap-0.5"
-                                    title="Reject this expense and return to CM with remarks"
-                                  >
-                                    <X className="w-2.5 h-2.5" /> Reject
-                                  </button>
-                                </div>
-                              ) : (
-                                <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-amber-50 text-amber-800 border border-amber-300">⏳ Pending Check</span>
-                              )
-                            ) : rec.accountantApprovalStatus === "APPROVED" ? (
+                            {rec.accountantApprovalStatus === "APPROVED" ? (
                               <div className="flex flex-col items-center">
                                 <span className="px-2 py-0.5 text-[9.5px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">✓ Checked</span>
                                 <span className="text-[8px] text-gray-500">{rec.accountantApprovedByName ? `by ${rec.accountantApprovedByName}` : "Accountant"}</span>
@@ -4363,6 +4476,28 @@ export function ExpenseRegister({
                                     {rec.rejectionRemarks || rec.accountantRemarks}
                                   </span>
                                 )}
+                              </div>
+                            ) : (isAccountant || isAdmin) ? (
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAccountantValidateAndApprove(rec)}
+                                  className="px-2 py-1 text-[9.5px] font-bold uppercase bg-teal-600 hover:bg-teal-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                                  title="Verify this expense is valid and forward to Super Admin"
+                                >
+                                  <Check className="w-2.5 h-2.5" /> Validate
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRejectingRecord(rec);
+                                    setRejectionReason("");
+                                  }}
+                                  className="px-1.5 py-1 text-[9.5px] font-bold uppercase bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-300 transition-all cursor-pointer flex items-center gap-0.5"
+                                  title="Reject this expense and return with remarks"
+                                >
+                                  <X className="w-2.5 h-2.5" /> Reject
+                                </button>
                               </div>
                             ) : (
                               <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-amber-50 text-amber-800 border border-amber-300">⏳ Pending Check</span>
@@ -4377,7 +4512,21 @@ export function ExpenseRegister({
                         if (!s) return null;
                         return (
                           <td style={s.style} className={`py-3 px-3 text-center whitespace-nowrap bg-purple-50/20 border-r border-purple-200 ${s.className}`}>
-                            {(rec.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" || rec.approvalStatus === "PENDING_APPROVAL") ? (
+                            {rec.approvalStatus === "APPROVED" ? (
+                              <div className="flex flex-col items-center">
+                                <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-emerald-100 text-emerald-900 border border-emerald-300">✓ Approved</span>
+                                <span className="text-[8px] text-emerald-700 font-semibold">Sir to Pay</span>
+                              </div>
+                            ) : rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN" ? (
+                              <div className="flex flex-col items-center">
+                                <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 cursor-help" title={rec.rejectionRemarks || rec.superAdminRemarks || "Rejected by Super Admin"}>✕ SA Rejected</span>
+                                {(rec.rejectionRemarks || rec.superAdminRemarks) && (
+                                  <span className="text-[8px] text-rose-700 truncate max-w-[110px] cursor-help mt-0.5" title={rec.rejectionRemarks || rec.superAdminRemarks || ""}>
+                                    {rec.rejectionRemarks || rec.superAdminRemarks}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (rec.accountantApprovalStatus === "APPROVED" || rec.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" || rec.approvalStatus === "PENDING_APPROVAL") ? (
                               isAdmin ? (
                                 <div className="inline-flex items-center gap-1">
                                   <button
@@ -4403,20 +4552,6 @@ export function ExpenseRegister({
                               ) : (
                                 <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-purple-50 text-purple-800 border border-purple-200">⏳ Pending SA</span>
                               )
-                            ) : rec.approvalStatus === "APPROVED" ? (
-                              <div className="flex flex-col items-center">
-                                <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-emerald-100 text-emerald-900 border border-emerald-300">✓ Approved</span>
-                                <span className="text-[8px] text-emerald-700 font-semibold">Sir to Pay</span>
-                              </div>
-                            ) : rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN" ? (
-                              <div className="flex flex-col items-center">
-                                <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 cursor-help" title={rec.rejectionRemarks || rec.superAdminRemarks || "Rejected by Super Admin"}>✕ SA Rejected</span>
-                                {(rec.rejectionRemarks || rec.superAdminRemarks) && (
-                                  <span className="text-[8px] text-rose-700 truncate max-w-[110px] cursor-help mt-0.5" title={rec.rejectionRemarks || rec.superAdminRemarks || ""}>
-                                    {rec.rejectionRemarks || rec.superAdminRemarks}
-                                  </span>
-                                )}
-                              </div>
                             ) : (
                               <span className="text-[8.5px] text-gray-400 font-mono bg-gray-50 px-1.5 py-0.5 border border-gray-200">Waiting on Step 1</span>
                             )}
@@ -4444,50 +4579,164 @@ export function ExpenseRegister({
                         );
                       })()}
 
+                      {/* 11b. Payment Approval Status (2nd Super Admin Approval - "Sir Pays") */}
+                      {(() => {
+                        const s = getColStyle("paymentApproval");
+                        if (!s) return null;
+
+                        const isBaseExpenseApproved =
+                          rec.approvalStatus === "APPROVED" ||
+                          rec.superAdminApprovalStatus === "APPROVED";
+                        const isPaymentApproved =
+                          rec.paymentApprovalStatus === "APPROVED" ||
+                          rec.paymentStatus === "PAID" ||
+                          Boolean(rec.utrNumber);
+                        const isPaymentPending =
+                          rec.paymentApprovalStatus === "PENDING" && !isPaymentApproved;
+                        const isPaymentRejected =
+                          rec.paymentApprovalStatus === "REJECTED";
+
+                        return (
+                          <td style={s.style} className={`py-3 px-2.5 text-center whitespace-nowrap bg-emerald-50/15 border-r border-emerald-200/70 ${s.className}`}>
+                            {!isBaseExpenseApproved ? (
+                              <span className="text-[8.5px] text-gray-400 font-mono bg-gray-50 px-1.5 py-0.5 border border-gray-200" title="Awaiting Step 2 Expense Approval by Super Admin first">
+                                Waiting on Step 2
+                              </span>
+                            ) : isPaymentApproved ? (
+                              <div className="flex flex-col items-center">
+                                <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-0.5">
+                                  <Check className="w-2.5 h-2.5 text-emerald-700" /> Approved
+                                </span>
+                                <span className="text-[8px] text-emerald-700 font-semibold mt-0.5">
+                                  {rec.paymentApprovedByName ? `by ${rec.paymentApprovedByName}` : "Paid by Sir"}
+                                </span>
+                              </div>
+                            ) : isPaymentPending ? (
+                              isAdmin ? (
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApprovePayment(rec.id)}
+                                    disabled={approving}
+                                    className="px-2 py-1 text-[9.5px] font-bold uppercase bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1 disabled:opacity-50"
+                                    title="Approve payment disbursal (Sir Pays) so Accountant can record UTR"
+                                  >
+                                    <Check className="w-2.5 h-2.5" /> Approve Pay
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setRejectingPaymentRecord(rec);
+                                      setPaymentRejectionReason("");
+                                    }}
+                                    className="px-1.5 py-1 text-[9.5px] font-bold uppercase bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-300 transition-all cursor-pointer flex items-center gap-0.5"
+                                    title="Reject payment request with remarks"
+                                  >
+                                    <X className="w-2.5 h-2.5" /> Reject
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center">
+                                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                                    ⏳ Waiting for Sir
+                                  </span>
+                                  <span className="text-[8px] text-amber-700 font-semibold mt-0.5">Pending Sir Approval</span>
+                                </div>
+                              )
+                            ) : isPaymentRejected ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 cursor-help" title={rec.paymentApprovalRemarks || "Payment Rejected by Super Admin"}>
+                                  ✕ Pay Rejected
+                                </span>
+                                {rec.paymentApprovalRemarks && (
+                                  <span className="text-[8px] text-rose-700 truncate max-w-[110px] cursor-help" title={rec.paymentApprovalRemarks}>
+                                    {rec.paymentApprovalRemarks}
+                                  </span>
+                                )}
+                                {(isAccountant || isAdmin) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRequestPaymentApproval(rec)}
+                                    className="text-[8px] font-bold text-[#006064] underline hover:text-teal-800 cursor-pointer"
+                                    title="Re-request Super Admin payment approval"
+                                  >
+                                    Re-request Sir
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              /* NOT_REQUESTED yet */
+                              (isAccountant || isAdmin) ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRequestPaymentApproval(rec)}
+                                    className="px-2 py-0.5 text-[9px] font-bold uppercase bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 transition-all cursor-pointer shadow-2xs whitespace-nowrap"
+                                    title="Send request to Super Admin (Sir) for payment approval"
+                                  >
+                                    Request Sir Pay
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[8.5px] text-slate-400 font-mono bg-slate-50 px-1.5 py-0.5 border border-slate-200">
+                                  Not Requested
+                                </span>
+                              )
+                            )}
+                          </td>
+                        );
+                      })()}
+
                       {/* 12. UTR No */}
                       {(() => {
                         const s = getColStyle("utrNumber");
                         if (!s) return null;
+                        const isPaymentApproved =
+                          rec.paymentApprovalStatus === "APPROVED" ||
+                          rec.paymentStatus === "PAID" ||
+                          Boolean(rec.utrNumber);
+
                         return (
                           <td style={s.style} className={`py-3 px-2 text-center bg-emerald-50/10 ${s.className}`}>
-                            {isApproved ? (
-                              rec.utrNumber ? (
-                                <div className="flex flex-col items-center justify-center max-w-full px-0.5">
-                                  <span
-                                    className="font-mono text-[10px] font-bold text-emerald-950 bg-emerald-50/90 px-1.5 py-0.5 border border-emerald-200/80 rounded-xs break-all max-w-full text-center leading-tight line-clamp-2 select-all"
-                                    title={rec.utrNumber}
-                                  >
-                                    {rec.utrNumber}
-                                  </span>
-                                  {(rec.paymentProofUrl || rec.utrFileUrl) && (
-                                    <a
-                                      href={rec.paymentProofUrl || rec.utrFileUrl || "#"}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-[9px] text-emerald-700 hover:underline flex items-center gap-0.5 font-bold mt-0.5"
-                                      title="View UTR payment screenshot"
-                                    >
-                                      <Check className="w-2.5 h-2.5" /> Proof
-                                    </a>
-                                  )}
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => openApproveModal(rec)}
-                                  className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-amber-500 hover:bg-amber-600 text-white transition-all cursor-pointer shadow-2xs whitespace-nowrap"
-                                  title="Sir has approved; record UTR"
+                            {rec.utrNumber ? (
+                              <div className="flex flex-col items-center justify-center max-w-full px-0.5">
+                                <span
+                                  className="font-mono text-[10px] font-bold text-emerald-950 bg-emerald-50/90 px-1.5 py-0.5 border border-emerald-200/80 rounded-xs break-all max-w-full text-center leading-tight line-clamp-2 select-all"
+                                  title={rec.utrNumber}
                                 >
-                                  + Enter UTR
-                                </button>
-                              )
-                            ) : (
-                              <span
-                                title="UTR entry unlocks after Super Admin approval"
-                                className="inline-flex items-center gap-1 text-[9.5px] text-gray-400 font-mono bg-gray-50 px-1.5 py-0.5 border border-gray-200 whitespace-nowrap"
+                                  {rec.utrNumber}
+                                </span>
+                                {(rec.paymentProofUrl || rec.utrFileUrl) && (
+                                  <a
+                                    href={rec.paymentProofUrl || rec.utrFileUrl || "#"}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[9px] text-emerald-700 hover:underline flex items-center gap-0.5 font-bold mt-0.5"
+                                    title="View UTR payment screenshot"
+                                  >
+                                    <Check className="w-2.5 h-2.5" /> Proof
+                                  </a>
+                                )}
+                              </div>
+                            ) : isPaymentApproved ? (
+                              <button
+                                type="button"
+                                onClick={() => openApproveModal(rec)}
+                                className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-amber-500 hover:bg-amber-600 text-white transition-all cursor-pointer shadow-2xs whitespace-nowrap flex items-center gap-1 mx-auto"
+                                title="Sir has approved payment; click to record UTR, date & proof"
                               >
-                                <Lock className="w-2.5 h-2.5 text-gray-400" /> Locked
-                              </span>
+                                + Enter UTR
+                              </button>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center text-center">
+                                <span
+                                  title="Awaiting Super Admin (Sir) payment approval before UTR entry"
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[8.5px] font-medium text-slate-400 bg-slate-100 border border-slate-200 rounded cursor-not-allowed"
+                                >
+                                  <Lock className="w-2.5 h-2.5 text-slate-400" /> Locked
+                                </span>
+                                <span className="text-[7.5px] text-slate-400 mt-0.5">Wait on Sir Pay</span>
+                              </div>
                             )}
                           </td>
                         );
@@ -4591,37 +4840,62 @@ export function ExpenseRegister({
                               </button>
 
                               {/* Dedicated Button 2: Record Disbursal & UTR Details */}
-                              {isApproved ? (
-                                isPaid ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openApproveModal(rec)}
-                                    className="px-2.5 py-1 text-[9.5px] font-bold uppercase bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 transition-all cursor-pointer shadow-2xs flex items-center gap-1"
-                                    title="View or update payment disbursal and UTR details"
+                              {(() => {
+                                const isPaymentApproved =
+                                  rec.paymentApprovalStatus === "APPROVED" ||
+                                  rec.paymentStatus === "PAID" ||
+                                  Boolean(rec.utrNumber);
+
+                                if (isPaid) {
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => openApproveModal(rec)}
+                                      className="px-2.5 py-1 text-[9.5px] font-bold uppercase bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 transition-all cursor-pointer shadow-2xs flex items-center gap-1"
+                                      title="View or update payment disbursal and UTR details"
+                                    >
+                                      <Edit3 className="w-2.5 h-2.5 text-gray-600" />
+                                      <span>Edit UTR</span>
+                                    </button>
+                                  );
+                                }
+
+                                if (isApproved && isPaymentApproved) {
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => openApproveModal(rec)}
+                                      className="px-2.5 py-1 text-[9.5px] font-bold uppercase bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1 border border-emerald-700 animate-pulse"
+                                      title="Sir has approved payment! Click to record payment disbursal and UTR details"
+                                    >
+                                      <CreditCard className="w-3 h-3" />
+                                      <span>Record Disbursal & UTR</span>
+                                    </button>
+                                  );
+                                }
+
+                                if (isApproved && !isPaymentApproved) {
+                                  return (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-[9px] text-amber-800 font-medium bg-amber-50 px-2 py-1 border border-amber-300 cursor-not-allowed select-none"
+                                      title="Waiting for Super Admin (Sir) to approve payment before recording UTR"
+                                    >
+                                      <Lock className="w-2.5 h-2.5 text-amber-600" />
+                                      <span>Wait on Sir Pay</span>
+                                    </span>
+                                  );
+                                }
+
+                                return (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[9px] text-gray-400 font-mono bg-gray-50 px-2 py-1 border border-gray-200 cursor-not-allowed select-none"
+                                    title="Payment Disbursal and UTR details unlock after Super Admin approval"
                                   >
-                                    <Edit3 className="w-2.5 h-2.5 text-gray-600" />
-                                    <span>Edit UTR</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => openApproveModal(rec)}
-                                    className="px-2.5 py-1 text-[9.5px] font-bold uppercase bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1 border border-emerald-700 animate-pulse"
-                                    title="Sir has approved! Click to record payment disbursal and UTR details"
-                                  >
-                                    <CreditCard className="w-3 h-3" />
-                                    <span>Record Disbursal & UTR</span>
-                                  </button>
-                                )
-                              ) : (
-                                <span
-                                  className="inline-flex items-center gap-1 text-[9px] text-gray-400 font-mono bg-gray-50 px-2 py-1 border border-gray-200 cursor-not-allowed select-none"
-                                  title="Payment Disbursal and UTR details unlock after Super Admin approval"
-                                >
-                                  <Lock className="w-2.5 h-2.5 text-gray-400" />
-                                  <span>UTR (Locked)</span>
-                                </span>
-                              )}
+                                    <Lock className="w-2.5 h-2.5 text-gray-400" />
+                                    <span>UTR (Locked)</span>
+                                  </span>
+                                );
+                              })()}
 
                               {/* Resubmit button if rejected and user is creator */}
                               {(rec.approvalStatus === "REJECTED_BY_ACCOUNTANT" || rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN") && canEditOrDeleteEntry(rec) && (
@@ -5761,6 +6035,142 @@ export function ExpenseRegister({
         document.body
       )}
 
+      {/* ── MODAL: REJECT PAYMENT DISBURSAL WITH MANDATORY REMARKS ── */}
+      {mounted && typeof document !== "undefined" && rejectingPaymentRecord && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white border border-rose-300 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 border-b border-rose-200 flex items-center justify-between bg-rose-800 text-white sticky top-0 z-10">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-rose-200" />
+                <div>
+                  <h3 className="text-sm font-display font-black uppercase tracking-wide">
+                    Super Admin: Reject Payment Authorization
+                  </h3>
+                  <p className="text-[11px] text-rose-100 font-sans">
+                    Mandatory remarks will be returned to the Accountant for clarification & re-submission
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectingPaymentRecord(null);
+                  setPaymentRejectionReason("");
+                }}
+                className="p-1 text-white/80 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitPaymentRejection} className="p-5 space-y-4 text-xs">
+              {/* Summary Card */}
+              <div className="bg-rose-50/70 p-3.5 border border-rose-200 space-y-2 text-[11.5px]">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-rose-800 font-bold">
+                    Payment Disbursal for Expense #{rejectingPaymentRecord.id}
+                  </span>
+                  <span className="font-mono font-bold text-rose-900 bg-white px-2 py-0.5 border border-rose-200">
+                    {formatCurrency(rejectingPaymentRecord.amount)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-gray-500 block text-[10.5px]">Vendor / Payee:</span>
+                    <strong className="text-gray-900">{rejectingPaymentRecord.vendorName || "Not assigned"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-[10.5px]">Center:</span>
+                    <strong className="text-gray-900">{rejectingPaymentRecord.locationName || "Center"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-[10.5px]">Bank A/C No:</span>
+                    <strong className="text-gray-900 font-mono">{rejectingPaymentRecord.accountNo || "-"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-[10.5px]">Bank Portal:</span>
+                    <strong className={rejectingPaymentRecord.uploadedInBankPortal ? "text-emerald-700" : "text-amber-700"}>
+                      {rejectingPaymentRecord.uploadedInBankPortal ? "Uploaded ✓" : "Pending"}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Remarks Textarea */}
+              <div>
+                <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1">
+                  Reason for Rejecting Payment / Clarification Remarks <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  placeholder="Enter specific reasons why payment cannot be authorized (e.g. 'Bank account details do not match vendor invoice', 'Invoice date mismatch', 'Holding until verification')..."
+                  value={paymentRejectionReason}
+                  onChange={(e) => setPaymentRejectionReason(e.target.value)}
+                  className="w-full border border-rose-300 p-2.5 text-xs focus:outline-none focus:border-rose-600 focus:ring-1 focus:ring-rose-500 text-gray-900 font-sans"
+                />
+              </div>
+
+              {/* Quick Preset Reasons */}
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 font-mono">
+                  Quick Select Common Reasons:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "Vendor bank account details missing or incorrect",
+                    "Uploaded tax invoice not matching bill amount",
+                    "Please verify GST number with vendor before payment",
+                    "Hold payment pending management confirmation",
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() =>
+                        setPaymentRejectionReason((prev) =>
+                          prev ? `${prev}; ${preset}` : preset
+                        )
+                      }
+                      className="text-[10px] bg-gray-100 hover:bg-rose-50 text-gray-700 hover:text-rose-800 px-2 py-1 border border-gray-200 hover:border-rose-300 transition-colors text-left"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRejectingPaymentRecord(null);
+                    setPaymentRejectionReason("");
+                  }}
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-100 border border-gray-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isRejectingPaymentSubmitting || !paymentRejectionReason.trim()}
+                  className="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isRejectingPaymentSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <XCircle className="w-4 h-4" />
+                  )}
+                  <span>{isRejectingPaymentSubmitting ? "Submitting..." : "Reject Payment Authorization"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* ── MODAL 3: INLINE QUICK-ADD VENDOR (MANDATORY MOBILE & EMAIL) ── */}
       {mounted && typeof document !== "undefined" && isNewVendorModalOpen && createPortal(
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm overflow-y-auto">
@@ -5798,19 +6208,18 @@ export function ExpenseRegister({
                 />
               </div>
 
-              {/* Mobile & Email in 2 columns (STRICTLY MANDATORY) */}
+              {/* Mobile & Email in 2 columns (Optional) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Mobile */}
                 <div>
                   <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1">
-                    Mobile Number <span className="text-red-500">*</span>
+                    Mobile Number
                   </label>
                   <div className="relative">
                     <Phone className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
-                      required
-                      placeholder="e.g. 9876543210"
+                      placeholder="e.g. 9876543210 (optional)"
                       maxLength={13}
                       value={newVendorForm.mobileNo}
                       onChange={(e) => {
@@ -5846,14 +6255,13 @@ export function ExpenseRegister({
                 {/* Email */}
                 <div>
                   <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1">
-                    Email Address <span className="text-red-500">*</span>
+                    Email Address
                   </label>
                   <div className="relative">
                     <Mail className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="email"
-                      required
-                      placeholder="e.g. accounts@vendor.com"
+                      placeholder="e.g. accounts@vendor.com (optional)"
                       value={newVendorForm.email}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -6623,9 +7031,15 @@ export function ExpenseRegister({
                         <span className="text-sm font-display font-black text-[#006064]">
                           {formatCurrency(rec.amount)}
                         </span>
-                        <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-300">
-                          Pending SA Approval
-                        </span>
+                        {rec.approvalStatus === "APPROVED" && rec.paymentApprovalStatus === "PENDING" ? (
+                          <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-300">
+                            Pending Payment Approval (Sir Pays)
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-purple-100 text-purple-900 border border-purple-300">
+                            Pending Step 2 (Expense SA Approval)
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -6636,13 +7050,8 @@ export function ExpenseRegister({
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9.5px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
                           <Check className="w-3 h-3 text-emerald-600" />
                           <span>
-                            Validated by Accountant {rec.accountantApprovedByName ? `(${rec.accountantApprovedByName})` : ""}
+                            Step 1 Validated by {rec.accountantApprovedByName || "Accountant"}
                           </span>
-                        </span>
-                      )}
-                      {rec.accountantRemarks && (
-                        <span className="text-[10px] text-gray-500 italic">
-                          Acc Note: &quot;{rec.accountantRemarks}&quot;
                         </span>
                       )}
                     </div>
@@ -6652,14 +7061,14 @@ export function ExpenseRegister({
                       <strong className="text-gray-900">Description:</strong> {rec.description}
                     </div>
 
-                    {/* Accountant Prepared Billing Details */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-2.5 border border-gray-200 text-[11px]">
+                    {/* Bill Breakdown Details */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 border border-gray-200 text-[11px]">
                       <div>
                         <span className="text-gray-400 block text-[10px] uppercase font-mono">
-                          Vendor Name
+                          Vendor / Payee
                         </span>
                         <strong className="text-gray-900 truncate block">
-                          {rec.vendorName || "Not Assigned"}
+                          {rec.vendorName || "Not specified"}
                         </strong>
                       </div>
                       <div>
@@ -6726,37 +7135,57 @@ export function ExpenseRegister({
 
                     {/* Actions */}
                     <div className="pt-2 border-t border-gray-100 flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRejectingRecord(rec);
-                          setRejectionReason("");
-                        }}
-                        className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-white text-rose-700 hover:bg-rose-50 border border-rose-300 transition-all cursor-pointer flex items-center gap-1"
-                        title="Reject requisition with mandatory remarks for correction"
-                      >
-                        <X className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Reject</span>
-                      </button>
+                      {rec.approvalStatus === "APPROVED" && rec.paymentApprovalStatus === "PENDING" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRejectingPaymentRecord(rec);
+                              setPaymentRejectionReason("");
+                            }}
+                            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-white text-rose-700 hover:bg-rose-50 border border-rose-300 transition-all cursor-pointer flex items-center gap-1"
+                            title="Reject payment request with remarks"
+                          >
+                            <X className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Reject Payment</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={approving}
+                            onClick={() => handleApprovePayment(rec.id)}
+                            className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                            title="Sir authorizes payment disbursal so Accountant can enter UTR"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Approve Payment (Sir Pays)</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRejectingRecord(rec);
+                              setRejectionReason("");
+                            }}
+                            className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-white text-rose-700 hover:bg-rose-50 border border-rose-300 transition-all cursor-pointer flex items-center gap-1"
+                            title="Reject requisition with mandatory remarks for correction"
+                          >
+                            <X className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Reject</span>
+                          </button>
 
-                      <button
-                        type="button"
-                        onClick={() => openApproveModal(rec)}
-                        className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-white text-gray-700 hover:bg-gray-100 border border-gray-300 transition-all cursor-pointer flex items-center gap-1"
-                      >
-                        <CreditCard className="w-3.5 h-3.5 text-[#006064]" />
-                        <span>Approve & Record UTR Now</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={approving}
-                        onClick={() => handleSuperAdminApprove(rec.id)}
-                        className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>Approve Expense (Authorize Disbursal)</span>
-                      </button>
+                          <button
+                            type="button"
+                            disabled={approving}
+                            onClick={() => handleSuperAdminApprove(rec.id)}
+                            className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Approve Expense (Step 2)</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))

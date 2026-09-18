@@ -35,6 +35,7 @@ import {
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -127,6 +128,7 @@ interface InvoicePaymentManagementProps {
   currentUserLocationId?: number | null;
   currentUserLocationName?: string | null;
   onOpenSdrManagement?: () => void;
+  onOpenSuspense?: () => void;
 }
 
 const PAYMENT_MODES = [
@@ -148,6 +150,7 @@ export function InvoicePaymentManagement({
   currentUserLocationId = null,
   currentUserLocationName = null,
   onOpenSdrManagement,
+  onOpenSuspense,
 }: InvoicePaymentManagementProps) {
   const isAccountant = canAccessAccountant || userRoleView === 'ACCOUNTANT';
   const [isSdrViewActive, setIsSdrViewActive] = useState(false);
@@ -1526,6 +1529,19 @@ export function InvoicePaymentManagement({
                   <ShieldCheck size={13} className="text-amber-300" />
                   <span>SDR Receive Management</span>
                 </button>
+
+                {/* Suspense Advance Payment Button */}
+                {onOpenSuspense && (
+                  <button
+                    type="button"
+                    onClick={onOpenSuspense}
+                    className="px-3 py-1.5 bg-[#006064] hover:bg-[#004D40] text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-xs border border-[#004D40] cursor-pointer transition-all hover:shadow-sm"
+                    title="Open Suspense Advance Payment Management (4-Hour Recognition)"
+                  >
+                    <Sparkles size={13} className="text-cyan-200" />
+                    <span>Suspense</span>
+                  </button>
+                )}
 
                 <button
                   type="button"

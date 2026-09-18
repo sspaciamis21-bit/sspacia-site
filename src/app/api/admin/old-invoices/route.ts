@@ -178,6 +178,7 @@ export async function POST(request: Request) {
           where: { id: currentUserId },
           select: {
             name: true,
+            email: true,
             role: { select: { name: true } },
             assignedLocations: {
               select: {
@@ -205,12 +206,10 @@ export async function POST(request: Request) {
       }
     }
 
-    if (currentUserRole === 'ACCOUNTANT') {
-      return NextResponse.json(
-        { success: false, error: 'Accountants cannot upload old invoices. Uploading invoices is restricted to Community Managers and Admins.' },
-        { status: 403 }
-      );
-    }
+    const isAccountant =
+      currentUserRole === 'ACCOUNTANT' ||
+      currentUserRole.includes('ACCOUNT') ||
+      currentUserName.toLowerCase().includes('account');
 
     const body = await request.json();
     const {
@@ -237,11 +236,12 @@ export async function POST(request: Request) {
 
     // ── ENFORCE CENTER FOR COMMUNITY MANAGER ──
     // Community Manager is strictly locked to their assigned center (e.g. Agarwal Complex)
-    // Super Admin can specify any center
+    // Super Admin and Accountant can upload old invoices for ANY center
+    const canSelectAnyCenter = isSuperAdmin || isAccountant;
     let finalLocationId = locationId ? parseInt(String(locationId), 10) : null;
     let finalLocationName = locationName || null;
 
-    if (!isSuperAdmin) {
+    if (!canSelectAnyCenter) {
       if (userPrimaryLocationId) {
         finalLocationId = userPrimaryLocationId;
         finalLocationName = userPrimaryLocationName;

@@ -34,6 +34,7 @@ import {
   ArrowUp,
   ArrowDown,
   FilterX,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -106,6 +107,23 @@ interface SdrReceiveManagementProps {
 
 const PAYMENT_MODES = ['Bank Transfer', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'Cheque', 'Cash'];
 
+export const DEFAULT_SDR_COLUMN_WIDTHS: Record<string, number> = {
+  srNo: 50,
+  companyName: 220,
+  locationName: 120,
+  sdrAmount: 120,
+  sdrReceivedAmount: 120,
+  balanceAmount: 120,
+  sdrPaymentStatus: 130,
+  docProof: 95,
+  payReceiveDate: 165,
+  receiveAmount: 125,
+  paymentMode: 130,
+  utrNumber: 155,
+  receiptProof: 110,
+  remarks: 180,
+};
+
 export function SdrReceiveManagement({
   isSuperAdmin = true,
   isAccountant = true,
@@ -131,6 +149,126 @@ export function SdrReceiveManagement({
     pendingCount: 0,
   });
 
+  // Resizable Column Widths state with localStorage persistence
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('sspacia_sdr_col_widths');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return { ...DEFAULT_SDR_COLUMN_WIDTHS, ...parsed };
+        }
+      } catch {}
+    }
+    return DEFAULT_SDR_COLUMN_WIDTHS;
+  });
+
+  const resizingRef = useRef<{ colKey: string; startX: number; startWidth: number } | null>(null);
+
+  const handleResizeStart = (colKey: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const activeColKey = colKey;
+    const startX = e.clientX;
+    const startWidth = columnWidths[colKey] || DEFAULT_SDR_COLUMN_WIDTHS[colKey] || 100;
+    resizingRef.current = { colKey: activeColKey, startX, startWidth };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    let currentWidth = startWidth;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      currentWidth = Math.max(45, startWidth + delta);
+      setColumnWidths((prev) => ({
+        ...prev,
+        [activeColKey]: currentWidth,
+      }));
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      resizingRef.current = null;
+
+      setColumnWidths((latest) => {
+        try {
+          localStorage.setItem('sspacia_sdr_col_widths', JSON.stringify(latest));
+        } catch {}
+        return latest;
+      });
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleResetColWidth = (colKey: string) => {
+    const defaultWidth = DEFAULT_SDR_COLUMN_WIDTHS[colKey] || 120;
+    setColumnWidths((prev) => {
+      const updated = { ...prev, [colKey]: defaultWidth };
+      try {
+        localStorage.setItem('sspacia_sdr_col_widths', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const handleResetAllWidths = () => {
+    setColumnWidths(DEFAULT_SDR_COLUMN_WIDTHS);
+    try {
+      localStorage.removeItem('sspacia_sdr_col_widths');
+    } catch {}
+    toast.success('Column widths reset to default');
+  };
+
+  const totalTableWidth = useMemo(() => {
+    return Object.keys(DEFAULT_SDR_COLUMN_WIDTHS).reduce((sum, key) => {
+      return sum + (columnWidths[key] || DEFAULT_SDR_COLUMN_WIDTHS[key] || 100);
+    }, 0);
+  }, [columnWidths]);
+
+  const leftSubrowWidth = useMemo(() => {
+    return (
+      (columnWidths.companyName || DEFAULT_SDR_COLUMN_WIDTHS.companyName) +
+      (columnWidths.locationName || DEFAULT_SDR_COLUMN_WIDTHS.locationName) +
+      (columnWidths.sdrAmount || DEFAULT_SDR_COLUMN_WIDTHS.sdrAmount) +
+      (columnWidths.sdrReceivedAmount || DEFAULT_SDR_COLUMN_WIDTHS.sdrReceivedAmount) +
+      (columnWidths.balanceAmount || DEFAULT_SDR_COLUMN_WIDTHS.balanceAmount) +
+      (columnWidths.sdrPaymentStatus || DEFAULT_SDR_COLUMN_WIDTHS.sdrPaymentStatus) +
+      (columnWidths.docProof || DEFAULT_SDR_COLUMN_WIDTHS.docProof)
+    );
+  }, [columnWidths]);
+
+  const rightSubrowWidth = useMemo(() => {
+    return (
+      (columnWidths.payReceiveDate || DEFAULT_SDR_COLUMN_WIDTHS.payReceiveDate) +
+      (columnWidths.receiveAmount || DEFAULT_SDR_COLUMN_WIDTHS.receiveAmount) +
+      (columnWidths.paymentMode || DEFAULT_SDR_COLUMN_WIDTHS.paymentMode) +
+      (columnWidths.utrNumber || DEFAULT_SDR_COLUMN_WIDTHS.utrNumber) +
+      (columnWidths.receiptProof || DEFAULT_SDR_COLUMN_WIDTHS.receiptProof) +
+      (columnWidths.remarks || DEFAULT_SDR_COLUMN_WIDTHS.remarks)
+    );
+  }, [columnWidths]);
+
+  const renderResizeHandle = (colKey: string) => (
+    <div
+      onMouseDown={(e) => handleResizeStart(colKey, e)}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        handleResetColWidth(colKey);
+      }}
+      className="absolute right-0 top-0 bottom-0 w-2.5 cursor-col-resize hover:bg-[#006064]/20 active:bg-[#006064]/40 z-20 transition-colors flex items-center justify-end group select-none"
+      title="Drag to resize column (Double-click to reset width)"
+    >
+      <div className="w-[1.5px] h-3.5 bg-gray-400/40 group-hover:bg-[#006064] group-hover:h-full transition-all mr-0.5 rounded-full" />
+    </div>
+  );
+
   // Top Bar Filters
   const [selectedLocation, setSelectedLocation] = useState<string>(
     currentUserLocationId ? String(currentUserLocationId) : 'ALL'
@@ -152,7 +290,6 @@ export function SdrReceiveManagement({
     | 'receiveAmount'
     | 'paymentMode'
     | 'utrNumber'
-    | 'bankName'
     | 'receiptProof'
     | 'remarks'
   >('sdrAmount');
@@ -182,18 +319,26 @@ export function SdrReceiveManagement({
         if (!next[c.id]) {
           const parts: SdrPaymentPart[] =
             c.payments && c.payments.length > 0
-              ? c.payments.map((p) => ({
-                  id: p.id || `part-${Math.random().toString(36).substring(2, 7)}`,
-                  receiveAmount: p.receiveAmount ? String(p.receiveAmount) : '',
-                  payReceiveDate: p.payReceiveDate ? String(p.payReceiveDate).split('T')[0] : '',
-                  paymentMode: p.paymentMode || 'Bank Transfer',
-                  utrNumber: p.utrNumber || '',
-                  utrDate: p.utrDate ? String(p.utrDate).split('T')[0] : '',
-                  bankName: p.bankName || '',
-                  utrFileUrl: p.utrFileUrl || null,
-                  utrFileName: p.utrFileName || null,
-                  remarks: p.remarks || '',
-                }))
+              ? c.payments.map((p) => {
+                  const isCmDoc = Boolean(
+                    p.utrFileUrl &&
+                      (p.utrFileUrl === c.sdrPdfUrl ||
+                        p.utrFileUrl === c.attachedDocUrl ||
+                        p.utrFileUrl === c.agreementPdfUrl)
+                  );
+                  return {
+                    id: p.id || `part-${Math.random().toString(36).substring(2, 7)}`,
+                    receiveAmount: p.receiveAmount ? String(p.receiveAmount) : '',
+                    payReceiveDate: p.payReceiveDate ? String(p.payReceiveDate).split('T')[0] : '',
+                    paymentMode: p.paymentMode || 'Bank Transfer',
+                    utrNumber: p.utrNumber || '',
+                    utrDate: p.utrDate ? String(p.utrDate).split('T')[0] : '',
+                    bankName: p.bankName || '',
+                    utrFileUrl: isCmDoc ? null : p.utrFileUrl || null,
+                    utrFileName: isCmDoc ? null : p.utrFileName || null,
+                    remarks: p.remarks || '',
+                  };
+                })
               : [
                   {
                     id: 'part-1',
@@ -203,8 +348,8 @@ export function SdrReceiveManagement({
                     utrNumber: c.sdrUtrNumber || '',
                     utrDate: c.sdrUtrDate ? String(c.sdrUtrDate).split('T')[0] : '',
                     bankName: c.sdrBankName || '',
-                    utrFileUrl: c.sdrPdfUrl || null,
-                    utrFileName: c.sdrPdfName || null,
+                    utrFileUrl: null,
+                    utrFileName: null,
                     remarks: c.sdrRemarks || '',
                   },
                 ];
@@ -310,16 +455,17 @@ export function SdrReceiveManagement({
             client.sdrUtrNumber;
           return utrs || '(Empty)';
         }
-        case 'bankName': {
-          const draft = drafts[client.id];
-          const banks =
-            draft?.parts?.map((p) => p.bankName).filter(Boolean).join(', ') ||
-            client.sdrBankName;
-          return banks || '(Empty)';
-        }
         case 'receiptProof': {
           const draft = drafts[client.id];
-          const hasFile = Boolean(draft?.parts?.some((p) => p.utrFileUrl) || client.sdrPdfUrl);
+          const hasFile = Boolean(
+            draft?.parts?.some(
+              (p) =>
+                p.utrFileUrl &&
+                p.utrFileUrl !== client.sdrPdfUrl &&
+                p.utrFileUrl !== client.attachedDocUrl &&
+                p.utrFileUrl !== client.agreementPdfUrl
+            )
+          );
           return hasFile ? 'Uploaded' : 'Pending';
         }
         case 'remarks': {
@@ -445,7 +591,6 @@ export function SdrReceiveManagement({
       | 'receiveAmount'
       | 'paymentMode'
       | 'utrNumber'
-      | 'bankName'
       | 'receiptProof'
       | 'remarks'
   ) => {
@@ -684,8 +829,6 @@ export function SdrReceiveManagement({
           sdrUtrNumber: combinedUtr || null,
           sdrUtrDate: latestPart?.utrDate ? new Date(latestPart.utrDate).toISOString() : null,
           sdrBankName: combinedBanks || null,
-          sdrPdfUrl: primaryProof,
-          sdrPdfName: primaryProofName,
           sdrPaymentsJson: JSON.stringify(validParts.length > 0 ? validParts : draftToSave.parts),
           sdrRemarks: combinedRemarks || null,
         };
@@ -725,8 +868,6 @@ export function SdrReceiveManagement({
               sdrUtrNumber: payload.sdrUtrNumber,
               sdrUtrDate: payload.sdrUtrDate,
               sdrBankName: payload.sdrBankName,
-              sdrPdfUrl: payload.sdrPdfUrl,
-              sdrPdfName: payload.sdrPdfName,
               sdrRemarks: payload.sdrRemarks,
               payments: validParts,
             };
@@ -1033,14 +1174,29 @@ export function SdrReceiveManagement({
           valB = drafts[b.id]?.parts?.map((p) => p.utrNumber).filter(Boolean).join(', ') || b.sdrUtrNumber || '';
           break;
         }
-        case 'bankName': {
-          valA = drafts[a.id]?.parts?.map((p) => p.bankName).filter(Boolean).join(', ') || a.sdrBankName || '';
-          valB = drafts[b.id]?.parts?.map((p) => p.bankName).filter(Boolean).join(', ') || b.sdrBankName || '';
-          break;
-        }
         case 'receiptProof': {
-          valA = Boolean(drafts[a.id]?.parts?.some((p) => p.utrFileUrl) || a.sdrPdfUrl) ? 1 : 0;
-          valB = Boolean(drafts[b.id]?.parts?.some((p) => p.utrFileUrl) || b.sdrPdfUrl) ? 1 : 0;
+          valA = Boolean(
+            drafts[a.id]?.parts?.some(
+              (p) =>
+                p.utrFileUrl &&
+                p.utrFileUrl !== a.sdrPdfUrl &&
+                p.utrFileUrl !== a.attachedDocUrl &&
+                p.utrFileUrl !== a.agreementPdfUrl
+            )
+          )
+            ? 1
+            : 0;
+          valB = Boolean(
+            drafts[b.id]?.parts?.some(
+              (p) =>
+                p.utrFileUrl &&
+                p.utrFileUrl !== b.sdrPdfUrl &&
+                p.utrFileUrl !== b.attachedDocUrl &&
+                p.utrFileUrl !== b.agreementPdfUrl
+            )
+          )
+            ? 1
+            : 0;
           break;
         }
         case 'remarks': {
@@ -1073,10 +1229,9 @@ export function SdrReceiveManagement({
       'SDR Received Amount',
       'Balance Pending',
       'Status',
-      'Payment Date',
+      'Payment Receive Date',
       'Payment Mode',
       'UTR Number',
-      'Bank Name',
       'Receipt URL',
       'Remarks',
     ];
@@ -1097,8 +1252,14 @@ export function SdrReceiveManagement({
         primaryPart?.payReceiveDate || (c.sdrRecdDate ? new Date(c.sdrRecdDate).toLocaleDateString('en-GB') : ''),
         `"${primaryPart?.paymentMode || c.sdrPaymentMode || ''}"`,
         `"${primaryPart?.utrNumber || c.sdrUtrNumber || ''}"`,
-        `"${primaryPart?.bankName || c.sdrBankName || ''}"`,
-        `"${primaryPart?.utrFileUrl || c.attachedDocUrl || ''}"`,
+        `"${
+          primaryPart?.utrFileUrl &&
+          primaryPart.utrFileUrl !== c.sdrPdfUrl &&
+          primaryPart.utrFileUrl !== c.attachedDocUrl &&
+          primaryPart.utrFileUrl !== c.agreementPdfUrl
+            ? primaryPart.utrFileUrl
+            : ''
+        }"`,
         `"${(primaryPart?.remarks || c.sdrRemarks || '').replace(/"/g, '""')}"`,
       ];
     });
@@ -1361,6 +1522,30 @@ export function SdrReceiveManagement({
         </div>
       </div>
 
+      {/* ── TABLE SUB-HEADER & COLUMN RESIZE BAR ── */}
+      <div className="flex items-center justify-between text-xs px-1 py-1 text-gray-500">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] font-bold text-gray-700">
+            {displayedClients.length} of {clients.length} clients
+          </span>
+          <span className="text-gray-300">•</span>
+          <span className="text-[10px] text-gray-400">
+            Drag column borders to resize
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleResetAllWidths}
+            className="text-[11px] font-bold text-gray-600 hover:text-[#006064] flex items-center gap-1 cursor-pointer transition-colors"
+            title="Reset column widths to default (Drag column right edges to resize)"
+          >
+            <RotateCcw size={11} className="text-gray-500" />
+            <span>Reset Column Widths</span>
+          </button>
+        </div>
+      </div>
+
       {/* ── ACTIVE EXCEL COLUMN FILTERS BANNER ── */}
       {hasActiveColFilters && (
         <div className="px-3 py-1.5 bg-cyan-50/90 border border-cyan-200 flex items-center justify-between text-xs text-cyan-900 font-sans shadow-2xs">
@@ -1381,15 +1566,25 @@ export function SdrReceiveManagement({
         </div>
       )}
 
-      {/* ── SPREADSHEET TABLE WITH UNIQUE INDIVIDUAL COLUMNS & HEADER FILTERS ── */}
+      {/* ── SPREADSHEET TABLE WITH UNIQUE INDIVIDUAL COLUMNS & RESIZABLE HEADERS ── */}
       <div className="bg-white border border-gray-300 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto max-h-[720px] scrollbar-thin">
-          <table className="w-full border-collapse text-left text-xs min-w-[2050px]">
+          <table
+            style={{ width: `${totalTableWidth}px`, minWidth: `${totalTableWidth}px`, tableLayout: 'fixed' }}
+            className="border-collapse text-left text-xs"
+          >
             {/* Table Header: Google Sheets / Excel Column Filter Popovers */}
             <thead className="bg-[#f1f5f9] text-gray-800 sticky top-0 z-20 shadow-xs border-b border-gray-300 select-none">
               <tr className="divide-x divide-gray-300 text-[10px] font-bold uppercase tracking-wider">
                 {/* 1. Sr. */}
-                <th className="p-2 w-12 text-center relative">
+                <th
+                  style={{
+                    width: `${columnWidths.srNo}px`,
+                    minWidth: `${columnWidths.srNo}px`,
+                    maxWidth: `${columnWidths.srNo}px`,
+                  }}
+                  className="p-2 text-center relative overflow-hidden"
+                >
                   <div className="flex items-center justify-center gap-1">
                     <span
                       onClick={() => handleToggleSort('srNo')}
@@ -1412,14 +1607,22 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('srNo', 'Sr.', 'left', true)}
+                  {renderResizeHandle('srNo')}
                 </th>
 
                 {/* 2. Corporate Client */}
-                <th className="p-2 min-w-[210px] text-left relative">
+                <th
+                  style={{
+                    width: `${columnWidths.companyName}px`,
+                    minWidth: `${columnWidths.companyName}px`,
+                    maxWidth: `${columnWidths.companyName}px`,
+                  }}
+                  className="p-2 text-left relative overflow-hidden"
+                >
                   <div className="flex items-center justify-between gap-1">
                     <span
                       onClick={() => handleToggleSort('companyName')}
-                      className="cursor-pointer hover:text-[#006064]"
+                      className="cursor-pointer hover:text-[#006064] truncate"
                       title="Sort by Corporate Client"
                     >
                       Corporate Client {sortCol === 'companyName' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
@@ -1438,10 +1641,18 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('companyName', 'Corporate Client', 'left', false)}
+                  {renderResizeHandle('companyName')}
                 </th>
 
                 {/* 3. Centre */}
-                <th className="p-2 min-w-[110px] text-center relative">
+                <th
+                  style={{
+                    width: `${columnWidths.locationName}px`,
+                    minWidth: `${columnWidths.locationName}px`,
+                    maxWidth: `${columnWidths.locationName}px`,
+                  }}
+                  className="p-2 text-center relative overflow-hidden"
+                >
                   <div className="flex items-center justify-center gap-1">
                     <span
                       onClick={() => handleToggleSort('locationName')}
@@ -1464,14 +1675,22 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('locationName', 'Centre', 'left', false)}
+                  {renderResizeHandle('locationName')}
                 </th>
 
                 {/* 4. Agreed SDR */}
-                <th className="p-2 min-w-[115px] text-right relative">
+                <th
+                  style={{
+                    width: `${columnWidths.sdrAmount}px`,
+                    minWidth: `${columnWidths.sdrAmount}px`,
+                    maxWidth: `${columnWidths.sdrAmount}px`,
+                  }}
+                  className="p-2 text-right relative overflow-hidden"
+                >
                   <div className="flex items-center justify-end gap-1">
                     <span
                       onClick={() => handleToggleSort('sdrAmount')}
-                      className="cursor-pointer hover:text-[#006064]"
+                      className="cursor-pointer hover:text-[#006064] truncate"
                       title="Sort by Agreed SDR"
                     >
                       Agreed SDR (₹) {sortCol === 'sdrAmount' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
@@ -1490,14 +1709,22 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('sdrAmount', 'Agreed SDR', 'left', true)}
+                  {renderResizeHandle('sdrAmount')}
                 </th>
 
                 {/* 5. Received SDR */}
-                <th className="p-2 min-w-[115px] text-right relative">
+                <th
+                  style={{
+                    width: `${columnWidths.sdrReceivedAmount}px`,
+                    minWidth: `${columnWidths.sdrReceivedAmount}px`,
+                    maxWidth: `${columnWidths.sdrReceivedAmount}px`,
+                  }}
+                  className="p-2 text-right relative overflow-hidden"
+                >
                   <div className="flex items-center justify-end gap-1">
                     <span
                       onClick={() => handleToggleSort('sdrReceivedAmount')}
-                      className="cursor-pointer hover:text-[#006064]"
+                      className="cursor-pointer hover:text-[#006064] truncate"
                       title="Sort by Received SDR"
                     >
                       Received (₹) {sortCol === 'sdrReceivedAmount' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
@@ -1516,14 +1743,22 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('sdrReceivedAmount', 'Received SDR', 'left', true)}
+                  {renderResizeHandle('sdrReceivedAmount')}
                 </th>
 
                 {/* 6. Balance Due */}
-                <th className="p-2 min-w-[115px] text-right relative">
+                <th
+                  style={{
+                    width: `${columnWidths.balanceAmount}px`,
+                    minWidth: `${columnWidths.balanceAmount}px`,
+                    maxWidth: `${columnWidths.balanceAmount}px`,
+                  }}
+                  className="p-2 text-right relative overflow-hidden"
+                >
                   <div className="flex items-center justify-end gap-1">
                     <span
                       onClick={() => handleToggleSort('balanceAmount')}
-                      className="cursor-pointer hover:text-[#006064]"
+                      className="cursor-pointer hover:text-[#006064] truncate"
                       title="Sort by Balance Due"
                     >
                       Balance (₹) {sortCol === 'balanceAmount' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
@@ -1542,14 +1777,22 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('balanceAmount', 'Balance Due', 'left', true)}
+                  {renderResizeHandle('balanceAmount')}
                 </th>
 
                 {/* 7. Status & Save */}
-                <th className="p-2 min-w-[125px] text-center relative">
+                <th
+                  style={{
+                    width: `${columnWidths.sdrPaymentStatus}px`,
+                    minWidth: `${columnWidths.sdrPaymentStatus}px`,
+                    maxWidth: `${columnWidths.sdrPaymentStatus}px`,
+                  }}
+                  className="p-2 text-center relative overflow-hidden"
+                >
                   <div className="flex items-center justify-center gap-1">
                     <span
                       onClick={() => handleToggleSort('sdrPaymentStatus')}
-                      className="cursor-pointer hover:text-[#006064]"
+                      className="cursor-pointer hover:text-[#006064] truncate"
                       title="Sort by Status"
                     >
                       Status &amp; Save {sortCol === 'sdrPaymentStatus' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
@@ -1568,10 +1811,18 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('sdrPaymentStatus', 'Status', 'left', false)}
+                  {renderResizeHandle('sdrPaymentStatus')}
                 </th>
 
                 {/* 8. Doc Proof */}
-                <th className="p-2 min-w-[90px] text-center relative">
+                <th
+                  style={{
+                    width: `${columnWidths.docProof}px`,
+                    minWidth: `${columnWidths.docProof}px`,
+                    maxWidth: `${columnWidths.docProof}px`,
+                  }}
+                  className="p-2 text-center relative overflow-hidden"
+                >
                   <div className="flex items-center justify-center gap-1">
                     <span
                       onClick={() => handleToggleSort('docProof')}
@@ -1594,18 +1845,26 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('docProof', 'Doc Proof', 'left', false)}
+                  {renderResizeHandle('docProof')}
                 </th>
 
                 {/* ── UNIQUE SEPARATE COLUMNS FOR ACCOUNTANT PAYMENT SETTLEMENT ── */}
-                {/* 9. Payment Date */}
-                <th className="p-2 min-w-[135px] bg-teal-50/90 text-[#004d40] text-left relative">
+                {/* 9. Payment Receive Date (Renamed per user request) */}
+                <th
+                  style={{
+                    width: `${columnWidths.payReceiveDate}px`,
+                    minWidth: `${columnWidths.payReceiveDate}px`,
+                    maxWidth: `${columnWidths.payReceiveDate}px`,
+                  }}
+                  className="p-2 bg-teal-50/90 text-[#004d40] text-left relative overflow-hidden"
+                >
                   <div className="flex items-center justify-between gap-1">
                     <span
                       onClick={() => handleToggleSort('payReceiveDate')}
-                      className="cursor-pointer hover:text-teal-900"
-                      title="Sort by Payment Date"
+                      className="cursor-pointer hover:text-teal-900 truncate"
+                      title="Sort by Payment Receive Date"
                     >
-                      Payment Date {sortCol === 'payReceiveDate' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                      Payment Receive Date {sortCol === 'payReceiveDate' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
                     </span>
                     <button
                       type="button"
@@ -1615,20 +1874,28 @@ export function SdrReceiveManagement({
                           ? 'bg-amber-400 text-amber-950 font-bold shadow-xs ring-1 ring-amber-500'
                           : 'text-teal-600 hover:text-teal-900 hover:bg-teal-100/60'
                       }`}
-                      title="Filter column: Payment Date"
+                      title="Filter column: Payment Receive Date"
                     >
                       <Filter className="w-2.5 h-2.5" />
                     </button>
                   </div>
-                  {renderColumnFilterDropdown('payReceiveDate', 'Payment Date', 'right', false)}
+                  {renderColumnFilterDropdown('payReceiveDate', 'Payment Receive Date', 'right', false)}
+                  {renderResizeHandle('payReceiveDate')}
                 </th>
 
                 {/* 10. Received Amt */}
-                <th className="p-2 min-w-[125px] text-right bg-teal-50/90 text-[#004d40] relative">
+                <th
+                  style={{
+                    width: `${columnWidths.receiveAmount}px`,
+                    minWidth: `${columnWidths.receiveAmount}px`,
+                    maxWidth: `${columnWidths.receiveAmount}px`,
+                  }}
+                  className="p-2 text-right bg-teal-50/90 text-[#004d40] relative overflow-hidden"
+                >
                   <div className="flex items-center justify-end gap-1">
                     <span
                       onClick={() => handleToggleSort('receiveAmount')}
-                      className="cursor-pointer hover:text-teal-900"
+                      className="cursor-pointer hover:text-teal-900 truncate"
                       title="Sort by Received Amount"
                     >
                       Received Amt (₹) {sortCol === 'receiveAmount' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
@@ -1647,14 +1914,22 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('receiveAmount', 'Received Amt', 'right', true)}
+                  {renderResizeHandle('receiveAmount')}
                 </th>
 
                 {/* 11. Payment Mode */}
-                <th className="p-2 min-w-[120px] bg-teal-50/90 text-[#004d40] text-left relative">
+                <th
+                  style={{
+                    width: `${columnWidths.paymentMode}px`,
+                    minWidth: `${columnWidths.paymentMode}px`,
+                    maxWidth: `${columnWidths.paymentMode}px`,
+                  }}
+                  className="p-2 bg-teal-50/90 text-[#004d40] text-left relative overflow-hidden"
+                >
                   <div className="flex items-center justify-between gap-1">
                     <span
                       onClick={() => handleToggleSort('paymentMode')}
-                      className="cursor-pointer hover:text-teal-900"
+                      className="cursor-pointer hover:text-teal-900 truncate"
                       title="Sort by Payment Mode"
                     >
                       Payment Mode {sortCol === 'paymentMode' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
@@ -1673,14 +1948,22 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('paymentMode', 'Payment Mode', 'right', false)}
+                  {renderResizeHandle('paymentMode')}
                 </th>
 
                 {/* 12. UTR / Ref No. */}
-                <th className="p-2 min-w-[150px] bg-teal-50/90 text-[#004d40] text-left relative">
+                <th
+                  style={{
+                    width: `${columnWidths.utrNumber}px`,
+                    minWidth: `${columnWidths.utrNumber}px`,
+                    maxWidth: `${columnWidths.utrNumber}px`,
+                  }}
+                  className="p-2 bg-teal-50/90 text-[#004d40] text-left relative overflow-hidden"
+                >
                   <div className="flex items-center justify-between gap-1">
                     <span
                       onClick={() => handleToggleSort('utrNumber')}
-                      className="cursor-pointer hover:text-teal-900"
+                      className="cursor-pointer hover:text-teal-900 truncate"
                       title="Sort by UTR Number"
                     >
                       UTR / Ref No. {sortCol === 'utrNumber' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
@@ -1699,36 +1982,18 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('utrNumber', 'UTR / Ref No.', 'right', false)}
+                  {renderResizeHandle('utrNumber')}
                 </th>
 
-                {/* 13. Bank Name */}
-                <th className="p-2 min-w-[140px] bg-teal-50/90 text-[#004d40] text-left relative">
-                  <div className="flex items-center justify-between gap-1">
-                    <span
-                      onClick={() => handleToggleSort('bankName')}
-                      className="cursor-pointer hover:text-teal-900"
-                      title="Sort by Bank Name"
-                    >
-                      Bank Name {sortCol === 'bankName' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => handleOpenColumnFilter('bankName', e)}
-                      className={`p-0.5 rounded-xs transition-colors cursor-pointer shrink-0 ${
-                        columnFilters['bankName']
-                          ? 'bg-amber-400 text-amber-950 font-bold shadow-xs ring-1 ring-amber-500'
-                          : 'text-teal-600 hover:text-teal-900 hover:bg-teal-100/60'
-                      }`}
-                      title="Filter column: Bank Name"
-                    >
-                      <Filter className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                  {renderColumnFilterDropdown('bankName', 'Bank Name', 'right', false)}
-                </th>
-
-                {/* 14. Receipt Proof */}
-                <th className="p-2 min-w-[110px] text-center bg-teal-50/90 text-[#004d40] relative">
+                {/* 13. Receipt Proof (Bank Name removed per user instruction) */}
+                <th
+                  style={{
+                    width: `${columnWidths.receiptProof}px`,
+                    minWidth: `${columnWidths.receiptProof}px`,
+                    maxWidth: `${columnWidths.receiptProof}px`,
+                  }}
+                  className="p-2 text-center bg-teal-50/90 text-[#004d40] relative overflow-hidden"
+                >
                   <div className="flex items-center justify-center gap-1">
                     <span
                       onClick={() => handleToggleSort('receiptProof')}
@@ -1751,14 +2016,22 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('receiptProof', 'Receipt Proof', 'right', false)}
+                  {renderResizeHandle('receiptProof')}
                 </th>
 
-                {/* 15. Remarks */}
-                <th className="p-2 min-w-[160px] bg-teal-50/90 text-[#004d40] text-left relative">
+                {/* 14. Remarks */}
+                <th
+                  style={{
+                    width: `${columnWidths.remarks}px`,
+                    minWidth: `${columnWidths.remarks}px`,
+                    maxWidth: `${columnWidths.remarks}px`,
+                  }}
+                  className="p-2 bg-teal-50/90 text-[#004d40] text-left relative overflow-hidden"
+                >
                   <div className="flex items-center justify-between gap-1">
                     <span
                       onClick={() => handleToggleSort('remarks')}
-                      className="cursor-pointer hover:text-teal-900"
+                      className="cursor-pointer hover:text-teal-900 truncate"
                       title="Sort by Remarks"
                     >
                       Remarks {sortCol === 'remarks' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
@@ -1777,6 +2050,7 @@ export function SdrReceiveManagement({
                     </button>
                   </div>
                   {renderColumnFilterDropdown('remarks', 'Remarks', 'right', false)}
+                  {renderResizeHandle('remarks')}
                 </th>
               </tr>
             </thead>
@@ -1785,14 +2059,14 @@ export function SdrReceiveManagement({
             <tbody className="divide-y divide-gray-200 bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan={15} className="p-12 text-center text-gray-500">
+                  <td colSpan={14} className="p-12 text-center text-gray-500">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[#006064]" />
                     <span className="font-bold text-xs uppercase tracking-wider">Loading SDR Records...</span>
                   </td>
                 </tr>
               ) : displayedClients.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="p-12 text-center text-gray-500">
+                  <td colSpan={14} className="p-12 text-center text-gray-500">
                     <ShieldCheck className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                     <p className="font-bold text-sm text-gray-700">No client SDR records found matching current filters</p>
                     <p className="text-xs text-gray-400 mt-1">Try clearing your filters or changing search terms</p>
@@ -1833,27 +2107,39 @@ export function SdrReceiveManagement({
                       {/* Primary Client Row */}
                       <tr
                         className={`divide-x divide-gray-200 hover:bg-gray-50/70 transition-colors ${
-                          isCompleted ? 'bg-emerald-50/15' : isPartial ? 'bg-amber-50/15' : ''
+                          hasMultipleParts ? 'bg-amber-50/20' : ''
                         }`}
                       >
-                        {/* 1. S.No */}
-                        <td className="p-2 text-center font-mono text-[11px] text-gray-500">
+                         {/* 1. S.No */}
+                        <td
+                          style={{
+                            width: `${columnWidths.srNo}px`,
+                            maxWidth: `${columnWidths.srNo}px`,
+                          }}
+                          className="p-2 text-center font-mono text-[11px] text-gray-500 overflow-hidden"
+                        >
                           {idx + 1}
                         </td>
 
                         {/* 2. Company Name, Client ID & Installment Control */}
-                        <td className="p-2">
-                          <div className="font-bold text-gray-950 flex items-center gap-1.5">
-                            <span>{client.companyName}</span>
+                        <td
+                          style={{
+                            width: `${columnWidths.companyName}px`,
+                            maxWidth: `${columnWidths.companyName}px`,
+                          }}
+                          className="p-2 overflow-hidden"
+                        >
+                          <div className="font-bold text-gray-950 flex items-center gap-1.5 truncate">
+                            <span className="truncate" title={client.companyName}>{client.companyName}</span>
                             {client.clientId && (
-                              <span className="px-1 py-0.2 bg-gray-100 text-gray-600 text-[9.5px] font-mono border border-gray-200">
+                              <span className="px-1 py-0.2 bg-gray-100 text-gray-600 text-[9.5px] font-mono border border-gray-200 shrink-0">
                                 {client.clientId}
                               </span>
                             )}
                           </div>
                           {(client.cabinName || client.noOfSeats) && (
-                            <div className="text-[10.5px] text-gray-500 flex items-center gap-1 mt-0.5 font-mono">
-                              {client.cabinName && <span>Cabin: {client.cabinName}</span>}
+                            <div className="text-[10.5px] text-gray-500 flex items-center gap-1 mt-0.5 font-mono truncate">
+                              {client.cabinName && <span className="truncate">Cabin: {client.cabinName}</span>}
                               {client.cabinName && client.noOfSeats && <span>•</span>}
                               {client.noOfSeats && <span>{client.noOfSeats} Seats</span>}
                             </div>
@@ -1861,20 +2147,38 @@ export function SdrReceiveManagement({
                         </td>
 
                         {/* 3. Centre */}
-                        <td className="p-2 text-center">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-700 border border-gray-300">
-                            <Building2 size={10} className="text-[#006064]" />
-                            {client.locationName}
+                        <td
+                          style={{
+                            width: `${columnWidths.locationName}px`,
+                            maxWidth: `${columnWidths.locationName}px`,
+                          }}
+                          className="p-2 text-center overflow-hidden"
+                        >
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-700 border border-gray-300 truncate">
+                            <Building2 size={10} className="text-[#006064] shrink-0" />
+                            <span className="truncate">{client.locationName}</span>
                           </span>
                         </td>
 
                         {/* 4. Agreed SDR Amount */}
-                        <td className="p-2 text-right font-mono font-black text-gray-900">
+                        <td
+                          style={{
+                            width: `${columnWidths.sdrAmount}px`,
+                            maxWidth: `${columnWidths.sdrAmount}px`,
+                          }}
+                          className="p-2 text-right font-mono font-black text-gray-900 overflow-hidden truncate"
+                        >
                           ₹{client.sdrAmount.toLocaleString('en-IN')}
                         </td>
 
                         {/* 5. Received Amount */}
-                        <td className="p-2 text-right font-mono font-bold text-emerald-700">
+                        <td
+                          style={{
+                            width: `${columnWidths.sdrReceivedAmount}px`,
+                            maxWidth: `${columnWidths.sdrReceivedAmount}px`,
+                          }}
+                          className="p-2 text-right font-mono font-bold text-emerald-700 overflow-hidden truncate"
+                        >
                           {client.sdrReceivedAmount > 0 ? (
                             `₹${client.sdrReceivedAmount.toLocaleString('en-IN')}`
                           ) : (
@@ -1883,7 +2187,13 @@ export function SdrReceiveManagement({
                         </td>
 
                         {/* 6. Balance Pending */}
-                        <td className="p-2 text-right font-mono font-bold">
+                        <td
+                          style={{
+                            width: `${columnWidths.balanceAmount}px`,
+                            maxWidth: `${columnWidths.balanceAmount}px`,
+                          }}
+                          className="p-2 text-right font-mono font-bold overflow-hidden truncate"
+                        >
                           {client.balanceAmount > 0 ? (
                             <span className="text-rose-600">₹{client.balanceAmount.toLocaleString('en-IN')}</span>
                           ) : (
@@ -1892,36 +2202,42 @@ export function SdrReceiveManagement({
                         </td>
 
                         {/* 7. Status Badge + Real-time Auto-Save Indicator */}
-                        <td className="p-2 text-center">
+                        <td
+                          style={{
+                            width: `${columnWidths.sdrPaymentStatus}px`,
+                            maxWidth: `${columnWidths.sdrPaymentStatus}px`,
+                          }}
+                          className="p-2 text-center overflow-hidden"
+                        >
                           <div className="flex flex-col items-center gap-1">
                             {isCompleted ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap">
                                 <CheckCircle2 size={11} /> Completed
                               </span>
                             ) : isPartial ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase bg-amber-100 text-amber-900 border border-amber-300">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase bg-amber-100 text-amber-900 border border-amber-300 whitespace-nowrap">
                                 <Clock size={11} /> Partial
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase bg-rose-100 text-rose-900 border border-rose-300">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-black uppercase bg-rose-100 text-rose-900 border border-rose-300 whitespace-nowrap">
                                 <AlertCircle size={11} /> Pending
                               </span>
                             )}
 
                             {/* Auto-Save Live Status */}
                             {draft.status === 'saving' ? (
-                              <span className="inline-flex items-center gap-0.5 text-[9.5px] font-mono font-bold text-amber-600 animate-pulse">
+                              <span className="inline-flex items-center gap-0.5 text-[9.5px] font-mono font-bold text-amber-600 animate-pulse whitespace-nowrap">
                                 <Loader2 size={10} className="animate-spin" /> Saving...
                               </span>
                             ) : draft.status === 'error' ? (
                               <span
-                                className="inline-flex items-center gap-0.5 text-[9.5px] font-mono font-bold text-rose-600 cursor-help"
+                                className="inline-flex items-center gap-0.5 text-[9.5px] font-mono font-bold text-rose-600 cursor-help whitespace-nowrap"
                                 title={draft.errorMessage || 'Save error'}
                               >
                                 <AlertCircle size={10} /> Error
                               </span>
                             ) : draft.saved ? (
-                              <span className="inline-flex items-center gap-0.5 text-[9.5px] font-mono font-semibold text-emerald-600">
+                              <span className="inline-flex items-center gap-0.5 text-[9.5px] font-mono font-semibold text-emerald-600 whitespace-nowrap">
                                 <Check size={10} /> Auto-Saved
                               </span>
                             ) : null}
@@ -1929,25 +2245,37 @@ export function SdrReceiveManagement({
                         </td>
 
                         {/* 8. Attached Document / Agreement */}
-                        <td className="p-2 text-center">
+                        <td
+                          style={{
+                            width: `${columnWidths.docProof}px`,
+                            maxWidth: `${columnWidths.docProof}px`,
+                          }}
+                          className="p-2 text-center overflow-hidden"
+                        >
                           {client.attachedDocUrl ? (
                             <a
                               href={client.attachedDocUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-[#006064] hover:underline cursor-pointer"
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-[#006064] hover:underline cursor-pointer whitespace-nowrap"
                               title={`View Document: ${client.attachedDocName || 'Attached PDF'}`}
                             >
                               <Eye size={12} />
                               <span>View Doc</span>
                             </a>
                           ) : (
-                            <span className="text-gray-400 text-[10px] italic">No Doc</span>
+                            <span className="text-gray-400 text-[10px] italic whitespace-nowrap">No Doc</span>
                           )}
                         </td>
 
-                        {/* 9. Payment Date (Dedicated Column) */}
-                        <td className="p-1.5 bg-teal-50/20">
+                        {/* 9. Payment Receive Date (Dedicated Column) */}
+                        <td
+                          style={{
+                            width: `${columnWidths.payReceiveDate}px`,
+                            maxWidth: `${columnWidths.payReceiveDate}px`,
+                          }}
+                          className="p-1.5 bg-teal-50/20 overflow-hidden"
+                        >
                           <input
                             type="date"
                             value={primaryPart.payReceiveDate}
@@ -1966,7 +2294,7 @@ export function SdrReceiveManagement({
                               <Plus size={10} /> Add Installment
                             </button>
                             {hasMultipleParts && (
-                              <span className="px-1.5 py-0.2 bg-teal-100 border border-teal-200 text-[#006064] text-[8.5px] font-bold rounded-2xs font-mono">
+                              <span className="px-1.5 py-0.2 bg-teal-100 border border-teal-200 text-[#006064] text-[8.5px] font-bold rounded-2xs font-mono shrink-0">
                                 Part 1/{draft.parts.length}
                               </span>
                             )}
@@ -1974,7 +2302,13 @@ export function SdrReceiveManagement({
                         </td>
 
                         {/* 10. Received Amount (Dedicated Column) */}
-                        <td className="p-1.5 bg-teal-50/20">
+                        <td
+                          style={{
+                            width: `${columnWidths.receiveAmount}px`,
+                            maxWidth: `${columnWidths.receiveAmount}px`,
+                          }}
+                          className="p-1.5 bg-teal-50/20 overflow-hidden"
+                        >
                           <div className="relative">
                             <input
                               type="number"
@@ -1989,7 +2323,13 @@ export function SdrReceiveManagement({
                         </td>
 
                         {/* 11. Payment Mode (Dedicated Column) */}
-                        <td className="p-1.5 bg-teal-50/20">
+                        <td
+                          style={{
+                            width: `${columnWidths.paymentMode}px`,
+                            maxWidth: `${columnWidths.paymentMode}px`,
+                          }}
+                          className="p-1.5 bg-teal-50/20 overflow-hidden"
+                        >
                           <select
                             value={primaryPart.paymentMode}
                             onChange={(e) =>
@@ -2006,7 +2346,13 @@ export function SdrReceiveManagement({
                         </td>
 
                         {/* 12. UTR / Ref No. (Dedicated Column) */}
-                        <td className="p-1.5 bg-teal-50/20">
+                        <td
+                          style={{
+                            width: `${columnWidths.utrNumber}px`,
+                            maxWidth: `${columnWidths.utrNumber}px`,
+                          }}
+                          className="p-1.5 bg-teal-50/20 overflow-hidden"
+                        >
                           <input
                             type="text"
                             placeholder="UTR number"
@@ -2018,28 +2364,24 @@ export function SdrReceiveManagement({
                           />
                         </td>
 
-                        {/* 13. Bank Name (Dedicated Column) */}
-                        <td className="p-1.5 bg-teal-50/20">
-                          <input
-                            type="text"
-                            placeholder="Bank Name"
-                            value={primaryPart.bankName || ''}
-                            onChange={(e) =>
-                              updateDraftPartField(client.id, primaryPart.id, 'bankName', e.target.value)
-                            }
-                            className="w-full border border-gray-300 px-1.5 py-1 text-xs text-gray-800 bg-white focus:outline-none focus:border-[#006064]"
-                          />
-                        </td>
-
-                        {/* 14. Receipt Proof (Dedicated Column) */}
-                        <td className="p-1.5 text-center bg-teal-50/20">
-                          {primaryPart.utrFileUrl ? (
+                        {/* 13. Receipt Proof (Dedicated Column - Bank Name removed) */}
+                        <td
+                          style={{
+                            width: `${columnWidths.receiptProof}px`,
+                            maxWidth: `${columnWidths.receiptProof}px`,
+                          }}
+                          className="p-1.5 text-center bg-teal-50/20 overflow-hidden"
+                        >
+                          {primaryPart.utrFileUrl &&
+                          primaryPart.utrFileUrl !== client.sdrPdfUrl &&
+                          primaryPart.utrFileUrl !== client.attachedDocUrl &&
+                          primaryPart.utrFileUrl !== client.agreementPdfUrl ? (
                             <div className="flex items-center justify-center gap-1">
                               <a
                                 href={primaryPart.utrFileUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-2xs hover:bg-emerald-100 cursor-pointer"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-2xs hover:bg-emerald-100 cursor-pointer whitespace-nowrap"
                                 title={primaryPart.utrFileName || 'View Uploaded Proof'}
                               >
                                 <Eye size={11} /> Proof
@@ -2047,17 +2389,17 @@ export function SdrReceiveManagement({
                               <button
                                 type="button"
                                 onClick={() => triggerFileUpload(client.id, primaryPart.id)}
-                                className="text-gray-400 hover:text-gray-700 p-0.5"
+                                className="text-gray-400 hover:text-gray-700 p-0.5 shrink-0"
                                 title="Change Proof File"
                               >
-                                <Upload size={10} />
+                                <Upload size={11} />
                               </button>
                             </div>
                           ) : (
                             <button
                               type="button"
                               onClick={() => triggerFileUpload(client.id, primaryPart.id)}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-2xs cursor-pointer shadow-2xs"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-2xs cursor-pointer shadow-2xs whitespace-nowrap"
                               title="Upload Receipt Proof"
                             >
                               <Upload size={10} /> Attach
@@ -2065,8 +2407,14 @@ export function SdrReceiveManagement({
                           )}
                         </td>
 
-                        {/* 15. Remarks (Dedicated Column) */}
-                        <td className="p-1.5 bg-teal-50/20">
+                        {/* 14. Remarks (Dedicated Column) */}
+                        <td
+                          style={{
+                            width: `${columnWidths.remarks}px`,
+                            maxWidth: `${columnWidths.remarks}px`,
+                          }}
+                          className="p-1.5 bg-teal-50/20 overflow-hidden"
+                        >
                           <input
                             type="text"
                             placeholder="Remarks..."
@@ -2087,11 +2435,24 @@ export function SdrReceiveManagement({
                             className="divide-x divide-gray-200 bg-teal-50/10 border-t border-gray-100 hover:bg-teal-50/20 transition-colors"
                           >
                             {/* Empty or Installment Indicator for Left Columns */}
-                            <td className="p-1.5 text-center text-[10px] font-mono text-gray-400">
+                            <td
+                              style={{
+                                width: `${columnWidths.srNo}px`,
+                                maxWidth: `${columnWidths.srNo}px`,
+                              }}
+                              className="p-1.5 text-center text-[10px] font-mono text-gray-400 overflow-hidden"
+                            >
                               ↳
                             </td>
-                            <td colSpan={7} className="p-1.5 text-right pr-4">
-                              <div className="flex items-center justify-end gap-2 text-[10px] text-teal-800 font-bold">
+                            <td
+                              colSpan={7}
+                              style={{
+                                width: `${leftSubrowWidth}px`,
+                                maxWidth: `${leftSubrowWidth}px`,
+                              }}
+                              className="p-1.5 text-right pr-4 overflow-hidden"
+                            >
+                              <div className="flex items-center justify-end gap-2 text-[10px] text-teal-800 font-bold truncate">
                                 <span className="px-1.5 py-0.2 bg-teal-100 border border-teal-300 rounded-2xs font-mono">
                                   Installment #{pIdx + 2}
                                 </span>
@@ -2107,7 +2468,13 @@ export function SdrReceiveManagement({
                             </td>
 
                             {/* 9. Installment Date */}
-                            <td className="p-1.5 bg-teal-50/20">
+                            <td
+                              style={{
+                                width: `${columnWidths.payReceiveDate}px`,
+                                maxWidth: `${columnWidths.payReceiveDate}px`,
+                              }}
+                              className="p-1.5 bg-teal-50/20 overflow-hidden"
+                            >
                               <input
                                 type="date"
                                 value={part.payReceiveDate}
@@ -2119,7 +2486,13 @@ export function SdrReceiveManagement({
                             </td>
 
                             {/* 10. Installment Amount */}
-                            <td className="p-1.5 bg-teal-50/20">
+                            <td
+                              style={{
+                                width: `${columnWidths.receiveAmount}px`,
+                                maxWidth: `${columnWidths.receiveAmount}px`,
+                              }}
+                              className="p-1.5 bg-teal-50/20 overflow-hidden"
+                            >
                               <input
                                 type="number"
                                 placeholder="0"
@@ -2132,7 +2505,13 @@ export function SdrReceiveManagement({
                             </td>
 
                             {/* 11. Installment Mode */}
-                            <td className="p-1.5 bg-teal-50/20">
+                            <td
+                              style={{
+                                width: `${columnWidths.paymentMode}px`,
+                                maxWidth: `${columnWidths.paymentMode}px`,
+                              }}
+                              className="p-1.5 bg-teal-50/20 overflow-hidden"
+                            >
                               <select
                                 value={part.paymentMode}
                                 onChange={(e) =>
@@ -2149,7 +2528,13 @@ export function SdrReceiveManagement({
                             </td>
 
                             {/* 12. Installment UTR */}
-                            <td className="p-1.5 bg-teal-50/20">
+                            <td
+                              style={{
+                                width: `${columnWidths.utrNumber}px`,
+                                maxWidth: `${columnWidths.utrNumber}px`,
+                              }}
+                              className="p-1.5 bg-teal-50/20 overflow-hidden"
+                            >
                               <input
                                 type="text"
                                 placeholder="UTR number"
@@ -2161,28 +2546,24 @@ export function SdrReceiveManagement({
                               />
                             </td>
 
-                            {/* 13. Installment Bank */}
-                            <td className="p-1.5 bg-teal-50/20">
-                              <input
-                                type="text"
-                                placeholder="Bank Name"
-                                value={part.bankName || ''}
-                                onChange={(e) =>
-                                  updateDraftPartField(client.id, part.id, 'bankName', e.target.value)
-                                }
-                                className="w-full border border-gray-300 px-1.5 py-1 text-xs text-gray-800 bg-white focus:outline-none focus:border-[#006064]"
-                              />
-                            </td>
-
-                            {/* 14. Installment Proof */}
-                            <td className="p-1.5 text-center bg-teal-50/20">
-                              {part.utrFileUrl ? (
+                            {/* 13. Installment Proof (Bank Name removed) */}
+                            <td
+                              style={{
+                                width: `${columnWidths.receiptProof}px`,
+                                maxWidth: `${columnWidths.receiptProof}px`,
+                              }}
+                              className="p-1.5 text-center bg-teal-50/20 overflow-hidden"
+                            >
+                              {part.utrFileUrl &&
+                              part.utrFileUrl !== client.sdrPdfUrl &&
+                              part.utrFileUrl !== client.attachedDocUrl &&
+                              part.utrFileUrl !== client.agreementPdfUrl ? (
                                 <div className="flex items-center justify-center gap-1">
                                   <a
                                     href={part.utrFileUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-2xs hover:bg-emerald-100 cursor-pointer"
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-2xs hover:bg-emerald-100 cursor-pointer whitespace-nowrap"
                                     title={part.utrFileName || 'View Proof'}
                                   >
                                     <Eye size={11} /> Proof
@@ -2190,7 +2571,7 @@ export function SdrReceiveManagement({
                                   <button
                                     type="button"
                                     onClick={() => triggerFileUpload(client.id, part.id)}
-                                    className="text-gray-400 hover:text-gray-700 p-0.5"
+                                    className="text-gray-400 hover:text-gray-700 p-0.5 shrink-0"
                                     title="Change Proof File"
                                   >
                                     <Upload size={10} />
@@ -2198,36 +2579,55 @@ export function SdrReceiveManagement({
                                 </div>
                               ) : (
                                 <button
-                              type="button"
-                              onClick={() => triggerFileUpload(client.id, part.id)}
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-2xs cursor-pointer shadow-2xs"
-                              title="Upload Receipt Proof"
-                            >
-                              <Upload size={10} /> Attach
-                            </button>
-                          )}
-                        </td>
+                                  type="button"
+                                  onClick={() => triggerFileUpload(client.id, part.id)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-600 bg-white hover:bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-2xs cursor-pointer shadow-2xs whitespace-nowrap"
+                                  title="Upload Receipt Proof"
+                                >
+                                  <Upload size={10} /> Attach
+                                </button>
+                              )}
+                            </td>
 
-                        {/* 15. Installment Remarks */}
-                        <td className="p-1.5 bg-teal-50/20">
-                          <input
-                            type="text"
-                            placeholder="Remarks..."
-                            value={part.remarks || ''}
-                            onChange={(e) =>
-                              updateDraftPartField(client.id, part.id, 'remarks', e.target.value)
-                            }
-                            className="w-full border border-gray-300 px-1.5 py-1 text-xs text-gray-700 bg-white focus:outline-none focus:border-[#006064]"
-                          />
-                        </td>
-                      </tr>
+                            {/* 14. Installment Remarks */}
+                            <td
+                              style={{
+                                width: `${columnWidths.remarks}px`,
+                                maxWidth: `${columnWidths.remarks}px`,
+                              }}
+                              className="p-1.5 bg-teal-50/20 overflow-hidden"
+                            >
+                              <input
+                                type="text"
+                                placeholder="Remarks..."
+                                value={part.remarks || ''}
+                                onChange={(e) =>
+                                  updateDraftPartField(client.id, part.id, 'remarks', e.target.value)
+                                }
+                                className="w-full border border-gray-300 px-1.5 py-1 text-xs text-gray-700 bg-white focus:outline-none focus:border-[#006064]"
+                              />
+                            </td>
+                          </tr>
                         ))}
 
-                      {/* Sub-row footer: Add another installment part spanning the payment receive section (columns 9 to 15) */}
+                      {/* Sub-row footer: Add another installment part spanning the payment receive section (columns 9 to 14) */}
                       {hasMultipleParts && (
                         <tr className="divide-x divide-gray-200 bg-teal-50/15 border-t border-dashed border-teal-200">
-                          <td colSpan={8} className="bg-transparent"></td>
-                          <td colSpan={7} className="p-1.5 bg-teal-50/30">
+                          <td
+                            colSpan={8}
+                            style={{
+                              width: `${columnWidths.srNo + leftSubrowWidth}px`,
+                            }}
+                            className="bg-transparent"
+                          ></td>
+                          <td
+                            colSpan={6}
+                            style={{
+                              width: `${rightSubrowWidth}px`,
+                              maxWidth: `${rightSubrowWidth}px`,
+                            }}
+                            className="p-1.5 bg-teal-50/30"
+                          >
                             <button
                               type="button"
                               onClick={() => addSplitPart(client.id)}

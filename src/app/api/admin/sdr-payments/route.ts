@@ -135,11 +135,26 @@ export async function GET(request: Request) {
             paymentMode: c.sdrPaymentMode || 'Bank Transfer',
             utrNumber: c.sdrUtrNumber || '',
             utrDate: c.sdrUtrDate ? new Date(c.sdrUtrDate).toISOString().split('T')[0] : '',
-            utrFileUrl: c.sdrPdfUrl || null,
-            utrFileName: c.sdrPdfName || null,
+            utrFileUrl: null,
+            utrFileName: null,
             remarks: c.sdrRemarks || '',
           },
         ];
+      }
+
+      // Receipt proof is strictly uploaded by the accountant during payment receive entry.
+      // Never display the CM's SDR document or agreement proof as payment receipt proof.
+      if (Array.isArray(parsedPayments)) {
+        parsedPayments = parsedPayments.map((p) => {
+          if (p.utrFileUrl && (p.utrFileUrl === c.sdrPdfUrl || p.utrFileUrl === c.agreementPdfUrl)) {
+            return {
+              ...p,
+              utrFileUrl: null,
+              utrFileName: null,
+            };
+          }
+          return p;
+        });
       }
 
       // Attached document (SDR receipt or official agreement PDF)

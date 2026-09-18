@@ -1349,6 +1349,13 @@ model ExpenseRecord {
   superAdminApprovedAt       DateTime?
   superAdminRemarks          String?   @db.Text
 
+  // 2nd Super Admin Approval: Payment Disbursal Approval ("Sir Pays & Approves")
+  paymentApprovalStatus      String?   @default("NOT_REQUESTED") // "NOT_REQUESTED" | "PENDING" | "APPROVED" | "REJECTED"
+  paymentApprovedById        Int?
+  paymentApprovedByName      String?
+  paymentApprovedAt          DateTime?
+  paymentApprovalRemarks     String?   @db.Text
+
   rejectionStage             String?   // "ACCOUNTANT" | "SUPER_ADMIN"
   rejectionRemarks           String?   @db.Text
 

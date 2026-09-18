@@ -49,6 +49,7 @@ import { FadeUp } from '@/components/ui/fade-up';
 import { useAuth } from '@/context/AuthContext';
 import { InvoicePaymentManagement } from '@/components/admin/invoice-payment-management';
 import { SdrReceiveManagement } from '@/components/admin/sdr-receive-management';
+import { SuspenseManagement } from '@/components/admin/suspense-management';
 import {
   getBillingMonthInfo,
   calculateInclusiveDays,
@@ -217,11 +218,24 @@ export default function AdminInvoicesWorkflowPage() {
     }
   }, [canAccessCM, canAccessAccountant, userRoleView]);
 
-  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES' | 'SDR_MANAGEMENT'>('ACTIVE_WORKFLOW');
+  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES' | 'SDR_MANAGEMENT' | 'SUSPENSE'>('ACTIVE_WORKFLOW');
+  const [pendingSuspenseCount, setPendingSuspenseCount] = useState(0);
 
-  // Ensure Payment Receive Management and SDR Receive Management are strictly NOT accessible for CM
+  // Fetch pending suspense count for navigation badge
   useEffect(() => {
-    if ((!canAccessAccountant || userRoleView === 'CM') && activeSection !== 'ACTIVE_WORKFLOW') {
+    fetch('/api/admin/suspense?status=PENDING')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.summary?.pendingCount !== undefined) {
+          setPendingSuspenseCount(data.summary.pendingCount);
+        }
+      })
+      .catch(() => {});
+  }, [activeSection]);
+
+  // Ensure Payment Receive Management and SDR Receive Management are strictly NOT accessible for CM (SUSPENSE is accessible to both)
+  useEffect(() => {
+    if ((!canAccessAccountant || userRoleView === 'CM') && activeSection !== 'ACTIVE_WORKFLOW' && activeSection !== 'SUSPENSE') {
       setActiveSection('ACTIVE_WORKFLOW');
     }
   }, [canAccessAccountant, userRoleView, activeSection]);
@@ -2250,6 +2264,24 @@ export default function AdminInvoicesWorkflowPage() {
                 </button>
               </>
             )}
+
+            {/* Suspense Advance Payments Button (Accessible to both Accountant & CM for 4-hour review) */}
+            <button
+              type="button"
+              onClick={() => setActiveSection('SUSPENSE')}
+              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${activeSection === 'SUSPENSE'
+                ? 'bg-[#006064] text-white shadow-xs'
+                : 'text-cyan-900 bg-cyan-50/70 border border-cyan-200/80 hover:bg-cyan-100/80'
+                }`}
+            >
+              <Sparkles size={15} className={activeSection === 'SUSPENSE' ? 'text-cyan-200' : 'text-[#006064]'} />
+              <span>Suspense Payments</span>
+              {pendingSuspenseCount > 0 && (
+                <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px] font-mono font-bold animate-pulse">
+                  {pendingSuspenseCount}
+                </span>
+              )}
+            </button>
           </div>
 
           {canAccessCM && canAccessAccountant && (
@@ -2279,8 +2311,20 @@ export default function AdminInvoicesWorkflowPage() {
         </div>
       </FadeUp>
 
-      {/* ── RENDER SDR MANAGEMENT, INVOICE PAYMENT MANAGEMENT OR ACTIVE INVOICE WORKFLOW ── */}
-      {canAccessAccountant && userRoleView === 'ACCOUNTANT' && activeSection === 'SDR_MANAGEMENT' ? (
+      {/* ── RENDER SUSPENSE, SDR MANAGEMENT, INVOICE PAYMENT MANAGEMENT OR ACTIVE INVOICE WORKFLOW ── */}
+      {activeSection === 'SUSPENSE' ? (
+        <SuspenseManagement
+          isSuperAdmin={isAdmin}
+          userRoleView={userRoleView}
+          canAccessCM={canAccessCM}
+          canAccessAccountant={canAccessAccountant}
+          currentUserLocationId={(user as any)?.locationId || (user as any)?.assignedLocations?.[0]?.locationId}
+          currentUserLocationName={(user as any)?.location?.name || (user as any)?.assignedLocations?.[0]?.location?.name}
+          currentUserId={user?.id ? Number(user.id) : null}
+          currentUserName={user?.name || (userRoleView === 'ACCOUNTANT' ? 'Accountant' : 'Community Manager')}
+          onBack={() => setActiveSection('ACTIVE_WORKFLOW')}
+        />
+      ) : canAccessAccountant && userRoleView === 'ACCOUNTANT' && activeSection === 'SDR_MANAGEMENT' ? (
         <SdrReceiveManagement
           isSuperAdmin={isAdmin}
           userRoleView={userRoleView}
@@ -2299,6 +2343,7 @@ export default function AdminInvoicesWorkflowPage() {
           currentUserLocationId={(user as any)?.locationId || (user as any)?.assignedLocations?.[0]?.locationId}
           currentUserLocationName={(user as any)?.location?.name || (user as any)?.assignedLocations?.[0]?.location?.name}
           onOpenSdrManagement={() => setActiveSection('SDR_MANAGEMENT')}
+          onOpenSuspense={() => setActiveSection('SUSPENSE')}
         />
       ) : (
 

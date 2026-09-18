@@ -146,26 +146,12 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!mobileNo || !mobileNo.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'Mobile Number is mandatory.' },
-        { status: 400 }
-      );
-    }
-
-    if (!email || !email.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'Email Address is mandatory.' },
-        { status: 400 }
-      );
-    }
-
     const created = await (prisma as any).vendorMaster.create({
       data: {
         vendorName: vendorName.trim(),
         address: address?.trim() || null,
-        email: email.trim(),
-        mobileNo: mobileNo.trim(),
+        email: email && email.trim() ? email.trim() : null,
+        mobileNo: mobileNo && mobileNo.trim() ? mobileNo.trim() : null,
         accountNo: accountNo?.trim() || null,
         ifscCode: ifscCode?.trim() || null,
         bankName: bankName?.trim() || null,

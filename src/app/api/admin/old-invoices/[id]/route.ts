@@ -125,11 +125,9 @@ export async function DELETE(
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get('auth-token')?.value;
+    // Authentication check: Super Admin, Admin, Accountant and CM can delete
     if (token) {
-      const payload = await verifyToken(token);
-      if (String(payload?.role || '').toUpperCase() === 'ACCOUNTANT') {
-        return NextResponse.json({ success: false, error: 'Accountants cannot delete invoices' }, { status: 403 });
-      }
+      await verifyToken(token);
     }
 
     const params = await props.params;
