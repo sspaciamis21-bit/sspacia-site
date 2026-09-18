@@ -349,6 +349,7 @@ interface ExpenseRegisterProps {
 
 export const FIXED_EXPENSE_TYPES = [
   "ELECTRICITY & UTILITIES",
+  "UTILITIES",
   "RENT & LEASE",
   "HOUSEKEEPING & CLEANING",
   "TEA, COFFEE & PANTRY SUPPLIES",
@@ -357,6 +358,7 @@ export const FIXED_EXPENSE_TYPES = [
   "INTERNET, WI-FI & TELECOM",
   "LEGAL, AUDIT & PROFESSIONAL FEES",
   "MARKETING & ADVERTISING",
+  "VOUCHER",
   "TRAVEL & CONVEYANCE",
   "SECURITY & SURVEILLANCE",
   "GENERAL OPERATING EXPENSE",
@@ -364,10 +366,11 @@ export const FIXED_EXPENSE_TYPES = [
 
 export const SUGGESTED_CATEGORY_HEADERS = [
   "ELECTRICITY & UTILITIES",
+  "UTILITIES",
   "MAINTENANCE & REPAIRS",
   "OFFICE SUPPLIES & STATIONERY",
   "TEA, COFFEE & PANTRY",
-  "VOUCHERS",
+  "VOUCHER",
   "MARKETING & ADVERTISING",
   "INTERNET & TELECOM",
   "CLEANING & HOUSEKEEPING",
@@ -879,12 +882,38 @@ export function ExpenseRegister({
 
   // Super Admin Main Expense Category Headers
   const [categoryHeaders, setCategoryHeaders] = useState<string[]>([]);
+  const [proposedCategories, setProposedCategories] = useState<string[]>([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [editingCategoryOldName, setEditingCategoryOldName] = useState<string | null>(null);
   const [editingCategoryNewName, setEditingCategoryNewName] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
   const [deletingCategoryName, setDeletingCategoryName] = useState<string | null>(null);
+
+  // Custom Category Header mode in Add/Edit Expense Modal (CM & Accountant can propose headers)
+  const [isCustomCategoryMode, setIsCustomCategoryMode] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState("");
+
+  // Super Admin Edit/Reassign Header for an Expense Modal state
+  const [editingHeaderRecord, setEditingHeaderRecord] = useState<ExpenseRecordItem | null>(null);
+  const [editingHeaderNewName, setEditingHeaderNewName] = useState("");
+  const [editingHeaderSelectedOfficial, setEditingHeaderSelectedOfficial] = useState("");
+  const [savingHeaderEdit, setSavingHeaderEdit] = useState(false);
+
+  // Super Admin Custom Header Review Modal state (Keep & add to predefined or Change/reassign)
+  const [customHeaderReviewRecord, setCustomHeaderReviewRecord] = useState<ExpenseRecordItem | null>(null);
+  const [customHeaderAction, setCustomHeaderAction] = useState<"keep" | "change">("keep");
+  const [reassignCategoryChoice, setReassignCategoryChoice] = useState<string>("");
+  const [isReviewingCustomHeaderSubmitting, setIsReviewingCustomHeaderSubmitting] = useState<boolean>(false);
+
+  const isPredefinedCategory = (cat?: string | null) => {
+    if (!cat || !cat.trim()) return true;
+    const norm = cat.trim().toUpperCase();
+    const set = new Set(
+      [...FIXED_EXPENSE_TYPES, ...categoryHeaders].map((c) => c.trim().toUpperCase())
+    );
+    return set.has(norm);
+  };
 
   const [savingForm, setSavingForm] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -912,13 +941,15 @@ export function ExpenseRegister({
       approvingRecord ||
       rejectingRecord ||
       rejectingPaymentRecord ||
+      customHeaderReviewRecord ||
       isNewVendorModalOpen ||
       settlingRecord ||
       isApprovalsModalOpen ||
       isViewPaymentModalOpen ||
       isBankStatementOpen ||
       isCategoryModalOpen ||
-      dueDatePickerRecord
+      dueDatePickerRecord ||
+      editingHeaderRecord
     );
     if (isAnyModalOpen) {
       const originalOverflow = document.body.style.overflow;
@@ -932,6 +963,7 @@ export function ExpenseRegister({
     approvingRecord,
     rejectingRecord,
     rejectingPaymentRecord,
+    customHeaderReviewRecord,
     isNewVendorModalOpen,
     settlingRecord,
     isApprovalsModalOpen,
@@ -939,6 +971,7 @@ export function ExpenseRegister({
     isBankStatementOpen,
     isCategoryModalOpen,
     dueDatePickerRecord,
+    editingHeaderRecord,
   ]);
 
   // Global pending approvals across ALL centres (irrespective of center/month filter)
@@ -1042,25 +1075,46 @@ export function ExpenseRegister({
 
   // Official Super Admin Category Headers (Strictly defined by Super Admin, fallback to defaults if none defined yet)
   const officialCategoryOptions = useMemo(() => {
-    if (categoryHeaders && categoryHeaders.length > 0) {
-      return categoryHeaders;
-    }
-    return FIXED_EXPENSE_TYPES;
+    const raw = (categoryHeaders && categoryHeaders.length > 0)
+      ? categoryHeaders
+      : FIXED_EXPENSE_TYPES;
+
+    return Array.from(
+      new Set(
+        raw
+          .map((c) => {
+            const up = String(c || "").trim().toUpperCase();
+            if (up === "UTITILITIES") return "UTILITIES";
+            if (up === "VOCHER" || up === "VOUCHERS") return "VOUCHER";
+            if (up === "MAINTAINACE & REPAIRS") return "MAINTENANCE & REPAIRS";
+            return up;
+          })
+          .filter(Boolean)
+      )
+    );
   }, [categoryHeaders]);
 
   // Consolidated Categories (Super Admin headers + any existing record categories to prevent data loss in filters)
   const allAvailableCategories = useMemo(() => {
+    const normalize = (c: string) => {
+      const up = String(c || "").trim().toUpperCase();
+      if (up === "UTITILITIES") return "UTILITIES";
+      if (up === "VOCHER" || up === "VOUCHERS") return "VOUCHER";
+      if (up === "MAINTAINACE & REPAIRS") return "MAINTENANCE & REPAIRS";
+      return up;
+    };
+
     const set = new Set<string>();
     // 1. Super Admin defined Category Headers
     if (categoryHeaders.length > 0) {
-      categoryHeaders.forEach((c) => c && set.add(c.trim().toUpperCase()));
+      categoryHeaders.forEach((c) => c && set.add(normalize(c)));
     } else {
-      FIXED_EXPENSE_TYPES.forEach((c) => set.add(c));
+      FIXED_EXPENSE_TYPES.forEach((c) => set.add(normalize(c)));
     }
     // 2. Also preserve historic categories from existing records so no historic data is lost
-    categories.forEach((c) => c && set.add(c.trim().toUpperCase()));
-    customCategories.forEach((c) => c && set.add(c.trim().toUpperCase()));
-    records.forEach((r) => r.category && set.add(r.category.trim().toUpperCase()));
+    categories.forEach((c) => c && set.add(normalize(c)));
+    customCategories.forEach((c) => c && set.add(normalize(c)));
+    records.forEach((r) => r.category && set.add(normalize(r.category)));
     return Array.from(set);
   }, [categoryHeaders, categories, customCategories, records]);
 
@@ -1581,7 +1635,7 @@ export function ExpenseRegister({
     }
   };
 
-  // Fetch Super Admin Category Headers
+  // Fetch Super Admin Category Headers (and CM proposed headers from expenses)
   const fetchCategoryHeaders = async () => {
     try {
       const res = await fetch("/api/admin/expense-categories");
@@ -1590,11 +1644,20 @@ export function ExpenseRegister({
         if (Array.isArray(data.categories)) {
           setCategoryHeaders(data.categories);
         }
+        if (Array.isArray(data.proposedCategories)) {
+          setProposedCategories(data.proposedCategories);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch category headers:", err);
     }
   };
+
+  useEffect(() => {
+    if (isCategoryModalOpen) {
+      fetchCategoryHeaders();
+    }
+  }, [isCategoryModalOpen]);
 
   // Add new Category Header (Super Admin Only)
   const handleAddCategoryHeader = async (nameToAdd?: string) => {
@@ -1621,6 +1684,8 @@ export function ExpenseRegister({
       setCategoryHeaders(data.categories || [...categoryHeaders, target]);
       setNewCategoryName("");
       toast.success(`Category header "${target}" added successfully!`);
+      await fetchCategoryHeaders();
+      fetchRecords(false);
     } catch (err: any) {
       toast.error(err.message || "Failed to add category header");
     } finally {
@@ -1628,7 +1693,7 @@ export function ExpenseRegister({
     }
   };
 
-  // Rename Category Header (Super Admin Only)
+  // Rename / Edit Category Header (Super Admin Only)
   const handleUpdateCategoryHeader = async (oldName: string, newName: string) => {
     const trimmed = newName.trim().toUpperCase();
     if (!trimmed) {
@@ -1654,6 +1719,7 @@ export function ExpenseRegister({
       setEditingCategoryOldName(null);
       setEditingCategoryNewName("");
       toast.success(`Category renamed from "${oldName}" to "${trimmed}"`);
+      await fetchCategoryHeaders();
       fetchRecords(false);
     } catch (err: any) {
       toast.error(err.message || "Failed to update category header");
@@ -1662,9 +1728,9 @@ export function ExpenseRegister({
     }
   };
 
-  // Delete Category Header (Super Admin Only)
-  const handleDeleteCategoryHeader = async (nameToDelete: string) => {
-    if (!confirm(`Are you sure you want to delete category header "${nameToDelete}"? Existing expenses will retain their category.`)) {
+  // Delete / Reassign Category Header (Super Admin Only)
+  const handleDeleteCategoryHeader = async (nameToDelete: string, reassignTo?: string) => {
+    if (!confirm(`Are you sure you want to delete category header "${nameToDelete}"?` + (reassignTo ? ` Matching expenses will be reassigned to "${reassignTo}".` : " Existing expenses will retain their category."))) {
       return;
     }
 
@@ -1672,16 +1738,90 @@ export function ExpenseRegister({
     try {
       const res = await fetch(`/api/admin/expense-categories?name=${encodeURIComponent(nameToDelete)}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nameToDelete, reassignTo }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to delete category");
 
-      setCategoryHeaders(data.categories);
+      if (data.categories) setCategoryHeaders(data.categories);
       toast.success(`Category header "${nameToDelete}" deleted`);
+      await fetchCategoryHeaders();
+      fetchRecords(false);
     } catch (err: any) {
       toast.error(err.message || "Failed to delete category header");
     } finally {
       setDeletingCategoryName(null);
+    }
+  };
+
+  // Accept CM / Accountant Proposed Header into Official Dropdown
+  const handleAcceptCategoryIntoDropdown = async (recordId: number, categoryName: string) => {
+    const trimmed = categoryName.trim().toUpperCase();
+    if (!trimmed) return;
+    try {
+      setUpdatingCategoryId(recordId);
+      const res = await fetch(`/api/admin/expense-records/${recordId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "SUPER_ADMIN_UPDATE_CATEGORY",
+          category: trimmed,
+          acceptCategoryIntoDropdown: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to accept header into dropdown");
+
+      toast.success(
+        `Header "${trimmed}" accepted & added to official company dropdown!`
+      );
+      await fetchCategoryHeaders();
+      fetchRecords(false);
+      fetchAllPendingApprovals();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to accept header");
+    } finally {
+      setUpdatingCategoryId(null);
+    }
+  };
+
+  // Super Admin Save Edited / Reassigned Header for an Expense
+  const handleSaveHeaderEdit = async (recordId: number, newName: string, alsoAddToDropdown: boolean) => {
+    const trimmed = newName.trim().toUpperCase();
+    if (!trimmed) {
+      toast.error("Category header name is required");
+      return;
+    }
+
+    try {
+      setSavingHeaderEdit(true);
+      const res = await fetch(`/api/admin/expense-records/${recordId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "SUPER_ADMIN_UPDATE_CATEGORY",
+          category: trimmed,
+          acceptCategoryIntoDropdown: alsoAddToDropdown,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update category");
+
+      toast.success(
+        alsoAddToDropdown
+          ? `Header updated to "${trimmed}" & added to official dropdown!`
+          : `Expense #${recordId} category updated to "${trimmed}"`
+      );
+
+      setEditingHeaderRecord(null);
+      await fetchCategoryHeaders();
+      fetchRecords(false);
+      fetchAllPendingApprovals();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save category edit");
+    } finally {
+      setSavingHeaderEdit(false);
     }
   };
 
@@ -1832,6 +1972,9 @@ export function ExpenseRegister({
     const fallbackCat =
       categoryHeaders.length > 0 ? categoryHeaders[0] : FIXED_EXPENSE_TYPES[0];
 
+    setIsCustomCategoryMode(false);
+    setCustomCategoryInput("");
+
     setFormData({
       locationId: initialLocation,
       expenseDate: today,
@@ -1895,6 +2038,10 @@ export function ExpenseRegister({
 
     const fallbackCat =
       categoryHeaders.length > 0 ? categoryHeaders[0] : FIXED_EXPENSE_TYPES[0];
+
+    const isCustom = Boolean(rec.category && !officialCategoryOptions.includes(rec.category));
+    setIsCustomCategoryMode(isCustom);
+    setCustomCategoryInput(isCustom && rec.category ? rec.category : "");
 
     setFormData({
       locationId: rec.locationId || "",
@@ -2115,7 +2262,13 @@ export function ExpenseRegister({
       return;
     }
 
-    const finalCategory = formData.category.trim().toUpperCase() || "GENERAL EXPENSE";
+    if (isCustomCategoryMode && !customCategoryInput.trim()) {
+      toast.error("Please enter your custom / proposed category header");
+      return;
+    }
+
+    const rawCategory = isCustomCategoryMode ? customCategoryInput : formData.category;
+    const finalCategory = rawCategory.trim().toUpperCase() || "GENERAL EXPENSE";
 
     const isEdit = Boolean(editingRecord);
     const isCurrentlyRejected =
@@ -2311,7 +2464,7 @@ export function ExpenseRegister({
       toast.success(
         isAlreadyPaymentApproved
           ? "Payment details updated successfully!"
-          : "Billing details saved! Payment approval request sent to Super Admin (Sir).",
+          : "Billing details saved & sent for Super Admin 3rd Payment Approval (Sir to Pay)!",
         { duration: 4000 }
       );
       setSettlingRecord(null);
@@ -2382,6 +2535,81 @@ export function ExpenseRegister({
       toast.error(err.message || "Approval failed");
     } finally {
       setApproving(false);
+    }
+  };
+
+  // Entry point for Super Admin approving Step 2:
+  // Detects if CM/Accountant entered a custom category header.
+  // If custom: prompts Super Admin to decide whether to Keep (add to predefined list) or Change (reassign from dropdown).
+  // If standard/predefined: proceeds directly with regular approval.
+  const handleInitiateSuperAdminApprove = (rec: ExpenseRecordItem) => {
+    if (!isPredefinedCategory(rec.category)) {
+      setCustomHeaderReviewRecord(rec);
+      setCustomHeaderAction("keep");
+      setReassignCategoryChoice(officialCategoryOptions[0] || FIXED_EXPENSE_TYPES[0]);
+    } else {
+      handleSuperAdminApprove(rec.id);
+    }
+  };
+
+  // Super Admin confirms custom header decision (Keep & Add to Predefined, or Reassign to existing)
+  const handleConfirmCustomHeaderApproval = async () => {
+    if (!customHeaderReviewRecord) return;
+    setIsReviewingCustomHeaderSubmitting(true);
+    try {
+      if (customHeaderAction === "keep") {
+        const rawCat = customHeaderReviewRecord.category || "GENERAL EXPENSE";
+        const catName = rawCat.trim().toUpperCase();
+
+        const res = await fetch(`/api/admin/expense-records/${customHeaderReviewRecord.id}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "SUPER_ADMIN_APPROVE",
+            category: catName,
+            acceptCategoryIntoDropdown: true,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Approval failed");
+
+        setCategoryHeaders((prev) => Array.from(new Set([...prev, catName])));
+        toast.success(
+          `Custom Header "${catName}" kept, added to Predefined Categories list, and Expense Requisition Approved!`,
+          { duration: 5000 }
+        );
+      } else {
+        // "change"
+        const newCat = (reassignCategoryChoice || officialCategoryOptions[0] || FIXED_EXPENSE_TYPES[0]).trim().toUpperCase();
+
+        const res = await fetch(`/api/admin/expense-records/${customHeaderReviewRecord.id}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "SUPER_ADMIN_APPROVE",
+            category: newCat,
+            acceptCategoryIntoDropdown: false,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Approval failed");
+
+        toast.success(
+          `Expense category reclassified to "${newCat}" and Approved!`,
+          { duration: 5000 }
+        );
+      }
+
+      setCustomHeaderReviewRecord(null);
+      await fetchCategoryHeaders();
+      await fetchAllPendingApprovals();
+      fetchRecords(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to process custom header review");
+    } finally {
+      setIsReviewingCustomHeaderSubmitting(false);
     }
   };
 
@@ -3897,19 +4125,31 @@ export function ExpenseRegister({
                         {(() => {
                           const s = getColStyle("category");
                           if (!s) return null;
+                          const isCustom = !isPredefinedCategory(rec.category);
                           return (
                             <td style={s.style} className={`py-3 px-2.5 whitespace-nowrap ${s.className}`}>
-                              <select
-                                value={rec.category || "GENERAL EXPENSE"}
-                                onChange={(e) => handleUpdateExpenseCategory(rec.id, e.target.value)}
-                                disabled={updatingCategoryId === rec.id}
-                                className="bg-cyan-50/80 hover:bg-cyan-100 text-[#006064] border border-cyan-300 text-[10px] font-bold uppercase py-1 px-1.5 focus:outline-none focus:border-[#006064] cursor-pointer max-w-[155px] truncate shadow-2xs"
-                                title="Select / change category header"
-                              >
-                                {Array.from(new Set([...officialCategoryOptions, ...(rec.category ? [rec.category] : [])])).map((cat) => (
-                                  <option key={cat} value={cat} className="bg-white text-gray-900 font-bold uppercase">{cat}</option>
-                                ))}
-                              </select>
+                              <div className="flex flex-col gap-0.5">
+                                <select
+                                  value={rec.category || "GENERAL EXPENSE"}
+                                  onChange={(e) => handleUpdateExpenseCategory(rec.id, e.target.value)}
+                                  disabled={updatingCategoryId === rec.id}
+                                  className={`text-[10px] font-bold uppercase py-1 px-1.5 focus:outline-none cursor-pointer max-w-[155px] truncate shadow-2xs border ${
+                                    isCustom
+                                      ? "bg-amber-50/90 text-amber-900 border-amber-300 focus:border-amber-600"
+                                      : "bg-cyan-50/80 hover:bg-cyan-100 text-[#006064] border-cyan-300 focus:border-[#006064]"
+                                  }`}
+                                  title={isCustom ? "Custom category header entered - awaiting/subject to Super Admin approval" : "Select / change category header"}
+                                >
+                                  {Array.from(new Set([...officialCategoryOptions, ...(rec.category ? [rec.category] : [])])).map((cat) => (
+                                    <option key={cat} value={cat} className="bg-white text-gray-900 font-bold uppercase">{cat}</option>
+                                  ))}
+                                </select>
+                                {isCustom && (
+                                  <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded-xs text-[8px] font-black bg-amber-100 text-amber-900 border border-amber-300 w-fit tracking-tight" title="Custom category header entered by user">
+                                    ⚡ CUSTOM HEADER
+                                  </span>
+                                )}
+                              </div>
                             </td>
                           );
                         })()}
@@ -4319,20 +4559,30 @@ export function ExpenseRegister({
                       {(() => {
                         const s = getColStyle("category");
                         if (!s) return null;
+                        const isCustom = !isPredefinedCategory(rec.category);
                         return (
                           <td style={s.style} className={`py-3 px-2.5 whitespace-nowrap ${s.className}`}>
-                            <div className="flex flex-col gap-1">
+                            <div className="flex flex-col gap-0.5">
                               <select
                                 value={rec.category || "GENERAL EXPENSE"}
                                 onChange={(e) => handleUpdateExpenseCategory(rec.id, e.target.value)}
                                 disabled={updatingCategoryId === rec.id}
-                                className="bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9.5px] font-bold uppercase py-0.5 px-1 focus:outline-none focus:border-emerald-600 cursor-pointer max-w-[145px] truncate shadow-2xs"
-                                title="Select / change category header"
+                                className={`text-[9.5px] font-bold uppercase py-0.5 px-1 focus:outline-none cursor-pointer max-w-[145px] truncate shadow-2xs border ${
+                                  isCustom
+                                    ? "bg-amber-50/90 text-amber-900 border-amber-300 focus:border-amber-600"
+                                    : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-900 border-emerald-300 focus:border-emerald-600"
+                                }`}
+                                title={isCustom ? "Custom category header entered - awaiting/subject to Super Admin approval" : "Select / change category header"}
                               >
                                 {Array.from(new Set([...officialCategoryOptions, ...(rec.category ? [rec.category] : [])])).map((cat) => (
                                   <option key={cat} value={cat} className="bg-white text-gray-900 font-bold uppercase">{cat}</option>
                                 ))}
                               </select>
+                              {isCustom && (
+                                <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded-xs text-[8px] font-black bg-amber-100 text-amber-900 border border-amber-300 w-fit tracking-tight" title="Custom category header entered by user">
+                                  ⚡ CUSTOM HEADER
+                                </span>
+                              )}
                             </div>
                           </td>
                         );
@@ -4531,11 +4781,29 @@ export function ExpenseRegister({
                                 <div className="inline-flex items-center gap-1">
                                   <button
                                     type="button"
-                                    onClick={() => handleSuperAdminApprove(rec.id)}
-                                    className="px-2.5 py-1 text-[9.5px] font-bold uppercase bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1"
-                                    title="Authorize payment for this expense"
+                                    onClick={() => handleInitiateSuperAdminApprove(rec)}
+                                    className={`px-2.5 py-1 text-[9.5px] font-bold uppercase text-white transition-all cursor-pointer shadow-2xs flex items-center gap-1 ${
+                                      !isPredefinedCategory(rec.category)
+                                        ? "bg-amber-600 hover:bg-amber-700 ring-1 ring-amber-400"
+                                        : "bg-emerald-600 hover:bg-emerald-700"
+                                    }`}
+                                    title={
+                                      !isPredefinedCategory(rec.category)
+                                        ? `Custom Header "${rec.category}" detected! Click to review (Keep or Change) & Approve`
+                                        : "Authorize expense requisition"
+                                    }
                                   >
-                                    <Check className="w-2.5 h-2.5" /> Approve
+                                    {!isPredefinedCategory(rec.category) ? (
+                                      <>
+                                        <Sparkles className="w-2.5 h-2.5 text-amber-200 animate-pulse" />
+                                        <span>Review Header</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Check className="w-2.5 h-2.5" />
+                                        <span>Approve</span>
+                                      </>
+                                    )}
                                   </button>
                                   <button
                                     type="button"
@@ -5325,34 +5593,92 @@ export function ExpenseRegister({
               {/* Section 2: Expense Classification & Amount */}
               <div className="space-y-3 pt-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Expense Type / Category (Super Admin defined headers only - NO custom option) */}
+                  {/* Expense Type / Category (Predefined or Custom) */}
                   <div>
-                    <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
-                      Expense Type / Category <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, category: e.target.value }))
-                      }
-                      required
-                      className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064] cursor-pointer bg-white font-medium"
-                    >
-                      {/* Strictly Super Admin Category Headers (plus existing record's category if editing an older record) */}
-                      {Array.from(
-                        new Set([
-                          ...officialCategoryOptions,
-                          ...(formData.category ? [formData.category] : []),
-                        ])
-                      ).map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="text-[10px] text-gray-400 mt-0.5 block">
-                      Main expense categories are centrally managed by Super Admin.
-                    </span>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-gray-700 uppercase tracking-wider text-xs">
+                        Expense Type / Category <span className="text-red-500">*</span>
+                      </label>
+                      {!isCustomCategoryMode ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCustomCategoryMode(true);
+                            setCustomCategoryInput("");
+                          }}
+                          className="text-[11px] text-[#006064] font-semibold hover:underline flex items-center gap-1"
+                        >
+                          + Custom Header
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCustomCategoryMode(false);
+                            setCustomCategoryInput("");
+                            setFormData((prev) => ({
+                              ...prev,
+                              category: officialCategoryOptions[0] || FIXED_EXPENSE_TYPES[0],
+                            }));
+                          }}
+                          className="text-[11px] text-[#006064] font-semibold hover:underline flex items-center gap-1"
+                        >
+                          ← Predefined List
+                        </button>
+                      )}
+                    </div>
+
+                    {!isCustomCategoryMode ? (
+                      <>
+                        <select
+                          value={formData.category}
+                          onChange={(e) => {
+                            if (e.target.value === "__CUSTOM__") {
+                              setIsCustomCategoryMode(true);
+                              setCustomCategoryInput("");
+                            } else {
+                              setFormData((prev) => ({ ...prev, category: e.target.value }));
+                            }
+                          }}
+                          required
+                          className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064] cursor-pointer bg-white font-medium"
+                        >
+                          {Array.from(
+                            new Set([
+                              ...officialCategoryOptions,
+                              ...(formData.category && formData.category !== "__CUSTOM__" ? [formData.category] : []),
+                            ])
+                          ).map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                          <option value="__CUSTOM__" className="text-[#006064] font-bold">
+                            + Enter Custom / New Expense Header...
+                          </option>
+                        </select>
+                        <span className="text-[10px] text-gray-400 mt-0.5 block">
+                          Select from predefined headers or click &quot;+ Custom Header&quot; to propose a new one.
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          value={customCategoryInput}
+                          onChange={(e) => setCustomCategoryInput(e.target.value.toUpperCase())}
+                          placeholder="ENTER CUSTOM EXPENSE HEADER (E.G. DEEP CLEANING, BRANDING)..."
+                          required
+                          className="w-full border-2 border-amber-400 bg-amber-50/50 p-2 text-xs font-semibold uppercase tracking-wider focus:outline-none focus:border-[#006064]"
+                        />
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-amber-800 bg-amber-100/70 px-2 py-1 border border-amber-300">
+                          <span>⚠️</span>
+                          <span>
+                            <strong>Custom Header:</strong> Super Admin will review this in Approval 1 and choose to either keep &amp; add it to the master list or reassign it.
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Payment Mode (Optional) */}
@@ -6841,95 +7167,180 @@ export function ExpenseRegister({
                 </div>
               </div>
 
-              {/* Form Section 5: Disbursal / UTR Entry (UNLOCKED AFTER APPROVAL) */}
-              {(settlingRecord.approvalStatus === "APPROVED" || settlingRecord.paymentStatus === "PAID") ? (
-                <div className="space-y-3 pt-2 bg-emerald-50/60 p-3.5 border border-emerald-200">
-                  <div className="flex items-center justify-between border-b border-emerald-200 pb-1.5">
-                    <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> 5. Super Admin Approved — Disbursal & UTR Details
-                    </h4>
-                    <span className="bg-emerald-600 text-white text-[9.5px] font-mono px-2 py-0.5 font-bold uppercase">
-                      Approved ✓
-                    </span>
-                  </div>
+              {/* Form Section 5: Disbursal / UTR Entry (ONLY UNLOCKED AFTER SUPER ADMIN PAYMENT APPROVAL) */}
+              {(() => {
+                const isSettlingPaymentApproved =
+                  settlingRecord.paymentApprovalStatus === "APPROVED" ||
+                  settlingRecord.paymentStatus === "PAID" ||
+                  Boolean(settlingRecord.utrNumber);
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* UTR No */}
-                    <div>
-                      <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1 text-[10.5px]">
-                        UTR No / Bank Ref # *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. UTR123456789"
-                        value={settleData.utrNumber}
-                        onChange={(e) => setSettleData((prev) => ({ ...prev, utrNumber: e.target.value }))}
-                        className="w-full border border-gray-300 p-1.5 text-xs bg-white font-mono font-bold focus:outline-none focus:border-emerald-600"
-                      />
+                if (isSettlingPaymentApproved) {
+                  return (
+                    <div className="space-y-3 pt-2 bg-emerald-50/60 p-3.5 border border-emerald-200">
+                      <div className="flex items-center justify-between border-b border-emerald-200 pb-1.5">
+                        <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" /> 5. Super Admin Approved — Disbursal & UTR Details
+                        </h4>
+                        <span className="bg-emerald-600 text-white text-[9.5px] font-mono px-2 py-0.5 font-bold uppercase">
+                          Approved ✓
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* UTR No */}
+                        <div>
+                          <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1 text-[10.5px]">
+                            UTR No / Bank Ref # *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. UTR123456789"
+                            value={settleData.utrNumber}
+                            onChange={(e) => setSettleData((prev) => ({ ...prev, utrNumber: e.target.value }))}
+                            className="w-full border border-gray-300 p-1.5 text-xs bg-white font-mono font-bold focus:outline-none focus:border-emerald-600"
+                          />
+                        </div>
+
+                        {/* Payment Date */}
+                        <div>
+                          <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1 text-[10.5px]">
+                            Payment Date
+                          </label>
+                          <input
+                            type="date"
+                            value={settleData.utrDate || settleData.payReceiveDate || ""}
+                            onChange={(e) =>
+                              setSettleData((prev) => ({
+                                ...prev,
+                                utrDate: e.target.value,
+                                payReceiveDate: e.target.value,
+                              }))
+                            }
+                            className="w-full border border-gray-300 p-1.5 text-xs bg-white font-mono focus:outline-none focus:border-emerald-600"
+                          />
+                        </div>
+
+                        {/* Payment Mode */}
+                        <div>
+                          <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1 text-[10.5px]">
+                            Disbursal Mode
+                          </label>
+                          <select
+                            value={settleData.accPaymentMode}
+                            onChange={(e) => setSettleData((prev) => ({ ...prev, accPaymentMode: e.target.value }))}
+                            className="w-full border border-gray-300 p-1.5 text-xs bg-white focus:outline-none focus:border-emerald-600"
+                          >
+                            <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
+                            <option value="IMPS">IMPS</option>
+                            <option value="UPI">UPI</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="Cash">Cash</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Send Alert Email to Vendor */}
+                      <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between">
+                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-emerald-900">
+                          <input
+                            type="checkbox"
+                            checked={settleData.sendAlertEmail}
+                            onChange={(e) => setSettleData((prev) => ({ ...prev, sendAlertEmail: e.target.checked }))}
+                            className="w-4 h-4 accent-emerald-700 cursor-pointer"
+                          />
+                          <span>Send Alert / confirmation email to vendor upon saving UTR</span>
+                        </label>
+                      </div>
                     </div>
+                  );
+                }
 
-                    {/* Payment Date */}
-                    <div>
-                      <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1 text-[10.5px]">
-                        Payment Date
-                      </label>
-                      <input
-                        type="date"
-                        value={settleData.utrDate || settleData.payReceiveDate || ""}
-                        onChange={(e) =>
-                          setSettleData((prev) => ({
-                            ...prev,
-                            utrDate: e.target.value,
-                            payReceiveDate: e.target.value,
-                          }))
-                        }
-                        className="w-full border border-gray-300 p-1.5 text-xs bg-white font-mono focus:outline-none focus:border-emerald-600"
-                      />
-                    </div>
-
-                    {/* Payment Mode */}
-                    <div>
-                      <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1 text-[10.5px]">
-                        Disbursal Mode
-                      </label>
-                      <select
-                        value={settleData.accPaymentMode}
-                        onChange={(e) => setSettleData((prev) => ({ ...prev, accPaymentMode: e.target.value }))}
-                        className="w-full border border-gray-300 p-1.5 text-xs bg-white focus:outline-none focus:border-emerald-600"
+                // If Super Admin has NOT approved payment yet:
+                return (
+                  <div className="space-y-3 pt-2 bg-amber-50/80 p-3.5 border border-amber-300">
+                    <div className="flex items-center justify-between border-b border-amber-200 pb-1.5">
+                      <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-amber-600" /> 5. Super Admin 3rd Payment Approval (Sir to Pay)
+                      </h4>
+                      <span
+                        className={`text-[9.5px] font-mono px-2 py-0.5 font-bold uppercase ${
+                          settlingRecord.paymentApprovalStatus === "PENDING"
+                            ? "bg-amber-600 text-white animate-pulse"
+                            : "bg-slate-700 text-white"
+                        }`}
                       >
-                        <option value="Bank Transfer">Bank Transfer (NEFT/RTGS)</option>
-                        <option value="IMPS">IMPS</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Cheque">Cheque</option>
-                        <option value="Cash">Cash</option>
-                      </select>
+                        {settlingRecord.paymentApprovalStatus === "PENDING"
+                          ? "⏳ Awaiting Sir Pay"
+                          : "3rd Approval Required"}
+                      </span>
                     </div>
-                  </div>
 
-                  {/* Send Alert Email to Vendor */}
-                  <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between">
-                    <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-emerald-900">
-                      <input
-                        type="checkbox"
-                        checked={settleData.sendAlertEmail}
-                        onChange={(e) => setSettleData((prev) => ({ ...prev, sendAlertEmail: e.target.checked }))}
-                        className="w-4 h-4 accent-emerald-700 cursor-pointer"
-                      />
-                      <span>Send Alert / confirmation email to vendor upon saving UTR</span>
-                    </label>
+                    <div className="text-[11px] text-amber-900 space-y-1 bg-white/70 p-2.5 border border-amber-200">
+                      <p>
+                        <strong>Super Admin Expense Requisition (Step 2) is Approved.</strong> Complete the vendor breakdown, invoice & bank portal verification above.
+                      </p>
+                      <p className="text-amber-800 text-[10.5px]">
+                        🔒 <strong>Payment Disbursal Locked:</strong> UTR Number, Payment Date, Disbursal Mode, and Vendor Confirmation Advice remain strictly locked until Super Admin grants <strong>3rd Payment Approval (Sir to Pay)</strong>.
+                      </p>
+                    </div>
+
+                    {/* Locked Fields Preview */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 opacity-60">
+                      <div>
+                        <label className="block font-bold text-gray-500 uppercase tracking-wider mb-1 text-[10px]">
+                          UTR No / Bank Ref #
+                        </label>
+                        <div className="w-full border border-dashed border-gray-300 p-1.5 text-xs bg-gray-100 text-gray-400 font-mono flex items-center gap-1 cursor-not-allowed">
+                          <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span>e.g. UTR123456789 (Locked)</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-gray-500 uppercase tracking-wider mb-1 text-[10.5px]">
+                          Payment Date
+                        </label>
+                        <div className="w-full border border-dashed border-gray-300 p-1.5 text-xs bg-gray-100 text-gray-400 font-mono flex items-center gap-1 cursor-not-allowed">
+                          <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span>dd-mm-yyyy (Locked)</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-gray-500 uppercase tracking-wider mb-1 text-[10.5px]">
+                          Disbursal Mode
+                        </label>
+                        <div className="w-full border border-dashed border-gray-300 p-1.5 text-xs bg-gray-100 text-gray-400 font-mono flex items-center gap-1 cursor-not-allowed">
+                          <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span>Bank Transfer (Locked)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Super Admin Direct Action (If Admin is viewing this modal) */}
+                    {isAdmin && (
+                      <div className="pt-2 border-t border-amber-200 flex items-center justify-between bg-emerald-50/80 p-2.5 border border-emerald-300 mt-1">
+                        <div className="text-[11px] text-emerald-900">
+                          <strong className="block">Super Admin Payment Authorization:</strong>
+                          <span className="text-[10px] text-emerald-700">You can authorize payment now to instantly unlock UTR entry.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await handleApprovePayment(settlingRecord.id);
+                            setSettlingRecord((prev) =>
+                              prev ? { ...prev, paymentApprovalStatus: "APPROVED" } : null
+                            );
+                          }}
+                          className="px-3 py-1.5 text-[10.5px] font-bold uppercase bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs flex items-center gap-1 shrink-0"
+                        >
+                          <Check className="w-3.5 h-3.5" /> Approve Payment (Sir Pay)
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ) : (
-                <div className="bg-amber-50 p-3 border border-amber-200 flex items-start gap-2.5">
-                  <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <div className="text-[11px] text-amber-900 leading-snug">
-                    <strong>Payment Details Locked:</strong>
-                    <p className="mt-0.5 text-amber-800">
-                      Payment Date, UTR No., Disbursal Mode, and Vendor Confirmation Email remain strictly locked until both Accountant validation and Super Admin Approval are completed.
-                    </p>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Actions */}
               <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2 sticky bottom-0 bg-white py-2">
@@ -6940,20 +7351,35 @@ export function ExpenseRegister({
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={savingForm}
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>
-                    {savingForm
-                      ? "Saving..."
-                      : (settlingRecord.approvalStatus === "APPROVED" || settlingRecord.paymentStatus === "PAID")
-                      ? "Save & Update Payment Details"
-                      : "Submit Bill & Send for Super Admin Approval"}
-                  </span>
-                </button>
+                {(() => {
+                  const isSettlingPaymentApproved =
+                    settlingRecord.paymentApprovalStatus === "APPROVED" ||
+                    settlingRecord.paymentStatus === "PAID" ||
+                    Boolean(settlingRecord.utrNumber);
+
+                  return (
+                    <button
+                      type="submit"
+                      disabled={savingForm}
+                      className={`text-white px-5 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5 ${
+                        isSettlingPaymentApproved
+                          ? "bg-emerald-700 hover:bg-emerald-800"
+                          : "bg-[#004d40] hover:bg-[#00382e]"
+                      }`}
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>
+                        {savingForm
+                          ? "Saving..."
+                          : isSettlingPaymentApproved
+                          ? "Save & Record Payment Disbursal (UTR)"
+                          : settlingRecord.paymentApprovalStatus === "PENDING"
+                          ? "Update Breakdown & Send for Super Admin 3rd Payment Approval"
+                          : "Send for Super Admin 3rd Payment Approval"}
+                      </span>
+                    </button>
+                  );
+                })()}
               </div>
             </form>
           </div>
@@ -7537,15 +7963,139 @@ export function ExpenseRegister({
                   </button>
                 </div>
 
-                {/* Simple Read-Only Category Suggestions */}
+                {/* Interactive Category Suggestions */}
                 <div className="pt-2 border-t border-slate-200 text-[11px] text-gray-500 leading-normal">
-                  <span className="font-bold text-gray-700">Suggestions: </span>
-                  <span className="text-gray-500">
-                    {SUGGESTED_CATEGORY_HEADERS.join(" • ")}
-                  </span>
+                  <span className="font-bold text-gray-700 block mb-1">Quick Add Suggestions (Click to add):</span>
+                  <div className="flex flex-wrap gap-1">
+                    {SUGGESTED_CATEGORY_HEADERS.map((sugg) => {
+                      const alreadyAdded = categoryHeaders.includes(sugg);
+                      return (
+                        <button
+                          key={sugg}
+                          type="button"
+                          onClick={() => !alreadyAdded && handleAddCategoryHeader(sugg)}
+                          disabled={alreadyAdded}
+                          className={`text-[9.5px] px-2 py-0.5 border font-semibold transition-all ${
+                            alreadyAdded
+                              ? "bg-gray-100 text-gray-400 border-gray-200 cursor-default"
+                              : "bg-white text-[#006064] border-cyan-200 hover:bg-cyan-50 hover:border-cyan-400 cursor-pointer shadow-2xs"
+                          }`}
+                        >
+                          {alreadyAdded ? `✓ ${sugg}` : `+ ${sugg}`}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
+
+              {/* Section 2: Active Category Headers List */}
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                  <h4 className="font-bold uppercase tracking-wider text-gray-800 text-[11px] flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-[#006064]" />
+                    <span>Official Category Headers ({categoryHeaders.length})</span>
+                  </h4>
+                  <span className="text-[10px] text-gray-500">
+                    Headers created by Super Admin for CM & Accountant dropdowns
+                  </span>
+                </div>
+
+                {categoryHeaders.length === 0 ? (
+                  <div className="py-8 text-center text-gray-400 bg-gray-50 border border-dashed border-gray-300">
+                    <p className="text-xs font-semibold text-gray-600">No category headers created yet.</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Add a new header above or pick from suggestions.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[380px] overflow-y-auto pr-1">
+                    {categoryHeaders.map((cat) => {
+                      const isEditing = editingCategoryOldName === cat;
+                      const expenseCount = records.filter(
+                        (r) => r.category && r.category.trim().toUpperCase() === cat
+                      ).length;
+
+                      return (
+                        <div
+                          key={cat}
+                          className="flex items-center justify-between p-2.5 bg-gray-50 hover:bg-cyan-50/40 border border-gray-200 transition-colors"
+                        >
+                          {isEditing ? (
+                            <div className="flex items-center gap-1.5 flex-1">
+                              <input
+                                type="text"
+                                value={editingCategoryNewName}
+                                onChange={(e) => setEditingCategoryNewName(e.target.value.toUpperCase())}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleUpdateCategoryHeader(cat, editingCategoryNewName);
+                                  }
+                                }}
+                                autoFocus
+                                className="flex-1 bg-white border border-[#006064] p-1 text-[11px] font-bold uppercase text-gray-900 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateCategoryHeader(cat, editingCategoryNewName)}
+                                disabled={savingCategory || !editingCategoryNewName.trim()}
+                                className="bg-[#006064] text-white px-2 py-1 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#00838f]"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingCategoryOldName(null);
+                                  setEditingCategoryNewName("");
+                                }}
+                                className="bg-gray-200 text-gray-700 px-2 py-1 text-[10px] font-bold uppercase cursor-pointer hover:bg-gray-300"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-bold text-gray-800 text-[11px] truncate uppercase">
+                                  {cat}
+                                </span>
+                                {expenseCount > 0 && (
+                                  <span className="text-[9px] font-mono px-1.5 py-0.2 bg-cyan-100 text-[#006064] font-bold shrink-0">
+                                    {expenseCount} exp
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingCategoryOldName(cat);
+                                    setEditingCategoryNewName(cat);
+                                  }}
+                                  className="p-1 text-gray-500 hover:text-[#006064] hover:bg-white border border-transparent hover:border-gray-200 transition-all cursor-pointer"
+                                  title={`Rename ${cat}`}
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCategoryHeader(cat)}
+                                  disabled={deletingCategoryName === cat}
+                                  className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all cursor-pointer"
+                                  title={`Delete ${cat}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
+            </div>
 
 
             {/* Modal Footer */}

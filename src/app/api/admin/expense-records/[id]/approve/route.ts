@@ -149,6 +149,82 @@ export async function POST(
       });
     }
 
+const CATEGORY_SETTING_KEY = 'EXPENSE_CATEGORY_HEADERS';
+
+async function addCategoryToDropdown(catName: string) {
+  const norm = String(catName || '').trim().toUpperCase();
+  if (!norm) return;
+
+  try {
+    const setting = await prisma.setting.findUnique({
+      where: { key: CATEGORY_SETTING_KEY },
+    });
+
+    let list: string[] = [];
+    if (setting && setting.value) {
+      try {
+        const parsed = JSON.parse(setting.value);
+        if (Array.isArray(parsed)) list = parsed;
+      } catch {}
+    }
+
+    if (!list.includes(norm)) {
+      list.push(norm);
+      await prisma.setting.upsert({
+        where: { key: CATEGORY_SETTING_KEY },
+        create: {
+          key: CATEGORY_SETTING_KEY,
+          value: JSON.stringify(list),
+          group: 'expenses',
+        },
+        update: {
+          value: JSON.stringify(list),
+        },
+      });
+    }
+  } catch (err) {
+    console.error('Failed to add category to dropdown:', err);
+  }
+}
+
+    // ── SUPER ADMIN UPDATE / ACCEPT / REASSIGN CATEGORY HEADER ──
+    if (action === 'SUPER_ADMIN_UPDATE_CATEGORY' || action === 'UPDATE_CATEGORY') {
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Only Super Admin can edit, accept or reassign expense categories during review.' },
+          { status: 403 }
+        );
+      }
+
+      const targetCategory = body.category ? String(body.category).trim().toUpperCase() : '';
+      if (!targetCategory) {
+        return NextResponse.json(
+          { error: 'Category name is required.' },
+          { status: 400 }
+        );
+      }
+
+      const acceptIntoDropdown = Boolean(body.acceptCategoryIntoDropdown);
+      if (acceptIntoDropdown) {
+        await addCategoryToDropdown(targetCategory);
+      }
+
+      const updated = await (prisma as any).expenseRecord.update({
+        where: { id: recordId },
+        data: {
+          category: targetCategory,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        message: acceptIntoDropdown
+          ? `Header "${targetCategory}" accepted into official dropdown and assigned to Expense #${recordId}!`
+          : `Expense #${recordId} category updated to "${targetCategory}".`,
+      });
+    }
+
     // ── 2. SUPER ADMIN ACTIONS ──
     if (action === 'SUPER_ADMIN_APPROVE') {
       if (!isSuperAdmin) {
@@ -158,22 +234,35 @@ export async function POST(
         );
       }
 
+      let categoryToSave = body.category ? String(body.category).trim().toUpperCase() : undefined;
+      const acceptCategoryIntoDropdown = Boolean(body.acceptCategoryIntoDropdown);
+
+      if (categoryToSave && acceptCategoryIntoDropdown) {
+        await addCategoryToDropdown(categoryToSave);
+      }
+
+      const updateData: any = {
+        approvalStatus: 'APPROVED',
+        superAdminApprovalStatus: 'APPROVED',
+        superAdminApprovedById: user.id,
+        superAdminApprovedByName: user.name,
+        superAdminApprovedAt: new Date(),
+        superAdminRemarks: remarks ? String(remarks).trim() : null,
+        approvedById: user.id,
+        approvedByName: user.name,
+        approvedAt: new Date(),
+        approvalRemarks: remarks ? String(remarks).trim() : null,
+        rejectionStage: null,
+        rejectionRemarks: null,
+      };
+
+      if (categoryToSave) {
+        updateData.category = categoryToSave;
+      }
+
       const updated = await (prisma as any).expenseRecord.update({
         where: { id: recordId },
-        data: {
-          approvalStatus: 'APPROVED',
-          superAdminApprovalStatus: 'APPROVED',
-          superAdminApprovedById: user.id,
-          superAdminApprovedByName: user.name,
-          superAdminApprovedAt: new Date(),
-          superAdminRemarks: remarks ? String(remarks).trim() : null,
-          approvedById: user.id,
-          approvedByName: user.name,
-          approvedAt: new Date(),
-          approvalRemarks: remarks ? String(remarks).trim() : null,
-          rejectionStage: null,
-          rejectionRemarks: null,
-        },
+        data: updateData,
       });
 
       return NextResponse.json({

@@ -7,10 +7,11 @@ const SETTING_KEY = 'expense_category_headers';
 
 export const DEFAULT_EXPENSE_CATEGORIES = [
   'ELECTRICITY & UTILITIES',
+  'UTILITIES',
   'MAINTENANCE & REPAIRS',
   'OFFICE SUPPLIES & STATIONERY',
   'TEA, COFFEE & PANTRY',
-  'VOUCHERS',
+  'VOUCHER',
   'MARKETING & ADVERTISING',
   'INTERNET & TELECOM',
   'CLEANING & HOUSEKEEPING',
@@ -41,6 +42,14 @@ async function getAuthUser() {
   }
 }
 
+function normalizeCategoryName(cat: string): string {
+  const up = String(cat || '').trim().toUpperCase();
+  if (up === 'UTITILITIES') return 'UTILITIES';
+  if (up === 'VOCHER' || up === 'VOUCHERS') return 'VOUCHER';
+  if (up === 'MAINTAINACE & REPAIRS') return 'MAINTENANCE & REPAIRS';
+  return up;
+}
+
 async function getStoredCategories(): Promise<string[]> {
   try {
     const setting = await prisma.setting.findUnique({
@@ -50,7 +59,10 @@ async function getStoredCategories(): Promise<string[]> {
     if (setting && setting.value) {
       const parsed = JSON.parse(setting.value);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((c: string) => String(c).trim().toUpperCase()).filter(Boolean);
+        const cleaned = Array.from(
+          new Set(parsed.map((c: string) => normalizeCategoryName(c)).filter(Boolean))
+        );
+        return cleaned;
       }
     }
   } catch (err) {
@@ -66,7 +78,7 @@ async function getStoredCategories(): Promise<string[]> {
   const merged = Array.from(
     new Set([
       ...DEFAULT_EXPENSE_CATEGORIES,
-      ...distinctDB.map((d: any) => d.category?.trim().toUpperCase()).filter(Boolean),
+      ...distinctDB.map((d: any) => normalizeCategoryName(d.category)).filter(Boolean),
     ])
   );
 
@@ -94,7 +106,26 @@ export async function GET() {
     }
 
     const categories = await getStoredCategories();
-    return NextResponse.json({ success: true, categories });
+
+    // Find any custom headers proposed by CM/Accountant in expense records not yet in official categories
+    const distinctDB = await (prisma as any).expenseRecord.findMany({
+      select: { category: true },
+      distinct: ['category'],
+    }).catch(() => []);
+
+    const proposedCategories = Array.from(
+      new Set(
+        distinctDB
+          .map((d: any) => normalizeCategoryName(d.category))
+          .filter((c: string) => c && !categories.includes(c))
+      )
+    );
+
+    return NextResponse.json({
+      success: true,
+      categories,
+      proposedCategories,
+    });
   } catch (error: any) {
     console.error('[EXPENSE_CATEGORIES_GET]', error);
     return NextResponse.json(
@@ -201,23 +232,23 @@ export async function PUT(request: Request) {
     const categories = await getStoredCategories();
 
     const index = categories.indexOf(oldName);
-    if (index === -1) {
-      return NextResponse.json(
-        { error: `Category "${oldName}" not found.` },
-        { status: 404 }
-      );
-    }
+    let updated = [...categories];
 
-    // Check if newName already exists elsewhere
-    if (categories.includes(newName) && oldName !== newName) {
-      return NextResponse.json(
-        { error: `Category "${newName}" already exists.` },
-        { status: 400 }
-      );
+    if (index !== -1) {
+      // Check if newName already exists elsewhere
+      if (categories.includes(newName) && oldName !== newName) {
+        return NextResponse.json(
+          { error: `Category "${newName}" already exists.` },
+          { status: 400 }
+        );
+      }
+      updated[index] = newName;
+    } else {
+      // It was a proposed category from expense records: add newName to official list
+      if (!updated.includes(newName)) {
+        updated.push(newName);
+      }
     }
-
-    const updated = [...categories];
-    updated[index] = newName;
 
     await prisma.setting.upsert({
       where: { key: SETTING_KEY },
@@ -231,7 +262,7 @@ export async function PUT(request: Request) {
       },
     });
 
-    // Optionally update records referencing oldName so no orphaned entries occur
+    // Update records referencing oldName so no orphaned entries occur
     await (prisma as any).expenseRecord.updateMany({
       where: { category: oldName },
       data: { category: newName },
@@ -269,17 +300,15 @@ export async function DELETE(request: Request) {
       );
     }
 
+    let bodyObj: any = {};
+    try {
+      bodyObj = await request.json();
+    } catch {}
+
     const url = new URL(request.url);
-    let targetName = url.searchParams.get('name');
-
-    if (!targetName) {
-      try {
-        const body = await request.json();
-        targetName = body?.name;
-      } catch {}
-    }
-
+    const targetName = url.searchParams.get('name') || bodyObj?.name;
     const nameToDelete = targetName ? String(targetName).trim().toUpperCase() : '';
+    const reassignTo = bodyObj?.reassignTo ? String(bodyObj.reassignTo).trim().toUpperCase() : null;
 
     if (!nameToDelete) {
       return NextResponse.json(
@@ -288,28 +317,30 @@ export async function DELETE(request: Request) {
       );
     }
 
-    const categories = await getStoredCategories();
-
-    if (!categories.includes(nameToDelete)) {
-      return NextResponse.json(
-        { error: `Category "${nameToDelete}" not found.` },
-        { status: 404 }
-      );
+    // If reassignTo is provided, migrate all expense records with this category
+    if (reassignTo) {
+      await (prisma as any).expenseRecord.updateMany({
+        where: { category: nameToDelete },
+        data: { category: reassignTo },
+      }).catch(() => {});
     }
 
+    const categories = await getStoredCategories();
     const updated = categories.filter((c) => c !== nameToDelete);
 
-    await prisma.setting.upsert({
-      where: { key: SETTING_KEY },
-      create: {
-        key: SETTING_KEY,
-        value: JSON.stringify(updated),
-        group: 'expenses',
-      },
-      update: {
-        value: JSON.stringify(updated),
-      },
-    });
+    if (categories.includes(nameToDelete)) {
+      await prisma.setting.upsert({
+        where: { key: SETTING_KEY },
+        create: {
+          key: SETTING_KEY,
+          value: JSON.stringify(updated),
+          group: 'expenses',
+        },
+        update: {
+          value: JSON.stringify(updated),
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,
