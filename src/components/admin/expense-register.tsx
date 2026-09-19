@@ -50,6 +50,7 @@ import {
   RotateCcw,
   EyeOff,
   SlidersHorizontal,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
@@ -91,8 +92,8 @@ export const CM_EXPENSE_COLUMNS: ExpenseColumnDef[] = [
   { id: "remarks", label: "Remarks", defaultWidth: 140, minWidth: 75, align: "left", phase: "1" },
 
   // ── PHASE 2: APPROVAL WORKFLOW (ACCOUNTANT → SUPER ADMIN) ──
-  { id: "accCheck", label: "Step 1: Acc Check", defaultWidth: 130, minWidth: 85, align: "center", phase: "2" },
-  { id: "saApproval", label: "Step 2: SA Approval", defaultWidth: 130, minWidth: 85, align: "center", phase: "2" },
+  { id: "accCheck", label: "Step 1: Acc Check", defaultWidth: 170, minWidth: 120, align: "center", phase: "2" },
+  { id: "saApproval", label: "Step 2: SA Approval", defaultWidth: 240, minWidth: 180, align: "center", phase: "2" },
 
   // ── PHASE 3: PAYMENT DETAILS (SIR PAYS & DISBURSAL) ──
   { id: "utrDate", label: "UTR & Pay Date", defaultWidth: 140, minWidth: 85, align: "center", phase: "3" },
@@ -118,12 +119,12 @@ export const ACCOUNTANT_EXPENSE_COLUMNS: ExpenseColumnDef[] = [
   { id: "remarks", label: "Remarks", defaultWidth: 135, minWidth: 75, align: "left", phase: "1" },
 
   // ── PHASE 2: APPROVAL WORKFLOW (ACCOUNTANT → SUPER ADMIN) ──
-  { id: "accCheck", label: "Step 1: Acc Check", defaultWidth: 125, minWidth: 80, align: "center", phase: "2" },
-  { id: "saApproval", label: "Step 2: SA Approval", defaultWidth: 125, minWidth: 80, align: "center", phase: "2" },
+  { id: "accCheck", label: "Step 1: Acc Check", defaultWidth: 170, minWidth: 120, align: "center", phase: "2" },
+  { id: "saApproval", label: "Step 2: SA Approval", defaultWidth: 240, minWidth: 180, align: "center", phase: "2" },
 
   // ── PHASE 3: PAYMENT DETAILS (SIR PAYS & DISBURSAL) ──
   { id: "bankPortal", label: "Bank Portal", defaultWidth: 90, minWidth: 65, align: "center", phase: "3" },
-  { id: "paymentApproval", label: "Payment Approval", defaultWidth: 135, minWidth: 90, align: "center", phase: "3" },
+  { id: "paymentApproval", label: "Payment Approval", defaultWidth: 200, minWidth: 140, align: "center", phase: "3" },
   { id: "utrNumber", label: "UTR No.", defaultWidth: 155, minWidth: 90, align: "center", phase: "3", mono: true },
   { id: "payDate", label: "Payment Date", defaultWidth: 110, minWidth: 75, align: "center", phase: "3", mono: true },
   { id: "emailAlert", label: "Email Alert", defaultWidth: 115, minWidth: 75, align: "center", phase: "3" },
@@ -1232,18 +1233,16 @@ export function ExpenseRegister({
 
     if (rec.approvalStatus === "REJECTED_BY_ACCOUNTANT") {
       return (
-        <div className="flex flex-col items-center">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-            <X className="w-3 h-3 text-rose-700" />
+        <div className="flex flex-col items-center gap-1 w-full max-w-[240px] text-center">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 rounded shadow-2xs whitespace-nowrap">
+            <X className="w-3 h-3 text-rose-700 shrink-0" />
             <span>Rejected by Accountant</span>
           </span>
           {(rec.rejectionRemarks || rec.accountantRemarks) && (
-            <span
-              className="text-[8px] text-rose-600 truncate max-w-[140px] mt-0.5 font-medium"
-              title={rec.rejectionRemarks || rec.accountantRemarks || ""}
-            >
-              Remark: {rec.rejectionRemarks || rec.accountantRemarks}
-            </span>
+            <div className="w-full bg-rose-50 border border-rose-200 rounded px-2 py-1 text-[10px] text-rose-900 leading-snug whitespace-normal break-words text-left shadow-2xs">
+              <span className="font-bold text-rose-800 block text-[8px] uppercase tracking-wide">Reason:</span>
+              <span className="font-medium">{rec.rejectionRemarks || rec.accountantRemarks}</span>
+            </div>
           )}
         </div>
       );
@@ -1251,18 +1250,16 @@ export function ExpenseRegister({
 
     if (rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN") {
       return (
-        <div className="flex flex-col items-center">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-            <X className="w-3 h-3 text-rose-700" />
+        <div className="flex flex-col items-center gap-1 w-full max-w-[240px] text-center">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 rounded shadow-2xs whitespace-nowrap">
+            <X className="w-3 h-3 text-rose-700 shrink-0" />
             <span>Rejected by Super Admin</span>
           </span>
           {(rec.rejectionRemarks || rec.superAdminRemarks) && (
-            <span
-              className="text-[8px] text-rose-600 truncate max-w-[140px] mt-0.5 font-medium"
-              title={rec.rejectionRemarks || rec.superAdminRemarks || ""}
-            >
-              Remark: {rec.rejectionRemarks || rec.superAdminRemarks}
-            </span>
+            <div className="w-full bg-rose-50 border border-rose-200 rounded px-2 py-1 text-[10px] text-rose-900 leading-snug whitespace-normal break-words text-left shadow-2xs">
+              <span className="font-bold text-rose-800 block text-[8px] uppercase tracking-wide">Reason:</span>
+              <span className="font-medium">{rec.rejectionRemarks || rec.superAdminRemarks}</span>
+            </div>
           )}
         </div>
       );
@@ -4260,14 +4257,15 @@ export function ExpenseRegister({
                                     <span className="text-[8px] text-gray-500">{rec.accountantApprovedByName ? `by ${rec.accountantApprovedByName}` : "Accountant"}</span>
                                   </>
                                 ) : rec.approvalStatus === "REJECTED_BY_ACCOUNTANT" ? (
-                                  <div className="flex flex-col items-center">
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 cursor-help" title={rec.rejectionRemarks || rec.accountantRemarks || "Rejected by Accountant"}>
-                                      <X className="w-2.5 h-2.5 text-rose-700" /> Rejected
+                                  <div className="flex flex-col items-center gap-1 w-full max-w-[200px] text-center">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 rounded shadow-2xs whitespace-nowrap cursor-help" title={rec.rejectionRemarks || rec.accountantRemarks || "Rejected by Accountant"}>
+                                      <X className="w-2.5 h-2.5 text-rose-700 shrink-0" /> Rejected
                                     </span>
                                     {(rec.rejectionRemarks || rec.accountantRemarks) && (
-                                      <span className="text-[8px] text-rose-700 truncate max-w-[120px] cursor-help mt-0.5" title={rec.rejectionRemarks || rec.accountantRemarks || ""}>
-                                        {rec.rejectionRemarks || rec.accountantRemarks}
-                                      </span>
+                                      <div className="w-full bg-rose-50 border border-rose-200 rounded px-1.5 py-0.5 text-[9px] text-rose-900 leading-snug whitespace-normal break-words text-left shadow-2xs">
+                                        <span className="font-bold text-rose-800 block text-[7.5px] uppercase tracking-wide">Reason:</span>
+                                        <span className="font-medium">{rec.rejectionRemarks || rec.accountantRemarks}</span>
+                                      </div>
                                     )}
                                   </div>
                                 ) : (
@@ -4295,14 +4293,15 @@ export function ExpenseRegister({
                                     <span className="text-[8px] text-emerald-700 font-semibold">Ready for Payment</span>
                                   </>
                                 ) : rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN" ? (
-                                  <div className="flex flex-col items-center">
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 cursor-help" title={rec.rejectionRemarks || rec.superAdminRemarks || "Rejected by Super Admin"}>
-                                      <X className="w-2.5 h-2.5 text-rose-700" /> SA Rejected
+                                  <div className="flex flex-col items-center gap-1 w-full max-w-[220px] text-center">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 rounded shadow-2xs whitespace-nowrap cursor-help" title={rec.rejectionRemarks || rec.superAdminRemarks || "Rejected by Super Admin"}>
+                                      <X className="w-2.5 h-2.5 text-rose-700 shrink-0" /> SA Rejected
                                     </span>
                                     {(rec.rejectionRemarks || rec.superAdminRemarks) && (
-                                      <span className="text-[8px] text-rose-700 truncate max-w-[120px] cursor-help mt-0.5" title={rec.rejectionRemarks || rec.superAdminRemarks || ""}>
-                                        {rec.rejectionRemarks || rec.superAdminRemarks}
-                                      </span>
+                                      <div className="w-full bg-rose-50 border border-rose-200 rounded px-1.5 py-0.5 text-[9px] text-rose-900 leading-snug whitespace-normal break-words text-left shadow-2xs">
+                                        <span className="font-bold text-rose-800 block text-[7.5px] uppercase tracking-wide">Reason:</span>
+                                        <span className="font-medium">{rec.rejectionRemarks || rec.superAdminRemarks}</span>
+                                      </div>
                                     )}
                                   </div>
                                 ) : (rec.accountantApprovalStatus === "APPROVED" || rec.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" || rec.approvalStatus === "PENDING_APPROVAL") ? (
@@ -4719,12 +4718,13 @@ export function ExpenseRegister({
                                 <span className="text-[8px] text-gray-500">{rec.accountantApprovedByName ? `by ${rec.accountantApprovedByName}` : "Accountant"}</span>
                               </div>
                             ) : rec.approvalStatus === "REJECTED_BY_ACCOUNTANT" ? (
-                              <div className="flex flex-col items-center">
-                                <span className="px-2 py-0.5 text-[9.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 cursor-help" title={rec.rejectionRemarks || rec.accountantRemarks || "Rejected by Accountant"}>✕ Rejected</span>
+                              <div className="flex flex-col items-center gap-1 w-full max-w-[200px] text-center">
+                                <span className="px-2 py-0.5 text-[9.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 rounded shadow-2xs whitespace-nowrap cursor-help" title={rec.rejectionRemarks || rec.accountantRemarks || "Rejected by Accountant"}>✕ Rejected</span>
                                 {(rec.rejectionRemarks || rec.accountantRemarks) && (
-                                  <span className="text-[8px] text-rose-700 truncate max-w-[110px] cursor-help mt-0.5" title={rec.rejectionRemarks || rec.accountantRemarks || ""}>
-                                    {rec.rejectionRemarks || rec.accountantRemarks}
-                                  </span>
+                                  <div className="w-full bg-rose-50 border border-rose-200 rounded px-1.5 py-0.5 text-[9px] text-rose-900 leading-snug whitespace-normal break-words text-left shadow-2xs">
+                                    <span className="font-bold text-rose-800 block text-[7.5px] uppercase tracking-wide">Reason:</span>
+                                    <span className="font-medium">{rec.rejectionRemarks || rec.accountantRemarks}</span>
+                                  </div>
                                 )}
                               </div>
                             ) : (isAccountant || isAdmin) ? (
@@ -4768,12 +4768,13 @@ export function ExpenseRegister({
                                 <span className="text-[8px] text-emerald-700 font-semibold">Sir to Pay</span>
                               </div>
                             ) : rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN" ? (
-                              <div className="flex flex-col items-center">
-                                <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 cursor-help" title={rec.rejectionRemarks || rec.superAdminRemarks || "Rejected by Super Admin"}>✕ SA Rejected</span>
+                              <div className="flex flex-col items-center gap-1 w-full max-w-[220px] text-center">
+                                <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 rounded shadow-2xs whitespace-nowrap cursor-help" title={rec.rejectionRemarks || rec.superAdminRemarks || "Rejected by Super Admin"}>✕ SA Rejected</span>
                                 {(rec.rejectionRemarks || rec.superAdminRemarks) && (
-                                  <span className="text-[8px] text-rose-700 truncate max-w-[110px] cursor-help mt-0.5" title={rec.rejectionRemarks || rec.superAdminRemarks || ""}>
-                                    {rec.rejectionRemarks || rec.superAdminRemarks}
-                                  </span>
+                                  <div className="w-full bg-rose-50 border border-rose-200 rounded px-1.5 py-0.5 text-[9px] text-rose-900 leading-snug whitespace-normal break-words text-left shadow-2xs">
+                                    <span className="font-bold text-rose-800 block text-[7.5px] uppercase tracking-wide">Reason:</span>
+                                    <span className="font-medium">{rec.rejectionRemarks || rec.superAdminRemarks}</span>
+                                  </div>
                                 )}
                               </div>
                             ) : (rec.accountantApprovalStatus === "APPROVED" || rec.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" || rec.approvalStatus === "PENDING_APPROVAL") ? (
