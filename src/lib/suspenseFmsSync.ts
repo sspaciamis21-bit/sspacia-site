@@ -228,3 +228,38 @@ export async function resyncSuspensePayment(suspenseId: number) {
 
   return { success: true, message: 'Successfully synced to Google Sheets', rowStart: payment.fmsRowStart };
 }
+
+/**
+ * ── 5. SUSPENSE DELETE ──
+ * Completely removes the suspense entry from Google Sheets tab 'expense fms' (unmerges and clears Rows V to AB)
+ */
+export async function syncSuspenseDelete(params: {
+  id: number;
+  fmsRowStart?: number | null;
+  payReceiveDate?: string | null;
+  suspensePaymentType?: string | null;
+}) {
+  try {
+    const payload = {
+      action: 'suspense_delete',
+      sheetName: 'expense fms',
+      suspenseId: params.id,
+      rowStart: params.fmsRowStart || null,
+      payReceiveDate: params.payReceiveDate || '',
+      suspensePaymentType: params.suspensePaymentType || '',
+    };
+
+    console.log(`[Suspense FMS Sync] 📤 Dispatching Suspense Delete for #${params.id}:`, payload);
+    const result = await postToFms(payload);
+
+    if (result.success) {
+      console.log(`[Suspense FMS Sync] ✅ Removed suspense entry #${params.id} from Google Sheets`);
+    }
+
+    return result;
+  } catch (err: any) {
+    console.error('[Suspense FMS Sync] syncSuspenseDelete error:', err?.message || err);
+    return { success: false, error: err?.message || err };
+  }
+}
+

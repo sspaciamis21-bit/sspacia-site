@@ -487,21 +487,29 @@ export function SuspenseManagement({
     }
   };
 
-  // Delete Suspense Payment (Super Admin Only)
+  // Delete Suspense Payment (Accountant & Super Admin)
   const handleDeletePayment = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this suspense payment record? This action cannot be undone.')) {
+    if (
+      !confirm(
+        `Are you sure you want to delete Suspense Entry #${id}? This will permanently remove it from both the website and Google Sheets tab 'expense fms'.`
+      )
+    ) {
       return;
     }
 
     try {
       const res = await fetch(`/api/admin/suspense/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete payment');
-      toast.success('Suspense payment deleted');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete payment');
+      }
+      toast.success(`Suspense Entry #${id} completely removed from website and Google Sheets!`);
       fetchPayments(false);
     } catch (err: any) {
       toast.error(err?.message || 'Delete error');
     }
   };
+
 
   // Helper to format remaining time
   const renderTimeCountdown = (deadlineAt: string | Date, overallStatus: string) => {
@@ -855,12 +863,12 @@ export function SuspenseManagement({
                       <Eye size={15} />
                     </button>
 
-                    {isSuperAdmin && (
+                    {(canAccessAccountant || isSuperAdmin) && (
                       <button
                         type="button"
                         onClick={() => handleDeletePayment(payment.id)}
-                        className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-white border border-transparent hover:border-gray-300 transition-all cursor-pointer"
-                        title="Delete Entry"
+                        className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-white border border-transparent hover:border-rose-200 transition-all cursor-pointer"
+                        title="Delete Entry (Completely remove from website and Google Sheets)"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -1743,11 +1751,26 @@ export function SuspenseManagement({
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-gray-200 flex justify-end">
+              <div className="pt-3 border-t border-gray-200 flex items-center justify-between">
+                {(canAccessAccountant || isSuperAdmin) && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const id = selectedPaymentForDetails.id;
+                      setSelectedPaymentForDetails(null);
+                      await handleDeletePayment(id);
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold uppercase text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Delete entry from website & Google Sheets"
+                  >
+                    <Trash2 size={13} />
+                    <span>Delete Entry</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setSelectedPaymentForDetails(null)}
-                  className="px-4 py-1.5 text-xs font-bold uppercase text-gray-700 bg-gray-100 hover:bg-gray-200 cursor-pointer"
+                  className="px-4 py-1.5 text-xs font-bold uppercase text-gray-700 bg-gray-100 hover:bg-gray-200 cursor-pointer ml-auto"
                 >
                   Close
                 </button>
@@ -2000,31 +2023,49 @@ export function SuspenseManagement({
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-4 border-t border-gray-200 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold uppercase text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingEdit || uploadingEditPdf}
-                  className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#006064] hover:bg-[#004D40] shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {savingEdit ? (
-                    <>
-                      <RefreshCcw size={14} className="animate-spin" />
-                      <span>Saving Changes...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check size={14} />
-                      <span>Save &amp; Update Google Sheet</span>
-                    </>
-                  )}
-                </button>
+              <div className="pt-4 border-t border-gray-200 flex items-center justify-between gap-3">
+                {(canAccessAccountant || isSuperAdmin) && (
+                  <button
+                    type="button"
+                    disabled={savingEdit}
+                    onClick={async () => {
+                      const id = selectedPaymentForEdit.id;
+                      setIsEditModalOpen(false);
+                      await handleDeletePayment(id);
+                    }}
+                    className="px-3 py-2 text-xs font-bold uppercase text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Delete entry from website & Google Sheets"
+                  >
+                    <Trash2 size={14} />
+                    <span>Delete Entry</span>
+                  </button>
+                )}
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="px-4 py-2 text-xs font-bold uppercase text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingEdit || uploadingEditPdf}
+                    className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#006064] hover:bg-[#004D40] shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {savingEdit ? (
+                      <>
+                        <RefreshCcw size={14} className="animate-spin" />
+                        <span>Saving Changes...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check size={14} />
+                        <span>Save &amp; Update Google Sheet</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

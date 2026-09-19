@@ -387,6 +387,26 @@ export function ManagePaymentModal({
     }
   };
 
+  // Handle Re-populate Daily FMS Check (Cols Q to T in tab 'Accounts')
+  const [repopulatingFms, setRepopulatingFms] = useState(false);
+  const handleRepopulateFms = async () => {
+    setRepopulatingFms(true);
+    try {
+      const res = await fetch('/api/admin/invoice-payments/daily-fms-check/repopulate', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to repopulate daily FMS checks');
+      }
+      toast.success('Successfully repopulated Daily FMS checks (Cols Q:T) in tab Accounts!');
+    } catch (err: any) {
+      toast.error(err?.message || 'Error repopulating sheet');
+    } finally {
+      setRepopulatingFms(false);
+    }
+  };
+
   // ── LIVE AUTO-SAVE WITH MULTI-PART SUPPORT ──
   const performSave = useCallback(
     async (invId: number, draft: InvoiceRowDraft, isSilent: boolean = false) => {
@@ -867,14 +887,27 @@ export function ManagePaymentModal({
             </div>
 
             {/* Bottom Actions based on selection */}
-            <div className="pt-2 flex items-center justify-between border-t border-neutral-200">
-              <button
-                type="button"
-                onClick={handleCloseModal}
-                className="px-4 py-2 border border-neutral-300 text-xs font-bold text-gray-700 hover:bg-neutral-100 cursor-pointer"
-              >
-                Cancel
-              </button>
+            <div className="pt-2 flex items-center justify-between border-t border-neutral-200 gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="px-4 py-2 border border-neutral-300 text-xs font-bold text-gray-700 hover:bg-neutral-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={repopulatingFms}
+                  onClick={handleRepopulateFms}
+                  className="px-3 py-2 border border-blue-300 bg-blue-50 hover:bg-blue-100 text-xs font-bold text-blue-850 flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+                  title="Re-populate Daily FMS Check (Cols Q to T in tab 'Accounts')"
+                >
+                  <RotateCcw size={12} className={repopulatingFms ? 'animate-spin text-blue-700' : ''} />
+                  <span>{repopulatingFms ? 'Syncing...' : 'Re-populate Daily Sheet'}</span>
+                </button>
+              </div>
 
               {selectedChoice === 'NO' ? (
                 <button

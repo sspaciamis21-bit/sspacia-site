@@ -4,7 +4,7 @@ import {
   updateSuspensePayment,
   deleteSuspensePayment,
 } from '@/lib/suspense-db';
-import { syncSuspenseUpdate } from '@/lib/suspenseFmsSync';
+import { syncSuspenseUpdate, syncSuspenseDelete } from '@/lib/suspenseFmsSync';
 
 // GET /api/admin/suspense/[id] — Fetch single suspense payment
 export async function GET(
@@ -128,8 +128,30 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
     }
 
+    const payment = await getSuspensePaymentById(numId);
+    if (!payment) {
+      return NextResponse.json({ error: 'Suspense payment not found' }, { status: 404 });
+    }
+
+    // Completely remove entry from Google Sheets tab 'expense fms'
+    try {
+      await syncSuspenseDelete({
+        id: payment.id,
+        fmsRowStart: payment.fmsRowStart,
+        payReceiveDate: payment.payReceiveDate,
+        suspensePaymentType: payment.suspensePaymentType,
+      });
+    } catch (sheetErr) {
+      console.warn('[API /api/admin/suspense/[id] DELETE] Google Sheet removal notice:', sheetErr);
+    }
+
+    // Delete record and its allocations from MySQL database
     await deleteSuspensePayment(numId);
-    return NextResponse.json({ success: true, message: 'Suspense payment deleted' });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Suspense payment completely removed from website and Google Sheets',
+    });
   } catch (error: any) {
     console.error('[API /api/admin/suspense/[id] DELETE]', error);
     return NextResponse.json(
@@ -138,3 +160,4 @@ export async function DELETE(
     );
   }
 }
+

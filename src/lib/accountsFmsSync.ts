@@ -304,13 +304,118 @@ export async function syncAccountsDailyFmsActual(customDate?: Date | string) {
       targetDay: day,
       targetMonth: month,
       targetYear: year,
+      status: 'Done',
     };
 
-    console.log(`[Accounts FMS Sync] 📤 Dispatching Daily FMS Actual for Column R: ${actualTimestamp}`);
+    console.log(`[Accounts FMS Sync] 📤 Dispatching Daily FMS Actual for Columns R, S, T: ${actualTimestamp}`);
     return await postToSheet(payload);
   } catch (err) {
     console.error('[Accounts FMS Sync] Error syncing daily fms actual:', err);
     return { success: false, error: String(err) };
   }
 }
+
+/**
+ * ── 5. REPOPULATE DAILY PAYMENT CHECKS (Cols Q to T) ──
+ * Repopulates Header (Rows 1-5) and all business days (Rows 6-35) with Planned, Actual, Status, and TimeDelay
+ * Spreadsheet: https://docs.google.com/spreadsheets/d/1a7ajEb9clt8ORnM73rtKem0_bT9Ifl8T5J6mifoonX0/edit#gid=270862341 (tab: 'Accounts')
+ */
+export async function repopulateDailyFmsChecks() {
+  try {
+    // 1. Fetch all stored daily checks from DB
+    const row = await (prisma as any).setting.findFirst({
+      where: { key: 'invoice_daily_fms_checks' },
+    });
+
+    let storedChecks: Array<{
+      date: string; // YYYY-MM-DD
+      status: 'YES' | 'NO';
+      timestamp: string; // M/D/YYYY HH:mm:ss
+    }> = [];
+
+    if (row && row.value) {
+      try {
+        const parsed = JSON.parse(row.value);
+        if (Array.isArray(parsed)) storedChecks = parsed;
+      } catch {}
+    }
+
+    // Map by date key
+    const checkMap = new Map<string, string>();
+    for (const c of storedChecks) {
+      if (c.timestamp) {
+        checkMap.set(c.date, c.timestamp);
+      }
+    }
+
+    // 2. Generate Planned dates starting 09/09/2026 (skipping Sundays)
+    const plannedDates: Array<{
+      date: string; // YYYY-MM-DD
+      planned: string; // DD/MM/YYYY 10:30:00
+      actual: string; // M/D/YYYY HH:mm:ss or ""
+      status: string; // Done / Pending / ""
+    }> = [];
+
+    const startDate = new Date(2026, 8, 9); // 9th September 2026
+    const totalDaysToGenerate = 30; // 30 business days
+    const curr = new Date(startDate);
+
+    while (plannedDates.length < totalDaysToGenerate) {
+      // If Sunday (0), skip
+      if (curr.getDay() !== 0) {
+        const y = curr.getFullYear();
+        const m = curr.getMonth() + 1;
+        const d = curr.getDate();
+        const dateKey = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const plannedStr = `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y} 10:30:00`;
+        const actual = checkMap.get(dateKey) || '';
+
+        plannedDates.push({
+          date: dateKey,
+          planned: plannedStr,
+          actual,
+          status: actual ? 'Done' : '',
+        });
+      }
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    const payload = {
+      action: 'accounts_repopulate_daily',
+      sheetName: 'Accounts',
+      dailyChecks: storedChecks,
+      plannedDates,
+    };
+
+    console.log(`[Accounts FMS Sync] 📤 Dispatching repopulate daily check for ${plannedDates.length} days...`);
+    const res = await postToSheet(payload);
+
+    // Also sync each stored check directly via accounts_daily_fms_check to ensure Col R is filled
+    for (const check of storedChecks) {
+      const parts = check.date.split('-');
+      if (parts.length === 3) {
+        const y = Number(parts[0]);
+        const m = Number(parts[1]);
+        const d = Number(parts[2]);
+        await postToSheet({
+          action: 'accounts_daily_fms_check',
+          sheetName: 'Accounts',
+          actual: check.timestamp,
+          date: check.date,
+          targetDate: `${m}/${d}/${y}`,
+          targetDay: d,
+          targetMonth: m,
+          targetYear: y,
+          status: 'Done',
+        });
+      }
+    }
+
+    return res;
+  } catch (err) {
+    console.error('[Accounts FMS Sync] Error in repopulateDailyFmsChecks:', err);
+    return { success: false, error: String(err) };
+  }
+}
+
 
