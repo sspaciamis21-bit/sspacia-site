@@ -28,7 +28,8 @@ import {
   Paperclip,
   Check,
   X,
-  Upload
+  Upload,
+  Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -112,6 +113,25 @@ export function SuspenseManagement({
 
   // View Details Modal
   const [selectedPaymentForDetails, setSelectedPaymentForDetails] = useState<SuspensePaymentRecord | null>(null);
+
+  // Edit Suspense Entry Modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedPaymentForEdit, setSelectedPaymentForEdit] = useState<SuspensePaymentRecord | null>(null);
+  const [editPayReceiveDate, setEditPayReceiveDate] = useState('');
+  const [editPaymentType, setEditPaymentType] = useState('Advance Rent');
+  const [editAmount, setEditAmount] = useState('');
+  const [editPaymentMode, setEditPaymentMode] = useState('NEFT');
+  const [editUtrNumber, setEditUtrNumber] = useState('');
+  const [editUtrDate, setEditUtrDate] = useState('');
+  const [editPayerName, setEditPayerName] = useState('');
+  const [editRemarks, setEditRemarks] = useState('');
+  const [editProofUrl, setEditProofUrl] = useState('');
+  const [editProofName, setEditProofName] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [uploadingEditPdf, setUploadingEditPdf] = useState(false);
+
+  // Manual FMS Re-sync state
+  const [syncingId, setSyncingId] = useState<number | null>(null);
 
   // Quick suggestions for suspense payment type
   const typeSuggestions = [
@@ -273,6 +293,141 @@ export function SuspenseManagement({
       toast.error(err?.message || 'Error creating suspense entry');
     } finally {
       setSubmittingEntry(false);
+    }
+  };
+
+  // Handle Edit PDF File Upload
+  const handleEditFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Only PDF documents are accepted for payment advice proof.');
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('File size exceeds 50MB limit.');
+      return;
+    }
+
+    setUploadingEditPdf(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('description', 'Suspense Payment Advice (Edited)');
+
+      const res = await fetch('/api/admin/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to upload PDF');
+      }
+
+      const data = await res.json();
+      if (!data.fileUrl) {
+        throw new Error('Upload response missing document URL');
+      }
+
+      setEditProofUrl(data.fileUrl);
+      setEditProofName(file.name);
+      toast.success(`PDF "${file.name}" uploaded successfully!`);
+    } catch (err: any) {
+      console.error('[Suspense Edit PDF Upload]', err);
+      toast.error(err?.message || 'Error uploading PDF file');
+    } finally {
+      setUploadingEditPdf(false);
+      e.target.value = '';
+    }
+  };
+
+  // Open Edit Modal pre-populated with payment details
+  const openEditModal = (payment: SuspensePaymentRecord) => {
+    setSelectedPaymentForEdit(payment);
+    setEditPayReceiveDate(payment.payReceiveDate || '');
+    setEditPaymentType(payment.suspensePaymentType || 'Advance Rent');
+    setEditAmount(String(payment.amount || ''));
+    setEditPaymentMode(payment.paymentMode || 'NEFT');
+    setEditUtrNumber(payment.utrNumber || '');
+    setEditUtrDate(payment.utrDate || '');
+    setEditPayerName(payment.payerName || '');
+    setEditRemarks(payment.remarks || '');
+    setEditProofUrl(payment.proofUrl || '');
+    setEditProofName(payment.proofName || '');
+    setIsEditModalOpen(true);
+  };
+
+  // Handle Save Edit Submission
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPaymentForEdit) return;
+
+    if (!editPaymentType.trim()) {
+      toast.error('Suspense payment type/description is required');
+      return;
+    }
+
+    const numAmount = Number(editAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      toast.error('Please enter a valid received payment amount');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/admin/suspense/${selectedPaymentForEdit.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payReceiveDate: editPayReceiveDate.trim(),
+          suspensePaymentType: editPaymentType.trim(),
+          amount: numAmount,
+          paymentMode: editPaymentMode.trim(),
+          utrNumber: editUtrNumber.trim(),
+          utrDate: editUtrDate.trim(),
+          payerName: editPayerName.trim(),
+          remarks: editRemarks.trim(),
+          proofUrl: editProofUrl.trim(),
+          proofName: editProofName.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update suspense entry');
+      }
+
+      toast.success(`Suspense Entry #${selectedPaymentForEdit.id} updated & synced with Google Sheets!`);
+      setIsEditModalOpen(false);
+      setSelectedPaymentForEdit(null);
+      fetchPayments(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Error updating suspense entry');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Handle Manual 1-Click Re-sync to Google Sheets
+  const handleManualSync = async (paymentId: number) => {
+    setSyncingId(paymentId);
+    try {
+      const res = await fetch(`/api/admin/suspense/${paymentId}/resync`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to sync with Google Sheets');
+      }
+      toast.success(data.message || 'Synced to Google Sheets tab `expense fms`!');
+      fetchPayments(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Error syncing with Google Sheets');
+    } finally {
+      setSyncingId(null);
     }
   };
 
@@ -650,12 +805,49 @@ export function SuspenseManagement({
                     {renderTimeCountdown(payment.deadlineAt, payment.overallStatus)}
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-gray-500 font-bold">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-mono text-gray-500 font-bold hidden sm:inline">
                       Planned 4h Window: {payment.plannedTimestamp}
                     </span>
 
+                    {/* 1-Click Google Sheets Sync Status & Trigger */}
                     <button
+                      type="button"
+                      onClick={() => handleManualSync(payment.id)}
+                      disabled={syncingId === payment.id}
+                      className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 border transition-all cursor-pointer shadow-2xs ${
+                        payment.fmsRowStart
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                          : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 animate-pulse'
+                      }`}
+                      title={
+                        payment.fmsRowStart
+                          ? `Synced to 'expense fms' Rows ${payment.fmsRowStart}–${payment.fmsRowStart + 2}. Click to re-sync.`
+                          : 'Not yet recorded in Google Sheets. Click to sync now.'
+                      }
+                    >
+                      <RefreshCcw size={11} className={syncingId === payment.id ? 'animate-spin text-amber-700' : ''} />
+                      <span>
+                        {payment.fmsRowStart
+                          ? `Sheet Rows ${payment.fmsRowStart}–${payment.fmsRowStart + 2}`
+                          : 'Sync to Sheet'}
+                      </span>
+                    </button>
+
+                    {/* Edit Entry (Accountant / Super Admin) */}
+                    {(canAccessAccountant || isSuperAdmin) && (
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(payment)}
+                        className="p-1.5 text-gray-600 hover:text-[#006064] hover:bg-white border border-gray-200 hover:border-gray-300 transition-all cursor-pointer shadow-2xs"
+                        title="Edit Suspense Entry"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
                       onClick={() => setSelectedPaymentForDetails(payment)}
                       className="p-1.5 text-gray-500 hover:text-[#006064] hover:bg-white border border-transparent hover:border-gray-300 transition-all cursor-pointer"
                       title="View Details"
@@ -665,6 +857,7 @@ export function SuspenseManagement({
 
                     {isSuperAdmin && (
                       <button
+                        type="button"
                         onClick={() => handleDeletePayment(payment.id)}
                         className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-white border border-transparent hover:border-gray-300 transition-all cursor-pointer"
                         title="Delete Entry"
@@ -678,59 +871,93 @@ export function SuspenseManagement({
                 {/* Entry Details & 3-Center Allocation Matrix */}
                 <div className="p-4">
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                    {/* Left: Financial Payment Details (Cols 1-4) */}
-                    <div className="lg:col-span-4 space-y-2.5 pr-0 lg:pr-4 border-b lg:border-b-0 lg:border-r border-gray-200 pb-4 lg:pb-0">
+                    {/* Left: Financial Payment Details — ALL 8 CORE DETAILS FOR CMs (Cols 1-4) */}
+                    <div className="lg:col-span-4 space-y-3 pr-0 lg:pr-4 border-b lg:border-b-0 lg:border-r border-gray-200 pb-4 lg:pb-0">
+                      {/* 1. Payment Receive Date (Col V) & Type (Col W) Header Badge */}
+                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-gray-100 flex-wrap">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                            Payment Receive Date (Col V)
+                          </span>
+                          <span className="text-xs font-black text-gray-900 flex items-center gap-1.5 mt-0.5">
+                            <Calendar size={13} className="text-[#006064]" />
+                            {payment.payReceiveDate}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 bg-[#006064]/10 text-[#006064] border border-[#006064]/20">
+                          {payment.suspensePaymentType}
+                        </span>
+                      </div>
+
+                      {/* 2. Amount Received */}
                       <div>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                          Received Amount
+                          Amount Received (₹)
                         </span>
                         <div className="text-2xl font-display font-black text-[#1B1C1C]">
                           ₹{payment.amount.toLocaleString('en-IN')}
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-xs">
+                      {/* 3 & 4. Payment Mode & UTR / Ref Number */}
+                      <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50/80 p-2.5 border border-gray-200">
                         <div>
-                          <span className="text-[10px] font-bold uppercase text-gray-400">Payment Mode:</span>
-                          <p className="font-bold text-gray-800">
+                          <span className="text-[10px] font-bold uppercase text-gray-400 block">Payment Mode:</span>
+                          <p className="font-bold text-gray-900 mt-0.5">
                             {payment.paymentMode || 'NEFT'}
                             {payment.bankName ? ` (${payment.bankName})` : ''}
                           </p>
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold uppercase text-gray-400">UTR / Ref:</span>
-                          <p className="font-mono font-bold text-gray-800 truncate" title={payment.utrNumber || '-'}>
+                          <span className="text-[10px] font-bold uppercase text-gray-400 block">UTR / Ref Number:</span>
+                          <p className="font-mono font-bold text-gray-900 truncate mt-0.5" title={payment.utrNumber || 'N/A'}>
                             {payment.utrNumber || 'N/A'}
                           </p>
                         </div>
                       </div>
 
-                      {payment.payerName && (
-                        <div className="text-xs">
-                          <span className="text-[10px] font-bold uppercase text-gray-400">Payer / Remitter:</span>
-                          <p className="font-bold text-gray-800">{payment.payerName}</p>
-                        </div>
-                      )}
+                      {/* 5. Payer / Remitter Name (From Bank Narration) — PROMINENT */}
+                      <div className="text-xs p-2.5 bg-slate-50 border border-slate-200">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                          Payer / Remitter Name (From Bank Narration):
+                        </span>
+                        <p className="font-bold text-gray-900 mt-0.5 text-[13px]">
+                          {payment.payerName ? (
+                            payment.payerName
+                          ) : (
+                            <span className="text-gray-400 italic font-normal text-xs">Not provided in narration</span>
+                          )}
+                        </p>
+                      </div>
 
-                      {payment.remarks && (
-                        <div className="text-xs bg-amber-50 p-2 border border-amber-200 text-amber-900">
-                          <span className="font-bold uppercase text-[9px] block text-amber-700">Accountant Notes:</span>
-                          {payment.remarks}
-                        </div>
-                      )}
-
-                      {payment.proofUrl && (
-                        <div className="pt-1">
+                      {/* 6. Payment Advice / Proof Attachment (PDF Only) */}
+                      {payment.proofUrl ? (
+                        <div>
                           <a
                             href={payment.proofUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs font-bold text-red-700 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1.5 rounded-xs transition-all shadow-2xs"
+                            className="w-full inline-flex items-center justify-center gap-2 text-xs font-bold text-red-700 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-xs transition-all shadow-2xs"
                           >
-                            <FileText size={13} className="text-red-600" />
-                            <span>View Attached PDF Advice</span>
-                            <ExternalLink size={11} className="opacity-70" />
+                            <FileText size={14} className="text-red-600" />
+                            <span>View Attached PDF Payment Advice</span>
+                            <ExternalLink size={12} className="opacity-70" />
                           </a>
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-gray-400 italic p-1.5 border border-dashed border-gray-200 text-center">
+                          No PDF advice attached
+                        </div>
+                      )}
+
+                      {/* 7. Accountant Remarks / Clues */}
+                      {payment.remarks && (
+                        <div className="text-xs bg-amber-50/90 p-2.5 border border-amber-200 text-amber-900">
+                          <span className="font-bold uppercase text-[9px] block text-amber-700 flex items-center gap-1">
+                            <HelpCircle size={11} />
+                            Accountant Remarks / Clues:
+                          </span>
+                          <p className="mt-0.5 font-medium">{payment.remarks}</p>
                         </div>
                       )}
                     </div>
@@ -1237,30 +1464,60 @@ export function SuspenseManagement({
 
             {/* Modal Body */}
             <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
-              {/* Payment Context Card */}
-              <div className="p-3 bg-gray-50 border border-gray-200 text-xs space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-gray-500 uppercase">Suspense #{selectedPaymentForReview.id}</span>
-                  <span className="font-bold text-[#006064]">₹{selectedPaymentForReview.amount.toLocaleString('en-IN')}</span>
+              {/* Full Payment Context Card for CM Review */}
+              <div className="p-3.5 bg-gray-50 border border-gray-300 text-xs space-y-2 rounded-xs shadow-2xs">
+                <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 bg-[#1B1C1C] text-white text-[10px] font-mono font-bold">
+                      SUSPENSE #{selectedPaymentForReview.id}
+                    </span>
+                    <span className="font-bold text-gray-700 flex items-center gap-1">
+                      <Calendar size={12} className="text-[#006064]" />
+                      Receive Date: {selectedPaymentForReview.payReceiveDate}
+                    </span>
+                  </div>
+                  <span className="text-base font-black text-[#006064]">
+                    ₹{selectedPaymentForReview.amount.toLocaleString('en-IN')}
+                  </span>
                 </div>
-                <p className="font-bold text-gray-900">{selectedPaymentForReview.suspensePaymentType}</p>
-                <p className="text-gray-600">
-                  Received: {selectedPaymentForReview.payReceiveDate} | Payer: {selectedPaymentForReview.payerName || 'N/A'}
-                </p>
-                {selectedPaymentForReview.utrNumber && (
-                  <p className="font-mono text-gray-500">UTR: {selectedPaymentForReview.utrNumber}</p>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-gray-400 block">Payment Type (Col W):</span>
+                    <span className="font-bold text-gray-900">{selectedPaymentForReview.suspensePaymentType}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-gray-400 block">Payment Mode:</span>
+                    <span className="font-bold text-gray-900">{selectedPaymentForReview.paymentMode || 'NEFT'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-gray-400 block">UTR / Ref Number:</span>
+                    <span className="font-mono font-bold text-gray-900">{selectedPaymentForReview.utrNumber || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase text-gray-400 block">Payer / Remitter:</span>
+                    <span className="font-bold text-gray-900">{selectedPaymentForReview.payerName || 'Not specified'}</span>
+                  </div>
+                </div>
+
+                {selectedPaymentForReview.remarks && (
+                  <div className="bg-amber-50 p-2 border border-amber-200 text-amber-900 text-[11px]">
+                    <span className="font-bold text-[9px] uppercase block text-amber-700">Accountant Clues:</span>
+                    {selectedPaymentForReview.remarks}
+                  </div>
                 )}
+
                 {selectedPaymentForReview.proofUrl && (
                   <div className="pt-1">
                     <a
                       href={selectedPaymentForReview.proofUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-xs"
+                      className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-xs shadow-2xs"
                     >
-                      <FileText size={12} className="text-red-600" />
-                      <span>View Attached PDF Payment Advice</span>
-                      <ExternalLink size={10} className="opacity-70" />
+                      <FileText size={13} className="text-red-600" />
+                      <span>Open Attached PDF Payment Advice</span>
+                      <ExternalLink size={11} className="opacity-70" />
                     </a>
                   </div>
                 )}
@@ -1496,6 +1753,280 @@ export function SuspenseManagement({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════════ */}
+      {/* ── MODAL 4: ACCOUNTANT EDIT SUSPENSE PAYMENT ENTRY ── */}
+      {/* ════════════════════════════════════════════════════════════════════════ */}
+      {isEditModalOpen && selectedPaymentForEdit && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex min-h-screen items-start sm:items-center justify-center p-3 sm:p-4 py-8 sm:py-12 animate-in fade-in duration-150">
+          <div className="relative bg-white border border-gray-300 max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col my-auto max-h-[calc(100vh-4rem)] rounded-xs">
+            {/* Modal Header */}
+            <div className="sticky top-0 z-10 bg-[#1B1C1C] text-white px-5 py-4 flex items-center justify-between shrink-0 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xs bg-white/10 flex items-center justify-center border border-white/20">
+                  <Pencil className="w-5 h-5 text-cyan-300" />
+                </div>
+                <div>
+                  <h3 className="font-display font-black text-base sm:text-lg uppercase tracking-tight text-white leading-tight">
+                    Edit Suspense Entry #{selectedPaymentForEdit.id}
+                  </h3>
+                  <p className="text-[11px] text-gray-300 font-medium">
+                    Modify payment details &amp; synchronize with Google Sheets tab <code>expense fms</code>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-white/80 hover:text-white p-1.5 hover:bg-white/10 rounded-xs transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveEdit} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Payment Receive Date (Col V) */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                    Payment Receive Date * (Col V)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="DD/MM/YYYY e.g. 19/09/2026"
+                    value={editPayReceiveDate}
+                    onChange={(e) => setEditPayReceiveDate(e.target.value)}
+                    className="w-full text-xs font-bold p-2.5 border border-gray-300 bg-gray-50 focus:bg-white focus:border-[#006064] focus:outline-hidden"
+                  />
+                </div>
+
+                {/* Amount Received */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                    Amount Received (₹) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-xs font-bold text-gray-400">₹</span>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      step="any"
+                      placeholder="e.g. 50000"
+                      value={editAmount}
+                      onChange={(e) => setEditAmount(e.target.value)}
+                      className="w-full text-xs font-bold pl-7 pr-3 py-2.5 border border-gray-300 bg-gray-50 focus:bg-white focus:border-[#006064] focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Suspense Payment Type (Col W) */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                  Suspense Payment Type / Description * (Col W)
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Advance Rent, x payment received, Meeting Room Booking..."
+                  value={editPaymentType}
+                  onChange={(e) => setEditPaymentType(e.target.value)}
+                  className="w-full text-xs font-bold p-2.5 border border-gray-300 bg-gray-50 focus:bg-white focus:border-[#006064] focus:outline-hidden"
+                />
+
+                {/* Quick suggestions chips */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {typeSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => setEditPaymentType(suggestion)}
+                      className={`text-[10px] font-bold uppercase px-2 py-0.5 border transition-all cursor-pointer ${
+                        editPaymentType === suggestion
+                          ? 'bg-[#006064] text-white border-[#006064]'
+                          : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                      }`}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Payment Mode */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                    Payment Mode
+                  </label>
+                  <select
+                    value={editPaymentMode}
+                    onChange={(e) => setEditPaymentMode(e.target.value)}
+                    className="w-full text-xs font-bold p-2.5 border border-gray-300 bg-gray-50 focus:bg-white focus:border-[#006064] focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="NEFT">NEFT</option>
+                    <option value="RTGS">RTGS</option>
+                    <option value="IMPS">IMPS</option>
+                    <option value="UPI">UPI / QR</option>
+                    <option value="Cheque">Cheque</option>
+                  </select>
+                </div>
+
+                {/* UTR / Reference */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                    UTR / Ref Number
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. CMS12345678"
+                    value={editUtrNumber}
+                    onChange={(e) => setEditUtrNumber(e.target.value)}
+                    className="w-full text-xs font-bold p-2.5 border border-gray-300 bg-gray-50 focus:bg-white focus:border-[#006064] focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Payer / Remitter Name */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                  Payer / Remitter Name (From Bank Narration)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Narration / Account Holder / Client Name"
+                  value={editPayerName}
+                  onChange={(e) => setEditPayerName(e.target.value)}
+                  className="w-full text-xs font-bold p-2.5 border border-gray-300 bg-gray-50 focus:bg-white focus:border-[#006064] focus:outline-hidden"
+                />
+              </div>
+
+              {/* PDF Attachment (Preview & Replace) */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-800 mb-1">
+                  Payment Advice / Proof Attachment (PDF Only)
+                </label>
+
+                {editProofUrl ? (
+                  <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xs flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 bg-red-600 text-white rounded-xs flex items-center justify-center shrink-0 font-bold text-[10px] shadow-xs">
+                        PDF
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-gray-900 truncate">
+                          {editProofName || 'Payment_Advice.pdf'}
+                        </p>
+                        <p className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                          <Check size={12} />
+                          <span>PDF Document Attached</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <a
+                        href={editProofUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 text-[11px] font-bold text-[#006064] bg-white border border-[#006064]/30 hover:bg-cyan-50 flex items-center gap-1 shadow-2xs"
+                      >
+                        <Eye size={12} />
+                        <span>Preview</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditProofUrl('');
+                          setEditProofName('');
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold text-red-600 bg-white border border-red-200 hover:bg-red-50 flex items-center gap-1 shadow-2xs cursor-pointer"
+                      >
+                        <X size={12} />
+                        <span>Replace</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-gray-300 p-4 text-center rounded-xs bg-gray-50">
+                    <input
+                      type="file"
+                      id="edit-suspense-pdf-upload"
+                      accept="application/pdf,.pdf"
+                      disabled={uploadingEditPdf}
+                      onChange={handleEditFileUpload}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="edit-suspense-pdf-upload"
+                      className="cursor-pointer flex flex-col items-center justify-center gap-1.5"
+                    >
+                      {uploadingEditPdf ? (
+                        <div className="flex flex-col items-center gap-1 py-1">
+                          <RefreshCcw size={20} className="animate-spin text-[#006064]" />
+                          <span className="text-xs font-bold text-[#006064]">Uploading PDF...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <FileText size={20} className="text-red-500" />
+                          <span className="text-xs font-bold text-gray-800">
+                            Click to upload new Payment Advice PDF
+                          </span>
+                          <span className="text-[10px] text-gray-500">PDF only (Max 50MB)</span>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Accountant Remarks */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-700 mb-1">
+                  Accountant Remarks / Clues
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Any clues noted from bank narration or client WhatsApp..."
+                  value={editRemarks}
+                  onChange={(e) => setEditRemarks(e.target.value)}
+                  className="w-full text-xs font-medium p-2.5 border border-gray-300 bg-gray-50 focus:bg-white focus:border-[#006064] focus:outline-hidden"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-gray-200 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold uppercase text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit || uploadingEditPdf}
+                  className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-white bg-[#006064] hover:bg-[#004D40] shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {savingEdit ? (
+                    <>
+                      <RefreshCcw size={14} className="animate-spin" />
+                      <span>Saving Changes...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} />
+                      <span>Save &amp; Update Google Sheet</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -411,6 +411,79 @@ export async function recordCenterRecognition(params: {
 }
 
 /**
+ * Update an existing suspense payment (Accountant / Super Admin edit)
+ */
+export async function updateSuspensePayment(
+  id: number,
+  data: {
+    payReceiveDate?: string;
+    suspensePaymentType?: string;
+    amount?: number;
+    bankName?: string | null;
+    paymentMode?: string | null;
+    utrNumber?: string | null;
+    utrDate?: string | null;
+    payerName?: string | null;
+    remarks?: string | null;
+    proofUrl?: string | null;
+    proofName?: string | null;
+  }
+): Promise<SuspensePaymentRecord | null> {
+  await ensureSuspenseTablesExist();
+
+  const current = await getSuspensePaymentById(id);
+  if (!current) {
+    throw new Error(`Suspense payment #${id} not found`);
+  }
+
+  const newPayReceiveDate = data.payReceiveDate !== undefined ? data.payReceiveDate : current.payReceiveDate;
+  const newType = data.suspensePaymentType !== undefined ? data.suspensePaymentType : current.suspensePaymentType;
+  const newAmount = data.amount !== undefined ? Number(data.amount) : current.amount;
+  const newBankName = data.bankName !== undefined ? data.bankName : current.bankName;
+  const newPaymentMode = data.paymentMode !== undefined ? data.paymentMode : current.paymentMode;
+  const newUtrNumber = data.utrNumber !== undefined ? data.utrNumber : current.utrNumber;
+  const newUtrDate = data.utrDate !== undefined ? data.utrDate : current.utrDate;
+  const newPayerName = data.payerName !== undefined ? data.payerName : current.payerName;
+  const newRemarks = data.remarks !== undefined ? data.remarks : current.remarks;
+  const newProofUrl = data.proofUrl !== undefined ? data.proofUrl : current.proofUrl;
+  const newProofName = data.proofName !== undefined ? data.proofName : current.proofName;
+
+  await prisma.$executeRawUnsafe(
+    `
+    UPDATE \`SuspensePayment\`
+    SET
+      \`payReceiveDate\` = ?,
+      \`suspensePaymentType\` = ?,
+      \`amount\` = ?,
+      \`bankName\` = ?,
+      \`paymentMode\` = ?,
+      \`utrNumber\` = ?,
+      \`utrDate\` = ?,
+      \`payerName\` = ?,
+      \`remarks\` = ?,
+      \`proofUrl\` = ?,
+      \`proofName\` = ?,
+      \`updatedAt\` = CURRENT_TIMESTAMP
+    WHERE \`id\` = ?
+    `,
+    newPayReceiveDate,
+    newType,
+    newAmount,
+    newBankName,
+    newPaymentMode,
+    newUtrNumber,
+    newUtrDate,
+    newPayerName,
+    newRemarks,
+    newProofUrl,
+    newProofName,
+    id
+  );
+
+  return getSuspensePaymentById(id);
+}
+
+/**
  * Delete suspense payment (Super Admin only)
  */
 export async function deleteSuspensePayment(id: number) {
@@ -419,3 +492,4 @@ export async function deleteSuspensePayment(id: number) {
   await prisma.$executeRawUnsafe('DELETE FROM `SuspensePayment` WHERE `id` = ?', id);
   return { success: true };
 }
+
