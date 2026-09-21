@@ -450,14 +450,7 @@ async function addCategoryToDropdown(catName: string) {
       );
     }
 
-    const finalUtr = utrNumber ? String(utrNumber).trim() : (record.utrNumber ? String(record.utrNumber).trim() : '');
-    if (!finalUtr) {
-      return NextResponse.json(
-        { error: 'UTR / Transaction Reference Number is required for payment disbursement.' },
-        { status: 400 }
-      );
-    }
-
+    const finalUtr = utrNumber ? String(utrNumber).trim() : (record.utrNumber ? String(record.utrNumber).trim() : null);
     const finalPayDate = paymentDate ? String(paymentDate).trim() : (record.utrDate || record.payReceiveDate || new Date().toISOString().split('T')[0]);
     const finalMode = paymentMode ? String(paymentMode).trim() : (record.accPaymentMode || record.paymentMode || 'Bank Transfer');
 
@@ -560,13 +553,15 @@ SSPACIA Coworking
       },
     });
 
-    const statusMsg = `Expense approved successfully! Payment UTR: ${finalUtr}${
-      emailSent
-        ? ` | Alert email sent to ${recipientEmail}`
-        : recipientEmail && emailError
-        ? ` | Email note: ${emailError}`
-        : ''
-    }`;
+    const statusMsg = finalUtr
+      ? `Expense approved successfully! Payment UTR: ${finalUtr}${
+          emailSent
+            ? ` | Alert email sent to ${recipientEmail}`
+            : recipientEmail && emailError
+            ? ` | Email note: ${emailError}`
+            : ''
+        }`
+      : 'Expense payment and disbursal details saved successfully!';
 
     return NextResponse.json({
       success: true,

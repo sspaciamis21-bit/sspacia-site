@@ -171,15 +171,7 @@ export async function PUT(
       updateData.attachmentUrl = body.attachmentUrl || null;
     }
     if (body.remarks !== undefined) {
-      if (!body.remarks || !body.remarks.trim()) {
-        return NextResponse.json({ error: 'Remarks is required' }, { status: 400 });
-      }
-      updateData.remarks = body.remarks.trim();
-    }
-    if (body.vendorId !== undefined && body.vendorName !== undefined) {
-      if (!body.vendorId && (!body.vendorName || !body.vendorName.trim())) {
-        return NextResponse.json({ error: 'Vendor / Supplier is required' }, { status: 400 });
-      }
+      updateData.remarks = body.remarks ? String(body.remarks).trim() : null;
     }
     if (body.vendorId !== undefined) {
       updateData.vendorId = body.vendorId ? Number(body.vendorId) : null;

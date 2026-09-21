@@ -136,7 +136,8 @@ export const isAccountantExpense = (rec?: ExpenseRecordItem | null): boolean => 
   if (!rec) return false;
   return (
     rec.createdByRole === "ACCOUNTANT" ||
-    Boolean(rec.createdByName?.toLowerCase()?.includes("account"))
+    Boolean(rec.createdByName?.toLowerCase()?.includes("account")) ||
+    (rec.createdById === null && rec.createdByName === null)
   );
 };
 
@@ -2282,14 +2283,7 @@ export function ExpenseRegister({
       toast.error("Please enter a valid expense amount");
       return;
     }
-    if (!formData.vendorId && !formData.vendorName?.trim()) {
-      toast.error("Please select or register a Vendor / Supplier");
-      return;
-    }
-    if (!formData.remarks || !formData.remarks.trim()) {
-      toast.error("Please enter remarks");
-      return;
-    }
+    // Vendor and remarks are optional as requested (do not mandate)
 
     if (isCustomCategoryMode && !customCategoryInput.trim()) {
       toast.error("Please enter your custom / proposed category header");
@@ -2374,10 +2368,7 @@ export function ExpenseRegister({
   const handleApproveAndPay = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!approvingRecord) return;
-    if (!approvalData.utrNumber.trim()) {
-      toast.error("UTR / Transaction Reference Number is required for approval.");
-      return;
-    }
+    // UTR and disbursal details are optional (do not mandate)
 
     try {
       setApproving(true);
@@ -2435,14 +2426,16 @@ export function ExpenseRegister({
         accountantApprovalStatus: "APPROVED",
         // If payment was already approved, keep APPROVED; otherwise set PENDING to request Sir's payment approval
         paymentApprovalStatus: isAlreadyPaymentApproved ? "APPROVED" : "PENDING",
-        ...(isAlreadyPaymentApproved && settleData.utrNumber
+        ...(isAlreadyPaymentApproved
           ? {
-              utrNumber: settleData.utrNumber.trim(),
-              utrDate: settleData.utrDate || settleData.payReceiveDate || new Date().toISOString().split("T")[0],
-              payReceiveDate: settleData.payReceiveDate || settleData.utrDate || new Date().toISOString().split("T")[0],
-              accPaymentMode: settleData.accPaymentMode || "Bank Transfer",
-              utrFileUrl: settleData.utrFileUrl || null,
-              paymentStatus: "PAID",
+              utrNumber: settleData.utrNumber ? settleData.utrNumber.trim() : (settlingRecord.utrNumber || null),
+              utrDate: settleData.utrDate || settleData.payReceiveDate || settlingRecord.utrDate || null,
+              payReceiveDate: settleData.payReceiveDate || settleData.utrDate || settlingRecord.payReceiveDate || null,
+              accPaymentMode: settleData.accPaymentMode || settlingRecord.accPaymentMode || "Bank Transfer",
+              utrFileUrl: settleData.utrFileUrl || settlingRecord.utrFileUrl || null,
+              paymentStatus: (settleData.utrNumber || settleData.payReceiveDate || settleData.utrDate)
+                ? "PAID"
+                : (settlingRecord.paymentStatus || "PENDING"),
             }
           : {
               paymentStatus: "PENDING",
@@ -3085,7 +3078,9 @@ export function ExpenseRegister({
             <span className="text-lg sm:text-xl font-display font-black text-amber-900 mt-0.5 block">
               {formatCurrency(summary.pendingAmount)}
             </span>
-            <span className="text-[10px] text-amber-700 font-mono">Awaiting SA Approval</span>
+            <span className="text-[10px] text-amber-700 font-mono">
+              {!onOffSAApproval && isAccountant ? "Pending Disbursal" : "Awaiting SA Approval"}
+            </span>
           </div>
 
           <div className="bg-cyan-50/60 p-3 border border-cyan-200">
@@ -5487,10 +5482,12 @@ export function ExpenseRegister({
               <div>
                 <h2 className="text-base font-display font-black text-gray-900 uppercase tracking-tight flex items-center gap-2">
                   <Receipt className="w-4 h-4 text-[#006064]" />
-                  <span>{editingRecord ? "Edit Expense Entry" : "Step 1: Record Center Operating Expense"}</span>
+                  <span>{editingRecord ? "Edit Expense Entry" : isAccountant ? "Record Center Operating Expense" : "Step 1: Record Center Operating Expense"}</span>
                 </h2>
                 <p className="text-[11px] text-gray-500">
-                  CM or Accounts: Enter operational expense and attach bill PDF. Accountant will enter payment details against it.
+                  {isAccountant
+                    ? "Accounts: Enter operational expense details. Auto-approved for payment disbursal."
+                    : "CM or Accounts: Enter operational expense and attach bill PDF. Accountant will enter payment details against it."}
                 </p>
               </div>
               <button
@@ -5610,7 +5607,7 @@ export function ExpenseRegister({
                   <div className="sm:col-span-3">
                     <div className="flex items-center justify-between mb-1">
                       <label className="block font-bold text-gray-700 uppercase tracking-wider text-[11px]">
-                        Vendor / Supplier <span className="text-red-500">*</span>
+                        Vendor / Supplier <span className="text-gray-400 font-normal lowercase">(optional)</span>
                       </label>
                       <button
                         type="button"
@@ -5623,10 +5620,9 @@ export function ExpenseRegister({
                     <select
                       value={formData.vendorId || ""}
                       onChange={(e) => handleVendorSelect(e.target.value)}
-                      required
                       className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064] cursor-pointer bg-white font-medium"
                     >
-                      <option value="">-- Select Vendor * --</option>
+                      <option value="">-- Select Vendor (Optional) --</option>
                       {vendors.map((v) => (
                         <option key={v.id} value={v.id}>
                           {v.vendorName} {v.accountNo ? `(A/C: ${v.accountNo})` : ""}
@@ -5926,16 +5922,15 @@ export function ExpenseRegister({
                 {/* Remarks (Mandatory) */}
                 <div>
                   <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    Remarks <span className="text-red-500">*</span>
+                    Remarks <span className="text-gray-400 font-normal lowercase">(optional)</span>
                   </label>
                   <textarea
                     rows={2}
-                    placeholder="Enter remarks or notes *"
+                    placeholder="Enter remarks or notes (optional)"
                     value={formData.remarks || ""}
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, remarks: e.target.value }))
                     }
-                    required
                     className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064]"
                   />
                 </div>
@@ -5963,6 +5958,10 @@ export function ExpenseRegister({
                       ? "Update & Resubmit Expense"
                       : editingRecord
                       ? "Update Expense Entry"
+                      : (!onOffSAApproval && isAccountant)
+                      ? "Submit Expense (Auto Approved)"
+                      : isAccountant
+                      ? "Submit Expense"
                       : "Submit Expense (Sent to Accounts)"}
                   </span>
                 </button>
@@ -6074,7 +6073,7 @@ export function ExpenseRegister({
                   {/* Payment Settlement Date */}
                   <div>
                     <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
-                      Payment Date <span className="text-red-500">*</span>
+                      Payment Date <span className="text-gray-400 font-normal lowercase">(optional)</span>
                     </label>
                     <input
                       type="date"
@@ -6082,7 +6081,6 @@ export function ExpenseRegister({
                       onChange={(e) =>
                         setApprovalData((prev) => ({ ...prev, paymentDate: e.target.value }))
                       }
-                      required
                       className="w-full border border-gray-300 p-2 text-xs focus:outline-none focus:border-[#006064]"
                     />
                   </div>
@@ -6090,7 +6088,7 @@ export function ExpenseRegister({
                   {/* Payment Mode */}
                   <div>
                     <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
-                      Payment Mode <span className="text-red-500">*</span>
+                      Payment Mode
                     </label>
                     <select
                       value={approvalData.paymentMode}
@@ -6111,16 +6109,15 @@ export function ExpenseRegister({
                 {/* UTR / Transaction No. */}
                 <div>
                   <label className="block font-bold text-gray-700 uppercase tracking-wider mb-1">
-                    UTR / Transaction Reference Number <span className="text-red-500">*</span>
+                    UTR / Transaction Reference Number <span className="text-gray-400 font-normal lowercase">(optional)</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="Enter bank transaction UTR (e.g. UTR192837465)"
+                    placeholder="Enter bank transaction UTR (optional)"
                     value={approvalData.utrNumber}
                     onChange={(e) =>
                       setApprovalData((prev) => ({ ...prev, utrNumber: e.target.value }))
                     }
-                    required
                     className="w-full border border-[#006064] p-2 text-xs font-mono font-bold focus:outline-none bg-cyan-50/30 text-gray-900"
                   />
                 </div>
@@ -6248,7 +6245,7 @@ export function ExpenseRegister({
                     {approving
                       ? "Recording & Dispatching..."
                       : (approvingRecord.approvalStatus === "APPROVED" || (!onOffSAApproval && (isAccountant || isAccountantExpense(approvingRecord))))
-                      ? "Record Payment Disbursal & Send Alert"
+                      ? "Record Payment Disbursal & Settle"
                       : "Confirm Approval & Disburse"}
                   </span>
                 </button>
@@ -7239,7 +7236,7 @@ export function ExpenseRegister({
                         {/* UTR No */}
                         <div>
                           <label className="block font-bold text-gray-800 uppercase tracking-wider mb-1 text-[10.5px]">
-                            UTR No / Bank Ref # *
+                            UTR No / Bank Ref # (optional)
                           </label>
                           <input
                             type="text"

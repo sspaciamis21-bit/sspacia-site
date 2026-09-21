@@ -427,12 +427,7 @@ export async function POST(request: Request) {
     if (!description || !description.trim()) {
       return NextResponse.json({ error: 'Expense description is required' }, { status: 400 });
     }
-    if (!vendorId && (!vendorName || !vendorName.trim())) {
-      return NextResponse.json({ error: 'Vendor / Supplier is required' }, { status: 400 });
-    }
-    if (!remarks || !remarks.trim()) {
-      return NextResponse.json({ error: 'Remarks is required' }, { status: 400 });
-    }
+    // Vendor and remarks are optional as per requirement (do not mandate)
 
     const loc = await prisma.location.findUnique({
       where: { id: Number(locationId) },
