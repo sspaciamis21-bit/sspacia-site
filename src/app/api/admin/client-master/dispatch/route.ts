@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { getNodeScopedUserIds, getUserIdsByLocation } from '@/lib/auth/getNodeScopedUserIds';
+import { syncInvoiceWorkflowArrival } from '@/lib/invoiceWorkflowFmsSync';
 
 export async function POST(request: Request) {
   try {
@@ -193,6 +194,13 @@ export async function POST(request: Request) {
     }
 
     const createdInvoiceRecords = await (prisma as any).$transaction(invoiceCreates);
+
+    // ── Synchronize Step 1 to Invoice Workflow FMS (Invoice Arrival) ──
+    for (const inv of createdInvoiceRecords) {
+      syncInvoiceWorkflowArrival(inv.id).catch((fmsErr) => {
+        console.warn(`[Dispatch] Invoice Workflow FMS Arrival notice for #${inv.id}:`, fmsErr);
+      });
+    }
 
     return NextResponse.json({
       success: true,

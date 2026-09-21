@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { syncInvoiceWorkflowArrival } from '@/lib/invoiceWorkflowFmsSync';
 
 /**
  * Auto-dispatches all active ClientMaster entries to InvoiceRecords
@@ -127,6 +128,13 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
     }
 
     const createdRecords = await (prisma as any).$transaction(invoiceCreates);
+
+    // ── Synchronize Step 1 to Invoice Workflow FMS (Invoice Arrival) ──
+    for (const inv of createdRecords) {
+      syncInvoiceWorkflowArrival(inv.id).catch((fmsErr) => {
+        console.warn(`[Auto-Dispatch] Invoice Workflow FMS Arrival notice for #${inv.id}:`, fmsErr);
+      });
+    }
 
     return {
       dispatched: true,

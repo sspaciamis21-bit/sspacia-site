@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
+import { syncInvoiceWorkflowPdfAttached } from '@/lib/invoiceWorkflowFmsSync';
 
 export async function POST(request: Request) {
   try {
@@ -72,6 +73,11 @@ export async function POST(request: Request) {
       data: {
         status: 'INVOICE_ATTACHED',
       },
+    });
+
+    // ── Synchronize Step 3 & 4 to Invoice Workflow FMS (Accountant Attaches PDF) ──
+    syncInvoiceWorkflowPdfAttached(numInvoiceRecordId).catch((fmsErr) => {
+      console.warn('[Attach Invoice] Invoice Workflow FMS PDF Attached notice:', fmsErr);
     });
 
     return NextResponse.json({

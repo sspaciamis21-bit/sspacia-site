@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
+import { syncInvoiceWorkflowArrival } from '@/lib/invoiceWorkflowFmsSync';
 
 export async function POST(
   request: Request,
@@ -135,6 +136,10 @@ export async function POST(
         status: 'PENDING_CM_REVIEW',
         createdById: currentUserId,
       },
+    });
+    // ── Synchronize Step 1 to Invoice Workflow FMS (Invoice Arrival) ──
+    syncInvoiceWorkflowArrival(newInvoice.id).catch((fmsErr) => {
+      console.warn('[Generate Invoice] Invoice Workflow FMS Arrival notice:', fmsErr);
     });
 
     return NextResponse.json({

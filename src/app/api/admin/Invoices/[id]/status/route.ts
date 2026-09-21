@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { sendInvoiceApprovalEmail } from '@/lib/invoice-email-service';
 import { syncLiveInvoicePlanned } from '@/lib/accountsFmsSync';
+import {
+  syncInvoiceWorkflowSentToAccountant,
+  syncInvoiceWorkflowApprovedClient,
+  syncInvoiceWorkflowPdfAttached,
+} from '@/lib/invoiceWorkflowFmsSync';
 
 export async function PATCH(
   request: Request,
@@ -56,6 +61,10 @@ export async function PATCH(
         console.warn('[Invoice Status] Accounts FMS Sync notice:', fmsErr);
       });
 
+      // ── Synchronize Step 4 to Invoice Workflow FMS (CM Approves & Sends to Client) ──
+      syncInvoiceWorkflowApprovedClient(invoiceRecordId).catch((fmsErr) => {
+        console.warn('[Invoice Status] Invoice Workflow FMS Approved notice:', fmsErr);
+      });
 
       // Automated Notification for Accountant & Super Admin
       try {
@@ -76,6 +85,16 @@ export async function PATCH(
       } catch (notifErr) {
         console.warn('[Invoice Status Notification Error]:', notifErr);
       }
+    } else if (status === 'SENT_TO_ACCOUNTANT') {
+      // ── Synchronize Step 2 & 3 to Invoice Workflow FMS (CM Sends to Accountant) ──
+      syncInvoiceWorkflowSentToAccountant(invoiceRecordId).catch((fmsErr) => {
+        console.warn('[Invoice Status] Invoice Workflow FMS Sent to Accountant notice:', fmsErr);
+      });
+    } else if (status === 'INVOICE_ATTACHED') {
+      // ── Synchronize Step 3 & 4 to Invoice Workflow FMS (Accountant Attaches PDF) ──
+      syncInvoiceWorkflowPdfAttached(invoiceRecordId).catch((fmsErr) => {
+        console.warn('[Invoice Status] Invoice Workflow FMS PDF Attached notice:', fmsErr);
+      });
     }
 
 
