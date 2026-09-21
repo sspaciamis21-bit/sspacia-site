@@ -255,9 +255,16 @@ export async function syncOldInvoiceActual(oldInvoiceId: number, customActualDat
       return;
     }
 
-    // Use current operational timestamp when accountant enters payment on SSPACIA
-    const actualDateObj = customActualDate instanceof Date ? customActualDate : new Date();
-    const actualTimestamp = formatIstTimestamp(actualDateObj);
+    // Use operational timestamp when accountant enters payment on SSPACIA in M/D/YYYY HH:mm:ss matching Google Sheet
+    const actualDateObj = customActualDate instanceof Date ? customActualDate : (customActualDate ? new Date(customActualDate) : new Date());
+    const istDate = new Date(actualDateObj.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const m = istDate.getMonth() + 1;
+    const d = istDate.getDate();
+    const y = istDate.getFullYear();
+    const h = istDate.getHours();
+    const min = String(istDate.getMinutes()).padStart(2, '0');
+    const s = String(istDate.getSeconds()).padStart(2, '0');
+    const actualTimestamp = `${m}/${d}/${y} ${h}:${min}:${s}`;
 
     const payload = {
       action: 'accounts_old_actual',

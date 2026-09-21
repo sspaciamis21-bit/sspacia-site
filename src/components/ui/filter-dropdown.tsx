@@ -53,16 +53,15 @@ export function FilterDropdown({
       <label className="text-[10px] font-sans font-bold text-primary uppercase tracking-[0.4em] ml-1">
         {label}
       </label>
-      
+
       <div className="relative">
         <button
           type="button"
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
-          className={`w-full flex items-center justify-between bg-surface-lowest px-4 py-3 text-xs sm:text-sm transition-all border-b-2 h-12 cursor-pointer ${
-            disabled ? "opacity-40 grayscale cursor-not-allowed border-outline-variant/10" :
-            isOpen ? "border-primary shadow-2xl bg-surface-high" : "border-outline-variant/20 hover:border-primary/50"
-          }`}
+          className={`w-full flex items-center justify-between bg-surface-lowest px-4 py-3 text-xs sm:text-sm transition-all border-b-2 h-12 cursor-pointer ${disabled ? "opacity-40 grayscale cursor-not-allowed border-outline-variant/10" :
+              isOpen ? "border-primary shadow-2xl bg-surface-high" : "border-outline-variant/20 hover:border-primary/50"
+            }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
             {icon && <span className="text-primary/60 shrink-0">{icon}</span>}
@@ -70,11 +69,11 @@ export function FilterDropdown({
               {selectedOption ? selectedOption.name : placeholder}
             </span>
           </div>
-          
+
           <div className="flex items-center gap-2 shrink-0">
             {isSelectedValid && (
-              <X 
-                className="h-3.5 w-3.5 text-tertiary hover:text-primary transition-colors cursor-pointer" 
+              <X
+                className="h-3.5 w-3.5 text-tertiary hover:text-primary transition-colors cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelect(undefined);
@@ -107,9 +106,8 @@ export function FilterDropdown({
                         onSelect(option.id);
                         setIsOpen(false);
                       }}
-                      className={`w-full text-left px-6 py-3.5 text-xs sm:text-sm transition-colors hover:bg-surface-high cursor-pointer ${
-                        isOptSelected ? "text-[#006064] font-bold bg-[#006064]/10" : "text-on-surface"
-                      }`}
+                      className={`w-full text-left px-6 py-3.5 text-xs sm:text-sm transition-colors hover:bg-surface-high cursor-pointer ${isOptSelected ? "text-[#006064] font-bold bg-[#006064]/10" : "text-on-surface"
+                        }`}
                     >
                       {option.name}
                     </button>

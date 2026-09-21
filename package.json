@@ -63,7 +63,8 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.2",
     "ts-node": "^10.9.2",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/geoip-lite": "^1.4.4",
