@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyToken } from '@/lib/jwt';
+import { onOffSAApproval } from '@/lib/expense-approval-config';
 
 const ACCOUNTANT_EMAIL = 'ssinfrazone21@gmail.com';
 
@@ -283,9 +284,22 @@ export async function PUT(
 
     if (body.resubmit || (isCurrentlyRejected && body.approvalStatus === undefined)) {
       if (existing.createdByRole === 'ACCOUNTANT' || isAccountant) {
-        updateData.approvalStatus = 'PENDING_SUPER_ADMIN_APPROVAL';
-        updateData.accountantApprovalStatus = 'APPROVED';
-        updateData.superAdminApprovalStatus = 'PENDING';
+        if (!onOffSAApproval) {
+          updateData.approvalStatus = 'APPROVED';
+          updateData.accountantApprovalStatus = 'APPROVED';
+          updateData.superAdminApprovalStatus = 'APPROVED';
+          updateData.superAdminApprovedById = user.id;
+          updateData.superAdminApprovedByName = `${user.name} (Auto Approved)`;
+          updateData.superAdminApprovedAt = new Date();
+          updateData.paymentApprovalStatus = 'APPROVED';
+          updateData.paymentApprovedById = user.id;
+          updateData.paymentApprovedByName = `${user.name} (Auto Approved)`;
+          updateData.paymentApprovedAt = new Date();
+        } else {
+          updateData.approvalStatus = 'PENDING_SUPER_ADMIN_APPROVAL';
+          updateData.accountantApprovalStatus = 'APPROVED';
+          updateData.superAdminApprovalStatus = 'PENDING';
+        }
       } else {
         updateData.approvalStatus = 'PENDING_ACCOUNTANT_APPROVAL';
         updateData.accountantApprovalStatus = 'PENDING';
@@ -295,8 +309,30 @@ export async function PUT(
       updateData.rejectionRemarks = null;
     }
 
-    // Accountant Settlement Fields (only applicable once approved by Super Admin)
-    const canDisburse = existing.approvalStatus === 'APPROVED' || updateData.approvalStatus === 'APPROVED' || isSuperAdmin;
+    const isAccountantRecord = existing.createdByRole === 'ACCOUNTANT' || existing.createdById === user.id;
+    if (!onOffSAApproval && (isAccountant || isAccountantRecord)) {
+      if (existing.approvalStatus !== 'APPROVED') {
+        updateData.approvalStatus = 'APPROVED';
+        updateData.accountantApprovalStatus = 'APPROVED';
+        updateData.superAdminApprovalStatus = 'APPROVED';
+        updateData.superAdminApprovedById = user.id;
+        updateData.superAdminApprovedByName = `${user.name} (Auto Approved)`;
+        updateData.superAdminApprovedAt = new Date();
+      }
+      if (existing.paymentApprovalStatus !== 'APPROVED') {
+        updateData.paymentApprovalStatus = 'APPROVED';
+        updateData.paymentApprovedById = user.id;
+        updateData.paymentApprovedByName = `${user.name} (Auto Approved)`;
+        updateData.paymentApprovedAt = new Date();
+      }
+    }
+
+    // Accountant Settlement Fields (only applicable once approved by Super Admin OR when onOffSAApproval is false for accountants)
+    const canDisburse =
+      existing.approvalStatus === 'APPROVED' ||
+      updateData.approvalStatus === 'APPROVED' ||
+      isSuperAdmin ||
+      (!onOffSAApproval && (isAccountant || isAccountantRecord));
 
     if (canDisburse) {
       if (body.payReceiveDate !== undefined) {

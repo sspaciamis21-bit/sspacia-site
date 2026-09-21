@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyToken } from '@/lib/jwt';
+import { onOffSAApproval } from '@/lib/expense-approval-config';
 
 const ACCOUNTANT_EMAIL = 'ssinfrazone21@gmail.com';
 
@@ -458,22 +459,37 @@ export async function POST(request: Request) {
     let accApprovedAt: Date | null = null;
 
     if (isAccountant) {
-      // Accountant enters expense -> straight to Super Admin for approval (Step 1 self-verified)
-      calculatedApprovalStatus = 'PENDING_SUPER_ADMIN_APPROVAL';
-      initialAccApprovalStatus = 'APPROVED';
-      accApprovedById = user.id;
-      accApprovedByName = user.name;
-      accApprovedAt = new Date();
-      initialAdminApprovalStatus = 'PENDING';
+      if (!onOffSAApproval) {
+        // Auto-approve both Step 1 & Step 2 for Accountant (onOffSAApproval === false)
+        calculatedApprovalStatus = 'APPROVED';
+        initialAccApprovalStatus = 'APPROVED';
+        initialAdminApprovalStatus = 'APPROVED';
+        initialApprovedById = user.id;
+        initialApprovedByName = `${user.name} (Auto Approved)`;
+        initialApprovedAt = new Date();
+        accApprovedById = user.id;
+        accApprovedByName = user.name;
+        accApprovedAt = new Date();
+      } else {
+        // Accountant enters expense -> straight to Super Admin for approval (Step 1 self-verified)
+        calculatedApprovalStatus = 'PENDING_SUPER_ADMIN_APPROVAL';
+        initialAccApprovalStatus = 'APPROVED';
+        accApprovedById = user.id;
+        accApprovedByName = user.name;
+        accApprovedAt = new Date();
+        initialAdminApprovalStatus = 'PENDING';
+      }
     } else {
-      // CM or Super Admin enters expense -> starts at Step 1 (Accountant or Super Admin validation)
+      // CM or other roles -> starts at Step 1 (Accountant or Super Admin validation)
       calculatedApprovalStatus = 'PENDING_ACCOUNTANT_APPROVAL';
       initialAccApprovalStatus = 'PENDING';
       initialAdminApprovalStatus = 'PENDING';
     }
 
-    const isSettled = isSuperAdmin && Boolean(utrNumber || payReceiveDate || (receiveAmount && receiveAmount > 0));
+    const canDisburseOrSetPayable = isSuperAdmin || (isAccountant && !onOffSAApproval);
+    const isSettled = canDisburseOrSetPayable && Boolean(utrNumber || payReceiveDate || (receiveAmount && receiveAmount > 0));
     const calculatedStatus = customPaymentStatus || (isSettled ? 'PAID' : 'PENDING');
+    const calculatedPaymentApprovalStatus = (!onOffSAApproval && isAccountant) ? 'APPROVED' : (customPaymentStatus === 'PAID' ? 'APPROVED' : 'NOT_REQUESTED');
 
     const createdRecord = await (prisma as any).expenseRecord.create({
       data: {
@@ -512,17 +528,26 @@ export async function POST(request: Request) {
         accountantApprovedByName: accApprovedByName,
         accountantApprovedAt: accApprovedAt,
         superAdminApprovalStatus: initialAdminApprovalStatus,
+        superAdminApprovedById: (!onOffSAApproval && isAccountant) ? user.id : null,
+        superAdminApprovedByName: (!onOffSAApproval && isAccountant) ? `${user.name} (Auto Approved)` : null,
+        superAdminApprovedAt: (!onOffSAApproval && isAccountant) ? new Date() : null,
         approvedById: initialApprovedById,
         approvedByName: initialApprovedByName,
         approvedAt: initialApprovedAt,
 
-        // Accountant details (only settable if superadmin or already approved)
-        payReceiveDate: isSuperAdmin ? (payReceiveDate || null) : null,
-        receiveAmount: isSuperAdmin && receiveAmount ? parseFloat(String(receiveAmount)) : null,
-        accPaymentMode: isSuperAdmin ? (accPaymentMode || null) : null,
-        utrNumber: isSuperAdmin && utrNumber ? utrNumber.trim() : null,
-        utrDate: isSuperAdmin ? finalUtrDate : null,
-        utrFileUrl: isSuperAdmin ? (utrFileUrl || null) : null,
+        // Payment Approval (3rd approval)
+        paymentApprovalStatus: calculatedPaymentApprovalStatus,
+        paymentApprovedById: (!onOffSAApproval && isAccountant) ? user.id : null,
+        paymentApprovedByName: (!onOffSAApproval && isAccountant) ? `${user.name} (Auto Approved)` : null,
+        paymentApprovedAt: (!onOffSAApproval && isAccountant) ? new Date() : null,
+
+        // Accountant details (settable if superadmin or accountant when onOffSAApproval is false)
+        payReceiveDate: canDisburseOrSetPayable ? (payReceiveDate || null) : null,
+        receiveAmount: canDisburseOrSetPayable && receiveAmount ? parseFloat(String(receiveAmount)) : null,
+        accPaymentMode: canDisburseOrSetPayable ? (accPaymentMode || null) : null,
+        utrNumber: canDisburseOrSetPayable && utrNumber ? utrNumber.trim() : null,
+        utrDate: canDisburseOrSetPayable ? finalUtrDate : null,
+        utrFileUrl: canDisburseOrSetPayable ? (utrFileUrl || null) : null,
         tdsDeducted: tdsDeducted || 'No',
         tdsAmount: tdsAmount ? parseFloat(String(tdsAmount)) : null,
         paymentStatus: calculatedStatus,

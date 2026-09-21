@@ -55,6 +55,7 @@ import {
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
 import { BankStatementModal } from "./bank-statement-modal";
+import { onOffSAApproval } from "@/lib/expense-approval-config";
 
 export interface ExpenseColumnDef {
   id: string;
@@ -131,7 +132,18 @@ export const ACCOUNTANT_EXPENSE_COLUMNS: ExpenseColumnDef[] = [
   { id: "actions", label: "Actions & Disbursal", defaultWidth: 310, minWidth: 240, align: "center", phase: "3" },
 ];
 
+export const isAccountantExpense = (rec?: ExpenseRecordItem | null): boolean => {
+  if (!rec) return false;
+  return (
+    rec.createdByRole === "ACCOUNTANT" ||
+    Boolean(rec.createdByName?.toLowerCase()?.includes("account"))
+  );
+};
+
 export const getExpenseCellValue = (rec: ExpenseRecordItem, colId: string, idx: number): string => {
+  const isAcc = isAccountantExpense(rec);
+  const isAutoApprovedByConfig = !onOffSAApproval && isAcc;
+
   switch (colId) {
     case "index":
       return String(idx + 1);
@@ -172,7 +184,7 @@ export const getExpenseCellValue = (rec: ExpenseRecordItem, colId: string, idx: 
       if (rec.approvalStatus === "REJECTED_BY_ACCOUNTANT") return "Rejected";
       return "Pending Check";
     case "saApproval":
-      if (rec.approvalStatus === "APPROVED") return "Approved ✓";
+      if (rec.approvalStatus === "APPROVED" || isAutoApprovedByConfig) return "Approved ✓";
       if (rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN") return "SA Rejected";
       if (rec.accountantApprovalStatus === "APPROVED" || rec.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" || rec.approvalStatus === "PENDING_APPROVAL") return "Pending SA";
       return "Waiting on Step 1";
@@ -181,17 +193,23 @@ export const getExpenseCellValue = (rec: ExpenseRecordItem, colId: string, idx: 
     case "bankPortal":
       return rec.uploadedInBankPortal ? "Uploaded" : "Pending";
     case "paymentApproval":
-      if (rec.paymentApprovalStatus === "APPROVED" || rec.paymentStatus === "PAID" || rec.utrNumber) return "Approved ✓";
+      if (isAutoApprovedByConfig || rec.paymentApprovalStatus === "APPROVED" || rec.paymentStatus === "PAID" || rec.utrNumber) return "Approved ✓";
       if (rec.paymentApprovalStatus === "REJECTED") return "SA Rejected";
       if (rec.paymentApprovalStatus === "PENDING") return "Pending Sir Pay";
       if (rec.approvalStatus === "APPROVED") return "Req Sir Pay";
       return "Waiting on Step 2";
-    case "utrNumber":
-      return rec.utrNumber || (rec.paymentApprovalStatus === "APPROVED" || rec.paymentStatus === "PAID" ? "Awaiting UTR" : "Locked");
-    case "utrDate":
-      return rec.utrNumber ? `${rec.utrNumber} (${rec.payReceiveDate || rec.utrDate || "Paid"})` : (rec.paymentApprovalStatus === "APPROVED" ? "Awaiting Disbursal" : "Locked");
-    case "payDate":
-      return rec.payReceiveDate || rec.utrDate || (rec.paymentApprovalStatus === "APPROVED" ? "Pending Date" : "Locked");
+    case "utrNumber": {
+      const isApprovedForPay = isAutoApprovedByConfig || rec.paymentApprovalStatus === "APPROVED" || rec.paymentStatus === "PAID";
+      return rec.utrNumber || (isApprovedForPay ? "Awaiting UTR" : "Locked");
+    }
+    case "utrDate": {
+      const isApprovedForPay = isAutoApprovedByConfig || rec.paymentApprovalStatus === "APPROVED" || rec.paymentStatus === "PAID";
+      return rec.utrNumber ? `${rec.utrNumber} (${rec.payReceiveDate || rec.utrDate || "Paid"})` : (isApprovedForPay ? "Awaiting Disbursal" : "Locked");
+    }
+    case "payDate": {
+      const isApprovedForPay = isAutoApprovedByConfig || rec.paymentApprovalStatus === "APPROVED" || rec.paymentStatus === "PAID";
+      return rec.payReceiveDate || rec.utrDate || (isApprovedForPay ? "Pending Date" : "Locked");
+    }
     case "paymentStatus":
       return rec.paymentStatus === "PAID" || rec.utrNumber ? "Paid" : "Pending";
     case "emailAlert":
@@ -1128,17 +1146,24 @@ export function ExpenseRegister({
         const data = await res.json();
         const all: ExpenseRecordItem[] = data.records || [];
         const pending = all.filter(
-          (r) =>
-            // Step 2: Base Expense Requisition Approvals
-            r.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" ||
-            r.approvalStatus === "PENDING_APPROVAL" ||
-            (r.approvalStatus === "PENDING" &&
-              (r.accountantApprovalStatus === "APPROVED" || r.createdByRole === "ACCOUNTANT")) ||
-            // Step 3: Payment Disbursal Approvals ("Sir Pays")
-            (r.approvalStatus === "APPROVED" &&
-              r.paymentApprovalStatus === "PENDING" &&
-              !r.utrNumber &&
-              r.paymentStatus !== "PAID")
+          (r) => {
+            // If onOffSAApproval is false, expenses uploaded by accountant do not require Super Admin approval
+            const isAcc = isAccountantExpense(r);
+            if (!onOffSAApproval && isAcc) return false;
+
+            return (
+              // Step 2: Base Expense Requisition Approvals
+              r.approvalStatus === "PENDING_SUPER_ADMIN_APPROVAL" ||
+              r.approvalStatus === "PENDING_APPROVAL" ||
+              (r.approvalStatus === "PENDING" &&
+                (r.accountantApprovalStatus === "APPROVED" || r.createdByRole === "ACCOUNTANT")) ||
+              // Step 3: Payment Disbursal Approvals ("Sir Pays")
+              (r.approvalStatus === "APPROVED" &&
+                r.paymentApprovalStatus === "PENDING" &&
+                !r.utrNumber &&
+                r.paymentStatus !== "PAID")
+            );
+          }
         );
         setAllPendingApprovals(pending);
       }
@@ -1203,12 +1228,15 @@ export function ExpenseRegister({
       );
     }
 
-    if (rec.approvalStatus === "APPROVED") {
+    const isAccRecord = isAccountantExpense(rec);
+    const isAutoApproved = !onOffSAApproval && isAccRecord;
+
+    if (rec.approvalStatus === "APPROVED" || isAutoApproved) {
       return (
         <div className="flex flex-col items-center">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
             <Check className="w-3 h-3 text-emerald-700" />
-            <span>Approved for Payment</span>
+            <span>{isAutoApproved ? "Auto Approved" : "Approved for Payment"}</span>
           </span>
           <span className="text-[8.5px] text-gray-500 mt-0.5 font-medium">Sir to pay • Enter UTR</span>
         </div>
@@ -2074,10 +2102,14 @@ export function ExpenseRegister({
 
   // Open Super Admin / Accountant Disbursal & UTR Modal
   const openApproveModal = (rec: ExpenseRecordItem) => {
+    const isAccountantRecord =
+      rec.createdByRole === "ACCOUNTANT" ||
+      rec.createdByName?.toLowerCase()?.includes("account");
     const isPaymentApproved =
       rec.paymentApprovalStatus === "APPROVED" ||
       rec.paymentStatus === "PAID" ||
-      Boolean(rec.utrNumber);
+      Boolean(rec.utrNumber) ||
+      (!onOffSAApproval && (isAccountant || isAccountantRecord));
 
     if (!isPaymentApproved && !isAdmin) {
       toast.error("Super Admin must approve payment (Sir Pays) before recording UTR and disbursal details.");
@@ -2324,7 +2356,9 @@ export function ExpenseRegister({
             ? "Expense corrected & resubmitted successfully for review!"
             : "Expense record updated successfully!"
           : isAccountant
-          ? "Expense created! Submitted for Super Admin approval."
+          ? !onOffSAApproval
+            ? "Expense created and auto-approved! No Super Admin approval needed."
+            : "Expense created! Submitted for Super Admin approval."
           : "Expense created! Submitted for Accountant validation."
       );
       setIsAddModalOpen(false);
@@ -2375,9 +2409,13 @@ export function ExpenseRegister({
     e.preventDefault();
     if (!settlingRecord) return;
 
+    const isAccountantRecord =
+      settlingRecord.createdByRole === "ACCOUNTANT" ||
+      settlingRecord.createdByName?.toLowerCase()?.includes("account");
     const isAlreadyPaymentApproved =
       settlingRecord.paymentApprovalStatus === "APPROVED" ||
-      settlingRecord.paymentStatus === "PAID";
+      settlingRecord.paymentStatus === "PAID" ||
+      (!onOffSAApproval && (isAccountant || isAccountantRecord));
 
     try {
       setSavingForm(true);
@@ -3986,8 +4024,10 @@ export function ExpenseRegister({
                 </tr>
               ) : (
                 finalDisplayRecords.map((rec, index) => {
+                  const isRecordByAccountant = isAccountantExpense(rec);
+                  const isAutoApprovedByConfig = !onOffSAApproval && isRecordByAccountant;
                   const isApproved =
-                    rec.approvalStatus === "APPROVED" || rec.paymentStatus === "PAID";
+                    rec.approvalStatus === "APPROVED" || rec.paymentStatus === "PAID" || isAutoApprovedByConfig;
                   const dateDisplay =
                     rec.expenseDateStr ||
                     (rec.expenseDate
@@ -4285,12 +4325,12 @@ export function ExpenseRegister({
                           return (
                             <td style={s.style} className={`py-3 px-3 text-center whitespace-nowrap bg-purple-50/20 border-r border-purple-200 ${s.className}`}>
                               <div className="flex flex-col items-center justify-center gap-0.5">
-                                {rec.approvalStatus === "APPROVED" ? (
+                                {rec.approvalStatus === "APPROVED" || isAutoApprovedByConfig ? (
                                   <>
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[9.5px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
                                       <Check className="w-2.5 h-2.5 text-emerald-700" /> Approved ✓
                                     </span>
-                                    <span className="text-[8px] text-emerald-700 font-semibold">Ready for Payment</span>
+                                    <span className="text-[8px] text-emerald-700 font-semibold">{isAutoApprovedByConfig ? "Auto Approved" : "Ready for Payment"}</span>
                                   </>
                                 ) : rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN" ? (
                                   <div className="flex flex-col items-center gap-1 w-full max-w-[220px] text-center">
@@ -4762,10 +4802,10 @@ export function ExpenseRegister({
                         if (!s) return null;
                         return (
                           <td style={s.style} className={`py-3 px-3 text-center whitespace-nowrap bg-purple-50/20 border-r border-purple-200 ${s.className}`}>
-                            {rec.approvalStatus === "APPROVED" ? (
+                            {rec.approvalStatus === "APPROVED" || isAutoApprovedByConfig ? (
                               <div className="flex flex-col items-center">
                                 <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-emerald-100 text-emerald-900 border border-emerald-300">✓ Approved</span>
-                                <span className="text-[8px] text-emerald-700 font-semibold">Sir to Pay</span>
+                                <span className="text-[8px] text-emerald-700 font-semibold">{isAutoApprovedByConfig ? "Auto Approved" : "Sir to Pay"}</span>
                               </div>
                             ) : rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN" ? (
                               <div className="flex flex-col items-center gap-1 w-full max-w-[220px] text-center">
@@ -4855,11 +4895,13 @@ export function ExpenseRegister({
 
                         const isBaseExpenseApproved =
                           rec.approvalStatus === "APPROVED" ||
-                          rec.superAdminApprovalStatus === "APPROVED";
+                          rec.superAdminApprovalStatus === "APPROVED" ||
+                          isAutoApprovedByConfig;
                         const isPaymentApproved =
                           rec.paymentApprovalStatus === "APPROVED" ||
                           rec.paymentStatus === "PAID" ||
-                          Boolean(rec.utrNumber);
+                          Boolean(rec.utrNumber) ||
+                          isAutoApprovedByConfig;
                         const isPaymentPending =
                           rec.paymentApprovalStatus === "PENDING" && !isPaymentApproved;
                         const isPaymentRejected =
@@ -4877,7 +4919,9 @@ export function ExpenseRegister({
                                   <Check className="w-2.5 h-2.5 text-emerald-700" /> Approved
                                 </span>
                                 <span className="text-[8px] text-emerald-700 font-semibold mt-0.5">
-                                  {rec.paymentApprovedByName ? `by ${rec.paymentApprovedByName}` : "Paid by Sir"}
+                                  {isAutoApprovedByConfig
+                                    ? "Auto Approved"
+                                    : (rec.paymentApprovedByName ? `by ${rec.paymentApprovedByName}` : "Paid by Sir")}
                                 </span>
                               </div>
                             ) : isPaymentPending ? (
@@ -4963,7 +5007,8 @@ export function ExpenseRegister({
                         const isPaymentApproved =
                           rec.paymentApprovalStatus === "APPROVED" ||
                           rec.paymentStatus === "PAID" ||
-                          Boolean(rec.utrNumber);
+                          Boolean(rec.utrNumber) ||
+                          isAutoApprovedByConfig;
 
                         return (
                           <td style={s.style} className={`py-3 px-2 text-center bg-emerald-50/10 ${s.className}`}>
@@ -5113,7 +5158,8 @@ export function ExpenseRegister({
                                 const isPaymentApproved =
                                   rec.paymentApprovalStatus === "APPROVED" ||
                                   rec.paymentStatus === "PAID" ||
-                                  Boolean(rec.utrNumber);
+                                  Boolean(rec.utrNumber) ||
+                                  isAutoApprovedByConfig;
 
                                 if (isPaid) {
                                   return (
@@ -5941,12 +5987,12 @@ export function ExpenseRegister({
                 )}
                 <div>
                   <h3 className="text-sm font-display font-black uppercase tracking-wide">
-                    {approvingRecord.approvalStatus === "APPROVED"
-                      ? "Record Disbursal & UTR Details (Super Admin Approved)"
+                    {approvingRecord.approvalStatus === "APPROVED" || (!onOffSAApproval && (isAccountant || isAccountantExpense(approvingRecord)))
+                      ? "Record Disbursal & UTR Details (Auto Approved)"
                       : "Super Admin: Approve & Disburse Vendor Payment"}
                   </h3>
                   <p className="text-[11px] text-cyan-100 font-sans">
-                    {approvingRecord.approvalStatus === "APPROVED"
+                    {approvingRecord.approvalStatus === "APPROVED" || (!onOffSAApproval && (isAccountant || isAccountantExpense(approvingRecord)))
                       ? "Accountant Payment Disbursal, UTR Number & Vendor Confirmation Advice"
                       : "Super Admin Review & Payment Authorization Desk"}
                   </p>
@@ -5969,13 +6015,13 @@ export function ExpenseRegister({
                   </span>
                   <span
                     className={`text-xs font-bold px-2 py-0.5 border ${
-                      approvingRecord.approvalStatus === "APPROVED"
+                      approvingRecord.approvalStatus === "APPROVED" || (!onOffSAApproval && (isAccountant || isAccountantExpense(approvingRecord)))
                         ? "bg-emerald-100 text-emerald-900 border-emerald-300"
                         : "bg-amber-100 text-amber-900 border-amber-300"
                     }`}
                   >
-                    {approvingRecord.approvalStatus === "APPROVED"
-                      ? "APPROVED ✓ (AWAITING DISBURSAL)"
+                    {approvingRecord.approvalStatus === "APPROVED" || (!onOffSAApproval && (isAccountant || isAccountantExpense(approvingRecord)))
+                      ? "APPROVED ✓ (DISBURSAL ENTRY)"
                       : "PENDING APPROVAL"}
                   </span>
                 </div>
@@ -6201,7 +6247,7 @@ export function ExpenseRegister({
                   <span>
                     {approving
                       ? "Recording & Dispatching..."
-                      : approvingRecord.approvalStatus === "APPROVED"
+                      : (approvingRecord.approvalStatus === "APPROVED" || (!onOffSAApproval && (isAccountant || isAccountantExpense(approvingRecord))))
                       ? "Record Payment Disbursal & Send Alert"
                       : "Confirm Approval & Disburse"}
                   </span>
@@ -7168,19 +7214,21 @@ export function ExpenseRegister({
                 </div>
               </div>
 
-              {/* Form Section 5: Disbursal / UTR Entry (ONLY UNLOCKED AFTER SUPER ADMIN PAYMENT APPROVAL) */}
+              {/* Form Section 5: Disbursal / UTR Entry (ONLY UNLOCKED AFTER SUPER ADMIN PAYMENT APPROVAL OR AUTO-APPROVED BY CONFIG) */}
               {(() => {
+                const isAutoApprovedSettling = !onOffSAApproval && (isAccountant || isAccountantExpense(settlingRecord));
                 const isSettlingPaymentApproved =
                   settlingRecord.paymentApprovalStatus === "APPROVED" ||
                   settlingRecord.paymentStatus === "PAID" ||
-                  Boolean(settlingRecord.utrNumber);
+                  Boolean(settlingRecord.utrNumber) ||
+                  isAutoApprovedSettling;
 
                 if (isSettlingPaymentApproved) {
                   return (
                     <div className="space-y-3 pt-2 bg-emerald-50/60 p-3.5 border border-emerald-200">
                       <div className="flex items-center justify-between border-b border-emerald-200 pb-1.5">
                         <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" /> 5. Super Admin Approved — Disbursal & UTR Details
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" /> {isAutoApprovedSettling ? "5. Auto-Approved — Disbursal & UTR Details" : "5. Super Admin Approved — Disbursal & UTR Details"}
                         </h4>
                         <span className="bg-emerald-600 text-white text-[9.5px] font-mono px-2 py-0.5 font-bold uppercase">
                           Approved ✓
@@ -7353,10 +7401,12 @@ export function ExpenseRegister({
                   Cancel
                 </button>
                 {(() => {
+                  const isAutoApprovedSettling = !onOffSAApproval && (isAccountant || isAccountantExpense(settlingRecord));
                   const isSettlingPaymentApproved =
                     settlingRecord.paymentApprovalStatus === "APPROVED" ||
                     settlingRecord.paymentStatus === "PAID" ||
-                    Boolean(settlingRecord.utrNumber);
+                    Boolean(settlingRecord.utrNumber) ||
+                    isAutoApprovedSettling;
 
                   return (
                     <button

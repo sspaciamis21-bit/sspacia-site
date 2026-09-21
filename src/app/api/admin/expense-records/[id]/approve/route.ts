@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyToken } from '@/lib/jwt';
 import { sendEmail } from '@/lib/email';
+import { onOffSAApproval } from '@/lib/expense-approval-config';
 
 async function getAuthUser() {
   const cookieStore = await cookies();
@@ -333,6 +334,27 @@ async function addCategoryToDropdown(catName: string) {
     };
 
     if (action === 'REQUEST_PAYMENT_APPROVAL') {
+      const isAccountantRecord = record.createdByRole === 'ACCOUNTANT' || record.createdByName?.toLowerCase()?.includes('account');
+      const bypassSA = !onOffSAApproval && (isAccountant || isAccountantRecord);
+
+      if (bypassSA) {
+        const updated = await updatePaymentApprovalRecord({
+          approvalStatus: 'APPROVED',
+          superAdminApprovalStatus: 'APPROVED',
+          paymentApprovalStatus: 'APPROVED',
+          paymentApprovedById: user.id,
+          paymentApprovedByName: `${user.name} (Auto Approved)`,
+          paymentApprovedAt: new Date(),
+          paymentApprovalRemarks: remarks ? String(remarks).trim() : 'Auto Approved (onOffSAApproval)',
+        });
+
+        return NextResponse.json({
+          success: true,
+          data: updated,
+          message: 'Payment auto-approved (onOffSAApproval is off)!',
+        });
+      }
+
       if (record.approvalStatus !== 'APPROVED') {
         return NextResponse.json(
           { error: 'Cannot request payment approval. Base expense must first be approved by Super Admin.' },
@@ -411,15 +433,17 @@ async function addCategoryToDropdown(catName: string) {
     }
 
     // ── 4. DISBURSEMENT / PAYMENT RECORDING ACTION (FINAL STEP) ──
-    // Strictly gated: must have received Super Admin Payment Approval ("Sir Pays")
-    if (record.approvalStatus !== 'APPROVED') {
+    const isAccountantRecord = record.createdByRole === 'ACCOUNTANT' || record.createdByName?.toLowerCase()?.includes('account');
+    const bypassSA = !onOffSAApproval && (isAccountant || isAccountantRecord);
+
+    if (record.approvalStatus !== 'APPROVED' && !bypassSA) {
       return NextResponse.json(
         { error: 'Payment details and UTR cannot be recorded yet. This expense must first receive Super Admin approval.' },
         { status: 400 }
       );
     }
 
-    if (record.paymentApprovalStatus !== 'APPROVED' && !isSuperAdmin) {
+    if (record.paymentApprovalStatus !== 'APPROVED' && !isSuperAdmin && !bypassSA) {
       return NextResponse.json(
         { error: 'Payment details and UTR cannot be recorded yet. Super Admin must first approve the payment (Sir Pays).' },
         { status: 400 }
@@ -521,6 +545,9 @@ SSPACIA Coworking
       where: { id: recordId },
       data: {
         paymentStatus: 'PAID',
+        approvalStatus: 'APPROVED',
+        superAdminApprovalStatus: 'APPROVED',
+        paymentApprovalStatus: 'APPROVED',
         utrNumber: finalUtr,
         utrDate: finalPayDate,
         payReceiveDate: finalPayDate,
