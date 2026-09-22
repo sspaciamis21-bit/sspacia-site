@@ -461,22 +461,30 @@ async function addCategoryToDropdown(catName: string) {
     }
 
     if (!recipientEmail && record.vendorId) {
-      const vm = await (prisma as any).vendorMaster.findUnique({
-        where: { id: record.vendorId },
-        select: { email: true, vendorName: true },
-      });
-      if (vm?.email && vm.email.trim()) {
-        recipientEmail = vm.email.trim();
+      try {
+        const vm = await (prisma as any).vendorMaster.findUnique({
+          where: { id: record.vendorId },
+          select: { email: true, vendorName: true },
+        });
+        if (vm?.email && vm.email.trim()) {
+          recipientEmail = vm.email.trim();
+        }
+      } catch (err) {
+        console.warn('[VENDOR_ID_LOOKUP_WARNING]', err);
       }
     }
 
     if (!recipientEmail && record.vendorName) {
-      const vm = await (prisma as any).vendorMaster.findFirst({
-        where: { vendorName: { equals: record.vendorName.trim(), mode: 'insensitive' } },
-        select: { email: true, vendorName: true },
-      });
-      if (vm?.email && vm.email.trim()) {
-        recipientEmail = vm.email.trim();
+      try {
+        const vm = await (prisma as any).vendorMaster.findFirst({
+          where: { vendorName: record.vendorName.trim() },
+          select: { email: true, vendorName: true },
+        });
+        if (vm?.email && vm.email.trim()) {
+          recipientEmail = vm.email.trim();
+        }
+      } catch (err) {
+        console.warn('[VENDOR_NAME_LOOKUP_WARNING]', err);
       }
     }
 
