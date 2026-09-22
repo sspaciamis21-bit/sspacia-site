@@ -91,6 +91,7 @@ export const CM_EXPENSE_COLUMNS: ExpenseColumnDef[] = [
   { id: "receiptNo", label: "Receipt / Ref #", defaultWidth: 125, minWidth: 80, align: "left", phase: "1", mono: true },
   { id: "attachment", label: "Receipt / Bill Doc", defaultWidth: 130, minWidth: 85, align: "center", phase: "1" },
   { id: "remarks", label: "Remarks", defaultWidth: 140, minWidth: 75, align: "left", phase: "1" },
+  { id: "editAction", label: "Edit Expense", defaultWidth: 100, minWidth: 75, align: "center", phase: "1" },
 
   // ── PHASE 2: APPROVAL WORKFLOW (ACCOUNTANT → SUPER ADMIN) ──
   { id: "accCheck", label: "Step 1: Acc Check", defaultWidth: 170, minWidth: 120, align: "center", phase: "2" },
@@ -118,6 +119,7 @@ export const ACCOUNTANT_EXPENSE_COLUMNS: ExpenseColumnDef[] = [
   { id: "receiptNo", label: "Receipt / Ref #", defaultWidth: 125, minWidth: 80, align: "left", phase: "1", mono: true },
   { id: "attachedDocs", label: "Attached Docs", defaultWidth: 130, minWidth: 85, align: "center", phase: "1" },
   { id: "remarks", label: "Remarks", defaultWidth: 135, minWidth: 75, align: "left", phase: "1" },
+  { id: "editAction", label: "Edit Expense", defaultWidth: 105, minWidth: 80, align: "center", phase: "1" },
 
   // ── PHASE 2: APPROVAL WORKFLOW (ACCOUNTANT → SUPER ADMIN) ──
   { id: "accCheck", label: "Step 1: Acc Check", defaultWidth: 170, minWidth: 120, align: "center", phase: "2" },
@@ -180,6 +182,8 @@ export const getExpenseCellValue = (rec: ExpenseRecordItem, colId: string, idx: 
     }
     case "remarks":
       return rec.remarks || "-";
+    case "editAction":
+      return "Edit";
     case "accCheck":
       if (rec.accountantApprovalStatus === "APPROVED") return "Verified ✓";
       if (rec.approvalStatus === "REJECTED_BY_ACCOUNTANT") return "Rejected";
@@ -3742,7 +3746,7 @@ export function ExpenseRegister({
                         )}
 
                         {/* Google Sheets Filter Button */}
-                        {col.id !== "actions" && (
+                        {col.id !== "actions" && col.id !== "editAction" && (
                           <button
                             type="button"
                             onClick={(e) => handleOpenColumnFilter(col.id, e)}
@@ -4277,6 +4281,30 @@ export function ExpenseRegister({
                           );
                         })()}
 
+                        {/* 12b. Edit Expense (Phase 1 Action for CM) */}
+                        {(() => {
+                          const s = getColStyle("editAction");
+                          if (!s) return null;
+                          const canEdit = canEditOrDeleteEntry(rec);
+                          return (
+                            <td style={s.style} className={`py-2.5 px-2 text-center whitespace-nowrap bg-slate-50/50 border-r border-slate-300 ${s.className}`}>
+                              {canEdit ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(rec)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase bg-[#006064] hover:bg-[#00838f] text-white rounded-xs shadow-2xs transition-all cursor-pointer"
+                                  title="Edit Expense Details (No need to scroll right)"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                  <span>Edit</span>
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-gray-300 font-mono">-</span>
+                              )}
+                            </td>
+                          );
+                        })()}
+
                         {/* 13. Step 1: Acc Check */}
                         {(() => {
                           const s = getColStyle("accCheck");
@@ -4741,6 +4769,45 @@ export function ExpenseRegister({
                         );
                       })()}
 
+                      {/* 14b. Edit Expense / Breakdown (Phase 1 Action for Accountant) */}
+                      {(() => {
+                        const s = getColStyle("editAction");
+                        if (!s) return null;
+                        const canEdit = canEditOrDeleteEntry(rec);
+                        const isCMEntry = rec.createdByRole === "COMMUNITY_MANAGER" && !rec.createdByName?.toLowerCase()?.includes("account");
+                        return (
+                          <td style={s.style} className={`py-2.5 px-2 text-center whitespace-nowrap bg-slate-50/50 border-r border-slate-300 ${s.className}`}>
+                            <div className="inline-flex items-center justify-center gap-1">
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() => openEditModal(rec)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase bg-[#006064] hover:bg-[#00838f] text-white rounded-xs shadow-2xs transition-all cursor-pointer"
+                                  title="Edit Expense Details (No need to scroll right)"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                  <span>Edit</span>
+                                </button>
+                              )}
+                              {isCMEntry && (
+                                <button
+                                  type="button"
+                                  onClick={() => openSettleModal(rec)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-[9.5px] font-bold uppercase bg-teal-50 hover:bg-[#006064] text-[#006064] hover:text-white border border-teal-300 rounded-xs transition-all cursor-pointer shadow-2xs"
+                                  title="Edit Vendor & Billing Breakdown Against Expense"
+                                >
+                                  <FileSpreadsheet className="w-3 h-3" />
+                                  <span>Breakdown</span>
+                                </button>
+                              )}
+                              {!canEdit && !isCMEntry && (
+                                <span className="text-[10px] text-gray-300 font-mono">-</span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })()}
+
                       {/* 15. Step 1: Acc Check */}
                       {(() => {
                         const s = getColStyle("accCheck");
@@ -5015,17 +5082,28 @@ export function ExpenseRegister({
                                 >
                                   {rec.utrNumber}
                                 </span>
-                                {(rec.paymentProofUrl || rec.utrFileUrl) && (
-                                  <a
-                                    href={rec.paymentProofUrl || rec.utrFileUrl || "#"}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-[9px] text-emerald-700 hover:underline flex items-center gap-0.5 font-bold mt-0.5"
-                                    title="View UTR payment screenshot"
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => openApproveModal(rec)}
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[8.5px] font-bold uppercase bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xs transition-all cursor-pointer shadow-2xs"
+                                    title="Edit UTR & Payment Disbursal Details"
                                   >
-                                    <Check className="w-2.5 h-2.5" /> Proof
-                                  </a>
-                                )}
+                                    <Edit3 className="w-2.5 h-2.5 text-amber-700" />
+                                    <span>Edit UTR</span>
+                                  </button>
+                                  {(rec.paymentProofUrl || rec.utrFileUrl) && (
+                                    <a
+                                      href={rec.paymentProofUrl || rec.utrFileUrl || "#"}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[8.5px] text-emerald-700 hover:underline flex items-center gap-0.5 font-bold"
+                                      title="View UTR payment screenshot"
+                                    >
+                                      <Check className="w-2.5 h-2.5" /> Proof
+                                    </a>
+                                  )}
+                                </div>
                               </div>
                             ) : isPaymentApproved ? (
                               <button
@@ -5034,7 +5112,7 @@ export function ExpenseRegister({
                                 className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-amber-500 hover:bg-amber-600 text-white transition-all cursor-pointer shadow-2xs whitespace-nowrap flex items-center gap-1 mx-auto"
                                 title="Sir has approved payment; click to record UTR, date & proof"
                               >
-                                + Enter UTR
+                                <Plus className="w-2.5 h-2.5" /> Enter UTR
                               </button>
                             ) : (
                               <div className="flex flex-col items-center justify-center text-center">
@@ -5055,14 +5133,38 @@ export function ExpenseRegister({
                       {(() => {
                         const s = getColStyle("payDate");
                         if (!s) return null;
+                        const isPaymentApproved =
+                          rec.paymentApprovalStatus === "APPROVED" ||
+                          rec.paymentStatus === "PAID" ||
+                          Boolean(rec.utrNumber) ||
+                          isAutoApprovedByConfig;
+
                         return (
                           <td style={s.style} className={`py-3 px-2 text-center whitespace-nowrap text-[11px] font-mono text-gray-800 bg-emerald-50/10 ${s.className}`}>
-                            {isApproved ? (
-                              rec.payReceiveDate || rec.utrDate ? (
+                            {rec.payReceiveDate || rec.utrDate ? (
+                              <div className="flex flex-col items-center justify-center gap-0.5">
                                 <span className="font-bold text-gray-800">{rec.payReceiveDate || rec.utrDate}</span>
-                              ) : (
-                                <span className="text-gray-400">-</span>
-                              )
+                                {(isAccountant || isAdmin || isPaymentApproved) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openApproveModal(rec)}
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[8.5px] font-bold uppercase bg-cyan-50 hover:bg-cyan-100 text-[#006064] border border-cyan-300 rounded-xs transition-all cursor-pointer shadow-2xs mt-0.5"
+                                    title="Edit Payment Disbursal Date"
+                                  >
+                                    <Edit3 className="w-2.5 h-2.5" />
+                                    <span>Edit Date</span>
+                                  </button>
+                                )}
+                              </div>
+                            ) : isApproved && (isPaymentApproved || isAccountant || isAdmin) ? (
+                              <button
+                                type="button"
+                                onClick={() => openApproveModal(rec)}
+                                className="px-1.5 py-0.5 text-[8.5px] font-bold uppercase bg-teal-50 hover:bg-teal-100 text-teal-800 border border-dashed border-teal-300 rounded-xs transition-all cursor-pointer shadow-2xs"
+                                title="Click to record payment disbursal date"
+                              >
+                                + Set Date
+                              </button>
                             ) : (
                               <span className="text-gray-300 text-[10px]">Locked</span>
                             )}
