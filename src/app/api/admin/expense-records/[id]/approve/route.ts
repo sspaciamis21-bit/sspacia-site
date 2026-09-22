@@ -137,6 +137,9 @@ export async function POST(
         data: {
           approvalStatus: 'REJECTED_BY_ACCOUNTANT',
           accountantApprovalStatus: 'REJECTED',
+          accountantApprovedById: user.id,
+          accountantApprovedByName: user.name,
+          accountantApprovedAt: new Date(),
           rejectionStage: 'ACCOUNTANT',
           rejectionRemarks: reason,
           accountantRemarks: reason,
@@ -294,6 +297,9 @@ async function addCategoryToDropdown(catName: string) {
         data: {
           approvalStatus: 'REJECTED_BY_SUPER_ADMIN',
           superAdminApprovalStatus: 'REJECTED',
+          superAdminApprovedById: user.id,
+          superAdminApprovedByName: user.name,
+          superAdminApprovedAt: new Date(),
           rejectionStage: 'SUPER_ADMIN',
           rejectionRemarks: reason,
           superAdminRemarks: reason,
@@ -422,6 +428,9 @@ async function addCategoryToDropdown(catName: string) {
 
       const updated = await updatePaymentApprovalRecord({
         paymentApprovalStatus: 'REJECTED',
+        paymentApprovedById: user.id,
+        paymentApprovedByName: user.name,
+        paymentApprovedAt: new Date(),
         paymentApprovalRemarks: reason,
       });
 
