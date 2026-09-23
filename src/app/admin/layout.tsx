@@ -50,6 +50,7 @@ const sidebarItems = [
   { name: 'Tickets', href: '/admin/tickets', icon: Ticket },
   { name: 'Bookings', href: '/admin/bookings', icon: Calendar },
   { name: 'Expenses', href: '/admin/expenses', icon: FileSpreadsheet },
+  { name: 'Vendor Master', href: '/admin/vendor-master', icon: Users },
   { name: 'Internal Inventory', href: '/admin/inventory', icon: Boxes },
   { name: 'Contracts', href: '/admin/contracts', icon: ShieldCheck },
   { name: 'Documents', href: '/admin/documents', icon: FileText },

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Building2,
   Loader2,
@@ -197,6 +198,16 @@ export default function SuperAdminExpensesPage() {
                 </button>
               </div>
             )}
+
+            {/* Direct Link to Vendor Master */}
+            <Link
+              href="/admin/vendor-master"
+              className="bg-white hover:bg-gray-100 text-gray-800 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider border border-gray-300 transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+              title="Open Vendor Master: Centralized vendor directory, banking details, GSTIN, PAN & contact records"
+            >
+              <Building2 className="w-3.5 h-3.5 text-[#006064]" />
+              <span>Vendor Master</span>
+            </Link>
 
             {isSuperAdmin && viewMode === "SPREADSHEET" && (
               <>

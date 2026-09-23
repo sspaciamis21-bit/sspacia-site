@@ -33,6 +33,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get('search') || '').trim();
     const locationIdParam = searchParams.get('locationId');
+    const cabinNameParam = searchParams.get('cabinName');
 
     const where: any = {};
 
@@ -40,7 +41,16 @@ export async function GET(request: Request) {
       where.OR = [
         { productName: { contains: search } },
         { remarks: { contains: search } },
+        { cabinName: { contains: search } },
       ];
+    }
+
+    if (cabinNameParam && cabinNameParam !== 'ALL') {
+      if (cabinNameParam === 'UNASSIGNED' || cabinNameParam === 'GENERAL') {
+        where.cabinName = null;
+      } else {
+        where.cabinName = cabinNameParam;
+      }
     }
 
     // Node data scoping for Community Managers
@@ -108,12 +118,63 @@ export async function GET(request: Request) {
       return {
         ...it,
         entryDate: it.entryDate || it.createdAt,
+        cabinName: it.cabinName || null,
         locationName: it.locationId ? (locMap.get(it.locationId) || 'Unassigned Centre') : 'All Centres',
         balanceAmount: (Number(it.balanceQty) || 0) * (Number(it.unitCost) || 0),
         transferCount: itemLogs.length,
         transferLogs: itemLogs,
       };
     });
+
+    // Fetch all products and product units grouped by location for cabin/room options
+    const locationSpaces = await (prisma as any).location.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        products: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            name: true,
+            units: {
+              where: { isActive: true },
+              select: { id: true, name: true }
+            }
+          }
+        }
+      }
+    });
+
+    const locationCabinsMap: Record<number, string[]> = {};
+    for (const loc of locationSpaces) {
+      const cabinsSet = new Set<string>();
+      for (const prod of loc.products || []) {
+        if (prod.units && prod.units.length > 0) {
+          prod.units.forEach((u: any) => {
+            if (u.name) cabinsSet.add(`${prod.name} - ${u.name}`);
+          });
+        } else if (prod.name) {
+          cabinsSet.add(prod.name);
+        }
+      }
+      locationCabinsMap[loc.id] = Array.from(cabinsSet).sort();
+    }
+
+    // Also include any custom cabin names already present in FixedInventoryItem
+    const existingCabins = await (prisma as any).fixedInventoryItem.findMany({
+      where: { cabinName: { not: null } },
+      select: { locationId: true, cabinName: true },
+      distinct: ['locationId', 'cabinName'],
+    });
+    for (const ec of existingCabins) {
+      if (ec.locationId && ec.cabinName) {
+        if (!locationCabinsMap[ec.locationId]) locationCabinsMap[ec.locationId] = [];
+        if (!locationCabinsMap[ec.locationId].includes(ec.cabinName)) {
+          locationCabinsMap[ec.locationId].push(ec.cabinName);
+        }
+      }
+    }
 
     // Fetch distinct product names across inventory for dynamic dropdown suggestions
     const allProductsRaw = await (prisma as any).fixedInventoryItem.findMany({
@@ -146,6 +207,7 @@ export async function GET(request: Request) {
       data: enrichedItems,
       productSuggestions: combinedProductSuggestions,
       locations,
+      locationCabinsMap,
       userAssignedLocationIds,
       isAdmin,
     });
@@ -184,6 +246,7 @@ export async function POST(request: Request) {
       entryDate,
       productName,
       locationId,
+      cabinName,
       initialQty = 1,
       balanceQty,
       unitCost = 0,
@@ -228,6 +291,7 @@ export async function POST(request: Request) {
         createdAt: parsedDate,
         productName: cleanProductName,
         locationId: targetLocationId,
+        cabinName: cabinName ? String(cabinName).trim() : null,
         initialQty: qty,
         balanceQty: balQty,
         unitCost: cost,

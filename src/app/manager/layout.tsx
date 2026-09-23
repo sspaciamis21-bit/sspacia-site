@@ -174,6 +174,7 @@ export default function ManagerLayout({
         { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
         { name: 'Invoices', href: '/manager/Invoices', icon: Receipt },
         { name: 'Expenses', href: '/manager/expenses', icon: FileSpreadsheet },
+        { name: 'Vendor Master', href: '/manager/vendor-master', icon: Users },
         { name: 'Client Master', href: '/manager/client-master', icon: FileText },
       ];
     }
@@ -192,6 +193,7 @@ export default function ManagerLayout({
     });
     items.push({ name: 'Tickets', href: '/manager/tickets', icon: Ticket });
     items.push({ name: 'Expenses', href: '/manager/expenses', icon: FileSpreadsheet });
+    items.push({ name: 'Vendor Master', href: '/manager/vendor-master', icon: Users });
     items.push({ 
       name: 'Contracts', 
       href: '/manager/contracts', 

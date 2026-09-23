@@ -32,7 +32,8 @@ import {
   Sparkles,
   AlertTriangle,
   FileSpreadsheet,
-  Globe
+  Globe,
+  Tag
 } from 'lucide-react';
 import { ClientTerminationModal } from '@/components/admin/client-termination-modal';
 import { toast } from 'sonner';
@@ -133,8 +134,11 @@ interface ClientMasterEntry {
   tdsPdfUrl: string | null;
   tdsPdfName: string | null;
   clientId: string | null;
+  bookingId?: string | null;
   hasBrokerCommission?: boolean;
+  brokerName?: string | null;
   brokerCommissionPercent?: number | null;
+  brokerCommissionAmount?: number | null;
   invoiceToBeRaised?: string | null;
   sorAmount: number | null;
   sorRecdDate: string | null;
@@ -384,10 +388,22 @@ export default function ClientMasterRegistryPage() {
   const [clientId, setClientId] = useState(DEFAULT_CLIENT_ID_PREFIX);
   const [clientType, setClientType] = useState<'DEFAULT' | 'VIRTUAL_OFFICE' | 'ONE_TIME'>('DEFAULT');
 
-  // Brokerage Commission Options
+  // Brokerage Commission & Booking Reference
+  const [bookingId, setBookingId] = useState('');
   const [hasBrokerCommission, setHasBrokerCommission] = useState(false);
+  const [brokerName, setBrokerName] = useState('');
   const [brokerCommissionPercent, setBrokerCommissionPercent] = useState<number | ''>('');
+  const [brokerCommissionAmount, setBrokerCommissionAmount] = useState<number | ''>('');
   const [invoiceToBeRaised, setInvoiceToBeRaised] = useState('CLIENT');
+
+  // One-Time Extended Hours State
+  const [hasExtendedHours, setHasExtendedHours] = useState(false);
+  const [extendedStartTime, setExtendedStartTime] = useState('');
+  const [extendedEndTime, setExtendedEndTime] = useState('');
+  const [extendedAmount, setExtendedAmount] = useState<number | ''>('');
+  const [extendedGstPercent, setExtendedGstPercent] = useState<number | ''>(18);
+  const [extendedTotalAmount, setExtendedTotalAmount] = useState<number | ''>('');
+  const [extendedClientName, setExtendedClientName] = useState('');
 
   // Primary Company Details
   const [companyName, setCompanyName] = useState('');
@@ -894,9 +910,18 @@ export default function ClientMasterRegistryPage() {
     setEditingId(null);
     setClientId(DEFAULT_CLIENT_ID_PREFIX);
     setClientType('DEFAULT');
+    setBookingId('');
     setHasBrokerCommission(false);
+    setBrokerName('');
     setBrokerCommissionPercent('');
+    setBrokerCommissionAmount('');
     setInvoiceToBeRaised('CLIENT');
+    setHasExtendedHours(false);
+    setExtendedStartTime('');
+    setExtendedEndTime('');
+    setExtendedAmount('');
+    setExtendedTotalAmount('');
+    setExtendedClientName('');
 
     setCompanyName('');
     setHoAddressLine1('');
@@ -957,8 +982,11 @@ export default function ClientMasterRegistryPage() {
         ? 'VIRTUAL_OFFICE'
         : (isEntryOneTime ? 'ONE_TIME' : 'DEFAULT')
     );
+    setBookingId(entry.bookingId || '');
     setHasBrokerCommission(Boolean(entry.hasBrokerCommission));
+    setBrokerName(entry.brokerName || '');
     setBrokerCommissionPercent(entry.brokerCommissionPercent ?? '');
+    setBrokerCommissionAmount(entry.brokerCommissionAmount ?? '');
     setInvoiceToBeRaised(entry.invoiceToBeRaised || 'CLIENT');
 
     setCompanyName(entry.companyName || '');
@@ -1149,9 +1177,14 @@ export default function ClientMasterRegistryPage() {
     const payload = {
       clientId: isOneTime ? null : (clientId.trim() || DEFAULT_CLIENT_ID_PREFIX),
       clientType,
-      hasBrokerCommission: isVO ? false : hasBrokerCommission,
-      brokerCommissionPercent: !isVO && hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : null,
-      invoiceToBeRaised: !isVO && hasBrokerCommission ? invoiceToBeRaised : null,
+      bookingId: bookingId.trim() || null,
+      hasBrokerCommission: Boolean(hasBrokerCommission),
+      brokerName: hasBrokerCommission && brokerName.trim() ? brokerName.trim() : null,
+      brokerCommissionPercent: hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : null,
+      brokerCommissionAmount: hasBrokerCommission && brokerCommissionAmount !== ''
+        ? Number(brokerCommissionAmount)
+        : (hasBrokerCommission && brokerCommissionPercent !== '' ? (rawAmount * Number(brokerCommissionPercent)) / 100 : null),
+      invoiceToBeRaised: hasBrokerCommission ? invoiceToBeRaised : 'CLIENT',
 
       companyName: companyName.trim() || (isOneTime ? 'One-Time Client' : 'Untitled Client'),
       hoAddressLine1: hoAddressLine1.trim() || null,
@@ -2000,6 +2033,16 @@ export default function ClientMasterRegistryPage() {
                         <td className="p-3">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <div className="font-bold text-[#1B1C1C] text-sm">{entry.companyName}</div>
+                            {entry.bookingId && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap font-mono" title={`Booking Reference: ${entry.bookingId}`}>
+                                <Tag size={9} /> ID: {entry.bookingId}
+                              </span>
+                            )}
+                            {entry.hasBrokerCommission && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded-xs whitespace-nowrap">
+                                🏢 {entry.brokerName || 'Broker'} ({entry.brokerCommissionPercent ?? 0}%)
+                              </span>
+                            )}
                             {entry.clientType === 'VIRTUAL_OFFICE' && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap">
                                 <Globe size={10} /> Virtual Office
@@ -2520,7 +2563,13 @@ export default function ClientMasterRegistryPage() {
                           </label>
                           <select
                             value={hasBrokerCommission ? 'YES' : 'NO'}
-                            onChange={(e) => setHasBrokerCommission(e.target.value === 'YES')}
+                            onChange={(e) => {
+                              const val = e.target.value === 'YES';
+                              setHasBrokerCommission(val);
+                              if (val && invoiceToBeRaised === 'CLIENT') {
+                                setInvoiceToBeRaised('BROKER');
+                              }
+                            }}
                             className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold"
                           >
                             <option value="NO">No</option>
@@ -2532,6 +2581,33 @@ export default function ClientMasterRegistryPage() {
                           <>
                             <div>
                               <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                                Booking ID <span className="text-red-500">* (Required for Broker)</span>
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. AWF-93821 / myHQ-10294..."
+                                value={bookingId}
+                                onChange={(e) => setBookingId(e.target.value)}
+                                className="w-full bg-white border-2 border-[#006064] px-4 py-3 text-sm focus:outline-none font-mono font-bold text-[#006064]"
+                                required={hasBrokerCommission}
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                                Broker Name / Platform
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Awfis, myHQ, Qdesq..."
+                                value={brokerName}
+                                onChange={(e) => setBrokerName(e.target.value)}
+                                className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-medium"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
                                 Broker Commission (%)
                               </label>
                               <input
@@ -2540,8 +2616,29 @@ export default function ClientMasterRegistryPage() {
                                 min="0"
                                 placeholder="e.g. 5.0"
                                 value={brokerCommissionPercent}
-                                onChange={(e) => setBrokerCommissionPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                                onChange={(e) => {
+                                  const pct = e.target.value === '' ? '' : Number(e.target.value);
+                                  setBrokerCommissionPercent(pct);
+                                  const base = Number(productRows[0]?.amount) || 0;
+                                  if (pct !== '' && base > 0) {
+                                    setBrokerCommissionAmount(Math.round(((base * pct) / 100) * 100) / 100);
+                                  }
+                                }}
                                 className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                                Commission Amount (₹)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="Auto-calculated or override"
+                                value={brokerCommissionAmount}
+                                onChange={(e) => setBrokerCommissionAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                                className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold font-mono"
                               />
                             </div>
 
@@ -2554,9 +2651,110 @@ export default function ClientMasterRegistryPage() {
                                 onChange={(e) => setInvoiceToBeRaised(e.target.value)}
                                 className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold"
                               >
-                                <option value="CLIENT">Client</option>
-                                <option value="BROKER">Broker</option>
+                                <option value="BROKER">Broker (Raised to Broker platform)</option>
+                                <option value="CLIENT">Client (Raised to direct client)</option>
                               </select>
+                            </div>
+
+                            {/* Extended Hours Toggle & Section */}
+                            <div className="md:col-span-2 bg-amber-50/80 border border-amber-300 p-4 space-y-3 rounded-xs">
+                              <div className="flex items-center justify-between">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={hasExtendedHours}
+                                    onChange={(e) => setHasExtendedHours(e.target.checked)}
+                                    className="w-4 h-4 accent-amber-600 rounded"
+                                  />
+                                  <span className="font-bold text-xs uppercase tracking-wider text-amber-950">
+                                    Client Extended Additional Hours? (Generates 2nd Direct Invoice)
+                                  </span>
+                                </label>
+                                {hasExtendedHours && (
+                                  <span className="px-2 py-0.5 bg-amber-200 text-amber-900 font-extrabold text-[9px] uppercase tracking-wider rounded">
+                                    ⚡ 2 Invoices Workflow
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="text-[11px] text-amber-900 leading-relaxed font-light">
+                                If the client stayed beyond the broker slot, the extended hours have <strong>no broker involvement</strong>. Two invoices will be generated: <strong>1st for Broker</strong> (original booking slot), and <strong>2nd for Client</strong> (direct payment to SSPACIA, 0% commission).
+                              </p>
+
+                              {hasExtendedHours && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-amber-200">
+                                  <div className="md:col-span-2">
+                                    <label className="block text-[10px] font-bold uppercase text-amber-950 mb-1">
+                                      Direct Client Name for 2nd Invoice
+                                    </label>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. John Doe / Direct Guest Name..."
+                                      value={extendedClientName}
+                                      onChange={(e) => setExtendedClientName(e.target.value)}
+                                      className="w-full bg-white border border-amber-300 px-3 py-2 text-xs focus:outline-none focus:border-amber-700 font-medium"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[10px] font-bold uppercase text-amber-950 mb-1">
+                                      Extended Start Time
+                                    </label>
+                                    <input
+                                      type="time"
+                                      value={extendedStartTime}
+                                      onChange={(e) => setExtendedStartTime(e.target.value)}
+                                      className="w-full bg-white border border-amber-300 px-3 py-2 text-xs focus:outline-none focus:border-amber-700"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[10px] font-bold uppercase text-amber-950 mb-1">
+                                      Extended End Time
+                                    </label>
+                                    <input
+                                      type="time"
+                                      value={extendedEndTime}
+                                      onChange={(e) => setExtendedEndTime(e.target.value)}
+                                      className="w-full bg-white border border-amber-300 px-3 py-2 text-xs focus:outline-none focus:border-amber-700"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[10px] font-bold uppercase text-amber-950 mb-1">
+                                      Extended Amount (₹ Excl. GST)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="e.g. 1500"
+                                      value={extendedAmount}
+                                      onChange={(e) => {
+                                        const amt = e.target.value === '' ? '' : Number(e.target.value);
+                                        setExtendedAmount(amt);
+                                        if (amt !== '') {
+                                          setExtendedTotalAmount(Math.round(amt * 1.18));
+                                        } else {
+                                          setExtendedTotalAmount('');
+                                        }
+                                      }}
+                                      className="w-full bg-white border border-amber-300 px-3 py-2 text-xs focus:outline-none focus:border-amber-700 font-bold"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-[10px] font-bold uppercase text-amber-950 mb-1">
+                                      Total with 18% GST (₹)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      readOnly
+                                      value={extendedTotalAmount}
+                                      className="w-full bg-amber-100/70 border border-amber-300 px-3 py-2 text-xs font-bold text-amber-950 cursor-not-allowed font-mono"
+                                    />
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </>
                         )}
@@ -3038,6 +3236,32 @@ export default function ClientMasterRegistryPage() {
                       <>
                         <div>
                           <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                            Booking / Broker Reference ID
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. AWF-74910 / VO-REF-01"
+                            value={bookingId}
+                            onChange={(e) => setBookingId(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-mono font-bold"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                            Broker Name / Platform
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Awfis, myHQ, Qdesq..."
+                            value={brokerName}
+                            onChange={(e) => setBrokerName(e.target.value)}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-medium"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
                             Broker Commission (%)
                           </label>
                           <input
@@ -3046,8 +3270,29 @@ export default function ClientMasterRegistryPage() {
                             min="0"
                             placeholder="e.g. 5.0"
                             value={brokerCommissionPercent}
-                            onChange={(e) => setBrokerCommissionPercent(e.target.value === '' ? '' : Number(e.target.value))}
+                            onChange={(e) => {
+                              const pct = e.target.value === '' ? '' : Number(e.target.value);
+                              setBrokerCommissionPercent(pct);
+                              const base = Number(productRows[0]?.amount) || 0;
+                              if (pct !== '' && base > 0) {
+                                setBrokerCommissionAmount(Math.round(((base * pct) / 100) * 100) / 100);
+                              }
+                            }}
                             className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block font-bold uppercase tracking-wider text-[#616161] mb-1.5">
+                            Commission Amount (₹)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="Auto-calculated or override"
+                            value={brokerCommissionAmount}
+                            onChange={(e) => setBrokerCommissionAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                            className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold font-mono"
                           />
                         </div>
 
@@ -4881,13 +5126,41 @@ export default function ClientMasterRegistryPage() {
                 </div>
               )}
 
-              {/* Broker Details */}
-              {entryToViewDetails.hasBrokerCommission && (
-                <div className="bg-amber-50 p-4 border border-amber-200 text-amber-900 space-y-1">
-                  <div className="font-bold uppercase text-[10px]">Brokerage Commission Details</div>
-                  <div className="flex items-center gap-4 text-xs font-bold">
-                    <span>Commission %: {entryToViewDetails.brokerCommissionPercent ?? 0}%</span>
-                    <span>Invoice To Be Raised: {entryToViewDetails.invoiceToBeRaised || 'CLIENT'}</span>
+              {/* Broker & Booking Details */}
+              {(entryToViewDetails.hasBrokerCommission || entryToViewDetails.bookingId) && (
+                <div className="bg-purple-50/70 p-4 border border-purple-200 text-purple-900 space-y-2">
+                  <div className="font-bold uppercase text-[10px] text-purple-950 flex items-center gap-1.5">
+                    <Building2 size={12} /> Brokerage &amp; Booking Details
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-bold">
+                    {entryToViewDetails.bookingId && (
+                      <div>
+                        <div className="text-[9px] uppercase text-purple-600 font-semibold">Booking ID</div>
+                        <div className="font-mono text-purple-950">{entryToViewDetails.bookingId}</div>
+                      </div>
+                    )}
+                    {entryToViewDetails.brokerName && (
+                      <div>
+                        <div className="text-[9px] uppercase text-purple-600 font-semibold">Broker Name</div>
+                        <div>{entryToViewDetails.brokerName}</div>
+                      </div>
+                    )}
+                    {entryToViewDetails.brokerCommissionPercent !== null && entryToViewDetails.brokerCommissionPercent !== undefined && (
+                      <div>
+                        <div className="text-[9px] uppercase text-purple-600 font-semibold">Commission %</div>
+                        <div>{entryToViewDetails.brokerCommissionPercent}%</div>
+                      </div>
+                    )}
+                    {entryToViewDetails.brokerCommissionAmount !== null && entryToViewDetails.brokerCommissionAmount !== undefined && (
+                      <div>
+                        <div className="text-[9px] uppercase text-purple-600 font-semibold">Commission Amount</div>
+                        <div className="font-mono">₹{Number(entryToViewDetails.brokerCommissionAmount).toLocaleString('en-IN')}</div>
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-[9px] uppercase text-purple-600 font-semibold">Invoice To Be Raised</div>
+                      <div>{entryToViewDetails.invoiceToBeRaised || 'CLIENT'}</div>
+                    </div>
                   </div>
                 </div>
               )}

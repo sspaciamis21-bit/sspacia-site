@@ -55,6 +55,7 @@ import {
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
 import { BankStatementModal } from "./bank-statement-modal";
+import { VendorMasterModal } from "./vendor-master-modal";
 import { onOffSAApproval } from "@/lib/expense-approval-config";
 
 export interface ExpenseColumnDef {
@@ -937,6 +938,7 @@ export function ExpenseRegister({
   const [viewingPaymentRecord, setViewingPaymentRecord] = useState<ExpenseRecordItem | null>(null);
   const [isNewVendorModalOpen, setIsNewVendorModalOpen] = useState(false);
   const [isBankStatementOpen, setIsBankStatementOpen] = useState(false);
+  const [isVendorMasterModalOpen, setIsVendorMasterModalOpen] = useState(false);
 
   // Super Admin Main Expense Category Headers
   const [categoryHeaders, setCategoryHeaders] = useState<string[]>([]);
@@ -1007,7 +1009,8 @@ export function ExpenseRegister({
       isBankStatementOpen ||
       isCategoryModalOpen ||
       dueDatePickerRecord ||
-      editingHeaderRecord
+      editingHeaderRecord ||
+      isVendorMasterModalOpen
     );
     if (isAnyModalOpen) {
       const originalOverflow = document.body.style.overflow;
@@ -1030,6 +1033,7 @@ export function ExpenseRegister({
     isCategoryModalOpen,
     dueDatePickerRecord,
     editingHeaderRecord,
+    isVendorMasterModalOpen,
   ]);
 
   // Global pending approvals across ALL centres (irrespective of center/month filter)
@@ -3255,6 +3259,17 @@ export function ExpenseRegister({
                 <span>Category Headers</span>
               </button>
             )}
+
+            {/* Vendor Master Button (Accessible to Super Admin, Accountant & Community Managers) */}
+            <button
+              type="button"
+              onClick={() => setIsVendorMasterModalOpen(true)}
+              className="bg-[#37474f] hover:bg-[#263238] text-white px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer border border-[#263238]"
+              title="Open Vendor Master: Manage vendors, bank details, GST, and contact info"
+            >
+              <Building2 className="w-3.5 h-3.5 text-amber-300" />
+              <span>Vendor Master</span>
+            </button>
 
             {/* Record Center Operating Expense Button (Opens Modal for CM & Accountant) */}
             <button
@@ -9271,6 +9286,18 @@ export function ExpenseRegister({
           />
         )
       }
+
+      {/* ── VENDOR MASTER MODAL (ACCESSIBLE TO CM, ACCOUNTANT & SUPER ADMIN) ── */}
+      <VendorMasterModal
+        isOpen={isVendorMasterModalOpen}
+        onClose={() => {
+          setIsVendorMasterModalOpen(false);
+          fetchVendors();
+        }}
+        isAdmin={isAdmin}
+        isAccountant={isAccountant}
+        onVendorChange={fetchVendors}
+      />
     </div >
   );
 }

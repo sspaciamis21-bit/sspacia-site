@@ -79,7 +79,17 @@ const validateEmail = (email: string): string | null => {
   return null;
 };
 
-export function VendorMasterView() {
+export interface VendorMasterViewProps {
+  isModal?: boolean;
+  onClose?: () => void;
+  onVendorChange?: () => void;
+}
+
+export function VendorMasterView({
+  isModal = false,
+  onClose,
+  onVendorChange,
+}: VendorMasterViewProps = {}) {
   const [vendors, setVendors] = useState<VendorRecord[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,11 +97,13 @@ export function VendorMasterView() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [centreFilter, setCentreFilter] = useState('ALL');
 
-  // Auto-shrink sidebar on Vendor Master page mount
-  const { setIsSidebarOpen } = useSidebar();
+  // Auto-shrink sidebar on Vendor Master page mount (when not inside a modal)
+  const sidebarContext = useSidebar();
   useEffect(() => {
-    setIsSidebarOpen(false);
-  }, [setIsSidebarOpen]);
+    if (!isModal && sidebarContext?.setIsSidebarOpen) {
+      sidebarContext.setIsSidebarOpen(false);
+    }
+  }, [isModal, sidebarContext]);
 
   // Excel-Style Column Filters
   const [colFilterSrNo, setColFilterSrNo] = useState('');
@@ -273,6 +285,7 @@ export function VendorMasterView() {
         toast.success(data.message || (editingVendor ? 'Vendor updated' : 'Vendor added'));
         setIsModalOpen(false);
         fetchVendors();
+        onVendorChange?.();
       } else {
         toast.error(data.error || 'Failed to save vendor');
       }
@@ -296,6 +309,7 @@ export function VendorMasterView() {
         toast.success(data.message || 'Vendor deleted successfully');
         setDeletingVendor(null);
         fetchVendors();
+        onVendorChange?.();
       } else {
         toast.error(data.error || 'Failed to delete vendor');
       }

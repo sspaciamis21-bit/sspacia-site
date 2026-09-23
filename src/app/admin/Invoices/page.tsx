@@ -149,11 +149,20 @@ interface InvoiceRecord {
   billingMonth: string | null;
   sendType: 'MANUAL' | 'AUTOMATIC_MONTH_END';
   sentAt: string;
+  bookingId?: string | null;
+  brokerName?: string | null;
+  brokerCommissionPercent?: number | null;
+  brokerCommissionAmount?: number | null;
+  billedTo?: string | null;
+  isExtendedHours?: boolean;
   status: 'PENDING_CM_REVIEW' | 'SENT_TO_ACCOUNTANT' | 'INVOICE_ATTACHED' | 'APPROVED' | 'REJECTED_WITH_REMARKS';
   remarks: string | null;
   createdAt: string;
   createdBy: { id: number; name: string; email: string; assignedLocations?: { location: LocationOption }[] };
   clientMaster?: {
+    clientType?: string | null;
+    hasBrokerCommission?: boolean;
+    brokerName?: string | null;
     hoAddress?: string | null;
     gstStatus?: string | null;
     gstNo?: string | null;
@@ -322,6 +331,10 @@ export default function AdminInvoicesWorkflowPage() {
   const [prorateCustomSubtotal, setProrateCustomSubtotal] = useState<string>('');
   const [prorateSaving, setProrateSaving] = useState<boolean>(false);
 
+  // CM Recipient Selection Modal (Broker vs Client)
+  const [cmRecipientInvoice, setCmRecipientInvoice] = useState<InvoiceRecord | null>(null);
+  const [showRecipientModal, setShowRecipientModal] = useState<boolean>(false);
+
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -338,7 +351,8 @@ export default function AdminInvoicesWorkflowPage() {
     entryToViewDetails ||
     waiveModalInvoice ||
     splitModalInvoice ||
-    prorateModalInvoice
+    prorateModalInvoice ||
+    showRecipientModal
   );
 
   useEffect(() => {
@@ -1781,6 +1795,46 @@ export default function AdminInvoicesWorkflowPage() {
     }
   };
 
+  // CM Decision: Send to Accountant (checks if Virtual Office or Broker client needs recipient prompt)
+  const handleSendToAccountantClick = (invoice: InvoiceRecord) => {
+    const isVO = invoice.clientMaster?.clientType === 'VIRTUAL_OFFICE';
+    const hasBroker = Boolean(invoice.brokerName || invoice.clientMaster?.hasBrokerCommission || invoice.bookingId);
+    if (isVO || hasBroker) {
+      setCmRecipientInvoice(invoice);
+      setShowRecipientModal(true);
+    } else {
+      handleUpdateStatus(invoice.id, 'SENT_TO_ACCOUNTANT');
+    }
+  };
+
+  const handleConfirmRecipientAndSend = async (chosenRecipient: 'BROKER' | 'CLIENT') => {
+    if (!cmRecipientInvoice) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/admin/Invoices/${cmRecipientInvoice.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'SENT_TO_ACCOUNTANT',
+          billedTo: chosenRecipient,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Invoice marked for ${chosenRecipient === 'BROKER' ? 'Broker 🏢' : 'Client 👤'} and sent to Accountant!`);
+        setShowRecipientModal(false);
+        setCmRecipientInvoice(null);
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to update recipient');
+      }
+    } catch {
+      toast.error('Error sending invoice to accountant');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Save Edit Invoice Record
   const handleSaveEditInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2755,14 +2809,36 @@ export default function AdminInvoicesWorkflowPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-100 font-medium">
-                      {filteredInvoices.map((invoice) => (
+                      {filteredInvoices.map((invoice, index) => (
                         <tr key={invoice.id} className="hover:bg-neutral-50/60 transition-colors">
                           <td className="p-3 text-center font-mono font-bold text-neutral-600 bg-neutral-50/50">
-                            #{invoice.srNo}
+                            #{index + 1}
                           </td>
 
                           <td className="p-3">
-                            <div className="font-bold text-[#1B1C1C] text-sm">{invoice.companyName}</div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-[#1B1C1C] text-sm">{invoice.companyName}</span>
+                              {invoice.isExtendedHours && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap">
+                                  ⚡ Extended Hours
+                                </span>
+                              )}
+                              {invoice.bookingId && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap font-mono" title={`Booking Reference ID: ${invoice.bookingId}`}>
+                                  <Tag size={9} /> ID: {invoice.bookingId}
+                                </span>
+                              )}
+                              {invoice.billedTo === 'BROKER' && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded-xs whitespace-nowrap">
+                                  🏢 Billed to Broker: {invoice.brokerName || 'Broker'} {invoice.brokerCommissionPercent ? `(${invoice.brokerCommissionPercent}%)` : ''}
+                                </span>
+                              )}
+                              {invoice.billedTo === 'CLIENT' && invoice.brokerName && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 text-[9px] font-bold uppercase tracking-wider rounded-xs whitespace-nowrap">
+                                  👤 Direct Client Invoice
+                                </span>
+                              )}
+                            </div>
                             {invoice.gstNo && <div className="text-[10px] font-mono text-neutral-500">GST: {invoice.gstNo}</div>}
                           </td>
 
@@ -2957,9 +3033,9 @@ export default function AdminInvoicesWorkflowPage() {
                                 <>
                                   {invoice.status === 'PENDING_CM_REVIEW' && (
                                     <button
-                                      onClick={() => handleUpdateStatus(invoice.id, 'SENT_TO_ACCOUNTANT')}
+                                      onClick={() => handleSendToAccountantClick(invoice)}
                                       disabled={actionLoading}
-                                      className="px-3 py-1.5 bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1 w-full justify-center shadow-xs"
+                                      className="px-3 py-1.5 bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1 w-full justify-center shadow-xs cursor-pointer"
                                     >
                                       <Send size={11} /> Send to Accountant
                                     </button>
@@ -3770,6 +3846,52 @@ export default function AdminInvoicesWorkflowPage() {
                           <X size={20} />
                         </button>
                       </div>
+
+                      {/* Booking & Broker Details Banner */}
+                      {(entryToViewDetails.bookingId || entryToViewDetails.brokerName || entryToViewDetails.isExtendedHours || entryToViewDetails.billedTo) && (
+                        <div className="bg-purple-50 border border-purple-200 p-3.5 space-y-2 text-purple-950 rounded-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold uppercase text-[10px] tracking-wider text-purple-900 flex items-center gap-1.5">
+                              <Building2 size={12} /> Broker &amp; Booking Details
+                            </span>
+                            {entryToViewDetails.isExtendedHours && (
+                              <span className="px-2 py-0.5 bg-amber-200 text-amber-950 font-black text-[9px] uppercase tracking-wider rounded">
+                                ⚡ Extended Hours Invoice
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                            {entryToViewDetails.bookingId && (
+                              <div>
+                                <div className="text-[9px] font-bold uppercase text-purple-700">Booking ID</div>
+                                <div className="font-mono font-bold text-purple-950">{entryToViewDetails.bookingId}</div>
+                              </div>
+                            )}
+                            {entryToViewDetails.brokerName && (
+                              <div>
+                                <div className="text-[9px] font-bold uppercase text-purple-700">Broker Platform</div>
+                                <div className="font-bold">{entryToViewDetails.brokerName}</div>
+                              </div>
+                            )}
+                            {entryToViewDetails.brokerCommissionPercent !== null && entryToViewDetails.brokerCommissionPercent !== undefined && (
+                              <div>
+                                <div className="text-[9px] font-bold uppercase text-purple-700">Commission %</div>
+                                <div className="font-bold">{entryToViewDetails.brokerCommissionPercent}%</div>
+                              </div>
+                            )}
+                            {entryToViewDetails.brokerCommissionAmount !== null && entryToViewDetails.brokerCommissionAmount !== undefined && (
+                              <div>
+                                <div className="text-[9px] font-bold uppercase text-purple-700">Commission Amount</div>
+                                <div className="font-mono font-bold">₹{Number(entryToViewDetails.brokerCommissionAmount).toLocaleString('en-IN')}</div>
+                              </div>
+                            )}
+                            <div>
+                              <div className="text-[9px] font-bold uppercase text-purple-700">Billed To</div>
+                              <div className="font-bold text-[#006064]">{entryToViewDetails.billedTo || 'CLIENT'}</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* SECTION 1: Cabin, Seating & Line-Item Products Breakdown */}
                       <div className="space-y-3">
@@ -5881,6 +6003,88 @@ export default function AdminInvoicesWorkflowPage() {
                           </div>
                         </form>
                       )}
+                    </motion.div>
+                  </div>
+                )}
+
+                {/* CM Recipient Selection Modal (Broker vs Client) */}
+                {showRecipientModal && cmRecipientInvoice && (
+                  <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white border border-[var(--outline-variant)] p-6 max-w-md w-full space-y-5 shadow-2xl"
+                    >
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
+                        <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-sm text-[#1B1C1C]">
+                          <Building2 size={16} className="text-[#006064]" />
+                          <span>Send to Accountant — Select Recipient</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowRecipientModal(false);
+                            setCmRecipientInvoice(null);
+                          }}
+                          className="text-neutral-400 hover:text-neutral-700"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        <p className="text-neutral-700 leading-relaxed">
+                          Before sending this invoice for <strong>{cmRecipientInvoice.companyName}</strong> to the Accountant, please select who this invoice should be generated for:
+                        </p>
+                        {cmRecipientInvoice.brokerName && (
+                          <div className="bg-purple-50 p-2.5 border border-purple-200 text-purple-900 rounded-xs">
+                            <strong>Broker on Record:</strong> {cmRecipientInvoice.brokerName} {cmRecipientInvoice.brokerCommissionPercent ? `(${cmRecipientInvoice.brokerCommissionPercent}%)` : ''}
+                          </div>
+                        )}
+                        {cmRecipientInvoice.bookingId && (
+                          <div className="bg-teal-50 p-2 border border-teal-200 text-teal-900 rounded-xs font-mono text-[11px]">
+                            <strong>Booking ID:</strong> {cmRecipientInvoice.bookingId}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-2">
+                        <button
+                          type="button"
+                          disabled={actionLoading}
+                          onClick={() => handleConfirmRecipientAndSend('BROKER')}
+                          className="p-3 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs uppercase tracking-wider flex flex-col items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer rounded-xs"
+                        >
+                          <Building2 size={20} />
+                          <span>🏢 Broker Invoice</span>
+                          <span className="text-[9px] font-normal opacity-85">Raise in Broker's Name</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={actionLoading}
+                          onClick={() => handleConfirmRecipientAndSend('CLIENT')}
+                          className="p-3 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-xs uppercase tracking-wider flex flex-col items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer rounded-xs"
+                        >
+                          <UserCheck size={20} />
+                          <span>👤 Client Invoice</span>
+                          <span className="text-[9px] font-normal opacity-85">Raise in Client's Name</span>
+                        </button>
+                      </div>
+
+                      <div className="flex justify-end pt-2 border-t border-neutral-100">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowRecipientModal(false);
+                            setCmRecipientInvoice(null);
+                          }}
+                          className="px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-[10px] uppercase tracking-wider cursor-pointer rounded-xs"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </motion.div>
                   </div>
                 )}

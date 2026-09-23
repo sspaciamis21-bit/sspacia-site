@@ -62,6 +62,8 @@ export async function GET(request: Request) {
         { companyName: { contains: search } },
         { gstNo: { contains: search } },
         { cabinName: { contains: search } },
+        { bookingId: { contains: search } },
+        { brokerName: { contains: search } },
       ];
     }
 

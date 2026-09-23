@@ -45,8 +45,10 @@ interface TransferLog {
   productName: string;
   fromLocationId: number;
   fromLocationName: string;
+  fromCabinName?: string | null;
   toLocationId: number;
   toLocationName: string;
+  toCabinName?: string | null;
   quantity: number;
   sourceItemId?: number | null;
   destinationItemId?: number | null;
@@ -63,6 +65,7 @@ interface FixedItem {
   productName: string;
   locationId: number | null;
   locationName: string;
+  cabinName?: string | null;
   initialQty: number;
   balanceQty: number;
   unitCost: number;
@@ -106,7 +109,9 @@ interface LocationOption {
 export default function InternalInventoryPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'FIXED' | 'CONSUMED'>('FIXED');
-  const [fixedSubView, setFixedSubView] = useState<'STOCK' | 'TRANSFERS'>('STOCK');
+  const [fixedSubView, setFixedSubView] = useState<'STOCK' | 'CABIN_WISE' | 'TRANSFERS'>('STOCK');
+  const [selectedCabinFilter, setSelectedCabinFilter] = useState<string>('ALL');
+  const [locationCabinsMap, setLocationCabinsMap] = useState<Record<number, string[]>>({});
 
   // Fixed Inventory State
   const [items, setItems] = useState<FixedItem[]>([]);
@@ -141,10 +146,13 @@ export default function InternalInventoryPage() {
   // Form states for Fixed Inventory
   const [formDate, setFormDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [formLocationId, setFormLocationId] = useState('');
+  const [formCabinName, setFormCabinName] = useState<string>('');
+  const [customCabinInput, setCustomCabinInput] = useState<string>('');
+  const [isCustomCabinMode, setIsCustomCabinMode] = useState<boolean>(false);
   const [formProductName, setFormProductName] = useState('');
   const [formAvailableQty, setFormAvailableQty] = useState('1');
   const [formBalanceQty, setFormBalanceQty] = useState('1');
-  const [formUnitCost, setFormUnitCost] = useState('');
+  const [formUnitCost, setFormUnitCost] = useState('0');
   const [formRemarks, setFormRemarks] = useState('');
 
   // Form states for Consumed Inventory
@@ -164,6 +172,9 @@ export default function InternalInventoryPage() {
     quantity: '1',
     remarks: '',
   });
+  const [transferToCabinName, setTransferToCabinName] = useState<string>('');
+  const [customTransferCabinInput, setCustomTransferCabinInput] = useState<string>('');
+  const [isCustomTransferCabinMode, setIsCustomTransferCabinMode] = useState<boolean>(false);
 
   // Dynamic dropdown states
   const [customProductInput, setCustomProductInput] = useState('');
@@ -191,6 +202,9 @@ export default function InternalInventoryPage() {
         setItems(json.data || []);
         setFixedSuggestions(json.productSuggestions || []);
         setLocations(json.locations || []);
+        if (json.locationCabinsMap) {
+          setLocationCabinsMap(json.locationCabinsMap);
+        }
 
         if (!isAdmin && json.userAssignedLocationIds?.length > 0) {
           const defaultLocId = String(json.userAssignedLocationIds[0]);
@@ -259,6 +273,7 @@ export default function InternalInventoryPage() {
       const matchSearch =
         !searchTerm.trim() ||
         it.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (it.cabinName && it.cabinName.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (it.remarks && it.remarks.toLowerCase().includes(searchTerm.toLowerCase())) ||
         it.locationName.toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -268,6 +283,49 @@ export default function InternalInventoryPage() {
       return matchSearch && matchLoc;
     });
   }, [items, searchTerm, selectedLocationFilter]);
+
+  // Available cabins for current location filter (to populate cabin filter dropdown)
+  const availableFilterCabins = useMemo(() => {
+    if (selectedLocationFilter === 'ALL') {
+      const allSet = new Set<string>();
+      Object.values(locationCabinsMap).forEach((list) => list.forEach((c) => allSet.add(c)));
+      items.forEach((it) => {
+        if (it.cabinName) allSet.add(it.cabinName);
+      });
+      return Array.from(allSet).sort();
+    }
+    const locId = Number(selectedLocationFilter);
+    const set = new Set<string>(locationCabinsMap[locId] || []);
+    items.filter((it) => it.locationId === locId && it.cabinName).forEach((it) => set.add(it.cabinName!));
+    return Array.from(set).sort();
+  }, [selectedLocationFilter, locationCabinsMap, items]);
+
+  // Cabin-filtered items for Cabin-Wise sub-view
+  const cabinFilteredItems = useMemo(() => {
+    return filteredItems.filter((it) => {
+      if (selectedCabinFilter === 'ALL') {
+        return Boolean(it.cabinName && it.cabinName.trim());
+      }
+      if (selectedCabinFilter === '__UNASSIGNED__') {
+        return !it.cabinName || !it.cabinName.trim();
+      }
+      return it.cabinName === selectedCabinFilter;
+    });
+  }, [filteredItems, selectedCabinFilter]);
+
+  // Available cabins for the form based on selected formLocationId
+  const availableCabinsForSelectedLoc = useMemo(() => {
+    const locId = Number(formLocationId);
+    if (!locId) return [];
+    return locationCabinsMap[locId] || [];
+  }, [formLocationId, locationCabinsMap]);
+
+  // Available cabins for the destination centre in transfer modal
+  const availableCabinsForTransferLoc = useMemo(() => {
+    const locId = Number(transferData.toLocationId);
+    if (!locId) return [];
+    return locationCabinsMap[locId] || [];
+  }, [transferData.toLocationId, locationCabinsMap]);
 
   // Filter consumed items by search locally
   const filteredConsumedItems = useMemo(() => {
@@ -294,20 +352,24 @@ export default function InternalInventoryPage() {
   const kpis = useMemo(() => {
     const totalEntries = filteredItems.length;
     const totalUnits = filteredItems.reduce((s, it) => s + (Number(it.balanceQty) || 0), 0);
-    const totalValuation = filteredItems.reduce((s, it) => s + (Number(it.balanceAmount) || 0), 0);
     const totalTransfers = transferLogs.length;
 
-    return { totalEntries, totalUnits, totalValuation, totalTransfers };
+    const cabinEntries = filteredItems.filter((it) => Boolean(it.cabinName && it.cabinName.trim())).length;
+    const cabinUnits = filteredItems
+      .filter((it) => Boolean(it.cabinName && it.cabinName.trim()))
+      .reduce((s, it) => s + (Number(it.balanceQty) || 0), 0);
+    const distinctCabinsCount = new Set(filteredItems.map((it) => it.cabinName).filter(Boolean)).size;
+
+    return { totalEntries, totalUnits, totalTransfers, cabinEntries, cabinUnits, distinctCabinsCount };
   }, [filteredItems, transferLogs]);
 
   // KPIs for Consumed Inventory
   const consumedKpis = useMemo(() => {
     const totalEntries = filteredConsumedItems.length;
     const totalUnits = filteredConsumedItems.reduce((s, it) => s + (Number(it.balanceQty) || 0), 0);
-    const totalValuation = filteredConsumedItems.reduce((s, it) => s + (Number(it.balanceAmount) || 0), 0);
     const bufferAlertCount = activeBufferAlerts.length;
 
-    return { totalEntries, totalUnits, totalValuation, bufferAlertCount };
+    return { totalEntries, totalUnits, bufferAlertCount };
   }, [filteredConsumedItems, activeBufferAlerts]);
 
   // Filtered transfer logs for Transfer History View
@@ -334,20 +396,6 @@ export default function InternalInventoryPage() {
     return filteredTransferLogs.reduce((acc, log) => acc + (Number(log.quantity) || 0), 0);
   }, [filteredTransferLogs]);
 
-  // Calculate live balance amount in Fixed modal
-  const liveCalculatedBalanceAmount = useMemo(() => {
-    const qty = parseFloat(formBalanceQty) || 0;
-    const cost = parseFloat(formUnitCost) || 0;
-    return qty * cost;
-  }, [formBalanceQty, formUnitCost]);
-
-  // Calculate live balance amount in Consumed modal
-  const liveCalculatedConsumedBalanceAmount = useMemo(() => {
-    const qty = parseFloat(consumedFormBalanceQty) || 0;
-    const cost = parseFloat(consumedFormUnitCost) || 0;
-    return qty * cost;
-  }, [consumedFormBalanceQty, consumedFormUnitCost]);
-
   // Handle Available Qty input change with auto-sync to Balance Qty on new entries (Fixed)
   const handleAvailableQtyChange = (val: string) => {
     const cleaned = val === '' ? '' : val.replace(/^0+(?=\d)/, '');
@@ -366,17 +414,47 @@ export default function InternalInventoryPage() {
     }
   };
 
-  // Open Create Fixed Modal
+  // Open Create Fixed Modal (Center-Wide default)
   const openCreateModal = () => {
     setEditingItem(null);
     setFormDate(new Date().toISOString().split('T')[0]);
-    setFormLocationId(locations[0]?.id ? String(locations[0].id) : '');
+    if (!formLocationId) {
+      setFormLocationId(locations[0]?.id ? String(locations[0].id) : '');
+    }
     setFormProductName('');
     setCustomProductInput('');
     setFormAvailableQty('1');
     setFormBalanceQty('1');
-    setFormUnitCost('');
+    setFormUnitCost('0');
     setFormRemarks('');
+    setIsCustomCabinMode(false);
+    setCustomCabinInput('');
+    setFormCabinName('');
+    setShowCreateModal(true);
+  };
+
+  // Open Create Cabin Fixed Modal (Pre-configured for Cabin Entry)
+  const openCreateCabinModal = () => {
+    setEditingItem(null);
+    setFormDate(new Date().toISOString().split('T')[0]);
+    if (selectedLocationFilter !== 'ALL') {
+      setFormLocationId(selectedLocationFilter);
+    } else if (!formLocationId) {
+      setFormLocationId(locations[0]?.id ? String(locations[0].id) : '');
+    }
+    setFormProductName('');
+    setCustomProductInput('');
+    setFormAvailableQty('1');
+    setFormBalanceQty('1');
+    setFormUnitCost('0');
+    setFormRemarks('');
+    setIsCustomCabinMode(false);
+    setCustomCabinInput('');
+    setFormCabinName(
+      selectedCabinFilter !== 'ALL' && selectedCabinFilter !== '__UNASSIGNED__'
+        ? selectedCabinFilter
+        : ''
+    );
     setShowCreateModal(true);
   };
 
@@ -392,8 +470,11 @@ export default function InternalInventoryPage() {
     setCustomProductInput(item.productName);
     setFormAvailableQty(String(item.initialQty));
     setFormBalanceQty(String(item.balanceQty));
-    setFormUnitCost(item.unitCost ? String(item.unitCost) : '');
+    setFormUnitCost('0');
     setFormRemarks(item.remarks || '');
+    setIsCustomCabinMode(false);
+    setCustomCabinInput('');
+    setFormCabinName(item.cabinName || '');
     setShowCreateModal(true);
   };
 
@@ -447,7 +528,7 @@ export default function InternalInventoryPage() {
 
     const initialQtyNum = parseInt(formAvailableQty, 10) || 0;
     const balanceQtyNum = parseInt(formBalanceQty, 10) || 0;
-    const unitCostNum = parseFloat(formUnitCost) || 0;
+    const finalCabinName = (isCustomCabinMode ? customCabinInput : formCabinName).trim();
 
     setActionLoading(true);
     try {
@@ -461,9 +542,10 @@ export default function InternalInventoryPage() {
         entryDate: formDate,
         productName: finalProductName,
         locationId: Number(formLocationId),
+        cabinName: finalCabinName || null,
         initialQty: initialQtyNum,
         balanceQty: balanceQtyNum,
-        unitCost: unitCostNum,
+        unitCost: 0,
         remarks: formRemarks.trim(),
       };
 
@@ -507,7 +589,6 @@ export default function InternalInventoryPage() {
     const initialQtyNum = parseInt(consumedFormAvailableQty, 10) || 0;
     const balanceQtyNum = parseInt(consumedFormBalanceQty, 10) || 0;
     const bufferLimitNum = Math.max(1, parseInt(consumedFormBufferLimit, 10) || 1);
-    const unitCostNum = parseFloat(consumedFormUnitCost) || 0;
 
     setActionLoading(true);
     try {
@@ -524,7 +605,7 @@ export default function InternalInventoryPage() {
         initialQty: initialQtyNum,
         balanceQty: balanceQtyNum,
         bufferLimit: bufferLimitNum,
-        unitCost: unitCostNum,
+        unitCost: 0,
         remarks: consumedFormRemarks.trim(),
       };
 
@@ -661,16 +742,18 @@ export default function InternalInventoryPage() {
     }
   };
 
-  // Open Transfer Modal
+  // Open Transfer Modal (Allows intra-centre and inter-centre transfers to any cabin/room)
   const openTransferModal = (item: FixedItem) => {
     setTransferSourceItem(item);
-    const eligibleDestinations = locations.filter((l) => l.id !== item.locationId);
     setTransferData({
       date: new Date().toISOString().split('T')[0],
-      toLocationId: eligibleDestinations[0]?.id ? String(eligibleDestinations[0].id) : '',
+      toLocationId: item.locationId ? String(item.locationId) : locations[0]?.id ? String(locations[0].id) : '',
       quantity: '1',
       remarks: '',
     });
+    setTransferToCabinName('');
+    setCustomTransferCabinInput('');
+    setIsCustomTransferCabinMode(false);
     setShowTransferModal(true);
   };
 
@@ -695,6 +778,15 @@ export default function InternalInventoryPage() {
       return;
     }
 
+    const finalDestCabin = (isCustomTransferCabinMode ? customTransferCabinInput : transferToCabinName).trim();
+    const isSameLoc = Number(transferData.toLocationId) === transferSourceItem.locationId;
+    const fromCabinLabel = (transferSourceItem.cabinName || '').trim();
+
+    if (isSameLoc && fromCabinLabel.toLowerCase() === finalDestCabin.toLowerCase()) {
+      toast.error('Destination cabin/room must be different from current cabin/room for intra-centre relocation.');
+      return;
+    }
+
     setActionLoading(true);
     try {
       const res = await fetch('/api/admin/inventory/transfer', {
@@ -703,6 +795,7 @@ export default function InternalInventoryPage() {
         body: JSON.stringify({
           sourceItemId: transferSourceItem.id,
           toLocationId: Number(transferData.toLocationId),
+          toCabinName: finalDestCabin || null,
           quantity: qty,
           transferDate: transferData.date,
           remarks: transferData.remarks.trim(),
@@ -796,6 +889,19 @@ export default function InternalInventoryPage() {
 
                   <button
                     type="button"
+                    onClick={() => setFixedSubView('CABIN_WISE')}
+                    className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+                      fixedSubView === 'CABIN_WISE'
+                        ? 'bg-white text-[#006064] shadow-2xs'
+                        : 'text-neutral-600 hover:text-neutral-900'
+                    }`}
+                  >
+                    <Building2 size={12} />
+                    <span>Cabin-Wise ({kpis.cabinEntries})</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setFixedSubView('TRANSFERS')}
                     className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
                       fixedSubView === 'TRANSFERS'
@@ -810,11 +916,11 @@ export default function InternalInventoryPage() {
 
                 <button
                   type="button"
-                  onClick={openCreateModal}
+                  onClick={fixedSubView === 'CABIN_WISE' ? openCreateCabinModal : openCreateModal}
                   className="px-3.5 py-1.5 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus size={14} />
-                  <span>Create Fixed Entry</span>
+                  <span>{fixedSubView === 'CABIN_WISE' ? 'Create Cabin Entry' : 'Create Fixed Entry'}</span>
                 </button>
               </>
             ) : (
@@ -841,14 +947,26 @@ export default function InternalInventoryPage() {
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pb-2.5 border-b border-[var(--outline-variant)]/40">
               <div>
                 <h1 className="text-xl sm:text-2xl font-display font-black tracking-tight text-[#1B1C1C] flex items-center gap-2">
-                  <span>{fixedSubView === 'STOCK' ? 'Fixed Inventory & Live Stock' : 'Stock Transfer History & Audit Ledger'}</span>
+                  <span>
+                    {fixedSubView === 'STOCK'
+                      ? 'Fixed Inventory & Live Stock'
+                      : fixedSubView === 'CABIN_WISE'
+                      ? 'Cabin-Wise Fixed Inventory & Room Assets'
+                      : 'Stock Transfer History & Audit Ledger'}
+                  </span>
                   <span className="text-[11px] font-normal text-neutral-400 font-sans">
-                    ({fixedSubView === 'STOCK' ? `${items.length} items` : `${transferLogs.length} transfers`})
+                    ({fixedSubView === 'STOCK'
+                      ? `${filteredItems.length} items`
+                      : fixedSubView === 'CABIN_WISE'
+                      ? `${cabinFilteredItems.length} cabin items`
+                      : `${transferLogs.length} transfers`})
                   </span>
                 </h1>
                 <p className="text-[11px] text-[#616161] font-light">
                   {fixedSubView === 'STOCK'
-                    ? 'Physical assets, balance quantities, valuations, and inter-centre stock transfers.'
+                    ? 'Physical assets, balance quantities, and inter-centre stock movements.'
+                    : fixedSubView === 'CABIN_WISE'
+                    ? 'Physical asset tracking mapped directly to specific cabins, rooms, and meeting facilities per centre.'
                     : 'Audit ledger of physical stock relocation between centres and community manager logs.'}
                 </p>
               </div>
@@ -868,15 +986,30 @@ export default function InternalInventoryPage() {
                     <strong className="text-teal-950 font-mono font-black">{kpis.totalUnits.toLocaleString('en-IN')} units</strong>
                   </div>
 
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 shadow-2xs font-medium">
-                    <span className="text-[10px] uppercase font-bold text-emerald-700">Total Value:</span>
-                    <strong className="text-emerald-950 font-mono font-black">₹{kpis.totalValuation.toLocaleString('en-IN')}</strong>
-                  </div>
-
                   <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 border border-purple-200 shadow-2xs font-medium">
                     <ArrowRightLeft size={12} className="text-purple-700" />
                     <span className="text-[10px] uppercase font-bold text-purple-700">Transfers:</span>
                     <strong className="text-purple-950 font-mono">{kpis.totalTransfers}</strong>
+                  </div>
+                </div>
+              ) : fixedSubView === 'CABIN_WISE' ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-neutral-200 shadow-2xs font-medium">
+                    <Building2 size={12} className="text-neutral-500" />
+                    <span className="text-[10px] uppercase font-bold text-neutral-500">Cabins Tracked:</span>
+                    <strong className="text-neutral-900 font-mono">{kpis.distinctCabinsCount}</strong>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 border border-teal-200 shadow-2xs font-medium">
+                    <Boxes size={12} className="text-teal-700" />
+                    <span className="text-[10px] uppercase font-bold text-teal-700">Cabin Assets:</span>
+                    <strong className="text-teal-950 font-mono font-black">{kpis.cabinEntries}</strong>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 shadow-2xs font-medium">
+                    <Package size={12} className="text-emerald-700" />
+                    <span className="text-[10px] uppercase font-bold text-emerald-700">Units in Cabins:</span>
+                    <strong className="text-emerald-950 font-mono font-black">{kpis.cabinUnits.toLocaleString('en-IN')} units</strong>
                   </div>
                 </div>
               ) : (
@@ -966,8 +1099,6 @@ export default function InternalInventoryPage() {
                           <th className="py-2.5 px-3.5">PRODUCT / ASSET NAME</th>
                           <th className="py-2.5 px-3.5 text-center">INITIAL QTY</th>
                           <th className="py-2.5 px-3.5 text-center">BALANCE QTY</th>
-                          <th className="py-2.5 px-3.5 text-right">UNIT COST</th>
-                          <th className="py-2.5 px-3.5 text-right">BALANCE AMOUNT</th>
                           <th className="py-2.5 px-3.5">REMARKS / SPECS</th>
                           <th className="py-2.5 px-3.5 text-center min-w-[200px]">ACTIONS</th>
                         </tr>
@@ -975,7 +1106,7 @@ export default function InternalInventoryPage() {
                       <tbody className="divide-y divide-neutral-200">
                         {loading ? (
                           <tr>
-                            <td colSpan={10} className="py-8 text-center">
+                            <td colSpan={8} className="py-8 text-center">
                               <Loader2 size={20} className="animate-spin text-[#006064] mx-auto mb-1.5" />
                               <span className="text-neutral-500 font-bold uppercase tracking-widest text-[9.5px]">
                                 Loading Inventory...
@@ -984,7 +1115,7 @@ export default function InternalInventoryPage() {
                           </tr>
                         ) : filteredItems.length === 0 ? (
                           <tr>
-                            <td colSpan={10} className="py-8 text-center text-neutral-500">
+                            <td colSpan={8} className="py-8 text-center text-neutral-500">
                               <Boxes size={28} className="mx-auto mb-1.5 opacity-30" />
                               <div className="font-bold text-xs text-neutral-700">No Fixed Inventory Entries Found</div>
                               <div className="text-[11px] text-neutral-400 mt-0.5">
@@ -1029,6 +1160,14 @@ export default function InternalInventoryPage() {
                                     <Package size={13} className="text-[#006064] shrink-0" />
                                     <span>{item.productName}</span>
                                   </div>
+                                  {item.cabinName && (
+                                    <div className="mt-0.5">
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.2 bg-teal-50 text-teal-800 border border-teal-200 text-[9.5px] font-semibold">
+                                        <Building2 size={9} className="text-[#006064]" />
+                                        <span>{item.cabinName}</span>
+                                      </span>
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="py-2.5 px-3.5 text-center font-mono font-bold text-neutral-600">
                                   {item.initialQty}
@@ -1044,11 +1183,238 @@ export default function InternalInventoryPage() {
                                     {item.balanceQty} units
                                   </span>
                                 </td>
-                                <td className="py-2.5 px-3.5 text-right font-mono text-neutral-600">
-                                  {item.unitCost > 0 ? `₹${Number(item.unitCost).toLocaleString('en-IN')}` : '—'}
+                                <td className="py-2.5 px-3.5 text-neutral-600 max-w-xs truncate text-[11px]" title={item.remarks || ''}>
+                                  {item.remarks || <span className="text-neutral-300 italic">No notes</span>}
                                 </td>
-                                <td className="py-2.5 px-3.5 text-right font-mono font-bold text-[#006064]">
-                                  {item.balanceAmount > 0 ? `₹${Number(item.balanceAmount).toLocaleString('en-IN')}` : '—'}
+                                <td className="py-2.5 px-3.5">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => openTransferModal(item)}
+                                      className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[9.5px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                                      title="Transfer units to another centre"
+                                    >
+                                      <ArrowRightLeft size={10} />
+                                      <span>Transfer</span>
+                                    </button>
+
+                                    {item.transferCount > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedItemForHistory(item)}
+                                        className="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer shadow-2xs"
+                                        title={`View ${item.transferCount} past stock movements`}
+                                      >
+                                        <History size={10} className="text-purple-600" />
+                                        <span>History ({item.transferCount})</span>
+                                      </button>
+                                    )}
+
+                                    <div className="flex items-center gap-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditModal(item)}
+                                        className="p-1 text-neutral-500 hover:text-[#006064] hover:bg-neutral-100 cursor-pointer"
+                                        title="Edit Item"
+                                      >
+                                        <Edit2 size={12} />
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteItem(item.id, item.productName)}
+                                        className="p-1 text-neutral-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                                        title="Delete Item"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </FadeUp>
+            </>
+          )}
+
+          {/* Sub-View B: Cabin-Wise Fixed Inventory Table */}
+          {fixedSubView === 'CABIN_WISE' && (
+            <>
+              <FadeUp delay={0.06}>
+                <div className="bg-white p-2.5 border border-[var(--outline-variant)]/50 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+                  <div className="relative flex-1 min-w-[220px] max-w-sm">
+                    <Search size={13} className="absolute left-2.5 top-2 text-[#616161]" />
+                    <input
+                      type="text"
+                      placeholder="Search asset, cabin name, remarks, or centre..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-white border border-[var(--outline-variant)] pl-7 pr-3 py-1 text-xs focus:outline-none focus:border-[#006064] font-medium"
+                    />
+                    {searchTerm && (
+                      <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1.5 text-neutral-400 hover:text-black">
+                        <X size={11} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Centre Selector */}
+                    <div className="flex items-center gap-1.5 bg-white border border-[var(--outline-variant)] px-2.5 py-1 shadow-2xs">
+                      <MapPin size={12} className="text-[#006064]" />
+                      <span className="text-[10px] font-bold text-neutral-700 uppercase">Centre:</span>
+                      <select
+                        value={selectedLocationFilter}
+                        onChange={(e) => {
+                          setSelectedLocationFilter(e.target.value);
+                          setSelectedCabinFilter('ALL');
+                        }}
+                        className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                      >
+                        <option value="ALL">All Centres ({locations.length})</option>
+                        {locations.map((loc) => (
+                          <option key={loc.id} value={String(loc.id)}>
+                            {loc.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Cabin Selector */}
+                    <div className="flex items-center gap-1.5 bg-white border border-[var(--outline-variant)] px-2.5 py-1 shadow-2xs">
+                      <Building2 size={12} className="text-[#006064]" />
+                      <span className="text-[10px] font-bold text-neutral-700 uppercase">Cabin / Room:</span>
+                      <select
+                        value={selectedCabinFilter}
+                        onChange={(e) => setSelectedCabinFilter(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[200px] truncate"
+                      >
+                        <option value="ALL">All Assigned Cabins ({availableFilterCabins.length})</option>
+                        <option value="__UNASSIGNED__">Unassigned (Center-Level)</option>
+                        {availableFilterCabins.map((cab) => (
+                          <option key={cab} value={cab}>
+                            {cab}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={fetchInventory}
+                      className="p-1.5 text-[#616161] hover:text-[#006064] hover:bg-neutral-100 border border-[var(--outline-variant)] cursor-pointer"
+                      title="Refresh List"
+                    >
+                      <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+                </div>
+              </FadeUp>
+
+              <FadeUp delay={0.09}>
+                <div className="bg-white border border-[var(--outline-variant)]/50 overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-[#006064] text-white border-b border-[#004d40] text-[10px] font-bold uppercase tracking-wider">
+                          <th className="py-2.5 px-3.5 w-10">SR.NO</th>
+                          <th className="py-2.5 px-3.5">DATE</th>
+                          <th className="py-2.5 px-3.5">CENTRE NODE</th>
+                          <th className="py-2.5 px-3.5 min-w-[160px]">CABIN / ROOM</th>
+                          <th className="py-2.5 px-3.5">PRODUCT / ASSET NAME</th>
+                          <th className="py-2.5 px-3.5 text-center">INITIAL QTY</th>
+                          <th className="py-2.5 px-3.5 text-center">BALANCE QTY</th>
+                          <th className="py-2.5 px-3.5">REMARKS / SPECS</th>
+                          <th className="py-2.5 px-3.5 text-center min-w-[200px]">ACTIONS</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-200">
+                        {loading ? (
+                          <tr>
+                            <td colSpan={9} className="py-8 text-center">
+                              <Loader2 size={20} className="animate-spin text-[#006064] mx-auto mb-1.5" />
+                              <span className="text-neutral-500 font-bold uppercase tracking-widest text-[9.5px]">
+                                Loading Cabin Inventory...
+                              </span>
+                            </td>
+                          </tr>
+                        ) : cabinFilteredItems.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="py-8 text-center text-neutral-500">
+                              <Building2 size={28} className="mx-auto mb-1.5 opacity-30 text-[#006064]" />
+                              <div className="font-bold text-xs text-neutral-700">No Cabin-Wise Asset Entries Found</div>
+                              <div className="text-[11px] text-neutral-400 mt-0.5">
+                                Click "+ Create Cabin Entry" to map assets to specific cabins or meeting rooms.
+                              </div>
+                            </td>
+                          </tr>
+                        ) : (
+                          cabinFilteredItems.map((item, index) => {
+                            const formattedDate = item.entryDate
+                              ? new Date(item.entryDate).toLocaleDateString('en-IN', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })
+                              : '—';
+
+                            return (
+                              <tr
+                                key={item.id}
+                                className={`hover:bg-teal-50/30 transition-colors ${
+                                  index % 2 === 0 ? 'bg-white' : 'bg-[#FAFAFA]'
+                                }`}
+                              >
+                                <td className="py-2.5 px-3.5 font-mono font-bold text-neutral-500 text-[11px]">
+                                  #{item.srNo || index + 1}
+                                </td>
+                                <td className="py-2.5 px-3.5 font-mono text-[11px] text-neutral-700 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1 font-semibold">
+                                    <Calendar size={11} className="text-[#006064]" />
+                                    {formattedDate}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3.5 font-medium">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100 border border-neutral-200 text-neutral-800 text-[10px] font-bold uppercase">
+                                    <Building2 size={10} className="text-[#006064]" />
+                                    {item.locationName}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3.5 font-medium">
+                                  {item.cabinName ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 text-teal-900 border border-teal-200 text-xs font-bold rounded shadow-2xs">
+                                      <Building2 size={12} className="text-[#006064]" />
+                                      <span>{item.cabinName}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-neutral-400 italic">Unassigned (Center-Level)</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3.5">
+                                  <div className="font-extrabold text-[#1B1C1C] text-xs sm:text-sm flex items-center gap-1.5">
+                                    <Package size={13} className="text-[#006064] shrink-0" />
+                                    <span>{item.productName}</span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3.5 text-center font-mono font-bold text-neutral-600">
+                                  {item.initialQty}
+                                </td>
+                                <td className="py-2.5 px-3.5 text-center">
+                                  <span
+                                    className={`inline-flex items-center justify-center px-2.5 py-0.5 text-[11px] font-mono font-black border ${
+                                      item.balanceQty > 0
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                        : 'bg-red-50 text-red-700 border-red-300'
+                                    }`}
+                                  >
+                                    {item.balanceQty} units
+                                  </span>
                                 </td>
                                 <td className="py-2.5 px-3.5 text-neutral-600 max-w-xs truncate text-[11px]" title={item.remarks || ''}>
                                   {item.remarks || <span className="text-neutral-300 italic">No notes</span>}
@@ -1220,16 +1586,30 @@ export default function InternalInventoryPage() {
                                 </span>
                               </td>
                               <td className="py-2.5 px-3.5">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-800 border border-red-200 text-[10px] font-bold uppercase rounded">
-                                  <Building2 size={10} />
-                                  {log.fromLocationName}
-                                </span>
+                                <div className="space-y-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-800 border border-red-200 text-[10px] font-bold uppercase rounded">
+                                    <Building2 size={10} />
+                                    {log.fromLocationName}
+                                  </span>
+                                  {log.fromCabinName && (
+                                    <span className="block text-[9.5px] font-bold text-teal-800 ml-0.5">
+                                      🚪 {log.fromCabinName}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-2.5 px-3.5">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase rounded">
-                                  <Building2 size={10} />
-                                  {log.toLocationName}
-                                </span>
+                                <div className="space-y-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase rounded">
+                                    <Building2 size={10} />
+                                    {log.toLocationName}
+                                  </span>
+                                  {log.toCabinName && (
+                                    <span className="block text-[9.5px] font-bold text-teal-800 ml-0.5">
+                                      🚪 {log.toCabinName}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-2.5 px-3.5 text-neutral-800 font-medium whitespace-nowrap">
                                 <span className="text-[11px] font-bold">
@@ -1297,8 +1677,9 @@ export default function InternalInventoryPage() {
                 </div>
 
                 <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 shadow-2xs font-medium">
-                  <span className="text-[10px] uppercase font-bold text-emerald-700">Live Value:</span>
-                  <strong className="text-emerald-950 font-mono font-black">₹{consumedKpis.totalValuation.toLocaleString('en-IN')}</strong>
+                  <Package size={12} className="text-emerald-700" />
+                  <span className="text-[10px] uppercase font-bold text-emerald-700">Total Stock:</span>
+                  <strong className="text-emerald-950 font-mono font-black">{consumedKpis.totalUnits.toLocaleString('en-IN')} units</strong>
                 </div>
               </div>
             </div>
@@ -1428,8 +1809,6 @@ export default function InternalInventoryPage() {
                       <th className="py-2.5 px-3.5 text-center">BUFFER LIMIT</th>
                       <th className="py-2.5 px-3.5 text-center">BUFFER STATUS</th>
                       <th className="py-2.5 px-3.5 text-center">PURCHASE FMS</th>
-                      <th className="py-2.5 px-3.5 text-right">UNIT COST</th>
-                      <th className="py-2.5 px-3.5 text-right">BALANCE VALUE</th>
                       <th className="py-2.5 px-3.5">REMARKS / NOTES</th>
                       <th className="py-2.5 px-3.5 text-center min-w-[170px]">ACTIONS</th>
                     </tr>
@@ -1437,7 +1816,7 @@ export default function InternalInventoryPage() {
                   <tbody className="divide-y divide-neutral-200">
                     {consumedLoading ? (
                       <tr>
-                        <td colSpan={12} className="py-8 text-center">
+                        <td colSpan={10} className="py-8 text-center">
                           <Loader2 size={20} className="animate-spin text-[#006064] mx-auto mb-1.5" />
                           <span className="text-neutral-500 font-bold uppercase tracking-widest text-[9.5px]">
                             Loading Consumed Inventory...
@@ -1446,7 +1825,7 @@ export default function InternalInventoryPage() {
                       </tr>
                     ) : filteredConsumedItems.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="py-8 text-center text-neutral-500">
+                        <td colSpan={10} className="py-8 text-center text-neutral-500">
                           <Layers size={28} className="mx-auto mb-1.5 opacity-30" />
                           <div className="font-bold text-xs text-neutral-700">No Consumed Inventory Entries Found</div>
                           <div className="text-[11px] text-neutral-400 mt-0.5">
@@ -1597,16 +1976,6 @@ export default function InternalInventoryPage() {
                               )}
                             </td>
 
-                            {/* Unit Cost */}
-                            <td className="py-2.5 px-3.5 text-right font-mono text-neutral-600">
-                              {item.unitCost > 0 ? `₹${Number(item.unitCost).toLocaleString('en-IN')}` : '—'}
-                            </td>
-
-                            {/* Balance Amount */}
-                            <td className="py-2.5 px-3.5 text-right font-mono font-bold text-[#006064]">
-                              {item.balanceAmount > 0 ? `₹${Number(item.balanceAmount).toLocaleString('en-IN')}` : '—'}
-                            </td>
-
                             {/* Remarks */}
                             <td className="py-2.5 px-3.5 text-neutral-600 max-w-xs truncate text-[11px]" title={item.remarks || ''}>
                               {item.remarks || <span className="text-neutral-300 italic">No notes</span>}
@@ -1722,6 +2091,56 @@ export default function InternalInventoryPage() {
                     </select>
                   </div>
 
+                  {/* 2b. Cabin / Room Assignment */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="block font-bold uppercase tracking-wider text-neutral-700 text-[10px] flex items-center gap-1">
+                        <Building2 size={11} className="text-[#006064]" />
+                        <span>Cabin / Room Assignment (Optional)</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomCabinMode(!isCustomCabinMode);
+                          if (!isCustomCabinMode) {
+                            setCustomCabinInput(formCabinName);
+                          }
+                        }}
+                        className="text-[10px] text-[#006064] font-bold hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        {isCustomCabinMode ? '← Choose from Centre Cabins' : '+ Type Custom Cabin / Room'}
+                      </button>
+                    </div>
+
+                    {isCustomCabinMode ? (
+                      <input
+                        type="text"
+                        placeholder="e.g. Dedicated Cabin A, Executive Cabin 4, Meeting Room..."
+                        value={customCabinInput}
+                        onChange={(e) => setCustomCabinInput(e.target.value)}
+                        className="w-full bg-white border border-neutral-300 p-2 text-xs font-bold text-neutral-900 focus:outline-none focus:border-[#006064]"
+                      />
+                    ) : (
+                      <select
+                        value={formCabinName}
+                        onChange={(e) => setFormCabinName(e.target.value)}
+                        className="w-full bg-white border border-neutral-300 p-2 text-xs font-bold text-neutral-900 focus:outline-none focus:border-[#006064]"
+                      >
+                        <option value="">No Specific Cabin (General Centre Asset)</option>
+                        {availableCabinsForSelectedLoc.map((cab) => (
+                          <option key={cab} value={cab}>
+                            {cab}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <span className="text-[9.5px] text-neutral-500 italic block">
+                      {formCabinName || customCabinInput
+                        ? `Asset mapped to: ${isCustomCabinMode ? customCabinInput : formCabinName}`
+                        : 'Optional: Map this asset to a specific cabin, desk cluster, or meeting room.'}
+                    </span>
+                  </div>
+
                   {/* 3. Product / Asset Name */}
                   <div className="space-y-1 relative">
                     <label className="block font-bold uppercase tracking-wider text-neutral-700 text-[10px] flex items-center gap-1">
@@ -1780,7 +2199,7 @@ export default function InternalInventoryPage() {
                     )}
                   </div>
 
-                  {/* 4. Quantities & Unit Valuation */}
+                  {/* 4. Quantities */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="block font-bold uppercase tracking-wider text-neutral-700 text-[10px]">
@@ -1797,42 +2216,17 @@ export default function InternalInventoryPage() {
                     </div>
 
                     <div className="space-y-1">
-                      <label className="block font-bold uppercase tracking-wider text-neutral-700 text-[10px] flex items-center justify-between">
-                        <span>Unit Valuation (₹ / unit)</span>
-                        <span className="text-[9px] text-neutral-400 font-normal lowercase">(optional)</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        placeholder="0 (optional)"
-                        value={formUnitCost}
-                        onChange={(e) => setFormUnitCost(e.target.value.replace(/^0+(?=\d)/, ''))}
-                        className="w-full bg-white border border-neutral-300 p-2 text-xs font-mono font-bold text-neutral-900 focus:outline-none focus:border-[#006064]"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 5. Balance Qty & Live Valuation */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2.5 bg-neutral-50 border border-neutral-200">
-                    <div className="space-y-1">
-                      <label className="block font-bold uppercase tracking-wider text-neutral-600 text-[9px]">
-                        Balance Quantity (Units)
+                      <label className="block font-bold uppercase tracking-wider text-neutral-700 text-[10px]">
+                        Balance Quantity (Units) *
                       </label>
                       <input
                         type="number"
                         min="0"
                         value={formBalanceQty}
                         onChange={(e) => setFormBalanceQty(e.target.value.replace(/^0+(?=\d)/, ''))}
-                        className="w-full bg-white border border-neutral-300 p-1.5 text-xs font-mono font-bold text-emerald-800 focus:outline-none focus:border-[#006064]"
+                        required
+                        className="w-full bg-white border border-neutral-300 p-2 text-xs font-mono font-bold text-emerald-800 focus:outline-none focus:border-[#006064]"
                       />
-                    </div>
-
-                    <div className="flex flex-col justify-center text-right">
-                      <span className="text-neutral-500 font-bold uppercase text-[9px]">Calculated Balance Amount:</span>
-                      <span className="font-mono font-black text-sm text-[#006064]">
-                        ₹{liveCalculatedBalanceAmount.toLocaleString('en-IN')}
-                      </span>
                     </div>
                   </div>
 
@@ -2039,32 +2433,7 @@ export default function InternalInventoryPage() {
                     </p>
                   </div>
 
-                  {/* 5. Unit Valuation & Calculated Balance */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2.5 bg-neutral-50 border border-neutral-200">
-                    <div className="space-y-1">
-                      <label className="block font-bold uppercase tracking-wider text-neutral-700 text-[9.5px]">
-                        Unit Valuation (₹ / unit)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        placeholder="0 (optional)"
-                        value={consumedFormUnitCost}
-                        onChange={(e) => setConsumedFormUnitCost(e.target.value.replace(/^0+(?=\d)/, ''))}
-                        className="w-full bg-white border border-neutral-300 p-1.5 text-xs font-mono font-bold text-neutral-900 focus:outline-none focus:border-[#006064]"
-                      />
-                    </div>
-
-                    <div className="flex flex-col justify-center text-right">
-                      <span className="text-neutral-500 font-bold uppercase text-[9px]">Calculated Balance Amount:</span>
-                      <span className="font-mono font-black text-sm text-[#006064]">
-                        ₹{liveCalculatedConsumedBalanceAmount.toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 6. Remarks */}
+                  {/* 5. Remarks */}
                   <div className="space-y-1">
                     <label className="block font-bold uppercase tracking-wider text-neutral-700 text-[10px]">
                       Remarks / Storage Placement / Brand Notes
@@ -2133,9 +2502,16 @@ export default function InternalInventoryPage() {
                       <Package size={14} />
                       <span>{transferSourceItem.productName}</span>
                     </div>
-                    <div className="flex items-center justify-between text-neutral-700 text-[11px]">
-                      <span><strong>Source Centre:</strong> {transferSourceItem.locationName}</span>
-                      <span className="px-2 py-0.5 bg-white border border-teal-300 font-mono font-bold text-teal-900 rounded">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-neutral-700 text-[11px] gap-1">
+                      <span>
+                        <strong>Source:</strong> {transferSourceItem.locationName}
+                        {transferSourceItem.cabinName ? (
+                          <span className="ml-1 text-teal-800 font-bold">({transferSourceItem.cabinName})</span>
+                        ) : (
+                          <span className="ml-1 text-neutral-400 italic">(General Stock)</span>
+                        )}
+                      </span>
+                      <span className="px-2 py-0.5 bg-white border border-teal-300 font-mono font-bold text-teal-900 rounded shrink-0 self-start sm:self-auto">
                         Current Balance: {transferSourceItem.balanceQty} units
                       </span>
                     </div>
@@ -2168,6 +2544,7 @@ export default function InternalInventoryPage() {
                     />
                   </div>
 
+                  {/* Destination Centre Node (Allows same centre for intra-cabin move, or another centre) */}
                   <div className="space-y-1">
                     <label className="block font-bold uppercase tracking-wider text-neutral-700 text-[10px] flex items-center gap-1">
                       <Building2 size={11} className="text-[#006064]" />
@@ -2175,19 +2552,71 @@ export default function InternalInventoryPage() {
                     </label>
                     <select
                       value={transferData.toLocationId}
-                      onChange={(e) => setTransferData({ ...transferData, toLocationId: e.target.value })}
+                      onChange={(e) => {
+                        setTransferData({ ...transferData, toLocationId: e.target.value });
+                        setTransferToCabinName('');
+                      }}
                       required
                       className="w-full bg-white border border-neutral-300 p-2 text-xs font-bold text-neutral-900 focus:outline-none focus:border-[#006064]"
                     >
                       <option value="">Select Destination Centre...</option>
-                      {locations
-                        .filter((l) => l.id !== transferSourceItem.locationId)
-                        .map((loc) => (
-                          <option key={loc.id} value={String(loc.id)}>
-                            {loc.name}
+                      {locations.map((loc) => (
+                        <option key={loc.id} value={String(loc.id)}>
+                          {loc.name} {loc.id === transferSourceItem.locationId ? '(Same Centre / Intra-Cabin Relocation)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Destination Cabin / Room Assignment */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="block font-bold uppercase tracking-wider text-neutral-700 text-[10px] flex items-center gap-1">
+                        <Building2 size={11} className="text-[#006064]" />
+                        <span>Destination Cabin / Room {Number(transferData.toLocationId) === transferSourceItem.locationId ? '*' : '(Optional)'}</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomTransferCabinMode(!isCustomTransferCabinMode);
+                          if (!isCustomTransferCabinMode) {
+                            setCustomTransferCabinInput(transferToCabinName);
+                          }
+                        }}
+                        className="text-[10px] text-[#006064] font-bold hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        {isCustomTransferCabinMode ? '← Choose from Centre Cabins' : '+ Type Custom Cabin / Room'}
+                      </button>
+                    </div>
+
+                    {isCustomTransferCabinMode ? (
+                      <input
+                        type="text"
+                        placeholder="e.g. Dedicated Cabin B, Conference Hall, Meeting Room 2..."
+                        value={customTransferCabinInput}
+                        onChange={(e) => setCustomTransferCabinInput(e.target.value)}
+                        className="w-full bg-white border border-neutral-300 p-2 text-xs font-bold text-neutral-900 focus:outline-none focus:border-[#006064]"
+                      />
+                    ) : (
+                      <select
+                        value={transferToCabinName}
+                        onChange={(e) => setTransferToCabinName(e.target.value)}
+                        className="w-full bg-white border border-neutral-300 p-2 text-xs font-bold text-neutral-900 focus:outline-none focus:border-[#006064]"
+                      >
+                        <option value="">General Centre Stock (Unassigned to Cabin)</option>
+                        {availableCabinsForTransferLoc.map((cab) => (
+                          <option key={cab} value={cab}>
+                            {cab}
                           </option>
                         ))}
-                    </select>
+                      </select>
+                    )}
+
+                    {Number(transferData.toLocationId) === transferSourceItem.locationId && (
+                      <p className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200 p-1.5 rounded">
+                        ℹ️ <strong>Intra-Centre Transfer:</strong> Relocating within <em>{transferSourceItem.locationName}</em>. Currently placed in: <strong>{transferSourceItem.cabinName || 'General Stock'}</strong>. Destination cabin/room must be different.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-1">

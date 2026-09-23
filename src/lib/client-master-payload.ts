@@ -36,8 +36,11 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     tdsPdfUrl,
     tdsPdfName,
     clientId,
+    bookingId,
     hasBrokerCommission = false,
+    brokerName,
     brokerCommissionPercent,
+    brokerCommissionAmount,
     invoiceToBeRaised,
     sorAmount,
     sorRecdDate,
@@ -154,9 +157,16 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     tdsPdfUrl: !isOneTime && willDeductTds ? (tdsPdfUrl as string) || null : null,
     tdsPdfName: !isOneTime && willDeductTds ? (tdsPdfName as string) || null : null,
     clientId: isOneTime ? null : (clientId ? String(clientId).trim() : null),
+    bookingId: bookingId ? String(bookingId).trim() : null,
     hasBrokerCommission: Boolean(hasBrokerCommission),
+    brokerName: hasBrokerCommission && brokerName ? String(brokerName).trim() : null,
     brokerCommissionPercent: hasBrokerCommission && brokerCommissionPercent
       ? Number(brokerCommissionPercent)
+      : null,
+    brokerCommissionAmount: hasBrokerCommission
+      ? (brokerCommissionAmount !== undefined && brokerCommissionAmount !== null && brokerCommissionAmount !== ''
+          ? Number(brokerCommissionAmount)
+          : (resolvedAmount && brokerCommissionPercent ? (Number(resolvedAmount) * Number(brokerCommissionPercent)) / 100 : null))
       : null,
     invoiceToBeRaised: hasBrokerCommission && invoiceToBeRaised
       ? String(invoiceToBeRaised)

@@ -55,6 +55,18 @@ export async function POST(
       amount: bodyAmount,
       gstPercent: bodyGst,
       totalAmount: bodyTotal,
+      bookingId: bodyBookingId,
+      brokerName: bodyBrokerName,
+      brokerCommissionPercent: bodyCommissionPct,
+      brokerCommissionAmount: bodyCommissionAmt,
+      billedTo: bodyBilledTo,
+      hasExtendedHours,
+      extendedStartTime,
+      extendedEndTime,
+      extendedAmount,
+      extendedGstPercent,
+      extendedTotalAmount,
+      extendedClientName,
     } = body;
 
     let targetProduct: any = null;
@@ -113,6 +125,16 @@ export async function POST(
       },
     ];
 
+    const resolvedBookingId = bodyBookingId || client.bookingId || null;
+    const resolvedBrokerName = bodyBrokerName || client.brokerName || null;
+    const resolvedCommPct = bodyCommissionPct !== undefined && bodyCommissionPct !== null && bodyCommissionPct !== ''
+      ? Number(bodyCommissionPct)
+      : client.brokerCommissionPercent;
+    const resolvedCommAmt = bodyCommissionAmt !== undefined && bodyCommissionAmt !== null && bodyCommissionAmt !== ''
+      ? Number(bodyCommissionAmt)
+      : (client.brokerCommissionAmount || (resolvedCommPct ? (amount * resolvedCommPct) / 100 : null));
+    const resolvedBilledTo = bodyBilledTo || (client.hasBrokerCommission ? 'BROKER' : (client.invoiceToBeRaised || 'CLIENT'));
+
     const newInvoice = await (prisma as any).invoiceRecord.create({
       data: {
         clientMasterId: client.id,
@@ -131,21 +153,93 @@ export async function POST(
         itemsJson: JSON.stringify(items),
         gstNo: client.gstNo || null,
         billingMonth,
+        bookingId: resolvedBookingId,
+        brokerName: resolvedBrokerName,
+        brokerCommissionPercent: resolvedCommPct,
+        brokerCommissionAmount: resolvedCommAmt,
+        billedTo: resolvedBilledTo,
+        isExtendedHours: false,
         sendType: 'MANUAL',
         sentAt: new Date(),
         status: 'PENDING_CM_REVIEW',
         createdById: currentUserId,
       },
     });
-    // ── Synchronize Step 1 to Invoice Workflow FMS (Invoice Arrival) ──
+
     syncInvoiceWorkflowArrival(newInvoice.id).catch((fmsErr) => {
       console.warn('[Generate Invoice] Invoice Workflow FMS Arrival notice:', fmsErr);
     });
 
+    let extendedInvoice: any = null;
+    if (hasExtendedHours && extendedAmount) {
+      const extAmt = Number(extendedAmount) || 0;
+      const extGst = extendedGstPercent !== undefined && extendedGstPercent !== null && extendedGstPercent !== ''
+        ? Number(extendedGstPercent)
+        : 18;
+      const extTot = extendedTotalAmount !== undefined && extendedTotalAmount !== null && extendedTotalAmount !== ''
+        ? Number(extendedTotalAmount)
+        : Math.round(extAmt * (1 + extGst / 100));
+
+      const extTimeStr = extendedStartTime && extendedEndTime ? ` (${extendedStartTime} - ${extendedEndTime})` : (extendedStartTime ? ` (${extendedStartTime})` : '');
+      const extSummary = `${cabinName} • ⚡ Extended Hours (${dateStr}${extTimeStr})`;
+
+      const extItems = [
+        {
+          cabinName: `${cabinName} (Extended)`,
+          sessionDate: validSessionDate.toISOString().split('T')[0],
+          startTime: extendedStartTime || null,
+          endTime: extendedEndTime || null,
+          amount: extAmt,
+          gstPercent: extGst,
+          totalAmount: extTot,
+          noOfSeats: 1,
+          isExtendedHours: true,
+        },
+      ];
+
+      extendedInvoice = await (prisma as any).invoiceRecord.create({
+        data: {
+          clientMasterId: client.id,
+          srNo: client.srNo,
+          companyName: extendedClientName?.trim() || client.companyName,
+          cabinName: extSummary,
+          noOfSeats: 1,
+          ratePerAgreement: extAmt,
+          amount: extAmt,
+          gstPercent: extGst,
+          totalAmount: extTot,
+          paymentDuration: 'ONE_TIME',
+          paymentDueDay: validSessionDate.getDate(),
+          dueDate: validSessionDate,
+          productGroupKey: 'EXTENDED_HOURS_SESSION',
+          itemsJson: JSON.stringify(extItems),
+          gstNo: client.gstNo || null,
+          billingMonth,
+          bookingId: resolvedBookingId,
+          brokerName: null,
+          brokerCommissionPercent: 0,
+          brokerCommissionAmount: 0,
+          billedTo: 'CLIENT',
+          isExtendedHours: true,
+          sendType: 'MANUAL',
+          sentAt: new Date(),
+          status: 'PENDING_CM_REVIEW',
+          createdById: currentUserId,
+        },
+      });
+
+      syncInvoiceWorkflowArrival(extendedInvoice.id).catch((fmsErr) => {
+        console.warn('[Generate Invoice] Extended Invoice Workflow FMS Arrival notice:', fmsErr);
+      });
+    }
+
     return NextResponse.json({
       success: true,
       data: newInvoice,
-      message: `Invoice #${newInvoice.id} generated for ${client.companyName} (${dateStr})!`,
+      extendedInvoice,
+      message: extendedInvoice
+        ? `Generated 2 invoices: #${newInvoice.id} for Broker and #${extendedInvoice.id} for Extended Hours!`
+        : `Invoice #${newInvoice.id} generated for ${client.companyName} (${dateStr})!`,
     }, { status: 201 });
   } catch (error) {
     console.error('Generate session invoice error:', error);

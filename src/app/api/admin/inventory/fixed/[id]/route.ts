@@ -34,6 +34,7 @@ export async function PUT(
       entryDate,
       productName,
       locationId,
+      cabinName,
       balanceQty,
       initialQty,
       unitCost,
@@ -52,6 +53,7 @@ export async function PUT(
     if (entryDate !== undefined) updateData.createdAt = entryDate ? new Date(entryDate) : new Date();
     if (productName !== undefined) updateData.productName = String(productName).trim();
     if (locationId !== undefined) updateData.locationId = locationId ? Number(locationId) : null;
+    if (cabinName !== undefined) updateData.cabinName = cabinName ? String(cabinName).trim() : null;
     if (initialQty !== undefined) updateData.initialQty = Math.max(0, parseInt(String(initialQty), 10) || 0);
     if (balanceQty !== undefined) updateData.balanceQty = Math.max(0, parseInt(String(balanceQty), 10) || 0);
     if (unitCost !== undefined) updateData.unitCost = Math.max(0, parseFloat(String(unitCost)) || 0);
