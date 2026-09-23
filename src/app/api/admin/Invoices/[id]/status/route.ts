@@ -17,7 +17,7 @@ export async function PATCH(
     const invoiceRecordId = Number(id);
 
     const body = await request.json();
-    const { status, remarks, billedTo } = body;
+    const { status, remarks, billedTo, isDigitalSignRequired } = body;
 
     const validStatuses = [
       'PENDING_CM_REVIEW',
@@ -37,6 +37,7 @@ export async function PATCH(
         status,
         ...(remarks !== undefined ? { remarks: remarks ? String(remarks).trim() : null } : {}),
         ...(billedTo !== undefined ? { billedTo: String(billedTo).trim() } : {}),
+        ...(isDigitalSignRequired !== undefined ? { isDigitalSignRequired: Boolean(isDigitalSignRequired) } : {}),
       },
       include: {
         clientMaster: true,

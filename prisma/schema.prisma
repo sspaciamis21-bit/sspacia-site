@@ -1131,6 +1131,7 @@ model InvoiceRecord {
   digitallySignedPdfName String?
   signedAt               DateTime?
   signedByName           String?
+  isDigitalSignRequired  Boolean                @default(false)
   clientEmailSentAt      DateTime?
   clientEmailSentTo      String?
   clientEmailSentCc      String?

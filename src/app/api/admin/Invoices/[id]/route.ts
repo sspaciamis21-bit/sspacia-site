@@ -73,6 +73,7 @@ export async function PUT(
       digitallySignedPdfName,
       signedAt,
       signedByName,
+      isDigitalSignRequired,
     } = body;
 
     const updateData: any = {};
@@ -96,6 +97,7 @@ export async function PUT(
     if (digitallySignedPdfName !== undefined) updateData.digitallySignedPdfName = digitallySignedPdfName;
     if (signedAt !== undefined) updateData.signedAt = signedAt ? new Date(signedAt) : null;
     if (signedByName !== undefined) updateData.signedByName = signedByName;
+    if (isDigitalSignRequired !== undefined) updateData.isDigitalSignRequired = Boolean(isDigitalSignRequired);
 
     if (Object.keys(updateData).length > 0) {
       await (prisma as any).invoiceRecord.update({

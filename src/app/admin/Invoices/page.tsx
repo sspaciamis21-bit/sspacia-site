@@ -142,6 +142,7 @@ interface InvoiceRecord {
   digitallySignedPdfName?: string | null;
   signedAt?: string | null;
   signedByName?: string | null;
+  isDigitalSignRequired?: boolean;
   clientEmailSentAt?: string | null;
   clientEmailSentTo?: string | null;
   clientEmailSentCc?: string | null;
@@ -268,25 +269,10 @@ export default function AdminInvoicesWorkflowPage() {
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('ALL');
 
-  // Digital Signature Management State
-  const [showSignatureSettingsModal, setShowSignatureSettingsModal] = useState(false);
-  const [signatureSetting, setSignatureSetting] = useState<{
-    signatureUrl: string;
-    signerName: string;
-    signerTitle: string;
-    companyName: string;
-    isActive: boolean;
-  }>({
-    signatureUrl: '',
-    signerName: 'Community Manager',
-    signerTitle: 'Authorized Signatory',
-    companyName: 'SSPACIA Workspaces',
-    isActive: true,
-  });
-  const [uploadingSignature, setUploadingSignature] = useState(false);
-  const [newSignatureFile, setNewSignatureFile] = useState<File | null>(null);
-  const [signatureSignerName, setSignatureSignerName] = useState('');
-  const [signatureSignerTitle, setSignatureSignerTitle] = useState('');
+  // CM Review & Send to Accountant Modal (prompts Digital Signature Required Yes/No + Recipient Selection)
+  const [sendToAccountantInvoice, setSendToAccountantInvoice] = useState<InvoiceRecord | null>(null);
+  const [digitalSignChoice, setDigitalSignChoice] = useState<boolean>(false);
+  const [sendRecipientChoice, setSendRecipientChoice] = useState<'CLIENT' | 'BROKER'>('CLIENT');
 
   // Accountant Upload Invoice Modal
   const [entryToAttachInvoice, setEntryToAttachInvoice] = useState<InvoiceRecord | null>(null);
@@ -298,16 +284,6 @@ export default function AdminInvoicesWorkflowPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
-
-  // USB DSC & Digital Signing Modal State
-  const [targetInvoiceToSign, setTargetInvoiceToSign] = useState<InvoiceRecord | null>(null);
-  const [showApplySignatureModal, setShowApplySignatureModal] = useState(false);
-  const [bridgeStatus, setBridgeStatus] = useState<{ connected: boolean; checking: boolean; certificates: any[] }>({
-    connected: false,
-    checking: false,
-    certificates: [],
-  });
-  const [signingWithUsb, setSigningWithUsb] = useState(false);
 
   // View Full Record Details Modal
   const [entryToViewDetails, setEntryToViewDetails] = useState<InvoiceRecord | null>(null);
@@ -331,10 +307,6 @@ export default function AdminInvoicesWorkflowPage() {
   const [prorateCustomSubtotal, setProrateCustomSubtotal] = useState<string>('');
   const [prorateSaving, setProrateSaving] = useState<boolean>(false);
 
-  // CM Recipient Selection Modal (Broker vs Client)
-  const [cmRecipientInvoice, setCmRecipientInvoice] = useState<InvoiceRecord | null>(null);
-  const [showRecipientModal, setShowRecipientModal] = useState<boolean>(false);
-
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -345,14 +317,11 @@ export default function AdminInvoicesWorkflowPage() {
   const isAnyWorkflowModalOpen = Boolean(
     entryToAttachInvoice ||
     entryToReviewInvoice ||
-    targetInvoiceToSign ||
-    showApplySignatureModal ||
-    showSignatureSettingsModal ||
+    sendToAccountantInvoice ||
     entryToViewDetails ||
     waiveModalInvoice ||
     splitModalInvoice ||
-    prorateModalInvoice ||
-    showRecipientModal
+    prorateModalInvoice
   );
 
   useEffect(() => {
@@ -409,191 +378,7 @@ export default function AdminInvoicesWorkflowPage() {
   const [editProrateActiveDays, setEditProrateActiveDays] = useState<number>(30);
   const [editProrateTotalMonthDays, setEditProrateTotalMonthDays] = useState<number>(30);
 
-  const fetchSignatureSettings = useCallback(async () => {
-    try {
-      const res = await fetch('/api/admin/digital-signature');
-      const json = await res.json();
-      if (json.success && json.data) {
-        setSignatureSetting(json.data);
-        setSignatureSignerName(json.data.signerName || 'Community Manager');
-        setSignatureSignerTitle(json.data.signerTitle || 'Authorized Signatory');
-      }
-    } catch { /* ignore */ }
-  }, []);
 
-  useEffect(() => {
-    fetchSignatureSettings();
-  }, [fetchSignatureSettings]);
-
-  const handleSaveSignatureSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setUploadingSignature(true);
-    try {
-      let signatureUrl = signatureSetting.signatureUrl;
-
-      if (newSignatureFile) {
-        const formData = new FormData();
-        formData.append('file', newSignatureFile);
-        formData.append('signerName', signatureSignerName);
-        formData.append('signerTitle', signatureSignerTitle);
-        formData.append('companyName', signatureSetting.companyName || 'SSPACIA Workspaces');
-
-        const res = await fetch('/api/admin/digital-signature', {
-          method: 'POST',
-          body: formData,
-        });
-        const json = await res.json();
-        if (json.success) {
-          toast.success('Digital signature stamp updated successfully! ✍️');
-          setSignatureSetting(json.data);
-          setShowSignatureSettingsModal(false);
-          setNewSignatureFile(null);
-          return;
-        } else {
-          toast.error(json.error || 'Failed to update signature');
-          return;
-        }
-      }
-
-      const res = await fetch('/api/admin/digital-signature', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          signatureUrl,
-          signerName: signatureSignerName,
-          signerTitle: signatureSignerTitle,
-          companyName: signatureSetting.companyName || 'SSPACIA Workspaces',
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        toast.success('Digital signature settings saved! ✍️');
-        setSignatureSetting(json.data);
-        setShowSignatureSettingsModal(false);
-      } else {
-        toast.error(json.error || 'Failed to save settings');
-      }
-    } catch {
-      toast.error('Error saving signature settings');
-    } finally {
-      setUploadingSignature(false);
-    }
-  };
-
-  const checkUsbBridge = useCallback(async () => {
-    setBridgeStatus(prev => ({ ...prev, checking: true }));
-    try {
-      const res = await fetch('http://127.0.0.1:8765/status', { signal: AbortSignal.timeout(2500) });
-      if (res.ok) {
-        const certsRes = await fetch('http://127.0.0.1:8765/certificates', { signal: AbortSignal.timeout(2500) });
-        const certsJson = await certsRes.json();
-        setBridgeStatus({
-          connected: true,
-          checking: false,
-          certificates: certsJson.certificates || [],
-        });
-        return;
-      }
-    } catch {
-      // Bridge not running
-    }
-    setBridgeStatus({ connected: false, checking: false, certificates: [] });
-  }, []);
-
-  useEffect(() => {
-    if (showApplySignatureModal) {
-      checkUsbBridge();
-    }
-  }, [showApplySignatureModal, checkUsbBridge]);
-
-  const handleSignWithUsbToken = async (invoice: InvoiceRecord) => {
-    if (!invoice.attachedInvoice?.fileUrl) {
-      toast.error('No attached invoice PDF found');
-      return;
-    }
-    setSigningWithUsb(true);
-    try {
-      const pdfRes = await fetch(invoice.attachedInvoice.fileUrl);
-      if (!pdfRes.ok) throw new Error('Could not fetch attached invoice PDF');
-      const arrayBuffer = await pdfRes.arrayBuffer();
-
-      let binary = '';
-      const bytes = new Uint8Array(arrayBuffer);
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const pdfBase64 = window.btoa(binary);
-
-      toast.info('Connecting to ProxKey USB Token... Please enter PIN if prompted.', { duration: 6000 });
-      const bridgeRes = await fetch('http://127.0.0.1:8765/sign-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pdfBase64,
-          signerName: signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL',
-        }),
-      });
-
-      const bridgeJson = await bridgeRes.json();
-      if (!bridgeRes.ok || !bridgeJson.success) {
-        throw new Error(bridgeJson.error || 'Failed to sign with USB token');
-      }
-
-      const dscData = bridgeJson.data;
-
-      const saveRes = await fetch(`/api/admin/Invoices/${invoice.id}/save-usb-signed`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          signedPdfBase64: pdfBase64,
-          signerName: dscData.signerName || 'PRAVEEN DILIPKUMAR AGARWAL',
-          serialNumber: dscData.serialNumber,
-          issuer: dscData.issuer,
-          thumbprint: dscData.thumbprint,
-        }),
-      });
-
-      const saveJson = await saveRes.json();
-      if (!saveRes.ok) throw new Error(saveJson.error || 'Failed to save signed invoice');
-
-      toast.success('🎉 Invoice digitally signed with ProxKey USB Token (PantaSign CA)!');
-      setShowApplySignatureModal(false);
-      setTargetInvoiceToSign(null);
-      fetchData();
-    } catch (err: any) {
-      console.error('USB Signing Error:', err);
-      toast.error(err.message || 'Failed to sign with USB Token. Ensure ProxKey is plugged in.');
-    } finally {
-      setSigningWithUsb(false);
-    }
-  };
-
-  const handleApplyDigitalSignature = async (invoiceId: number) => {
-    setActionLoading(true);
-    try {
-      const res = await fetch(`/api/admin/Invoices/${invoiceId}/apply-digital-signature`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          signerName: signatureSignerName || signatureSetting.signerName,
-          signerTitle: signatureSignerTitle || signatureSetting.signerTitle,
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        toast.success('Digital signature stamp successfully applied to invoice PDF! ✅');
-        setShowApplySignatureModal(false);
-        setTargetInvoiceToSign(null);
-        fetchData();
-      } else {
-        toast.error(json.error || 'Failed to apply digital signature');
-      }
-    } catch {
-      toast.error('Error applying digital signature');
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   // Late Fee Surcharge & Flexible Waive-Off Handlers
   const handleOpenWaiveModal = (inv: InvoiceRecord) => {
@@ -1795,38 +1580,38 @@ export default function AdminInvoicesWorkflowPage() {
     }
   };
 
-  // CM Decision: Send to Accountant (checks if Virtual Office or Broker client needs recipient prompt)
+  // CM Decision: Send to Accountant (prompts whether digital signature is required + recipient choice)
   const handleSendToAccountantClick = (invoice: InvoiceRecord) => {
-    const isVO = invoice.clientMaster?.clientType === 'VIRTUAL_OFFICE';
-    const hasBroker = Boolean(invoice.brokerName || invoice.clientMaster?.hasBrokerCommission || invoice.bookingId);
-    if (isVO || hasBroker) {
-      setCmRecipientInvoice(invoice);
-      setShowRecipientModal(true);
-    } else {
-      handleUpdateStatus(invoice.id, 'SENT_TO_ACCOUNTANT');
-    }
+    setSendToAccountantInvoice(invoice);
+    setDigitalSignChoice(Boolean(invoice.isDigitalSignRequired));
+    setSendRecipientChoice(invoice.billedTo === 'BROKER' ? 'BROKER' : 'CLIENT');
   };
 
-  const handleConfirmRecipientAndSend = async (chosenRecipient: 'BROKER' | 'CLIENT') => {
-    if (!cmRecipientInvoice) return;
+  const handleConfirmSendToAccountant = async (digitalRequiredParam?: boolean) => {
+    if (!sendToAccountantInvoice) return;
+    const finalDigitalRequired = digitalRequiredParam !== undefined ? digitalRequiredParam : digitalSignChoice;
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/admin/Invoices/${cmRecipientInvoice.id}/status`, {
+      const res = await fetch(`/api/admin/Invoices/${sendToAccountantInvoice.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'SENT_TO_ACCOUNTANT',
-          billedTo: chosenRecipient,
+          isDigitalSignRequired: finalDigitalRequired,
+          billedTo: sendRecipientChoice,
         }),
       });
       const json = await res.json();
       if (json.success) {
-        toast.success(`Invoice marked for ${chosenRecipient === 'BROKER' ? 'Broker 🏢' : 'Client 👤'} and sent to Accountant!`);
-        setShowRecipientModal(false);
-        setCmRecipientInvoice(null);
+        toast.success(
+          finalDigitalRequired
+            ? 'Sent to Accountant with [✍️ Digital Signature Required] notice!'
+            : 'Sent to Accountant for standard Tally PDF processing!'
+        );
+        setSendToAccountantInvoice(null);
         fetchData();
       } else {
-        toast.error(json.error || 'Failed to update recipient');
+        toast.error(json.error || 'Failed to send to accountant');
       }
     } catch {
       toast.error('Error sending invoice to accountant');
@@ -2669,21 +2454,7 @@ export default function AdminInvoicesWorkflowPage() {
                     </div>
                   </div>
 
-                  {/* Primary Actions: Digital Signature Stamp Hub */}
-                  <div className="flex items-center gap-2 shrink-0">
 
-
-                    {(canAccessCM || isAdmin) && (
-                      <button
-                        type="button"
-                        onClick={() => setShowSignatureSettingsModal(true)}
-                        className="flex items-center gap-1.5 px-3.5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider shadow-xs transition-colors shrink-0 cursor-pointer"
-                      >
-                        <PenTool size={13} />
-                        <span>Digital Signature Stamp</span>
-                      </button>
-                    )}
-                  </div>
                 </div>
 
                 {/* Tier 2: Search, Node Scoping, Status Filter & Refresh */}
@@ -3008,6 +2779,12 @@ export default function AdminInvoicesWorkflowPage() {
                                 return null;
                               })()}
 
+                              {invoice.isDigitalSignRequired && (
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-950 border border-amber-300 text-[9px] font-extrabold uppercase rounded shadow-2xs">
+                                  <PenTool size={10} className="text-amber-800" /> Digital Sign Required
+                                </div>
+                              )}
+
                               {invoice.digitallySignedPdfUrl && (
                                 <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-bold uppercase rounded">
                                   <Award size={10} className="text-emerald-700" /> Digitally Signed
@@ -3069,24 +2846,12 @@ export default function AdminInvoicesWorkflowPage() {
                                   )}
 
                                   {invoice.status === 'INVOICE_ATTACHED' && (invoice.attachedInvoice || invoice.splitsJson) && (
-                                    <>
-                                      <button
-                                        onClick={() => setEntryToReviewInvoice(invoice)}
-                                        className="px-3 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 w-full justify-center shadow-xs"
-                                      >
-                                        <Eye size={11} /> Review Tally PDF
-                                      </button>
-
-                                      <button
-                                        onClick={() => {
-                                          setTargetInvoiceToSign(invoice);
-                                          setShowApplySignatureModal(true);
-                                        }}
-                                        className="px-3 py-1.5 bg-[#006064] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-teal-900 flex items-center gap-1 w-full justify-center shadow-xs"
-                                      >
-                                        <PenTool size={11} /> Apply Digital Signature
-                                      </button>
-                                    </>
+                                    <button
+                                      onClick={() => setEntryToReviewInvoice(invoice)}
+                                      className="px-3 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 w-full justify-center shadow-xs"
+                                    >
+                                      <Eye size={11} /> Review Tally PDF
+                                    </button>
                                   )}
 
                                   {invoice.clientEmailSentAt ? (
@@ -3136,19 +2901,26 @@ export default function AdminInvoicesWorkflowPage() {
                               {userRoleView === 'ACCOUNTANT' && (
                                 <>
                                   {['SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS', 'INVOICE_ATTACHED'].includes(invoice.status) ? (
-                                    <button
-                                      onClick={() => {
-                                        setEntryToAttachInvoice(invoice);
-                                        setSelectedInvoiceFile(null);
-                                      }}
-                                      className={`px-3 py-1.5 font-bold text-[10px] uppercase tracking-wider text-white flex items-center justify-center gap-1 w-full shadow-xs ${invoice.status === 'REJECTED_WITH_REMARKS'
-                                        ? 'bg-red-600 hover:bg-red-700'
-                                        : 'bg-[var(--primary)] hover:opacity-90'
-                                        }`}
-                                    >
-                                      <Paperclip size={11} />
-                                      {invoice.attachedInvoice ? 'Replace Tally PDF' : 'Attach Tally PDF'}
-                                    </button>
+                                    <>
+                                      {invoice.isDigitalSignRequired && (
+                                        <div className="w-full text-center py-0.5 px-1 bg-amber-100 border border-amber-300 text-amber-950 font-black text-[9px] uppercase tracking-wide rounded">
+                                          ✍️ DSC Required
+                                        </div>
+                                      )}
+                                      <button
+                                        onClick={() => {
+                                          setEntryToAttachInvoice(invoice);
+                                          setSelectedInvoiceFile(null);
+                                        }}
+                                        className={`px-3 py-1.5 font-bold text-[10px] uppercase tracking-wider text-white flex items-center justify-center gap-1 w-full shadow-xs ${invoice.status === 'REJECTED_WITH_REMARKS'
+                                          ? 'bg-red-600 hover:bg-red-700'
+                                          : 'bg-[var(--primary)] hover:opacity-90'
+                                          }`}
+                                      >
+                                        <Paperclip size={11} />
+                                        {invoice.attachedInvoice ? 'Replace Tally PDF' : 'Attach Tally PDF'}
+                                      </button>
+                                    </>
                                   ) : (
                                     <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
                                       <CheckCircle2 size={12} /> Finalized
@@ -3248,6 +3020,18 @@ export default function AdminInvoicesWorkflowPage() {
                           Total Amount: ₹{Number(entryToAttachInvoice.totalAmount || 0).toLocaleString('en-IN')}
                         </div>
                       </div>
+
+                      {entryToAttachInvoice.isDigitalSignRequired && (
+                        <div className="p-3.5 bg-gradient-to-r from-amber-500/15 via-amber-500/25 to-amber-500/15 border-2 border-amber-500 rounded-xs text-amber-950 space-y-1.5 shrink-0 shadow-xs">
+                          <div className="font-black text-xs uppercase tracking-wide flex items-center gap-2 text-amber-950">
+                            <AlertTriangle size={17} className="text-amber-700 shrink-0" />
+                            <span>⚠️ ATTENTION ACCOUNTANT: DIGITALLY SIGNED INVOICE REQUIRED</span>
+                          </div>
+                          <div className="text-[11.5px] font-semibold text-amber-900 leading-relaxed pl-6">
+                            Community Manager marked that this invoice <strong>requires an official digital signature</strong>. Please ensure you apply your official digital signature (DSC token) in Tally and attach the digitally signed PDF.
+                          </div>
+                        </div>
+                      )}
 
                       {entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS' && entryToAttachInvoice.remarks && (
                         <div className="p-3 bg-red-50 border border-red-200 text-red-800 space-y-1 shrink-0">
@@ -3473,6 +3257,17 @@ export default function AdminInvoicesWorkflowPage() {
                         </div>
                       </div>
 
+                      {entryToReviewInvoice.isDigitalSignRequired ? (
+                        <div className="p-2.5 bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center gap-1.5 shrink-0 rounded-xs">
+                          <PenTool size={13} className="text-amber-700 shrink-0" />
+                          <span>✍️ Digitally Signed Invoice was Requested for this Client (Please verify signature in attached PDF)</span>
+                        </div>
+                      ) : (
+                        <div className="p-2 bg-neutral-50 border border-neutral-200 text-neutral-600 text-[11px] font-medium flex items-center gap-1.5 shrink-0 rounded-xs">
+                          <span>📄 Standard Tally Invoice (Digital Signature Not Required)</span>
+                        </div>
+                      )}
+
                       <div className="overflow-y-auto flex-1 pr-1 space-y-3">
                         {/* IF SPLIT INVOICES EXIST */}
                         {entryToReviewInvoice.splitsJson && (() => {
@@ -3649,154 +3444,170 @@ export default function AdminInvoicesWorkflowPage() {
                 )}
               </AnimatePresence>
 
-              {/* MODAL 3.5: USB DSC & Digital Signing Modal */}
+              {/* MODAL 3.5: CM REVIEW & SEND TO ACCOUNTANT MODAL */}
               <AnimatePresence>
-                {showApplySignatureModal && targetInvoiceToSign && (
-                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs font-sans">
+                {sendToAccountantInvoice && (
+                  <div className="fixed inset-0 z-[999999] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 font-sans text-xs">
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-xl space-y-5 shadow-2xl text-xs"
+                      className="bg-white border border-[var(--outline-variant)] p-6 max-w-lg w-full space-y-4 shadow-2xl rounded-xs"
                     >
-                      {/* Modal Header */}
+                      {/* Header */}
                       <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
                         <div className="flex items-center gap-2">
-                          <div className="p-2 bg-[#006064] text-white">
-                            <Award size={18} />
+                          <div className="p-2 bg-blue-600 text-white rounded-xs">
+                            <Send size={16} />
                           </div>
                           <div>
-                            <h3 className="text-base font-black text-[#1B1C1C] uppercase tracking-wide">
-                              Apply Digital Signature (DSC)
+                            <h3 className="text-sm font-black text-[#1B1C1C] uppercase tracking-wide">
+                              Send Invoice to Accountant
                             </h3>
-                            <p className="text-[10px] text-[#616161]">
-                              {targetInvoiceToSign.companyName} | SR #{targetInvoiceToSign.srNo} | Amount: ₹{Number(targetInvoiceToSign.totalAmount || 0).toLocaleString('en-IN')}
+                            <p className="text-[10.5px] text-[#616161]">
+                              Specify digital signature requirement for Tally invoice processing
                             </p>
                           </div>
                         </div>
                         <button
-                          onClick={() => {
-                            setShowApplySignatureModal(false);
-                            setTargetInvoiceToSign(null);
-                          }}
-                          className="text-neutral-400 hover:text-neutral-700 p-1"
+                          type="button"
+                          onClick={() => setSendToAccountantInvoice(null)}
+                          className="text-neutral-400 hover:text-neutral-700 p-1 cursor-pointer"
                         >
                           <X size={18} />
                         </button>
                       </div>
 
-                      {/* Signatory Settings Preview */}
-                      <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <span className="text-[9px] uppercase font-bold text-neutral-400 block">Signatory Name</span>
-                          <span className="font-bold text-[#1B1C1C]">{signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL'}</span>
+                      {/* Invoice Summary Box */}
+                      <div className="bg-[#F8F9FA] p-3.5 border border-neutral-200 rounded-xs space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-[#1B1C1C] text-sm">{sendToAccountantInvoice.companyName}</span>
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-900 border border-blue-200 text-[10px] font-bold rounded-xs">
+                            SR #{sendToAccountantInvoice.srNo}
+                          </span>
                         </div>
-                        <div>
-                          <span className="text-[9px] uppercase font-bold text-neutral-400 block">Designation / Company</span>
-                          <span className="font-bold text-[#1B1C1C]">{signatureSignerTitle || 'Director'} | SSPACIA INDIA PVT LTD</span>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-600">
+                          <span><strong>Month:</strong> {sendToAccountantInvoice.billingMonth || 'Current'}</span>
+                          <span>&bull;</span>
+                          <span><strong>Cabin:</strong> {sendToAccountantInvoice.cabinName || 'Center Space'}</span>
+                          <span>&bull;</span>
+                          <span><strong>Seats:</strong> {sendToAccountantInvoice.noOfSeats || 1}</span>
+                        </div>
+                        <div className="pt-1 text-sm font-black text-[#006064]">
+                          Total Amount: ₹{Number(sendToAccountantInvoice.totalAmount || 0).toLocaleString('en-IN')}
                         </div>
                       </div>
 
-                      {/* OPTION A: Physical ProxKey USB Token (Real Class 3 DSC) */}
-                      <div className="p-4 border-2 border-[#006064]/30 bg-teal-50/40 space-y-3 relative">
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-xs uppercase tracking-wider text-[#006064] flex items-center gap-1.5">
-                            <PenTool size={14} /> Method 1: Watchdata ProxKey USB Token (PantaSign Class 3)
-                          </span>
-                          <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded ${bridgeStatus.connected ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
-                            }`}>
-                            {bridgeStatus.connected ? '● USB Bridge Connected' : '○ Bridge Disconnected'}
-                          </span>
-                        </div>
+                      {/* KEY QUESTION: Is Digital Signature Required? */}
+                      <div className="space-y-2 pt-1">
+                        <label className="block font-black text-xs uppercase tracking-wider text-[#1B1C1C] flex items-center gap-1.5">
+                          <PenTool size={14} className="text-[#006064]" />
+                          <span>Is Digital Signature Required for this Invoice? *</span>
+                        </label>
+                        <p className="text-[11px] text-neutral-600 leading-normal">
+                          Select whether the Accountant must apply their official digital signature in Tally before attaching this invoice PDF:
+                        </p>
 
-                        {bridgeStatus.connected ? (
-                          <div className="space-y-3">
-                            <div className="text-[11px] text-emerald-900 bg-emerald-50 p-2.5 border border-emerald-200 flex items-start gap-2">
-                              <CheckCircle2 size={16} className="text-emerald-700 shrink-0 mt-0.5" />
-                              <div>
-                                <div className="font-bold">Hardware USB Token Ready for Cryptographic Signing</div>
-                                <div className="text-[10px] text-emerald-800 mt-0.5">
-                                  Certificate: <span className="font-mono font-bold">PRAVEEN DILIPKUMAR AGARWAL</span> (PantaSign Sub CA for DSC 2022 / CCA India)
-                                </div>
-                              </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          {/* OPTION 1: YES */}
+                          <button
+                            type="button"
+                            onClick={() => setDigitalSignChoice(true)}
+                            className={`p-3.5 border-2 rounded-xs text-left transition-all cursor-pointer ${
+                              digitalSignChoice === true
+                                ? 'border-amber-500 bg-amber-50/80 ring-2 ring-amber-400'
+                                : 'border-neutral-200 bg-white hover:border-amber-300 hover:bg-amber-50/30'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-black text-xs uppercase tracking-wide text-amber-950 flex items-center gap-1.5">
+                                <span>✍️</span> Yes, Required
+                              </span>
+                              {digitalSignChoice === true && (
+                                <CheckCircle2 size={16} className="text-amber-600 shrink-0" />
+                              )}
                             </div>
+                            <p className="text-[10px] text-amber-900/90 leading-relaxed font-medium">
+                              Accountant will see a prominent notice to attach a <strong>digitally signed Tally invoice</strong>.
+                            </p>
+                          </button>
 
+                          {/* OPTION 2: NO */}
+                          <button
+                            type="button"
+                            onClick={() => setDigitalSignChoice(false)}
+                            className={`p-3.5 border-2 rounded-xs text-left transition-all cursor-pointer ${
+                              digitalSignChoice === false
+                                ? 'border-neutral-800 bg-neutral-100 ring-2 ring-neutral-700'
+                                : 'border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-black text-xs uppercase tracking-wide text-neutral-900 flex items-center gap-1.5">
+                                <span>📄</span> No, Standard
+                              </span>
+                              {digitalSignChoice === false && (
+                                <CheckCircle2 size={16} className="text-neutral-800 shrink-0" />
+                              )}
+                            </div>
+                            <p className="text-[10px] text-neutral-600 leading-relaxed font-medium">
+                              Accountant attaches regular Tally invoice PDF without digital signature.
+                            </p>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* If Virtual Office or Broker Client: Select Recipient */}
+                      {(sendToAccountantInvoice.clientMaster?.clientType === 'VIRTUAL_OFFICE' ||
+                        Boolean(sendToAccountantInvoice.brokerName || sendToAccountantInvoice.clientMaster?.hasBrokerCommission || sendToAccountantInvoice.bookingId)) && (
+                        <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xs space-y-2">
+                          <label className="block font-bold text-[11px] uppercase tracking-wider text-purple-950">
+                            Select Invoice Recipient (Billed To):
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
                             <button
                               type="button"
-                              onClick={() => handleSignWithUsbToken(targetInvoiceToSign)}
-                              disabled={signingWithUsb}
-                              className="w-full py-3 bg-[#006064] hover:bg-[#004d40] text-white font-extrabold uppercase tracking-wider text-xs flex items-center justify-center gap-2 shadow-md disabled:opacity-50 transition-all cursor-pointer"
+                              onClick={() => setSendRecipientChoice('CLIENT')}
+                              className={`p-2 border rounded-xs text-xs font-bold transition-all cursor-pointer ${
+                                sendRecipientChoice === 'CLIENT'
+                                  ? 'bg-[#006064] text-white border-[#006064]'
+                                  : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
+                              }`}
                             >
-                              {signingWithUsb ? (
-                                <>
-                                  <Loader2 size={16} className="animate-spin" /> Signing with ProxKey USB Token...
-                                </>
-                              ) : (
-                                <>
-                                  <Award size={16} /> ✍ Sign with ProxKey USB Token (PantaSign Class 3)
-                                </>
-                              )}
+                              👤 Client Invoice
                             </button>
-                            <p className="text-[9px] text-center text-neutral-500 italic">
-                              Clicking will trigger your ProxKey Token PIN dialog on Windows.
-                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setSendRecipientChoice('BROKER')}
+                              className={`p-2 border rounded-xs text-xs font-bold transition-all cursor-pointer ${
+                                sendRecipientChoice === 'BROKER'
+                                  ? 'bg-purple-700 text-white border-purple-700'
+                                  : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
+                              }`}
+                            >
+                              🏢 Broker Invoice
+                            </button>
                           </div>
-                        ) : (
-                          <div className="space-y-3">
-                            <div className="text-[11px] text-amber-900 bg-amber-50 p-2.5 border border-amber-200 flex items-start gap-2">
-                              <AlertTriangle size={16} className="text-amber-700 shrink-0 mt-0.5" />
-                              <div className="space-y-1">
-                                <div className="font-bold">ProxKey USB Bridge is not running on this computer</div>
-                                <div className="text-[10px] text-neutral-700 leading-relaxed">
-                                  1. Plug in your <strong>Watchdata ProxKey USB Dongle</strong>.<br />
-                                  2. Double-click <strong className="font-mono text-[#006064]">start-dsc-bridge.bat</strong> in the website project folder.
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={checkUsbBridge}
-                                disabled={bridgeStatus.checking}
-                                className="flex-1 py-2 bg-neutral-800 hover:bg-neutral-900 text-white font-bold uppercase text-[10px] tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
-                              >
-                                {bridgeStatus.checking ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
-                                Re-Check USB Connection
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* OPTION B: Server-Side High-Speed Digital Stamp */}
-                      <div className="p-3 bg-neutral-50 border border-neutral-200 flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-bold text-[#1B1C1C] text-[11px]">Method 2: Server-Side Cryptographic Signature</div>
-                          <div className="text-[10px] text-neutral-500">Sign immediately with server cryptographic certificate & dynamic timestamp.</div>
                         </div>
+                      )}
 
+                      {/* Modal Actions */}
+                      <div className="flex items-center justify-between pt-3 border-t border-neutral-200">
                         <button
                           type="button"
-                          onClick={() => handleApplyDigitalSignature(targetInvoiceToSign.id)}
-                          disabled={actionLoading}
-                          className="px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-bold uppercase text-[10px] tracking-wider whitespace-nowrap cursor-pointer"
-                        >
-                          {actionLoading ? <Loader2 size={12} className="animate-spin" /> : '⚡ Fast Server Sign'}
-                        </button>
-                      </div>
-
-                      {/* Close Button */}
-                      <div className="flex justify-end pt-2 border-t border-neutral-200">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowApplySignatureModal(false);
-                            setTargetInvoiceToSign(null);
-                          }}
-                          className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
+                          onClick={() => setSendToAccountantInvoice(null)}
+                          className="px-4 py-2 text-neutral-600 hover:text-neutral-900 font-bold uppercase tracking-wider text-[11px] cursor-pointer"
                         >
                           Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={actionLoading}
+                          onClick={() => handleConfirmSendToAccountant()}
+                          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold uppercase tracking-wider text-xs flex items-center gap-2 rounded-xs shadow-sm disabled:opacity-50 cursor-pointer transition-all"
+                        >
+                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                          <span>Confirm &amp; Send to Accountant</span>
                         </button>
                       </div>
                     </motion.div>
@@ -4864,162 +4675,7 @@ export default function AdminInvoicesWorkflowPage() {
                 )}
               </AnimatePresence>
 
-              {/* MODAL 6: DIGITAL SIGNATURE STAMP SETTINGS */}
-              <AnimatePresence>
-                {showSignatureSettingsModal && (
-                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.96, y: 15 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.96, y: 15 }}
-                      className="bg-white border border-[var(--outline-variant)] w-full max-w-lg shadow-2xl overflow-hidden font-sans text-xs my-auto max-h-[88vh] flex flex-col"
-                    >
-                      <div className="p-5 bg-[#006064] text-white flex items-center justify-between shrink-0">
-                        <div className="flex items-center gap-2.5">
-                          <PenTool className="h-5 w-5" />
-                          <div>
-                            <h2 className="text-base font-bold tracking-tight uppercase">
-                              Official Digital Signature Stamp Hub
-                            </h2>
-                            <p className="text-xs text-white/80 font-light">
-                              Upload or change your electronic signature stamp for 1-click invoice signing.
-                            </p>
-                          </div>
-                        </div>
 
-                        <button
-                          type="button"
-                          onClick={() => setShowSignatureSettingsModal(false)}
-                          className="text-white/80 hover:text-white p-1.5 hover:bg-white/10 transition-colors"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
-
-                      <form onSubmit={handleSaveSignatureSettings} className="p-6 space-y-4 overflow-y-auto flex-1">
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                            Signatory Full Name
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g. Authorized Signatory / CM Name"
-                            value={signatureSignerName}
-                            onChange={(e) => setSignatureSignerName(e.target.value)}
-                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                            Signatory Designation / Title
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g. Community Manager"
-                            value={signatureSignerTitle}
-                            onChange={(e) => setSignatureSignerTitle(e.target.value)}
-                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#006064]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-[#616161] mb-1">
-                            Upload Signature Image / Stamp (Transparent PNG Recommended)
-                          </label>
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp"
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files[0]) {
-                                setNewSignatureFile(e.target.files[0]);
-                              }
-                            }}
-                            className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs"
-                          />
-                          <p className="text-[10px] text-neutral-500 mt-1">
-                            A clear transparent PNG image works best on invoice PDFs.
-                          </p>
-                        </div>
-
-                        {/* Stamp Visual Live Preview */}
-                        <div className="space-y-2 pt-2">
-                          <div className="text-[10px] font-bold uppercase text-neutral-600">
-                            Official Adobe Signature Box Preview on Invoice PDF:
-                          </div>
-                          <div className="p-3 bg-neutral-50 border border-neutral-300 rounded space-y-1">
-                            <div className="font-bold text-[11px] text-black">
-                              for {signatureSetting.companyName || 'SSPACIA INDIA PVT LTD'}
-                            </div>
-
-                            <div className="p-3 bg-white border-2 border-black grid grid-cols-2 gap-3 relative shadow-xs">
-                              {/* Watermark preview */}
-                              {(newSignatureFile || signatureSetting.signatureUrl) && (
-                                <div className="absolute inset-0 flex items-center justify-center opacity-25 pointer-events-none p-1">
-                                  {newSignatureFile ? (
-                                    <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 border border-teal-200">
-                                      [{newSignatureFile.name}]
-                                    </span>
-                                  ) : (
-                                    <img src={signatureSetting.signatureUrl} alt="" className="max-h-12 object-contain" />
-                                  )}
-                                </div>
-                              )}
-
-                              <div className="font-black text-xs text-black leading-snug">
-                                {(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ').filter(Boolean).map((part: string, idx: number) => (
-                                  <div key={idx}>{part}</div>
-                                ))}
-                              </div>
-
-                              <div className="text-[9px] text-black space-y-0.5 font-sans leading-tight">
-                                <div>Digitally signed by {(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ')[0]}</div>
-                                <div>{(signatureSignerName || 'PRAVEEN DILIPKUMAR AGARWAL').split(' ').slice(1).join(' ')}</div>
-                                <div>Date: 2026.08.20 {new Date().toLocaleTimeString('en-GB')}</div>
-                                <div>+05'30'</div>
-                              </div>
-                            </div>
-
-                            <div className="text-center font-bold text-[10px] text-black pt-0.5">
-                              Authorised Signatory
-                            </div>
-                          </div>
-
-                          <div className="p-2.5 bg-teal-50 border border-teal-200 text-teal-900 text-[10px] space-y-1">
-                            <div className="font-bold flex items-center gap-1">
-                              <Award size={12} className="text-[#006064]" /> ProxKey USB Dongle Support:
-                            </div>
-                            <div>
-                              When signing an invoice row, you can choose between <strong>ProxKey USB Hardware Token (PantaSign Class 3)</strong> or <strong>Fast Server-Side Cryptographic Sign</strong>.
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
-                          <button
-                            type="button"
-                            onClick={() => setShowSignatureSettingsModal(false)}
-                            className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider"
-                          >
-                            Cancel
-                          </button>
-
-                          <button
-                            type="submit"
-                            disabled={uploadingSignature}
-                            className="px-5 py-2 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2"
-                          >
-                            {uploadingSignature ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                            Save Stamp Settings
-                          </button>
-                        </div>
-                      </form>
-                    </motion.div>
-                  </div>
-                )}
-              </AnimatePresence>
 
               {/* MODAL 7: FLEXIBLE LATE FEE SURCHARGE & WAIVE DAYS MANAGER */}
               <AnimatePresence>
@@ -6007,87 +5663,7 @@ export default function AdminInvoicesWorkflowPage() {
                   </div>
                 )}
 
-                {/* CM Recipient Selection Modal (Broker vs Client) */}
-                {showRecipientModal && cmRecipientInvoice && (
-                  <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-white border border-[var(--outline-variant)] p-6 max-w-md w-full space-y-5 shadow-2xl"
-                    >
-                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
-                        <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-sm text-[#1B1C1C]">
-                          <Building2 size={16} className="text-[#006064]" />
-                          <span>Send to Accountant — Select Recipient</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowRecipientModal(false);
-                            setCmRecipientInvoice(null);
-                          }}
-                          className="text-neutral-400 hover:text-neutral-700"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
 
-                      <div className="space-y-2 text-xs">
-                        <p className="text-neutral-700 leading-relaxed">
-                          Before sending this invoice for <strong>{cmRecipientInvoice.companyName}</strong> to the Accountant, please select who this invoice should be generated for:
-                        </p>
-                        {cmRecipientInvoice.brokerName && (
-                          <div className="bg-purple-50 p-2.5 border border-purple-200 text-purple-900 rounded-xs">
-                            <strong>Broker on Record:</strong> {cmRecipientInvoice.brokerName} {cmRecipientInvoice.brokerCommissionPercent ? `(${cmRecipientInvoice.brokerCommissionPercent}%)` : ''}
-                          </div>
-                        )}
-                        {cmRecipientInvoice.bookingId && (
-                          <div className="bg-teal-50 p-2 border border-teal-200 text-teal-900 rounded-xs font-mono text-[11px]">
-                            <strong>Booking ID:</strong> {cmRecipientInvoice.bookingId}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 pt-2">
-                        <button
-                          type="button"
-                          disabled={actionLoading}
-                          onClick={() => handleConfirmRecipientAndSend('BROKER')}
-                          className="p-3 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs uppercase tracking-wider flex flex-col items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer rounded-xs"
-                        >
-                          <Building2 size={20} />
-                          <span>🏢 Broker Invoice</span>
-                          <span className="text-[9px] font-normal opacity-85">Raise in Broker's Name</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={actionLoading}
-                          onClick={() => handleConfirmRecipientAndSend('CLIENT')}
-                          className="p-3 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-xs uppercase tracking-wider flex flex-col items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer rounded-xs"
-                        >
-                          <UserCheck size={20} />
-                          <span>👤 Client Invoice</span>
-                          <span className="text-[9px] font-normal opacity-85">Raise in Client's Name</span>
-                        </button>
-                      </div>
-
-                      <div className="flex justify-end pt-2 border-t border-neutral-100">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowRecipientModal(false);
-                            setCmRecipientInvoice(null);
-                          }}
-                          className="px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-[10px] uppercase tracking-wider cursor-pointer rounded-xs"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </motion.div>
-                  </div>
-                )}
               </AnimatePresence>
             </>,
             document.body
