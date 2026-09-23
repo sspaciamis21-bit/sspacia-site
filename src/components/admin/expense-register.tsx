@@ -8344,933 +8344,933 @@ export function ExpenseRegister({
                   {/* VIEW 2: HISTORY & AUDIT TRAIL                             */}
                   {/* ────────────────────────────────────────────────────────── */}
                   {(approvalsRightTab === "HISTORY" || approvalsRightTab === "BOTH") && (
-                                  <div className="space-y-3">
-                                    {/* History Header with granular sub-filters */}
-                                    <div className="flex items-center justify-between pb-2 border-b border-emerald-200 pt-1 flex-wrap gap-2">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-[11px] font-bold uppercase tracking-wide text-emerald-900 flex items-center gap-1.5">
-                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                                          <span>Approval History & Audit Trail</span>
-                                        </span>
+                    <div className="space-y-3">
+                      {/* History Header with granular sub-filters */}
+                      <div className="flex items-center justify-between pb-2 border-b border-emerald-200 pt-1 flex-wrap gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[11px] font-bold uppercase tracking-wide text-emerald-900 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>Approval History & Audit Trail</span>
+                          </span>
 
-                                        {/* Sub-filter tabs */}
-                                        <div className="inline-flex items-center bg-slate-100 border border-slate-300 p-0.5 rounded text-[9.5px] font-bold flex-wrap">
-                                          <button
-                                            type="button"
-                                            onClick={() => setApprovalsHistorySubFilter("ALL")}
-                                            className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${approvalsHistorySubFilter === "ALL"
-                                              ? "bg-emerald-700 text-white shadow-2xs"
-                                              : "text-slate-700 hover:bg-slate-200"
-                                              }`}
-                                          >
-                                            All ({historyBaseCount})
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setApprovalsHistorySubFilter("APPROVED")}
-                                            className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${approvalsHistorySubFilter === "APPROVED"
-                                              ? "bg-purple-700 text-white shadow-2xs"
-                                              : "text-purple-800 hover:bg-purple-100"
-                                              }`}
-                                          >
-                                            Expense Approved ({historyExpenseApprovedCount})
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setApprovalsHistorySubFilter("PAYMENT")}
-                                            className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${approvalsHistorySubFilter === "PAYMENT"
-                                              ? "bg-amber-700 text-white shadow-2xs"
-                                              : "text-amber-900 hover:bg-amber-100"
-                                              }`}
-                                          >
-                                            Payment Authorized ({historyPaymentApprovedCount})
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setApprovalsHistorySubFilter("REJECTED")}
-                                            className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${approvalsHistorySubFilter === "REJECTED"
-                                              ? "bg-rose-700 text-white shadow-2xs"
-                                              : "text-rose-800 hover:bg-rose-100"
-                                              }`}
-                                          >
-                                            Rejected ({historyRejectedCount})
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setApprovalsHistorySubFilter("DISBURSED")}
-                                            className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${approvalsHistorySubFilter === "DISBURSED"
-                                              ? "bg-emerald-600 text-white shadow-2xs"
-                                              : "text-emerald-800 hover:bg-emerald-100"
-                                              }`}
-                                          >
-                                            Disbursed ({historyDisbursedCount})
-                                          </button>
-                                        </div>
-                                      </div>
+                          {/* Sub-filter tabs */}
+                          <div className="inline-flex items-center bg-slate-100 border border-slate-300 p-0.5 rounded text-[9.5px] font-bold flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setApprovalsHistorySubFilter("ALL")}
+                              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${approvalsHistorySubFilter === "ALL"
+                                ? "bg-emerald-700 text-white shadow-2xs"
+                                : "text-slate-700 hover:bg-slate-200"
+                                }`}
+                            >
+                              All ({historyBaseCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setApprovalsHistorySubFilter("APPROVED")}
+                              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${approvalsHistorySubFilter === "APPROVED"
+                                ? "bg-purple-700 text-white shadow-2xs"
+                                : "text-purple-800 hover:bg-purple-100"
+                                }`}
+                            >
+                              Expense Approved ({historyExpenseApprovedCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setApprovalsHistorySubFilter("PAYMENT")}
+                              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${approvalsHistorySubFilter === "PAYMENT"
+                                ? "bg-amber-700 text-white shadow-2xs"
+                                : "text-amber-900 hover:bg-amber-100"
+                                }`}
+                            >
+                              Payment Authorized ({historyPaymentApprovedCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setApprovalsHistorySubFilter("REJECTED")}
+                              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${approvalsHistorySubFilter === "REJECTED"
+                                ? "bg-rose-700 text-white shadow-2xs"
+                                : "text-rose-800 hover:bg-rose-100"
+                                }`}
+                            >
+                              Rejected ({historyRejectedCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setApprovalsHistorySubFilter("DISBURSED")}
+                              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${approvalsHistorySubFilter === "DISBURSED"
+                                ? "bg-emerald-600 text-white shadow-2xs"
+                                : "text-emerald-800 hover:bg-emerald-100"
+                                }`}
+                            >
+                              Disbursed ({historyDisbursedCount})
+                            </button>
+                          </div>
+                        </div>
 
-                                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
-                                        {historyFiltered.length} Showing • {formatCurrency(historyTotal)}
+                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                          {historyFiltered.length} Showing • {formatCurrency(historyTotal)}
+                        </span>
+                      </div>
+
+                      {historyFiltered.length === 0 ? (
+                        <div className="py-8 text-center text-gray-400 bg-white border border-gray-200 rounded p-4">
+                          <Clock className="w-8 h-8 mx-auto text-gray-400 mb-1" />
+                          <p className="text-xs font-semibold text-gray-700">
+                            No Records Found
+                          </p>
+                          <p className="text-[10px] text-gray-400">
+                            No approval history matching current center, search or sub-filter.
+                          </p>
+                        </div>
+                      ) : (
+                        historyFiltered.map((rec) => {
+                          const isExpenseApproved =
+                            rec.approvalStatus === "APPROVED" ||
+                            rec.superAdminApprovalStatus === "APPROVED";
+                          const isExpenseRejected =
+                            rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN" ||
+                            rec.superAdminApprovalStatus === "REJECTED";
+                          const isAccRejected =
+                            rec.approvalStatus === "REJECTED_BY_ACCOUNTANT" ||
+                            rec.accountantApprovalStatus === "REJECTED";
+                          const isPaymentApproved =
+                            rec.paymentApprovalStatus === "APPROVED" ||
+                            rec.paymentStatus === "PAID" ||
+                            Boolean(rec.utrNumber);
+                          const isPaymentRejected =
+                            rec.paymentApprovalStatus === "REJECTED";
+                          const isDisbursed =
+                            rec.paymentStatus === "PAID" || Boolean(rec.utrNumber);
+
+                          return (
+                            <div
+                              key={rec.id}
+                              className="border border-gray-200 bg-white p-3 rounded-md shadow-2xs hover:border-gray-300 transition-colors space-y-2.5 text-xs"
+                            >
+                              {/* Top Row: Meta Tags & Amount */}
+                              <div className="flex items-center justify-between flex-wrap gap-2 pb-1.5 border-b border-gray-100">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-mono text-xs font-bold text-gray-500">
+                                    #{rec.id}
+                                  </span>
+                                  <span className="text-xs font-bold text-gray-900 bg-slate-100 px-2 py-0.5 border border-slate-300 rounded">
+                                    {rec.locationName || "Center"}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-gray-500">
+                                    {rec.expenseDateStr ||
+                                      (rec.expenseDate
+                                        ? new Date(rec.expenseDate).toLocaleDateString("en-GB")
+                                        : "-")}
+                                  </span>
+                                  <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider bg-gray-100 text-gray-800 border border-gray-200 rounded">
+                                    {rec.category || "GENERAL"}
+                                  </span>
+
+                                  {/* Overall Status Badge */}
+                                  {isDisbursed ? (
+                                    <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-emerald-100 text-emerald-900 border border-emerald-300 rounded flex items-center gap-1">
+                                      <Check className="w-2.5 h-2.5 text-emerald-700" />
+                                      <span>Paid / Disbursed</span>
+                                    </span>
+                                  ) : isPaymentRejected ? (
+                                    <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 rounded flex items-center gap-1">
+                                      <X className="w-2.5 h-2.5 text-rose-700" />
+                                      <span>Payment Rejected</span>
+                                    </span>
+                                  ) : isExpenseRejected ? (
+                                    <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 rounded flex items-center gap-1">
+                                      <X className="w-2.5 h-2.5 text-rose-700" />
+                                      <span>Expense Rejected (SA)</span>
+                                    </span>
+                                  ) : isAccRejected ? (
+                                    <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 rounded flex items-center gap-1">
+                                      <X className="w-2.5 h-2.5 text-rose-700" />
+                                      <span>Rejected by Accountant</span>
+                                    </span>
+                                  ) : isPaymentApproved ? (
+                                    <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-300 rounded flex items-center gap-1">
+                                      <Check className="w-2.5 h-2.5 text-amber-700" />
+                                      <span>Payment Authorized</span>
+                                    </span>
+                                  ) : isExpenseApproved ? (
+                                    <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-purple-100 text-purple-900 border border-purple-300 rounded flex items-center gap-1">
+                                      <Check className="w-2.5 h-2.5 text-purple-700" />
+                                      <span>Expense Approved</span>
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <span className="text-sm font-display font-black text-gray-900">
+                                  {formatCurrency(rec.amount)}
+                                </span>
+                              </div>
+
+                              {/* Description & Payee */}
+                              <div className="text-[11.5px] text-gray-800 flex items-center justify-between flex-wrap gap-2">
+                                <div>
+                                  <strong className="text-gray-900">Description:</strong> {rec.description}
+                                  {rec.vendorName && (
+                                    <span className="text-gray-600 ml-2">
+                                      • Payee: <strong className="text-gray-800">{rec.vendorName}</strong>
+                                    </span>
+                                  )}
+                                  {rec.accountNo && (
+                                    <span className="text-gray-500 font-mono ml-2 text-[10.5px]">
+                                      (A/C: {rec.accountNo})
+                                    </span>
+                                  )}
+                                </div>
+                                {renderEnteredByBadge(rec)}
+                              </div>
+
+                              {/* ── STRUCTURED AUDIT TRAIL: BOTH APPROVALS ── */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 border-t border-gray-100">
+                                {/* 1. EXPENSE RECOGNITION APPROVAL (Step 1 Accountant + Step 2 Super Admin) */}
+                                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-[11px] space-y-1.5">
+                                  <div className="font-bold text-gray-800 uppercase tracking-wide text-[9.5px] flex items-center justify-between border-b border-slate-200 pb-1">
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="w-3 h-3 text-purple-700" />
+                                      <span>1. Expense Recognition</span>
+                                    </span>
+                                    {isExpenseApproved ? (
+                                      <span className="text-emerald-700 font-bold flex items-center gap-0.5">
+                                        <Check className="w-3 h-3" /> Approved
                                       </span>
-                                    </div>
-
-                                    {historyFiltered.length === 0 ? (
-                                      <div className="py-8 text-center text-gray-400 bg-white border border-gray-200 rounded p-4">
-                                        <Clock className="w-8 h-8 mx-auto text-gray-400 mb-1" />
-                                        <p className="text-xs font-semibold text-gray-700">
-                                          No Records Found
-                                        </p>
-                                        <p className="text-[10px] text-gray-400">
-                                          No approval history matching current center, search or sub-filter.
-                                        </p>
-                                      </div>
+                                    ) : isExpenseRejected ? (
+                                      <span className="text-rose-700 font-bold flex items-center gap-0.5">
+                                        <X className="w-3 h-3" /> SA Rejected
+                                      </span>
+                                    ) : isAccRejected ? (
+                                      <span className="text-rose-700 font-bold flex items-center gap-0.5">
+                                        <X className="w-3 h-3" /> Acc Rejected
+                                      </span>
                                     ) : (
-                                      historyFiltered.map((rec) => {
-                                        const isExpenseApproved =
-                                          rec.approvalStatus === "APPROVED" ||
-                                          rec.superAdminApprovalStatus === "APPROVED";
-                                        const isExpenseRejected =
-                                          rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN" ||
-                                          rec.superAdminApprovalStatus === "REJECTED";
-                                        const isAccRejected =
-                                          rec.approvalStatus === "REJECTED_BY_ACCOUNTANT" ||
-                                          rec.accountantApprovalStatus === "REJECTED";
-                                        const isPaymentApproved =
-                                          rec.paymentApprovalStatus === "APPROVED" ||
-                                          rec.paymentStatus === "PAID" ||
-                                          Boolean(rec.utrNumber);
-                                        const isPaymentRejected =
-                                          rec.paymentApprovalStatus === "REJECTED";
-                                        const isDisbursed =
-                                          rec.paymentStatus === "PAID" || Boolean(rec.utrNumber);
+                                      <span className="text-amber-700 font-semibold">Pending Check</span>
+                                    )}
+                                  </div>
 
-                                        return (
-                                          <div
-                                            key={rec.id}
-                                            className="border border-gray-200 bg-white p-3 rounded-md shadow-2xs hover:border-gray-300 transition-colors space-y-2.5 text-xs"
-                                          >
-                                            {/* Top Row: Meta Tags & Amount */}
-                                            <div className="flex items-center justify-between flex-wrap gap-2 pb-1.5 border-b border-gray-100">
-                                              <div className="flex items-center gap-1.5 flex-wrap">
-                                                <span className="font-mono text-xs font-bold text-gray-500">
-                                                  #{rec.id}
-                                                </span>
-                                                <span className="text-xs font-bold text-gray-900 bg-slate-100 px-2 py-0.5 border border-slate-300 rounded">
-                                                  {rec.locationName || "Center"}
-                                                </span>
-                                                <span className="text-[10px] font-mono text-gray-500">
-                                                  {rec.expenseDateStr ||
-                                                    (rec.expenseDate
-                                                      ? new Date(rec.expenseDate).toLocaleDateString("en-GB")
-                                                      : "-")}
-                                                </span>
-                                                <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider bg-gray-100 text-gray-800 border border-gray-200 rounded">
-                                                  {rec.category || "GENERAL"}
-                                                </span>
+                                  {/* Step 1 Accountant Check Detail */}
+                                  <div className="text-[10px] text-gray-700 flex flex-col gap-0.5">
+                                    <div className="flex items-start gap-1">
+                                      <span className="font-bold text-gray-500 shrink-0 w-16">Acc Check:</span>
+                                      {rec.accountantApprovalStatus === "APPROVED" ? (
+                                        <span className="text-emerald-800">
+                                          ✓ Validated by <strong>{rec.accountantApprovedByName || "Accountant"}</strong>
+                                          {(rec.accountantApprovedAt || rec.updatedAt) && (
+                                            <span className="font-mono text-gray-500 ml-1">
+                                              on {formatTimestamp(rec.accountantApprovedAt || rec.updatedAt)}
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : isAccRejected ? (
+                                        <span className="text-rose-700">
+                                          ✕ Rejected by <strong>{rec.accountantApprovedByName || "Accountant"}</strong>
+                                          {(rec.accountantApprovedAt || rec.updatedAt) && (
+                                            <span className="font-mono text-rose-600 ml-1">
+                                              on {formatTimestamp(rec.accountantApprovedAt || rec.updatedAt)}
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400 font-mono">Bypassed / Pending</span>
+                                      )}
+                                    </div>
+                                  </div>
 
-                                                {/* Overall Status Badge */}
-                                                {isDisbursed ? (
-                                                  <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-emerald-100 text-emerald-900 border border-emerald-300 rounded flex items-center gap-1">
-                                                    <Check className="w-2.5 h-2.5 text-emerald-700" />
-                                                    <span>Paid / Disbursed</span>
-                                                  </span>
-                                                ) : isPaymentRejected ? (
-                                                  <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 rounded flex items-center gap-1">
-                                                    <X className="w-2.5 h-2.5 text-rose-700" />
-                                                    <span>Payment Rejected</span>
-                                                  </span>
-                                                ) : isExpenseRejected ? (
-                                                  <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 rounded flex items-center gap-1">
-                                                    <X className="w-2.5 h-2.5 text-rose-700" />
-                                                    <span>Expense Rejected (SA)</span>
-                                                  </span>
-                                                ) : isAccRejected ? (
-                                                  <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-rose-100 text-rose-800 border border-rose-300 rounded flex items-center gap-1">
-                                                    <X className="w-2.5 h-2.5 text-rose-700" />
-                                                    <span>Rejected by Accountant</span>
-                                                  </span>
-                                                ) : isPaymentApproved ? (
-                                                  <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-amber-100 text-amber-900 border border-amber-300 rounded flex items-center gap-1">
-                                                    <Check className="w-2.5 h-2.5 text-amber-700" />
-                                                    <span>Payment Authorized</span>
-                                                  </span>
-                                                ) : isExpenseApproved ? (
-                                                  <span className="px-2 py-0.5 text-[9.5px] font-bold uppercase bg-purple-100 text-purple-900 border border-purple-300 rounded flex items-center gap-1">
-                                                    <Check className="w-2.5 h-2.5 text-purple-700" />
-                                                    <span>Expense Approved</span>
-                                                  </span>
-                                                ) : null}
-                                              </div>
+                                  {/* Step 2 SA Expense Recognition Detail */}
+                                  <div className="text-[10px] text-gray-700 flex flex-col gap-0.5">
+                                    <div className="flex items-start gap-1">
+                                      <span className="font-bold text-gray-500 shrink-0 w-16">SA Recon:</span>
+                                      {isExpenseApproved ? (
+                                        <span className="text-purple-900">
+                                          ✓ Approved by <strong>{rec.superAdminApprovedByName || rec.approvedByName || "Super Admin"}</strong>
+                                          {(rec.superAdminApprovedAt || rec.approvedAt || rec.updatedAt) && (
+                                            <span className="font-mono text-gray-500 ml-1">
+                                              on {formatTimestamp(rec.superAdminApprovedAt || rec.approvedAt || rec.updatedAt)}
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : isExpenseRejected ? (
+                                        <span className="text-rose-700">
+                                          ✕ Rejected by <strong>{rec.superAdminApprovedByName || "Super Admin"}</strong>
+                                          {(rec.superAdminApprovedAt || rec.updatedAt) && (
+                                            <span className="font-mono text-rose-600 ml-1">
+                                              on {formatTimestamp(rec.superAdminApprovedAt || rec.updatedAt)}
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : (
+                                        <span className="text-amber-700 font-mono">Awaiting Super Admin Review</span>
+                                      )}
+                                    </div>
+                                  </div>
 
-                                              <span className="text-sm font-display font-black text-gray-900">
-                                                {formatCurrency(rec.amount)}
-                                              </span>
-                                            </div>
+                                  {/* Remarks or Rejection Reason */}
+                                  {(rec.rejectionRemarks || rec.superAdminRemarks || rec.accountantRemarks) && (
+                                    <div className={`mt-1 p-1.5 rounded text-[9.5px] border ${isExpenseRejected || isAccRejected
+                                      ? "bg-rose-50 border-rose-200 text-rose-900"
+                                      : "bg-white border-slate-200 text-gray-700"
+                                      }`}>
+                                      <strong className="block text-[8px] uppercase tracking-wide font-mono">
+                                        {isExpenseRejected || isAccRejected ? "Rejection Reason:" : "Notes / Remarks:"}
+                                      </strong>
+                                      <span>{rec.rejectionRemarks || rec.superAdminRemarks || rec.accountantRemarks}</span>
+                                    </div>
+                                  )}
+                                </div>
 
-                                            {/* Description & Payee */}
-                                            <div className="text-[11.5px] text-gray-800 flex items-center justify-between flex-wrap gap-2">
-                                              <div>
-                                                <strong className="text-gray-900">Description:</strong> {rec.description}
-                                                {rec.vendorName && (
-                                                  <span className="text-gray-600 ml-2">
-                                                    • Payee: <strong className="text-gray-800">{rec.vendorName}</strong>
-                                                  </span>
-                                                )}
-                                                {rec.accountNo && (
-                                                  <span className="text-gray-500 font-mono ml-2 text-[10.5px]">
-                                                    (A/C: {rec.accountNo})
-                                                  </span>
-                                                )}
-                                              </div>
-                                              {renderEnteredByBadge(rec)}
-                                            </div>
+                                {/* 2. PAYMENT TIME APPROVAL (Sir to Pay & Settlement) */}
+                                <div className="p-2.5 bg-amber-50/50 border border-amber-200 rounded text-[11px] space-y-1.5">
+                                  <div className="font-bold text-amber-900 uppercase tracking-wide text-[9.5px] flex items-center justify-between border-b border-amber-200 pb-1">
+                                    <span className="flex items-center gap-1">
+                                      <CreditCard className="w-3 h-3 text-amber-700" />
+                                      <span>2. Payment Time Approval (Sir Pays)</span>
+                                    </span>
+                                    {isPaymentApproved ? (
+                                      <span className="text-emerald-700 font-bold flex items-center gap-0.5">
+                                        <Check className="w-3 h-3" /> Authorized
+                                      </span>
+                                    ) : isPaymentRejected ? (
+                                      <span className="text-rose-700 font-bold flex items-center gap-0.5">
+                                        <X className="w-3 h-3" /> Rejected
+                                      </span>
+                                    ) : rec.paymentApprovalStatus === "PENDING" ? (
+                                      <span className="text-amber-700 font-semibold">Pending Sir</span>
+                                    ) : (
+                                      <span className="text-gray-400 font-medium">Direct / Self</span>
+                                    )}
+                                  </div>
 
-                                            {/* ── STRUCTURED AUDIT TRAIL: BOTH APPROVALS ── */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 border-t border-gray-100">
-                                              {/* 1. EXPENSE RECOGNITION APPROVAL (Step 1 Accountant + Step 2 Super Admin) */}
-                                              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-[11px] space-y-1.5">
-                                                <div className="font-bold text-gray-800 uppercase tracking-wide text-[9.5px] flex items-center justify-between border-b border-slate-200 pb-1">
-                                                  <span className="flex items-center gap-1">
-                                                    <Clock className="w-3 h-3 text-purple-700" />
-                                                    <span>1. Expense Recognition</span>
-                                                  </span>
-                                                  {isExpenseApproved ? (
-                                                    <span className="text-emerald-700 font-bold flex items-center gap-0.5">
-                                                      <Check className="w-3 h-3" /> Approved
-                                                    </span>
-                                                  ) : isExpenseRejected ? (
-                                                    <span className="text-rose-700 font-bold flex items-center gap-0.5">
-                                                      <X className="w-3 h-3" /> SA Rejected
-                                                    </span>
-                                                  ) : isAccRejected ? (
-                                                    <span className="text-rose-700 font-bold flex items-center gap-0.5">
-                                                      <X className="w-3 h-3" /> Acc Rejected
-                                                    </span>
-                                                  ) : (
-                                                    <span className="text-amber-700 font-semibold">Pending Check</span>
-                                                  )}
-                                                </div>
+                                  {/* Payment Authorization Status */}
+                                  <div className="text-[10px] text-gray-700 flex flex-col gap-0.5">
+                                    <div className="flex items-start gap-1">
+                                      <span className="font-bold text-gray-500 shrink-0 w-16">Sir Pay:</span>
+                                      {isPaymentApproved ? (
+                                        <span className="text-amber-950">
+                                          ✓ Authorized by <strong>{rec.paymentApprovedByName || "Super Admin"}</strong>
+                                          {(rec.paymentApprovedAt || rec.updatedAt) && (
+                                            <span className="font-mono text-amber-800 ml-1">
+                                              on {formatTimestamp(rec.paymentApprovedAt || rec.updatedAt)}
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : isPaymentRejected ? (
+                                        <span className="text-rose-700">
+                                          ✕ Rejected by <strong>{rec.paymentApprovedByName || "Super Admin"}</strong>
+                                          {(rec.paymentApprovedAt || rec.updatedAt) && (
+                                            <span className="font-mono text-rose-600 ml-1">
+                                              on {formatTimestamp(rec.paymentApprovedAt || rec.updatedAt)}
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : rec.paymentApprovalStatus === "PENDING" ? (
+                                        <span className="text-amber-700 font-mono">Pending Payment Authorization</span>
+                                      ) : (
+                                        <span className="text-gray-400 font-mono">Self / Center Settled</span>
+                                      )}
+                                    </div>
+                                  </div>
 
-                                                {/* Step 1 Accountant Check Detail */}
-                                                <div className="text-[10px] text-gray-700 flex flex-col gap-0.5">
-                                                  <div className="flex items-start gap-1">
-                                                    <span className="font-bold text-gray-500 shrink-0 w-16">Acc Check:</span>
-                                                    {rec.accountantApprovalStatus === "APPROVED" ? (
-                                                      <span className="text-emerald-800">
-                                                        ✓ Validated by <strong>{rec.accountantApprovedByName || "Accountant"}</strong>
-                                                        {(rec.accountantApprovedAt || rec.updatedAt) && (
-                                                          <span className="font-mono text-gray-500 ml-1">
-                                                            on {formatTimestamp(rec.accountantApprovedAt || rec.updatedAt)}
-                                                          </span>
-                                                        )}
-                                                      </span>
-                                                    ) : isAccRejected ? (
-                                                      <span className="text-rose-700">
-                                                        ✕ Rejected by <strong>{rec.accountantApprovedByName || "Accountant"}</strong>
-                                                        {(rec.accountantApprovedAt || rec.updatedAt) && (
-                                                          <span className="font-mono text-rose-600 ml-1">
-                                                            on {formatTimestamp(rec.accountantApprovedAt || rec.updatedAt)}
-                                                          </span>
-                                                        )}
-                                                      </span>
-                                                    ) : (
-                                                      <span className="text-gray-400 font-mono">Bypassed / Pending</span>
-                                                    )}
-                                                  </div>
-                                                </div>
+                                  {/* Disbursal / Settlement Status */}
+                                  <div className="text-[10px] text-gray-700 flex flex-col gap-0.5">
+                                    <div className="flex items-start gap-1">
+                                      <span className="font-bold text-gray-500 shrink-0 w-16">Settlement:</span>
+                                      {isDisbursed ? (
+                                        <span className="text-emerald-800 font-mono">
+                                          ✓ Disbursed <strong>{rec.utrNumber ? `(UTR: ${rec.utrNumber})` : "✓"}</strong>
+                                          {(rec.payReceiveDate || rec.utrDate) && (
+                                            <span className="ml-1 text-gray-500 font-sans">
+                                              on {rec.payReceiveDate || rec.utrDate}
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : isPaymentApproved ? (
+                                        <span className="text-amber-700 font-semibold flex items-center gap-1">
+                                          <Clock className="w-2.5 h-2.5" />
+                                          <span>Awaiting Accountant UTR recording</span>
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400 font-mono">Awaiting Payment Approval</span>
+                                      )}
+                                    </div>
+                                  </div>
 
-                                                {/* Step 2 SA Expense Recognition Detail */}
-                                                <div className="text-[10px] text-gray-700 flex flex-col gap-0.5">
-                                                  <div className="flex items-start gap-1">
-                                                    <span className="font-bold text-gray-500 shrink-0 w-16">SA Recon:</span>
-                                                    {isExpenseApproved ? (
-                                                      <span className="text-purple-900">
-                                                        ✓ Approved by <strong>{rec.superAdminApprovedByName || rec.approvedByName || "Super Admin"}</strong>
-                                                        {(rec.superAdminApprovedAt || rec.approvedAt || rec.updatedAt) && (
-                                                          <span className="font-mono text-gray-500 ml-1">
-                                                            on {formatTimestamp(rec.superAdminApprovedAt || rec.approvedAt || rec.updatedAt)}
-                                                          </span>
-                                                        )}
-                                                      </span>
-                                                    ) : isExpenseRejected ? (
-                                                      <span className="text-rose-700">
-                                                        ✕ Rejected by <strong>{rec.superAdminApprovedByName || "Super Admin"}</strong>
-                                                        {(rec.superAdminApprovedAt || rec.updatedAt) && (
-                                                          <span className="font-mono text-rose-600 ml-1">
-                                                            on {formatTimestamp(rec.superAdminApprovedAt || rec.updatedAt)}
-                                                          </span>
-                                                        )}
-                                                      </span>
-                                                    ) : (
-                                                      <span className="text-amber-700 font-mono">Awaiting Super Admin Review</span>
-                                                    )}
-                                                  </div>
-                                                </div>
+                                  {/* Payment Remarks or Rejection Reason */}
+                                  {rec.paymentApprovalRemarks && (
+                                    <div className={`mt-1 p-1.5 rounded text-[9.5px] border ${isPaymentRejected
+                                      ? "bg-rose-50 border-rose-200 text-rose-900"
+                                      : "bg-white border-amber-200 text-amber-900"
+                                      }`}>
+                                      <strong className="block text-[8px] uppercase tracking-wide font-mono">
+                                        {isPaymentRejected ? "Payment Rejection Reason:" : "Payment Note:"}
+                                      </strong>
+                                      <span>{rec.paymentApprovalRemarks}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
 
-                                                {/* Remarks or Rejection Reason */}
-                                                {(rec.rejectionRemarks || rec.superAdminRemarks || rec.accountantRemarks) && (
-                                                  <div className={`mt-1 p-1.5 rounded text-[9.5px] border ${isExpenseRejected || isAccRejected
-                                                    ? "bg-rose-50 border-rose-200 text-rose-900"
-                                                    : "bg-white border-slate-200 text-gray-700"
-                                                    }`}>
-                                                    <strong className="block text-[8px] uppercase tracking-wide font-mono">
-                                                      {isExpenseRejected || isAccRejected ? "Rejection Reason:" : "Notes / Remarks:"}
-                                                    </strong>
-                                                    <span>{rec.rejectionRemarks || rec.superAdminRemarks || rec.accountantRemarks}</span>
-                                                  </div>
-                                                )}
-                                              </div>
-
-                                              {/* 2. PAYMENT TIME APPROVAL (Sir to Pay & Settlement) */}
-                                              <div className="p-2.5 bg-amber-50/50 border border-amber-200 rounded text-[11px] space-y-1.5">
-                                                <div className="font-bold text-amber-900 uppercase tracking-wide text-[9.5px] flex items-center justify-between border-b border-amber-200 pb-1">
-                                                  <span className="flex items-center gap-1">
-                                                    <CreditCard className="w-3 h-3 text-amber-700" />
-                                                    <span>2. Payment Time Approval (Sir Pays)</span>
-                                                  </span>
-                                                  {isPaymentApproved ? (
-                                                    <span className="text-emerald-700 font-bold flex items-center gap-0.5">
-                                                      <Check className="w-3 h-3" /> Authorized
-                                                    </span>
-                                                  ) : isPaymentRejected ? (
-                                                    <span className="text-rose-700 font-bold flex items-center gap-0.5">
-                                                      <X className="w-3 h-3" /> Rejected
-                                                    </span>
-                                                  ) : rec.paymentApprovalStatus === "PENDING" ? (
-                                                    <span className="text-amber-700 font-semibold">Pending Sir</span>
-                                                  ) : (
-                                                    <span className="text-gray-400 font-medium">Direct / Self</span>
-                                                  )}
-                                                </div>
-
-                                                {/* Payment Authorization Status */}
-                                                <div className="text-[10px] text-gray-700 flex flex-col gap-0.5">
-                                                  <div className="flex items-start gap-1">
-                                                    <span className="font-bold text-gray-500 shrink-0 w-16">Sir Pay:</span>
-                                                    {isPaymentApproved ? (
-                                                      <span className="text-amber-950">
-                                                        ✓ Authorized by <strong>{rec.paymentApprovedByName || "Super Admin"}</strong>
-                                                        {(rec.paymentApprovedAt || rec.updatedAt) && (
-                                                          <span className="font-mono text-amber-800 ml-1">
-                                                            on {formatTimestamp(rec.paymentApprovedAt || rec.updatedAt)}
-                                                          </span>
-                                                        )}
-                                                      </span>
-                                                    ) : isPaymentRejected ? (
-                                                      <span className="text-rose-700">
-                                                        ✕ Rejected by <strong>{rec.paymentApprovedByName || "Super Admin"}</strong>
-                                                        {(rec.paymentApprovedAt || rec.updatedAt) && (
-                                                          <span className="font-mono text-rose-600 ml-1">
-                                                            on {formatTimestamp(rec.paymentApprovedAt || rec.updatedAt)}
-                                                          </span>
-                                                        )}
-                                                      </span>
-                                                    ) : rec.paymentApprovalStatus === "PENDING" ? (
-                                                      <span className="text-amber-700 font-mono">Pending Payment Authorization</span>
-                                                    ) : (
-                                                      <span className="text-gray-400 font-mono">Self / Center Settled</span>
-                                                    )}
-                                                  </div>
-                                                </div>
-
-                                                {/* Disbursal / Settlement Status */}
-                                                <div className="text-[10px] text-gray-700 flex flex-col gap-0.5">
-                                                  <div className="flex items-start gap-1">
-                                                    <span className="font-bold text-gray-500 shrink-0 w-16">Settlement:</span>
-                                                    {isDisbursed ? (
-                                                      <span className="text-emerald-800 font-mono">
-                                                        ✓ Disbursed <strong>{rec.utrNumber ? `(UTR: ${rec.utrNumber})` : "✓"}</strong>
-                                                        {(rec.payReceiveDate || rec.utrDate) && (
-                                                          <span className="ml-1 text-gray-500 font-sans">
-                                                            on {rec.payReceiveDate || rec.utrDate}
-                                                          </span>
-                                                        )}
-                                                      </span>
-                                                    ) : isPaymentApproved ? (
-                                                      <span className="text-amber-700 font-semibold flex items-center gap-1">
-                                                        <Clock className="w-2.5 h-2.5" />
-                                                        <span>Awaiting Accountant UTR recording</span>
-                                                      </span>
-                                                    ) : (
-                                                      <span className="text-gray-400 font-mono">Awaiting Payment Approval</span>
-                                                    )}
-                                                  </div>
-                                                </div>
-
-                                                {/* Payment Remarks or Rejection Reason */}
-                                                {rec.paymentApprovalRemarks && (
-                                                  <div className={`mt-1 p-1.5 rounded text-[9.5px] border ${isPaymentRejected
-                                                    ? "bg-rose-50 border-rose-200 text-rose-900"
-                                                    : "bg-white border-amber-200 text-amber-900"
-                                                    }`}>
-                                                    <strong className="block text-[8px] uppercase tracking-wide font-mono">
-                                                      {isPaymentRejected ? "Payment Rejection Reason:" : "Payment Note:"}
-                                                    </strong>
-                                                    <span>{rec.paymentApprovalRemarks}</span>
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </div>
-
-                                            {/* Attached docs if present */}
-                                            {((rec.attachmentUrl && !rec.attachmentUrl.includes("undefined")) ||
-                                              (rec.invoiceUrl && !rec.invoiceUrl.includes("undefined")) ||
-                                              (rec.utrFileUrl && !rec.utrFileUrl.includes("undefined"))) && (
-                                                <div className="flex items-center gap-2 pt-1 border-t border-gray-100 flex-wrap text-[10px]">
-                                                  {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") && (
-                                                    <a
-                                                      href={rec.invoiceUrl}
-                                                      target="_blank"
-                                                      rel="noopener noreferrer"
-                                                      className="text-[#006064] underline hover:text-[#004d40] flex items-center gap-0.5 font-bold"
-                                                    >
-                                                      <FileText className="w-2.5 h-2.5" />
-                                                      <span>Invoice PDF</span>
-                                                    </a>
-                                                  )}
-                                                  {rec.attachmentUrl && !rec.attachmentUrl.includes("undefined") && (
-                                                    <a
-                                                      href={rec.attachmentUrl}
-                                                      target="_blank"
-                                                      rel="noopener noreferrer"
-                                                      className="text-amber-800 underline hover:text-amber-900 flex items-center gap-0.5 font-bold"
-                                                    >
-                                                      <Receipt className="w-2.5 h-2.5" />
-                                                      <span>CM Slip</span>
-                                                    </a>
-                                                  )}
-                                                  {rec.utrFileUrl && !rec.utrFileUrl.includes("undefined") && (
-                                                    <a
-                                                      href={rec.utrFileUrl}
-                                                      target="_blank"
-                                                      rel="noopener noreferrer"
-                                                      className="text-emerald-800 underline hover:text-emerald-900 flex items-center gap-0.5 font-bold"
-                                                    >
-                                                      <CheckCircle2 className="w-2.5 h-2.5" />
-                                                      <span>UTR Payment Proof</span>
-                                                    </a>
-                                                  )}
-                                                </div>
-                                              )}
-                                          </div>
-                                        );
-                                      })
+                              {/* Attached docs if present */}
+                              {((rec.attachmentUrl && !rec.attachmentUrl.includes("undefined")) ||
+                                (rec.invoiceUrl && !rec.invoiceUrl.includes("undefined")) ||
+                                (rec.utrFileUrl && !rec.utrFileUrl.includes("undefined"))) && (
+                                  <div className="flex items-center gap-2 pt-1 border-t border-gray-100 flex-wrap text-[10px]">
+                                    {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") && (
+                                      <a
+                                        href={rec.invoiceUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[#006064] underline hover:text-[#004d40] flex items-center gap-0.5 font-bold"
+                                      >
+                                        <FileText className="w-2.5 h-2.5" />
+                                        <span>Invoice PDF</span>
+                                      </a>
+                                    )}
+                                    {rec.attachmentUrl && !rec.attachmentUrl.includes("undefined") && (
+                                      <a
+                                        href={rec.attachmentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-amber-800 underline hover:text-amber-900 flex items-center gap-0.5 font-bold"
+                                      >
+                                        <Receipt className="w-2.5 h-2.5" />
+                                        <span>CM Slip</span>
+                                      </a>
+                                    )}
+                                    {rec.utrFileUrl && !rec.utrFileUrl.includes("undefined") && (
+                                      <a
+                                        href={rec.utrFileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-emerald-800 underline hover:text-emerald-900 flex items-center gap-0.5 font-bold"
+                                      >
+                                        <CheckCircle2 className="w-2.5 h-2.5" />
+                                        <span>UTR Payment Proof</span>
+                                      </a>
                                     )}
                                   </div>
                                 )}
-                </div>
-              </div>
-            </div>
-
-          {/* Footer */}
-          <div className="p-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between shrink-0">
-            <span className="text-[11px] text-gray-500">
-              Approvals notify the accountant and unlock UTR recording & vendor notification.
-            </span>
-            <button
-              type="button"
-              onClick={() => setIsApprovalsModalOpen(false)}
-              className="px-5 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 border border-gray-300 cursor-pointer bg-white rounded shadow-2xs transition-colors"
-            >
-              Close Desk
-            </button>
-          </div>
-        </div>
-        </div>,
-    document.body
-  )
-}
-
-{/* ── MODAL 6: CM VIEW PAYMENT DETAILS MODAL ── */ }
-{
-  mounted && typeof document !== "undefined" && isViewPaymentModalOpen && viewingPaymentRecord && createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border border-gray-300 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#006064] text-white sticky top-0 z-10">
-          <div className="flex items-center gap-2">
-            <Eye className="w-5 h-5 text-cyan-200" />
-            <div>
-              <h3 className="text-sm font-display font-black uppercase tracking-wide">
-                Expense & Payment Settlement Details #{viewingPaymentRecord.id}
-              </h3>
-              <p className="text-[11px] text-cyan-100">
-                Full billing, approval & disbursal status for Community Manager
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setIsViewPaymentModalOpen(false)}
-            className="p-1 text-white/80 hover:text-white cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4 text-xs">
-          {/* Center & Expense Summary */}
-          <div className="bg-cyan-50/50 p-3.5 border border-cyan-200 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] uppercase tracking-wider text-gray-500 font-bold">
-                Center Expense Bill
-              </span>
-              <span className="text-xs font-bold px-2 py-0.5 bg-white text-[#006064] border border-cyan-300">
-                {viewingPaymentRecord.locationName || "Center"}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11.5px]">
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Category:</span>
-                <strong className="text-gray-900">{viewingPaymentRecord.category || "GENERAL"}</strong>
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Date:</span>
-                <strong className="text-gray-900">
-                  {viewingPaymentRecord.expenseDateStr ||
-                    (viewingPaymentRecord.expenseDate
-                      ? new Date(viewingPaymentRecord.expenseDate).toLocaleDateString("en-GB")
-                      : "-")}
-                </strong>
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Total Amount:</span>
-                <strong className="text-sm font-display font-black text-[#006064]">
-                  {formatCurrency(viewingPaymentRecord.amount)}
-                </strong>
-              </div>
-            </div>
-
-            <div className="text-[11.5px] text-gray-700 pt-1 border-t border-cyan-100">
-              <span className="font-bold text-gray-900">Description:</span> {viewingPaymentRecord.description}
-            </div>
-            <div className="pt-1">
-              {renderEnteredByBadge(viewingPaymentRecord)}
-            </div>
-
-            {/* CM Documents */}
-            {((viewingPaymentRecord.attachmentUrl && !viewingPaymentRecord.attachmentUrl.includes("undefined")) ||
-              (viewingPaymentRecord.invoiceUrl && !viewingPaymentRecord.invoiceUrl.includes("undefined"))) && (
-                <div className="pt-1.5 flex flex-wrap items-center gap-2">
-                  {viewingPaymentRecord.attachmentUrl && !viewingPaymentRecord.attachmentUrl.includes("undefined") && (
-                    <a
-                      href={viewingPaymentRecord.attachmentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-amber-900 hover:underline font-bold text-[11px] bg-white px-2.5 py-1 border border-amber-300"
-                    >
-                      <Receipt className="w-3.5 h-3.5 text-amber-700" />
-                      <span>Receipt Slip</span>
-                    </a>
-                  )}
-                  {viewingPaymentRecord.invoiceUrl && !viewingPaymentRecord.invoiceUrl.includes("undefined") && (
-                    <a
-                      href={viewingPaymentRecord.invoiceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-[#006064] hover:underline font-bold text-[11px] bg-white px-2.5 py-1 border border-cyan-300"
-                    >
-                      <FileText className="w-3.5 h-3.5 text-[#006064]" />
-                      <span>Vendor Bill PDF</span>
-                    </a>
-                  )}
-                </div>
-              )}
-          </div>
-
-          {/* Vendor & Bill Breakdown */}
-          <div className="border border-gray-200 p-3.5 space-y-2 bg-white">
-            <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-gray-700 border-b border-gray-100 pb-1">
-              Vendor & Billing Breakdown (Entered by Accountant)
-            </h4>
-
-            <div className="grid grid-cols-2 gap-2 text-[11.5px]">
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Vendor / Supplier:</span>
-                <strong className="text-gray-900">
-                  {viewingPaymentRecord.vendorName || "Accounts to Assign"}
-                </strong>
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Vendor Bank A/C:</span>
-                <span className="font-mono text-gray-900">
-                  {viewingPaymentRecord.accountNo || "-"}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Invoice / Bill No:</span>
-                <span className="font-mono text-gray-900">
-                  {viewingPaymentRecord.receiptNo || "-"}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Quantity & Unit:</span>
-                <span className="text-gray-900">
-                  {viewingPaymentRecord.quantity || 1} {viewingPaymentRecord.unit || "Nos"}
-                  {viewingPaymentRecord.rate ? ` (Rate: ₹${viewingPaymentRecord.rate})` : ""}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Bank Portal Upload:</span>
-                <span
-                  className={`font-bold ${viewingPaymentRecord.uploadedInBankPortal
-                    ? "text-emerald-700"
-                    : "text-gray-500"
-                    }`}
-                >
-                  {viewingPaymentRecord.uploadedInBankPortal ? "Uploaded in Bank Portal ✓" : "Pending Upload"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Approval & Disbursal Status */}
-          <div className="border border-gray-200 p-3.5 space-y-2 bg-white">
-            <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-gray-700 border-b border-gray-100 pb-1">
-              Super Admin Approval & Disbursal Status
-            </h4>
-
-            <div className="grid grid-cols-2 gap-2 text-[11.5px]">
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Approval Status:</span>
-                {viewingPaymentRecord.approvalStatus === "APPROVED" || viewingPaymentRecord.paymentStatus === "PAID" ? (
-                  <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Approved by Super Admin
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 font-bold text-amber-700">
-                    <Clock className="w-3.5 h-3.5" /> Awaiting Super Admin Approval
-                  </span>
-                )}
-              </div>
-
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Payment Status:</span>
-                <span
-                  className={`font-bold ${viewingPaymentRecord.paymentStatus === "PAID"
-                    ? "text-emerald-700"
-                    : "text-amber-700"
-                    }`}
-                >
-                  {viewingPaymentRecord.paymentStatus === "PAID"
-                    ? "Paid & Disbursed ✓"
-                    : "Pending Payment"}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">UTR / Reference No:</span>
-                <span className="font-mono font-bold text-[#006064]">
-                  {viewingPaymentRecord.utrNumber || "Locked until approval & disbursement"}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Payment Date:</span>
-                <span className="text-gray-900">
-                  {viewingPaymentRecord.utrDate || viewingPaymentRecord.payReceiveDate || "-"}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Payment Mode:</span>
-                <span className="text-gray-900">
-                  {viewingPaymentRecord.accPaymentMode || viewingPaymentRecord.paymentMode || "-"}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-gray-500 block text-[10.5px]">Vendor Alert Email:</span>
-                <span
-                  className={`font-bold ${viewingPaymentRecord.alertEmailSent
-                    ? "text-emerald-700"
-                    : "text-gray-400"
-                    }`}
-                >
-                  {viewingPaymentRecord.alertEmailSent
-                    ? "Dispatched to Vendor ✓"
-                    : "Pending Disbursal"}
-                </span>
-              </div>
-            </div>
-
-            {viewingPaymentRecord.paymentProofUrl && (
-              <div className="pt-2 border-t border-gray-100">
-                <a
-                  href={viewingPaymentRecord.paymentProofUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-emerald-800 hover:underline font-bold text-[11px] bg-emerald-50 px-2.5 py-1 border border-emerald-300"
-                >
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>View Payment Proof Doc / UTR Screenshot</span>
-                </a>
-              </div>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="pt-2 flex items-center justify-end gap-2">
-            {(isAccountant || isAdmin) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsViewPaymentModalOpen(false);
-                  openSettleModal(viewingPaymentRecord);
-                }}
-                className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Edit Payment Details</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setIsViewPaymentModalOpen(false)}
-              className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 border border-gray-300 cursor-pointer"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
-  )
-}
-
-{/* ── MODAL: SUPER ADMIN MAIN EXPENSE CATEGORY HEADERS ── */ }
-{
-  mounted && typeof document !== "undefined" && isCategoryModalOpen && isAdmin && createPortal(
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border border-gray-300 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
-        {/* Modal Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#37474f] text-white sticky top-0 z-10">
-          <div className="flex items-center gap-2.5">
-            <Layers className="w-5 h-5 text-cyan-300" />
-            <div>
-              <h3 className="text-sm font-display font-black uppercase tracking-wide flex items-center gap-2">
-                <span>Main Expense Category Headers</span>
-                <span className="bg-cyan-900 text-cyan-200 text-[10px] px-2 py-0.5 font-mono border border-cyan-700">
-                  Super Admin Only
-                </span>
-              </h3>
-              <p className="text-[11px] text-gray-300">
-                Define and control official expense categories for CMs & Accountants. CM and Accountant dropdowns will strictly use these headers.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              setIsCategoryModalOpen(false);
-              setNewCategoryName("");
-            }}
-            className="p-1 text-white/80 hover:text-white cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-5 text-xs">
-          {/* Section 1: Add New Category Header */}
-          <div className="bg-slate-50 border border-slate-200 p-4 space-y-3">
-            <h4 className="font-bold uppercase tracking-wider text-gray-800 text-[11px] flex items-center gap-1.5">
-              <Plus className="w-4 h-4 text-[#006064]" />
-              <span>Add New Category Header</span>
-            </h4>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Enter category name (e.g. ELECTRICITY & UTILITIES, CAPEX, etc.)"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value.toUpperCase())}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddCategoryHeader();
-                  }
-                }}
-                className="flex-1 bg-white border border-gray-300 p-2 text-xs font-bold uppercase text-gray-900 focus:outline-none focus:border-[#006064]"
-              />
-              <button
-                type="button"
-                onClick={() => handleAddCategoryHeader()}
-                disabled={savingCategory || !newCategoryName.trim()}
-                className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50 whitespace-nowrap"
-              >
-                {savingCategory ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Plus className="w-3.5 h-3.5" />
-                )}
-                <span>Add Header</span>
-              </button>
-            </div>
-
-            {/* Interactive Category Suggestions */}
-            <div className="pt-2 border-t border-slate-200 text-[11px] text-gray-500 leading-normal">
-              <span className="font-bold text-gray-700 block mb-1">Quick Add Suggestions (Click to add):</span>
-              <div className="flex flex-wrap gap-1">
-                {SUGGESTED_CATEGORY_HEADERS.map((sugg) => {
-                  const alreadyAdded = categoryHeaders.includes(sugg);
-                  return (
-                    <button
-                      key={sugg}
-                      type="button"
-                      onClick={() => !alreadyAdded && handleAddCategoryHeader(sugg)}
-                      disabled={alreadyAdded}
-                      className={`text-[9.5px] px-2 py-0.5 border font-semibold transition-all ${alreadyAdded
-                        ? "bg-gray-100 text-gray-400 border-gray-200 cursor-default"
-                        : "bg-white text-[#006064] border-cyan-200 hover:bg-cyan-50 hover:border-cyan-400 cursor-pointer shadow-2xs"
-                        }`}
-                    >
-                      {alreadyAdded ? `✓ ${sugg}` : `+ ${sugg}`}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Active Category Headers List */}
-          <div className="space-y-3 pt-1">
-            <div className="flex items-center justify-between border-b border-gray-200 pb-2">
-              <h4 className="font-bold uppercase tracking-wider text-gray-800 text-[11px] flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-[#006064]" />
-                <span>Official Category Headers ({categoryHeaders.length})</span>
-              </h4>
-              <span className="text-[10px] text-gray-500">
-                Headers created by Super Admin for CM & Accountant dropdowns
-              </span>
-            </div>
-
-            {categoryHeaders.length === 0 ? (
-              <div className="py-8 text-center text-gray-400 bg-gray-50 border border-dashed border-gray-300">
-                <p className="text-xs font-semibold text-gray-600">No category headers created yet.</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">Add a new header above or pick from suggestions.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[380px] overflow-y-auto pr-1">
-                {categoryHeaders.map((cat) => {
-                  const isEditing = editingCategoryOldName === cat;
-                  const expenseCount = records.filter(
-                    (r) => r.category && r.category.trim().toUpperCase() === cat
-                  ).length;
-
-                  return (
-                    <div
-                      key={cat}
-                      className="flex items-center justify-between p-2.5 bg-gray-50 hover:bg-cyan-50/40 border border-gray-200 transition-colors"
-                    >
-                      {isEditing ? (
-                        <div className="flex items-center gap-1.5 flex-1">
-                          <input
-                            type="text"
-                            value={editingCategoryNewName}
-                            onChange={(e) => setEditingCategoryNewName(e.target.value.toUpperCase())}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleUpdateCategoryHeader(cat, editingCategoryNewName);
-                              }
-                            }}
-                            autoFocus
-                            className="flex-1 bg-white border border-[#006064] p-1 text-[11px] font-bold uppercase text-gray-900 focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateCategoryHeader(cat, editingCategoryNewName)}
-                            disabled={savingCategory || !editingCategoryNewName.trim()}
-                            className="bg-[#006064] text-white px-2 py-1 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#00838f]"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingCategoryOldName(null);
-                              setEditingCategoryNewName("");
-                            }}
-                            className="bg-gray-200 text-gray-700 px-2 py-1 text-[10px] font-bold uppercase cursor-pointer hover:bg-gray-300"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-bold text-gray-800 text-[11px] truncate uppercase">
-                              {cat}
-                            </span>
-                            {expenseCount > 0 && (
-                              <span className="text-[9px] font-mono px-1.5 py-0.2 bg-cyan-100 text-[#006064] font-bold shrink-0">
-                                {expenseCount} exp
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingCategoryOldName(cat);
-                                setEditingCategoryNewName(cat);
-                              }}
-                              className="p-1 text-gray-500 hover:text-[#006064] hover:bg-white border border-transparent hover:border-gray-200 transition-all cursor-pointer"
-                              title={`Rename ${cat}`}
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCategoryHeader(cat)}
-                              disabled={deletingCategoryName === cat}
-                              className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all cursor-pointer"
-                              title={`Delete ${cat}`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
-            )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-gray-500">
+                Approvals notify the accountant and unlock UTR recording & vendor notification.
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsApprovalsModalOpen(false)}
+                className="px-5 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 border border-gray-300 cursor-pointer bg-white rounded shadow-2xs transition-colors"
+              >
+                Close Desk
+              </button>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )
+      }
+
+      {/* ── MODAL 6: CM VIEW PAYMENT DETAILS MODAL ── */}
+      {
+        mounted && typeof document !== "undefined" && isViewPaymentModalOpen && viewingPaymentRecord && createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white border border-gray-300 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+              {/* Header */}
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#006064] text-white sticky top-0 z-10">
+                <div className="flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-cyan-200" />
+                  <div>
+                    <h3 className="text-sm font-display font-black uppercase tracking-wide">
+                      Expense & Payment Settlement Details #{viewingPaymentRecord.id}
+                    </h3>
+                    <p className="text-[11px] text-cyan-100">
+                      Full billing, approval & disbursal status for Community Manager
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsViewPaymentModalOpen(false)}
+                  className="p-1 text-white/80 hover:text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs">
+                {/* Center & Expense Summary */}
+                <div className="bg-cyan-50/50 p-3.5 border border-cyan-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+                      Center Expense Bill
+                    </span>
+                    <span className="text-xs font-bold px-2 py-0.5 bg-white text-[#006064] border border-cyan-300">
+                      {viewingPaymentRecord.locationName || "Center"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11.5px]">
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Category:</span>
+                      <strong className="text-gray-900">{viewingPaymentRecord.category || "GENERAL"}</strong>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Date:</span>
+                      <strong className="text-gray-900">
+                        {viewingPaymentRecord.expenseDateStr ||
+                          (viewingPaymentRecord.expenseDate
+                            ? new Date(viewingPaymentRecord.expenseDate).toLocaleDateString("en-GB")
+                            : "-")}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Total Amount:</span>
+                      <strong className="text-sm font-display font-black text-[#006064]">
+                        {formatCurrency(viewingPaymentRecord.amount)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="text-[11.5px] text-gray-700 pt-1 border-t border-cyan-100">
+                    <span className="font-bold text-gray-900">Description:</span> {viewingPaymentRecord.description}
+                  </div>
+                  <div className="pt-1">
+                    {renderEnteredByBadge(viewingPaymentRecord)}
+                  </div>
+
+                  {/* CM Documents */}
+                  {((viewingPaymentRecord.attachmentUrl && !viewingPaymentRecord.attachmentUrl.includes("undefined")) ||
+                    (viewingPaymentRecord.invoiceUrl && !viewingPaymentRecord.invoiceUrl.includes("undefined"))) && (
+                      <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                        {viewingPaymentRecord.attachmentUrl && !viewingPaymentRecord.attachmentUrl.includes("undefined") && (
+                          <a
+                            href={viewingPaymentRecord.attachmentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-amber-900 hover:underline font-bold text-[11px] bg-white px-2.5 py-1 border border-amber-300"
+                          >
+                            <Receipt className="w-3.5 h-3.5 text-amber-700" />
+                            <span>Receipt Slip</span>
+                          </a>
+                        )}
+                        {viewingPaymentRecord.invoiceUrl && !viewingPaymentRecord.invoiceUrl.includes("undefined") && (
+                          <a
+                            href={viewingPaymentRecord.invoiceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-[#006064] hover:underline font-bold text-[11px] bg-white px-2.5 py-1 border border-cyan-300"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-[#006064]" />
+                            <span>Vendor Bill PDF</span>
+                          </a>
+                        )}
+                      </div>
+                    )}
+                </div>
+
+                {/* Vendor & Bill Breakdown */}
+                <div className="border border-gray-200 p-3.5 space-y-2 bg-white">
+                  <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-gray-700 border-b border-gray-100 pb-1">
+                    Vendor & Billing Breakdown (Entered by Accountant)
+                  </h4>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11.5px]">
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Vendor / Supplier:</span>
+                      <strong className="text-gray-900">
+                        {viewingPaymentRecord.vendorName || "Accounts to Assign"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Vendor Bank A/C:</span>
+                      <span className="font-mono text-gray-900">
+                        {viewingPaymentRecord.accountNo || "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Invoice / Bill No:</span>
+                      <span className="font-mono text-gray-900">
+                        {viewingPaymentRecord.receiptNo || "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Quantity & Unit:</span>
+                      <span className="text-gray-900">
+                        {viewingPaymentRecord.quantity || 1} {viewingPaymentRecord.unit || "Nos"}
+                        {viewingPaymentRecord.rate ? ` (Rate: ₹${viewingPaymentRecord.rate})` : ""}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Bank Portal Upload:</span>
+                      <span
+                        className={`font-bold ${viewingPaymentRecord.uploadedInBankPortal
+                          ? "text-emerald-700"
+                          : "text-gray-500"
+                          }`}
+                      >
+                        {viewingPaymentRecord.uploadedInBankPortal ? "Uploaded in Bank Portal ✓" : "Pending Upload"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Approval & Disbursal Status */}
+                <div className="border border-gray-200 p-3.5 space-y-2 bg-white">
+                  <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-gray-700 border-b border-gray-100 pb-1">
+                    Super Admin Approval & Disbursal Status
+                  </h4>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11.5px]">
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Approval Status:</span>
+                      {viewingPaymentRecord.approvalStatus === "APPROVED" || viewingPaymentRecord.paymentStatus === "PAID" ? (
+                        <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Approved by Super Admin
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-bold text-amber-700">
+                          <Clock className="w-3.5 h-3.5" /> Awaiting Super Admin Approval
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Payment Status:</span>
+                      <span
+                        className={`font-bold ${viewingPaymentRecord.paymentStatus === "PAID"
+                          ? "text-emerald-700"
+                          : "text-amber-700"
+                          }`}
+                      >
+                        {viewingPaymentRecord.paymentStatus === "PAID"
+                          ? "Paid & Disbursed ✓"
+                          : "Pending Payment"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">UTR / Reference No:</span>
+                      <span className="font-mono font-bold text-[#006064]">
+                        {viewingPaymentRecord.utrNumber || "Locked until approval & disbursement"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Payment Date:</span>
+                      <span className="text-gray-900">
+                        {viewingPaymentRecord.utrDate || viewingPaymentRecord.payReceiveDate || "-"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Payment Mode:</span>
+                      <span className="text-gray-900">
+                        {viewingPaymentRecord.accPaymentMode || viewingPaymentRecord.paymentMode || "-"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-500 block text-[10.5px]">Vendor Alert Email:</span>
+                      <span
+                        className={`font-bold ${viewingPaymentRecord.alertEmailSent
+                          ? "text-emerald-700"
+                          : "text-gray-400"
+                          }`}
+                      >
+                        {viewingPaymentRecord.alertEmailSent
+                          ? "Dispatched to Vendor ✓"
+                          : "Pending Disbursal"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {viewingPaymentRecord.paymentProofUrl && (
+                    <div className="pt-2 border-t border-gray-100">
+                      <a
+                        href={viewingPaymentRecord.paymentProofUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-emerald-800 hover:underline font-bold text-[11px] bg-emerald-50 px-2.5 py-1 border border-emerald-300"
+                      >
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>View Payment Proof Doc / UTR Screenshot</span>
+                      </a>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  {(isAccountant || isAdmin) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsViewPaymentModalOpen(false);
+                        openSettleModal(viewingPaymentRecord);
+                      }}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Edit Payment Details</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsViewPaymentModalOpen(false)}
+                    className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 border border-gray-300 cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      }
+
+      {/* ── MODAL: SUPER ADMIN MAIN EXPENSE CATEGORY HEADERS ── */}
+      {
+        mounted && typeof document !== "undefined" && isCategoryModalOpen && isAdmin && createPortal(
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white border border-gray-300 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+              {/* Modal Header */}
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#37474f] text-white sticky top-0 z-10">
+                <div className="flex items-center gap-2.5">
+                  <Layers className="w-5 h-5 text-cyan-300" />
+                  <div>
+                    <h3 className="text-sm font-display font-black uppercase tracking-wide flex items-center gap-2">
+                      <span>Main Expense Category Headers</span>
+                      <span className="bg-cyan-900 text-cyan-200 text-[10px] px-2 py-0.5 font-mono border border-cyan-700">
+                        Super Admin Only
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-gray-300">
+                      Define and control official expense categories for CMs & Accountants. CM and Accountant dropdowns will strictly use these headers.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsCategoryModalOpen(false);
+                    setNewCategoryName("");
+                  }}
+                  className="p-1 text-white/80 hover:text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-5 text-xs">
+                {/* Section 1: Add New Category Header */}
+                <div className="bg-slate-50 border border-slate-200 p-4 space-y-3">
+                  <h4 className="font-bold uppercase tracking-wider text-gray-800 text-[11px] flex items-center gap-1.5">
+                    <Plus className="w-4 h-4 text-[#006064]" />
+                    <span>Add New Category Header</span>
+                  </h4>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter category name (e.g. ELECTRICITY & UTILITIES, CAPEX, etc.)"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddCategoryHeader();
+                        }
+                      }}
+                      className="flex-1 bg-white border border-gray-300 p-2 text-xs font-bold uppercase text-gray-900 focus:outline-none focus:border-[#006064]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddCategoryHeader()}
+                      disabled={savingCategory || !newCategoryName.trim()}
+                      className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {savingCategory ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      <span>Add Header</span>
+                    </button>
+                  </div>
+
+                  {/* Interactive Category Suggestions */}
+                  <div className="pt-2 border-t border-slate-200 text-[11px] text-gray-500 leading-normal">
+                    <span className="font-bold text-gray-700 block mb-1">Quick Add Suggestions (Click to add):</span>
+                    <div className="flex flex-wrap gap-1">
+                      {SUGGESTED_CATEGORY_HEADERS.map((sugg) => {
+                        const alreadyAdded = categoryHeaders.includes(sugg);
+                        return (
+                          <button
+                            key={sugg}
+                            type="button"
+                            onClick={() => !alreadyAdded && handleAddCategoryHeader(sugg)}
+                            disabled={alreadyAdded}
+                            className={`text-[9.5px] px-2 py-0.5 border font-semibold transition-all ${alreadyAdded
+                              ? "bg-gray-100 text-gray-400 border-gray-200 cursor-default"
+                              : "bg-white text-[#006064] border-cyan-200 hover:bg-cyan-50 hover:border-cyan-400 cursor-pointer shadow-2xs"
+                              }`}
+                          >
+                            {alreadyAdded ? `✓ ${sugg}` : `+ ${sugg}`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Active Category Headers List */}
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                    <h4 className="font-bold uppercase tracking-wider text-gray-800 text-[11px] flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-[#006064]" />
+                      <span>Official Category Headers ({categoryHeaders.length})</span>
+                    </h4>
+                    <span className="text-[10px] text-gray-500">
+                      Headers created by Super Admin for CM & Accountant dropdowns
+                    </span>
+                  </div>
+
+                  {categoryHeaders.length === 0 ? (
+                    <div className="py-8 text-center text-gray-400 bg-gray-50 border border-dashed border-gray-300">
+                      <p className="text-xs font-semibold text-gray-600">No category headers created yet.</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">Add a new header above or pick from suggestions.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[380px] overflow-y-auto pr-1">
+                      {categoryHeaders.map((cat) => {
+                        const isEditing = editingCategoryOldName === cat;
+                        const expenseCount = records.filter(
+                          (r) => r.category && r.category.trim().toUpperCase() === cat
+                        ).length;
+
+                        return (
+                          <div
+                            key={cat}
+                            className="flex items-center justify-between p-2.5 bg-gray-50 hover:bg-cyan-50/40 border border-gray-200 transition-colors"
+                          >
+                            {isEditing ? (
+                              <div className="flex items-center gap-1.5 flex-1">
+                                <input
+                                  type="text"
+                                  value={editingCategoryNewName}
+                                  onChange={(e) => setEditingCategoryNewName(e.target.value.toUpperCase())}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleUpdateCategoryHeader(cat, editingCategoryNewName);
+                                    }
+                                  }}
+                                  autoFocus
+                                  className="flex-1 bg-white border border-[#006064] p-1 text-[11px] font-bold uppercase text-gray-900 focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateCategoryHeader(cat, editingCategoryNewName)}
+                                  disabled={savingCategory || !editingCategoryNewName.trim()}
+                                  className="bg-[#006064] text-white px-2 py-1 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#00838f]"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingCategoryOldName(null);
+                                    setEditingCategoryNewName("");
+                                  }}
+                                  className="bg-gray-200 text-gray-700 px-2 py-1 text-[10px] font-bold uppercase cursor-pointer hover:bg-gray-300"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="font-bold text-gray-800 text-[11px] truncate uppercase">
+                                    {cat}
+                                  </span>
+                                  {expenseCount > 0 && (
+                                    <span className="text-[9px] font-mono px-1.5 py-0.2 bg-cyan-100 text-[#006064] font-bold shrink-0">
+                                      {expenseCount} exp
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingCategoryOldName(cat);
+                                      setEditingCategoryNewName(cat);
+                                    }}
+                                    className="p-1 text-gray-500 hover:text-[#006064] hover:bg-white border border-transparent hover:border-gray-200 transition-all cursor-pointer"
+                                    title={`Rename ${cat}`}
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCategoryHeader(cat)}
+                                    disabled={deletingCategoryName === cat}
+                                    className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all cursor-pointer"
+                                    title={`Delete ${cat}`}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
 
 
-        {/* Modal Footer */}
-        <div className="p-4 border-t border-gray-200 flex items-center justify-end bg-gray-50">
-          <button
-            type="button"
-            onClick={() => {
-              setIsCategoryModalOpen(false);
-              setNewCategoryName("");
-            }}
-            className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 border border-gray-300 cursor-pointer"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  )
-}
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-gray-200 flex items-center justify-end bg-gray-50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCategoryModalOpen(false);
+                    setNewCategoryName("");
+                  }}
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 border border-gray-300 cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      }
 
-{/* ── ICICI BANK STATEMENT MODAL (ACCOUNTANT & SUPER ADMIN ONLY) ── */ }
-{
-  (isAdmin || isAccountant) && (
-    <BankStatementModal
-      isOpen={isBankStatementOpen}
-      onClose={() => setIsBankStatementOpen(false)}
-      isAdmin={isAdmin}
-      isAccountant={isAccountant}
-    />
-  )
-}
+      {/* ── ICICI BANK STATEMENT MODAL (ACCOUNTANT & SUPER ADMIN ONLY) ── */}
+      {
+        (isAdmin || isAccountant) && (
+          <BankStatementModal
+            isOpen={isBankStatementOpen}
+            onClose={() => setIsBankStatementOpen(false)}
+            isAdmin={isAdmin}
+            isAccountant={isAccountant}
+          />
+        )
+      }
     </div >
   );
 }

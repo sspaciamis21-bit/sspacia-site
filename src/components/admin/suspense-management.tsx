@@ -47,6 +47,7 @@ interface SuspenseManagementProps {
   canAccessAccountant?: boolean;
   currentUserLocationId?: number | null;
   currentUserLocationName?: string | null;
+  userAssignedLocations?: any[];
   currentUserId?: number | null;
   currentUserName?: string | null;
   onBack?: () => void;
@@ -59,6 +60,7 @@ export function SuspenseManagement({
   canAccessAccountant = true,
   currentUserLocationId,
   currentUserLocationName,
+  userAssignedLocations = [],
   currentUserId,
   currentUserName = 'User',
   onBack,
@@ -175,15 +177,32 @@ export function SuspenseManagement({
     fetchPayments(true);
   }, [statusFilter]);
 
-  // Determine CM assigned center (normalized to lowercase)
+  // List of all normalized center names assigned to this user
+  const userAssignedCenters = useMemo(() => {
+    const list: string[] = [];
+    const checkAndAdd = (name?: string | null) => {
+      if (!name || typeof name !== 'string') return;
+      const lower = name.toLowerCase().trim();
+      if (lower.includes('mercado')) list.push('mercado');
+      else if (lower.includes('premier')) list.push('premier house');
+      else if (lower.includes('agarwal')) list.push('agarwal complex');
+      else if (lower) list.push(lower);
+    };
+
+    checkAndAdd(currentUserLocationName);
+    if (Array.isArray(userAssignedLocations)) {
+      userAssignedLocations.forEach((loc) => {
+        checkAndAdd(loc?.name);
+        checkAndAdd(loc?.location?.name);
+      });
+    }
+    return Array.from(new Set(list));
+  }, [currentUserLocationName, userAssignedLocations]);
+
+  // Primary normalized center for single-location CM
   const normalizedUserCenter = useMemo(() => {
-    if (!currentUserLocationName) return null;
-    const lower = currentUserLocationName.toLowerCase();
-    if (lower.includes('mercado')) return 'mercado';
-    if (lower.includes('premier')) return 'premier house';
-    if (lower.includes('agarwal')) return 'agarwal complex';
-    return lower;
-  }, [currentUserLocationName]);
+    return userAssignedCenters[0] || null;
+  }, [userAssignedCenters]);
 
   // Handle PDF File Upload (PDF Only)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -436,9 +455,12 @@ export function SuspenseManagement({
     setSelectedPaymentForReview(payment);
     setReviewCenterName(centerName);
     setReviewDecision(decision);
-    setReviewCompanyName('');
-    setReviewIdentifiedType('Invoice Settlement');
-    setReviewCmRemarks('');
+    const existingAlloc = payment.allocations?.find(
+      (a) => a.centerName.toLowerCase() === centerName.toLowerCase()
+    );
+    setReviewCompanyName(existingAlloc?.companyName || '');
+    setReviewIdentifiedType(existingAlloc?.identifiedType || 'Invoice Settlement');
+    setReviewCmRemarks(existingAlloc?.cmRemarks || '');
   };
 
   // Submit CM Review Decision
@@ -990,11 +1012,11 @@ export function SuspenseManagement({
                             (a) => a.centerName.toLowerCase() === center.name.toLowerCase()
                           );
                           const isAssignedToCurrentCM =
-                            userRoleView === 'CM' &&
-                            normalizedUserCenter &&
-                            (normalizedUserCenter === center.name ||
-                              normalizedUserCenter.includes(center.name) ||
-                              center.name.includes(normalizedUserCenter));
+                            userAssignedCenters.includes(center.name.toLowerCase()) ||
+                            (normalizedUserCenter &&
+                              (normalizedUserCenter === center.name.toLowerCase() ||
+                                normalizedUserCenter.includes(center.name.toLowerCase()) ||
+                                center.name.toLowerCase().includes(normalizedUserCenter)));
 
                           const isDecisionPending = !alloc || alloc.decision === 'PENDING';
                           const isAccepted = alloc?.decision === 'ACCEPTED';
@@ -1008,16 +1030,21 @@ export function SuspenseManagement({
                                   ? 'bg-emerald-50 border-emerald-300'
                                   : isRejected
                                   ? 'bg-gray-50 border-gray-200 opacity-85'
-                                  : isAssignedToCurrentCM
+                                  : isAssignedToCurrentCM && userRoleView === 'CM'
                                   ? 'bg-cyan-50/50 border-[#1ab0bc] shadow-xs'
                                   : 'bg-white border-gray-300'
                               }`}
                             >
                               <div>
                                 <div className="flex items-center justify-between pb-1.5 border-b border-gray-200/60 mb-2">
-                                  <span className="text-xs font-black uppercase text-gray-900 tracking-tight flex items-center gap-1.5">
+                                  <span className="text-xs font-black uppercase text-gray-900 tracking-tight flex items-center gap-1.5 flex-wrap">
                                     <Building2 size={12} className="text-[#006064]" />
                                     <span>{center.displayName}</span>
+                                    {isAssignedToCurrentCM && userRoleView === 'CM' && (
+                                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 bg-cyan-100 text-[#006064] border border-cyan-300 rounded-2xs">
+                                        Your Center
+                                      </span>
+                                    )}
                                   </span>
 
                                   {isAccepted ? (
@@ -1072,35 +1099,46 @@ export function SuspenseManagement({
                               {/* Footer Timestamp & CM Actions */}
                               <div className="pt-3 mt-3 border-t border-gray-200/60">
                                 {alloc?.actualTimestamp ? (
-                                  <div className="text-[10px] font-mono text-gray-500 flex items-center justify-between">
-                                    <span>Reviewed:</span>
-                                    <span className="font-bold text-gray-700">{alloc.actualTimestamp}</span>
+                                  <div className="space-y-1.5">
+                                    <div className="text-[10px] font-mono text-gray-500 flex items-center justify-between">
+                                      <span>Reviewed:</span>
+                                      <span className="font-bold text-gray-700">{alloc.actualTimestamp}</span>
+                                    </div>
+                                    <div className="flex justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={() => openReviewModal(payment, center.name, alloc.decision === 'ACCEPTED' ? 'ACCEPTED' : 'REJECTED')}
+                                        className="text-[10px] font-bold uppercase text-[#006064] hover:underline cursor-pointer flex items-center gap-1 transition-all"
+                                        title={`Change decision for ${center.displayName}`}
+                                      >
+                                        <Pencil size={11} />
+                                        <span>Change Decision</span>
+                                      </button>
+                                    </div>
                                   </div>
                                 ) : (
                                   <div className="space-y-2">
-                                    {/* Action buttons visible if CM for this center OR Super Admin / Accountant acting */}
-                                    {(isAssignedToCurrentCM || userRoleView !== 'CM' || isSuperAdmin) && (
-                                      <div className="grid grid-cols-2 gap-1.5">
-                                        <button
-                                          type="button"
-                                          onClick={() => openReviewModal(payment, center.name, 'ACCEPTED')}
-                                          className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 shadow-xs cursor-pointer"
-                                          title={`Confirm payment belongs to ${center.displayName}`}
-                                        >
-                                          <Check size={12} />
-                                          <span>Yes, Ours</span>
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => openReviewModal(payment, center.name, 'REJECTED')}
-                                          className="px-2 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 shadow-xs cursor-pointer"
-                                          title={`Mark as NOT belonging to ${center.displayName}`}
-                                        >
-                                          <X size={12} />
-                                          <span>No, Not Ours</span>
-                                        </button>
-                                      </div>
-                                    )}
+                                    {/* Action buttons ALWAYS available for Community Managers to review */}
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => openReviewModal(payment, center.name, 'ACCEPTED')}
+                                        className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 shadow-xs cursor-pointer transition-colors"
+                                        title={`Confirm payment belongs to ${center.displayName}`}
+                                      >
+                                        <Check size={12} />
+                                        <span>Yes, Ours</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => openReviewModal(payment, center.name, 'REJECTED')}
+                                        className="px-2 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1 shadow-xs cursor-pointer transition-colors"
+                                        title={`Mark as NOT belonging to ${center.displayName}`}
+                                      >
+                                        <X size={12} />
+                                        <span>No, Not Ours</span>
+                                      </button>
+                                    </div>
                                   </div>
                                 )}
                               </div>

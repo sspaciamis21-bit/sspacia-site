@@ -2318,8 +2318,19 @@ export default function AdminInvoicesWorkflowPage() {
           userRoleView={userRoleView}
           canAccessCM={canAccessCM}
           canAccessAccountant={canAccessAccountant}
-          currentUserLocationId={(user as any)?.locationId || (user as any)?.assignedLocations?.[0]?.locationId}
-          currentUserLocationName={(user as any)?.location?.name || (user as any)?.assignedLocations?.[0]?.location?.name}
+          currentUserLocationId={
+            (user as any)?.locationId ||
+            (user as any)?.assignedLocations?.[0]?.id ||
+            (user as any)?.assignedLocations?.[0]?.locationId ||
+            null
+          }
+          currentUserLocationName={
+            (user as any)?.location?.name ||
+            (user as any)?.assignedLocations?.[0]?.name ||
+            (user as any)?.assignedLocations?.[0]?.location?.name ||
+            null
+          }
+          userAssignedLocations={(user as any)?.assignedLocations || []}
           currentUserId={user?.id ? Number(user.id) : null}
           currentUserName={user?.name || (userRoleView === 'ACCOUNTANT' ? 'Accountant' : 'Community Manager')}
           onBack={() => setActiveSection('ACTIVE_WORKFLOW')}
