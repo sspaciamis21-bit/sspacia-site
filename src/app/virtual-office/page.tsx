@@ -6,25 +6,25 @@ import VirtualOfficeClient from './virtual-office-client';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Virtual Office in Ahmedabad with GST Registration & ROC Address | SSPACIA',
+  title: 'Virtual Office in Ahmedabad | Prestigious Business Address & Mail Handling | SSPACIA',
   description:
-    'Get a prestigious business address for GST & MCA company registration across 3 prime Ahmedabad centres: Agarwal Complex (CG Road), Mercado (CG Road) & Premier House (SG Highway). Includes Landlord NOC, electricity bill & mail handling.',
+    'Get a prestigious business address for company correspondence and commercial presence across 3 prime Ahmedabad centres: Agarwal Complex (CG Road), Mercado (CG Road) & Premier House (SG Highway). Fixed ₹24,000/year for business address usage.',
   keywords: [
     'Virtual Office Ahmedabad',
-    'GST Registration Address Ahmedabad',
+    'Business Address Ahmedabad',
+    'Mailing Address Ahmedabad',
     'Virtual Office CG Road',
     'Virtual Office SG Highway',
-    'ROC Registration Office Ahmedabad',
-    'Business Address Ahmedabad',
+    'Commercial Address Ahmedabad',
     'SSPACIA Virtual Office',
   ],
   alternates: {
     canonical: `${seoConfig.baseUrl}/virtual-office`,
   },
   openGraph: {
-    title: 'Virtual Office in Ahmedabad with GST Registration & ROC Address | SSPACIA',
+    title: 'Virtual Office in Ahmedabad | Prestigious Business Address | SSPACIA',
     description:
-      'Prestigious business address in Ahmedabad across 3 prime centres. 100% compliant with Landlord NOC, electricity bill, and courier handling.',
+      'Prestigious business address in Ahmedabad across 3 prime centres. Professional mailing presence, courier receiving, and on-demand meeting rooms at ₹24,000/year.',
     url: `${seoConfig.baseUrl}/virtual-office`,
     siteName: seoConfig.siteName,
     images: [
@@ -44,9 +44,15 @@ export default function VirtualOfficePage() {
   const virtualOfficeSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
-    name: 'SSPACIA Virtual Office & GST Registration',
+    name: 'SSPACIA Virtual Office (Business Address Usage)',
     description:
-      'Prestigious business address across 3 prime Ahmedabad centres (Agarwal Complex CG Road, Mercado CG Road, Premier House SG Highway) for GST registration and company incorporation.',
+      'Prestigious commercial business address across 3 prime Ahmedabad centres (Agarwal Complex CG Road, Mercado CG Road, Premier House SG Highway) for business correspondence and mail receiving. Fixed ₹24,000/year.',
+    offers: {
+      '@type': 'Offer',
+      price: '24000',
+      priceCurrency: 'INR',
+      availability: 'https://schema.org/InStock',
+    },
     brand: {
       '@type': 'Brand',
       name: 'SSPACIA',

@@ -42,7 +42,9 @@ import {
   Plus,
   Sliders,
   Scissors,
-  CalendarDays
+  CalendarDays,
+  Gift,
+  Printer
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -143,6 +145,7 @@ interface InvoiceRecord {
   signedAt?: string | null;
   signedByName?: string | null;
   isDigitalSignRequired?: boolean;
+  complimentaryUsageJson?: string | null;
   clientEmailSentAt?: string | null;
   clientEmailSentTo?: string | null;
   clientEmailSentCc?: string | null;
@@ -162,6 +165,7 @@ interface InvoiceRecord {
   createdBy: { id: number; name: string; email: string; assignedLocations?: { location: LocationOption }[] };
   clientMaster?: {
     clientType?: string | null;
+    complimentaryJson?: string | null;
     hasBrokerCommission?: boolean;
     brokerName?: string | null;
     hoAddress?: string | null;
@@ -195,6 +199,27 @@ interface InvoiceRecord {
     }[];
   };
   attachedInvoice?: AttachedInvoice | null;
+}
+
+export interface ComplimentaryUsageSummary {
+  meetingRoom?: {
+    freeQuota: number;
+    actualUsed: number;
+    extraUsed: number;
+    extraRate: number;
+    charge: number;
+  };
+  printerPages?: {
+    freeQuota: number;
+    actualUsed: number;
+    extraUsed: number;
+    extraRate: number;
+    charge: number;
+  };
+  totalExtraSubtotal: number;
+  totalExtraGst: number;
+  totalExtraAmount: number;
+  updatedAt?: string;
 }
 
 const ACCOUNTANT_CM_EMAIL = 'ssinfrazone21@gmail.com';
@@ -307,6 +332,18 @@ export default function AdminInvoicesWorkflowPage() {
   const [prorateCustomSubtotal, setProrateCustomSubtotal] = useState<string>('');
   const [prorateSaving, setProrateSaving] = useState<boolean>(false);
 
+  // Complimentary Monthly Over-Usage Modal State (Meeting Room & Printer Copies)
+  const [complimentaryModalInvoice, setComplimentaryModalInvoice] = useState<InvoiceRecord | null>(null);
+  const [compMeetingRoomHours, setCompMeetingRoomHours] = useState<number | ''>('');
+  const [compPrinterPages, setCompPrinterPages] = useState<number | ''>('');
+  const [compMeetingRoomFreeQuota, setCompMeetingRoomFreeQuota] = useState<number>(2);
+  const [compMeetingRoomExtraRate, setCompMeetingRoomExtraRate] = useState<number>(500);
+  const [compPrinterPagesFreeQuota, setCompPrinterPagesFreeQuota] = useState<number>(100);
+  const [compPrinterPagesExtraRate, setCompPrinterPagesExtraRate] = useState<number>(1);
+  const [compMeetingRoomEnabled, setCompMeetingRoomEnabled] = useState<boolean>(true);
+  const [compPrinterPagesEnabled, setCompPrinterPagesEnabled] = useState<boolean>(true);
+  const [compSaving, setCompSaving] = useState<boolean>(false);
+
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -321,7 +358,8 @@ export default function AdminInvoicesWorkflowPage() {
     entryToViewDetails ||
     waiveModalInvoice ||
     splitModalInvoice ||
-    prorateModalInvoice
+    prorateModalInvoice ||
+    complimentaryModalInvoice
   );
 
   useEffect(() => {
@@ -1183,6 +1221,296 @@ export default function AdminInvoicesWorkflowPage() {
       toast.error('Network error resetting invoice');
     } finally {
       setProrateSaving(false);
+    }
+  };
+
+  // ── COMPLIMENTARY MONTHLY OVER-USAGE HANDLERS (MEETING ROOM & PRINTER COPIES) ──
+  const roundCurrency = (val: number): number => Math.round(val * 100) / 100;
+
+  const hasComplimentaryOverusage = (inv: InvoiceRecord): boolean => {
+    // Only full-time regular clients receive complimentary quotas and can have over-usage
+    if (
+      inv.paymentDuration === 'ONE_TIME' ||
+      inv.productGroupKey === 'ONE_TIME_SESSION' ||
+      inv.clientMaster?.clientType === 'ONE_TIME' ||
+      inv.clientMaster?.clientType === 'VIRTUAL_OFFICE'
+    ) {
+      return false;
+    }
+
+    if (inv.complimentaryUsageJson) {
+      try {
+        const u = JSON.parse(inv.complimentaryUsageJson);
+        if (Number(u.totalExtraSubtotal || 0) > 0 || Number(u.meetingRoom?.extraUsed || 0) > 0 || Number(u.printerPages?.extraUsed || 0) > 0) {
+          return true;
+        }
+      } catch {}
+    }
+    if (inv.itemsJson) {
+      try {
+        const items = JSON.parse(inv.itemsJson);
+        if (Array.isArray(items) && items.some((it: any) => it.isComplimentaryOverusage)) {
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  };
+
+  const handleOpenComplimentaryModal = (inv: InvoiceRecord) => {
+    // Strictly restrict to full-time clients
+    if (
+      inv.paymentDuration === 'ONE_TIME' ||
+      inv.productGroupKey === 'ONE_TIME_SESSION' ||
+      inv.clientMaster?.clientType === 'ONE_TIME' ||
+      inv.clientMaster?.clientType === 'VIRTUAL_OFFICE'
+    ) {
+      toast.info('Complimentary monthly allowances are only provided to full-time clients (not One-Time or Virtual Office).');
+      return;
+    }
+
+    setComplimentaryModalInvoice(inv);
+
+    let mtgQuota = 2;
+    let mtgRate = 500;
+    let mtgEnabled = true;
+    let printQuota = 100;
+    let printRate = 1;
+    let printEnabled = true;
+
+    if (inv.clientMaster?.complimentaryJson) {
+      try {
+        const parsed = JSON.parse(inv.clientMaster.complimentaryJson);
+        if (Array.isArray(parsed)) {
+          const mtg = parsed.find((p: any) => p.type === 'MEETING_ROOM');
+          if (mtg) {
+            mtgQuota = Number(mtg.freeQuota ?? 2);
+            mtgRate = Number(mtg.extraRate ?? 500);
+            mtgEnabled = mtg.isEnabled !== false;
+          }
+          const prt = parsed.find((p: any) => p.type === 'PRINTER_PAGES');
+          if (prt) {
+            printQuota = Number(prt.freeQuota ?? 100);
+            printRate = Number(prt.extraRate ?? 1);
+            printEnabled = prt.isEnabled !== false;
+          }
+        }
+      } catch {}
+    }
+
+    setCompMeetingRoomFreeQuota(mtgQuota);
+    setCompMeetingRoomExtraRate(mtgRate);
+    setCompMeetingRoomEnabled(mtgEnabled);
+    setCompPrinterPagesFreeQuota(printQuota);
+    setCompPrinterPagesExtraRate(printRate);
+    setCompPrinterPagesEnabled(printEnabled);
+
+    if (inv.complimentaryUsageJson) {
+      try {
+        const usage = JSON.parse(inv.complimentaryUsageJson);
+        setCompMeetingRoomHours(usage.meetingRoom?.actualUsed !== undefined ? usage.meetingRoom.actualUsed : '');
+        setCompPrinterPages(usage.printerPages?.actualUsed !== undefined ? usage.printerPages.actualUsed : '');
+        return;
+      } catch {}
+    }
+
+    let items: any[] = [];
+    try {
+      if (inv.itemsJson) items = JSON.parse(inv.itemsJson);
+    } catch {}
+
+    const mtgItem = items.find((it: any) => it.isComplimentaryOverusage && it.complimentaryType === 'MEETING_ROOM');
+    const prtItem = items.find((it: any) => it.isComplimentaryOverusage && it.complimentaryType === 'PRINTER_PAGES');
+
+    if (mtgItem || prtItem) {
+      setCompMeetingRoomHours(mtgItem?.actualUsed !== undefined ? mtgItem.actualUsed : '');
+      setCompPrinterPages(prtItem?.actualUsed !== undefined ? prtItem.actualUsed : '');
+    } else {
+      setCompMeetingRoomHours('');
+      setCompPrinterPages('');
+    }
+  };
+
+  const handleSaveComplimentaryUsage = async () => {
+    if (!complimentaryModalInvoice) return;
+    setCompSaving(true);
+    try {
+      const actualMtg = typeof compMeetingRoomHours === 'number' ? compMeetingRoomHours : 0;
+      const actualPrint = typeof compPrinterPages === 'number' ? compPrinterPages : 0;
+
+      const extraMtgHours = compMeetingRoomEnabled ? Math.max(0, actualMtg - compMeetingRoomFreeQuota) : 0;
+      const extraMtgCharge = roundCurrency(extraMtgHours * compMeetingRoomExtraRate);
+
+      const extraPrintPages = compPrinterPagesEnabled ? Math.max(0, actualPrint - compPrinterPagesFreeQuota) : 0;
+      const extraPrintCharge = roundCurrency(extraPrintPages * compPrinterPagesExtraRate);
+
+      const totalExtraSubtotal = roundCurrency(extraMtgCharge + extraPrintCharge);
+      const totalExtraGst = roundCurrency(totalExtraSubtotal * 0.18);
+      const totalExtraAmount = roundCurrency(totalExtraSubtotal + totalExtraGst);
+
+      let items: any[] = [];
+      if (complimentaryModalInvoice.itemsJson) {
+        try {
+          const raw = JSON.parse(complimentaryModalInvoice.itemsJson);
+          if (Array.isArray(raw)) items = raw;
+        } catch {}
+      }
+
+      if (items.length === 0) {
+        items = [{
+          cabinName: complimentaryModalInvoice.cabinName || 'Workspace',
+          noOfSeats: complimentaryModalInvoice.noOfSeats || 1,
+          ratePerAgreement: complimentaryModalInvoice.ratePerAgreement || complimentaryModalInvoice.amount,
+          amount: Number(complimentaryModalInvoice.amount || 0),
+          gstPercent: Number(complimentaryModalInvoice.gstPercent || 18),
+          totalAmount: Number(complimentaryModalInvoice.totalAmount || 0),
+        }];
+      }
+
+      const baseItems = items.filter((it: any) => !it.isComplimentaryOverusage);
+      const overusageItems: any[] = [];
+
+      if (extraMtgHours > 0) {
+        const itemGst = roundCurrency(extraMtgCharge * 0.18);
+        overusageItems.push({
+          cabinName: `Meeting Room Over-Usage (${extraMtgHours} hr${extraMtgHours > 1 ? 's' : ''} @ ₹${compMeetingRoomExtraRate}/hr)`,
+          noOfSeats: 1,
+          ratePerAgreement: compMeetingRoomExtraRate,
+          amount: extraMtgCharge,
+          gstPercent: 18,
+          totalAmount: roundCurrency(extraMtgCharge + itemGst),
+          isComplimentaryOverusage: true,
+          complimentaryType: 'MEETING_ROOM',
+          freeQuota: compMeetingRoomFreeQuota,
+          actualUsed: actualMtg,
+          extraUsed: extraMtgHours,
+          extraRate: compMeetingRoomExtraRate,
+        });
+      }
+
+      if (extraPrintPages > 0) {
+        const itemGst = roundCurrency(extraPrintCharge * 0.18);
+        overusageItems.push({
+          cabinName: `Printer Paper Over-Usage (${extraPrintPages} page${extraPrintPages > 1 ? 's' : ''} @ ₹${compPrinterPagesExtraRate}/page)`,
+          noOfSeats: extraPrintPages,
+          ratePerAgreement: compPrinterPagesExtraRate,
+          amount: extraPrintCharge,
+          gstPercent: 18,
+          totalAmount: roundCurrency(extraPrintCharge + itemGst),
+          isComplimentaryOverusage: true,
+          complimentaryType: 'PRINTER_PAGES',
+          freeQuota: compPrinterPagesFreeQuota,
+          actualUsed: actualPrint,
+          extraUsed: extraPrintPages,
+          extraRate: compPrinterPagesExtraRate,
+        });
+      }
+
+      const finalItems = [...baseItems, ...overusageItems];
+      const newAmount = roundCurrency(finalItems.reduce((s, it) => s + (Number(it.amount) || 0), 0));
+      const newTotalAmount = roundCurrency(finalItems.reduce((s, it) => s + (Number(it.totalAmount) || 0), 0));
+
+      const usageSummary: ComplimentaryUsageSummary = {
+        meetingRoom: {
+          freeQuota: compMeetingRoomFreeQuota,
+          actualUsed: actualMtg,
+          extraUsed: extraMtgHours,
+          extraRate: compMeetingRoomExtraRate,
+          charge: extraMtgCharge,
+        },
+        printerPages: {
+          freeQuota: compPrinterPagesFreeQuota,
+          actualUsed: actualPrint,
+          extraUsed: extraPrintPages,
+          extraRate: compPrinterPagesExtraRate,
+          charge: extraPrintCharge,
+        },
+        totalExtraSubtotal,
+        totalExtraGst,
+        totalExtraAmount,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const res = await fetch(`/api/admin/Invoices/${complimentaryModalInvoice.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemsJson: JSON.stringify(finalItems),
+          amount: newAmount,
+          totalAmount: newTotalAmount,
+          complimentaryUsageJson: JSON.stringify(usageSummary),
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        if (totalExtraSubtotal > 0) {
+          toast.success(`Logged over-usage! Added ₹${totalExtraSubtotal.toLocaleString('en-IN')} (+GST) to invoice.`);
+        } else {
+          toast.success('Complimentary usage verified within free monthly quota (₹0 extra charge).');
+        }
+        setComplimentaryModalInvoice(null);
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to update complimentary usage');
+      }
+    } catch {
+      toast.error('An error occurred while saving complimentary usage');
+    } finally {
+      setCompSaving(false);
+    }
+  };
+
+  const handleRemoveComplimentaryUsage = async () => {
+    if (!complimentaryModalInvoice) return;
+    setCompSaving(true);
+    try {
+      let items: any[] = [];
+      if (complimentaryModalInvoice.itemsJson) {
+        try {
+          const raw = JSON.parse(complimentaryModalInvoice.itemsJson);
+          if (Array.isArray(raw)) items = raw;
+        } catch {}
+      }
+
+      const baseItems = items.filter((it: any) => !it.isComplimentaryOverusage);
+      if (baseItems.length === 0) {
+        baseItems.push({
+          cabinName: complimentaryModalInvoice.cabinName || 'Workspace',
+          noOfSeats: complimentaryModalInvoice.noOfSeats || 1,
+          ratePerAgreement: complimentaryModalInvoice.ratePerAgreement || complimentaryModalInvoice.amount,
+          amount: Number(complimentaryModalInvoice.amount || 0),
+          gstPercent: Number(complimentaryModalInvoice.gstPercent || 18),
+          totalAmount: Number(complimentaryModalInvoice.totalAmount || 0),
+        });
+      }
+
+      const newAmount = roundCurrency(baseItems.reduce((s, it) => s + (Number(it.amount) || 0), 0));
+      const newTotalAmount = roundCurrency(baseItems.reduce((s, it) => s + (Number(it.totalAmount) || 0), 0));
+
+      const res = await fetch(`/api/admin/Invoices/${complimentaryModalInvoice.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemsJson: JSON.stringify(baseItems),
+          amount: newAmount,
+          totalAmount: newTotalAmount,
+          complimentaryUsageJson: null,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast.success('Removed complimentary over-usage charges from invoice.');
+        setComplimentaryModalInvoice(null);
+        fetchData();
+      } else {
+        toast.error(json.error || 'Failed to clear complimentary usage');
+      }
+    } catch {
+      toast.error('Error clearing complimentary usage');
+    } finally {
+      setCompSaving(false);
     }
   };
 
@@ -2689,6 +3017,26 @@ export default function AdminInvoicesWorkflowPage() {
                             <div className="text-[10px] text-[#616161]">
                               {invoice.noOfSeats || 0} seats @ ₹{Number(invoice.ratePerAgreement || 0).toLocaleString('en-IN')}
                             </div>
+                            {invoice.complimentaryUsageJson &&
+                              invoice.clientMaster?.clientType !== 'ONE_TIME' &&
+                              invoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' &&
+                              (() => {
+                              try {
+                                const usage = JSON.parse(invoice.complimentaryUsageJson);
+                                const parts = [];
+                                if (usage.meetingRoom?.extraUsed > 0) parts.push(`+${usage.meetingRoom.extraUsed}h Mtg (₹${usage.meetingRoom.charge})`);
+                                if (usage.printerPages?.extraUsed > 0) parts.push(`+${usage.printerPages.extraUsed}p Print (₹${usage.printerPages.charge})`);
+                                if (parts.length > 0) {
+                                  return (
+                                    <div className="mt-1 flex items-center gap-1 text-[9px] font-bold text-teal-800 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded w-fit" title="Complimentary Over-Usage included">
+                                      <Gift size={9} className="text-teal-700 shrink-0" />
+                                      <span>{parts.join(' | ')}</span>
+                                    </div>
+                                  );
+                                }
+                              } catch {}
+                              return null;
+                            })()}
                           </td>
 
                           <td className="p-3">
@@ -2842,6 +3190,26 @@ export default function AdminInvoicesWorkflowPage() {
                                       className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors"
                                     >
                                       <Scissors size={10} /> {invoice.splitsJson ? 'Adjust Sub-Invoices' : 'Split Invoice'}
+                                    </button>
+                                  )}
+
+                                  {/* Complimentary Over-Usage Action for CM (Full-Time Clients Only) */}
+                                  {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS'].includes(invoice.status) &&
+                                    invoice.paymentDuration !== 'ONE_TIME' &&
+                                    invoice.productGroupKey !== 'ONE_TIME_SESSION' &&
+                                    invoice.clientMaster?.clientType !== 'ONE_TIME' &&
+                                    invoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenComplimentaryModal(invoice)}
+                                      className={`px-2.5 py-1 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors rounded ${hasComplimentaryOverusage(invoice)
+                                        ? 'bg-teal-100 text-teal-900 border border-teal-300 hover:bg-teal-200'
+                                        : 'bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100'
+                                        }`}
+                                      title="Review complimentary meeting room & printer usage, bill extra usage"
+                                    >
+                                      <Gift size={10} className="text-teal-700" />
+                                      <span>{hasComplimentaryOverusage(invoice) ? '✓ Over-Usage Logged' : '🎁 Complimentary Usage'}</span>
                                     </button>
                                   )}
 
@@ -3019,6 +3387,79 @@ export default function AdminInvoicesWorkflowPage() {
                         <div className="font-bold text-[var(--primary)]">
                           Total Amount: ₹{Number(entryToAttachInvoice.totalAmount || 0).toLocaleString('en-IN')}
                         </div>
+                      </div>
+
+                      {/* Itemized Line Items for Tally Preparation */}
+                      <div className="border border-neutral-200 rounded p-3 bg-white space-y-2 shrink-0 max-h-48 overflow-y-auto">
+                        <div className="flex items-center justify-between border-b border-neutral-200 pb-1.5">
+                          <span className="font-extrabold text-[11px] uppercase tracking-wider text-[#1B1C1C] flex items-center gap-1.5">
+                            <Receipt size={13} className="text-[#006064]" /> Line Items for Tally Entry
+                          </span>
+                          <span className="text-[10px] text-neutral-500 font-semibold">Enter these exact items into Tally</span>
+                        </div>
+
+                        {(() => {
+                          let items: any[] = [];
+                          if (entryToAttachInvoice.itemsJson) {
+                            try {
+                              const parsed = JSON.parse(entryToAttachInvoice.itemsJson);
+                              if (Array.isArray(parsed) && parsed.length > 0) items = parsed;
+                            } catch {}
+                          }
+                          if (items.length === 0) {
+                            items = [{
+                              cabinName: entryToAttachInvoice.cabinName || 'Workspace Rent',
+                              noOfSeats: entryToAttachInvoice.noOfSeats || 1,
+                              amount: Number(entryToAttachInvoice.amount || 0),
+                              gstPercent: Number(entryToAttachInvoice.gstPercent || 18),
+                              totalAmount: Number(entryToAttachInvoice.totalAmount || 0),
+                            }];
+                          }
+                          return (
+                            <div className="space-y-1.5">
+                              <table className="w-full text-left text-[11px] border-collapse">
+                                <thead>
+                                  <tr className="border-b border-neutral-200 text-neutral-500 text-[10px] uppercase">
+                                    <th className="py-1">Description / Item</th>
+                                    <th className="py-1 text-center">Qty / Seats</th>
+                                    <th className="py-1 text-right">Subtotal</th>
+                                    <th className="py-1 text-right">GST (18%)</th>
+                                    <th className="py-1 text-right font-bold">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-neutral-100">
+                                  {items.map((it, idx) => (
+                                    <tr key={idx} className={it.isComplimentaryOverusage ? 'bg-teal-50/70 font-medium' : ''}>
+                                      <td className="py-1.5 pr-2">
+                                        <div className="font-bold flex items-center gap-1">
+                                          {it.isComplimentaryOverusage && <Gift size={11} className="text-teal-700 shrink-0" />}
+                                          <span>{it.cabinName}</span>
+                                        </div>
+                                        {it.isComplimentaryOverusage && (
+                                          <div className="text-[10px] text-teal-800">
+                                            Actual: {it.actualUsed} &bull; Free Quota: {it.freeQuota} &bull; Extra: {it.extraUsed}
+                                          </div>
+                                        )}
+                                      </td>
+                                      <td className="py-1.5 text-center">{it.noOfSeats || 1}</td>
+                                      <td className="py-1.5 text-right font-mono">₹{Number(it.amount || 0).toLocaleString('en-IN')}</td>
+                                      <td className="py-1.5 text-right font-mono text-neutral-500">₹{(Number(it.totalAmount || 0) - Number(it.amount || 0)).toLocaleString('en-IN')}</td>
+                                      <td className="py-1.5 text-right font-mono font-bold text-[#006064]">₹{Number(it.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="border-t-2 border-neutral-300 font-extrabold text-[11px]">
+                                    <td colSpan={2} className="py-1.5 uppercase">Grand Total (for Tally)</td>
+                                    <td className="py-1.5 text-right font-mono">₹{Number(entryToAttachInvoice.amount || 0).toLocaleString('en-IN')}</td>
+                                    <td className="py-1.5 text-right font-mono text-neutral-500">₹{(Number(entryToAttachInvoice.totalAmount || 0) - Number(entryToAttachInvoice.amount || 0)).toLocaleString('en-IN')}</td>
+                                    <td className="py-1.5 text-right font-mono text-teal-900 text-xs">₹{Number(entryToAttachInvoice.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {entryToAttachInvoice.isDigitalSignRequired && (
@@ -3497,6 +3938,38 @@ export default function AdminInvoicesWorkflowPage() {
                           Total Amount: ₹{Number(sendToAccountantInvoice.totalAmount || 0).toLocaleString('en-IN')}
                         </div>
                       </div>
+
+                      {/* Complimentary Over-Usage Notice & Quick Link (Full-Time Clients Only) */}
+                      {sendToAccountantInvoice.paymentDuration !== 'ONE_TIME' &&
+                        sendToAccountantInvoice.productGroupKey !== 'ONE_TIME_SESSION' &&
+                        sendToAccountantInvoice.clientMaster?.clientType !== 'ONE_TIME' &&
+                        sendToAccountantInvoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' && (
+                        <div className="p-2.5 bg-teal-50 border border-teal-200 rounded-xs flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-[11px] text-teal-950">
+                            <Gift size={13} className="text-teal-700 shrink-0" />
+                            {hasComplimentaryOverusage(sendToAccountantInvoice) ? (
+                              <span>
+                                <strong>Over-Usage Billed:</strong> Extra Meeting Room/Printer charges included in total.
+                              </span>
+                            ) : (
+                              <span>
+                                <strong>Complimentary Quota:</strong> 2h Meeting Room &amp; 100 pages Print free.
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const inv = sendToAccountantInvoice;
+                              setSendToAccountantInvoice(null);
+                              handleOpenComplimentaryModal(inv);
+                            }}
+                            className="text-[10px] font-bold uppercase tracking-wider text-teal-800 hover:text-teal-950 underline cursor-pointer"
+                          >
+                            {hasComplimentaryOverusage(sendToAccountantInvoice) ? 'Edit Over-Usage' : 'Log Over-Usage'}
+                          </button>
+                        </div>
+                      )}
 
                       {/* KEY QUESTION: Is Digital Signature Required? */}
                       <div className="space-y-2 pt-1">
@@ -5439,6 +5912,298 @@ export default function AdminInvoicesWorkflowPage() {
                           >
                             {prorateSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                             <span>Save &amp; Apply Prorated Amount</span>
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+
+              {/* MODAL 8.6: COMPLIMENTARY MONTHLY OVER-USAGE (MEETING ROOM & PRINTER COPIES) */}
+              <AnimatePresence>
+                {complimentaryModalInvoice && (
+                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-2xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
+                    >
+                      {/* Header */}
+                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
+                        <div>
+                          <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
+                            <Gift size={20} className="text-[#006064]" />
+                            <span>Complimentary Monthly Over-Usage Review</span>
+                          </h3>
+                          <p className="text-[11px] text-neutral-500 mt-0.5">
+                            Review monthly complimentary quotas &amp; bill extra charges if client exceeded meeting room hours or printer paper copies.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setComplimentaryModalInvoice(null)}
+                          className="text-neutral-400 hover:text-neutral-700 p-1 cursor-pointer"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+
+                      {/* Invoice Context Banner */}
+                      <div className="bg-[#F8F9FA] p-3.5 border border-neutral-200 rounded-xs space-y-1.5 shrink-0">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-[#1B1C1C] text-sm">
+                            {complimentaryModalInvoice.companyName}
+                          </span>
+                          <span className="px-2 py-0.5 bg-teal-100 text-teal-900 border border-teal-200 text-[10px] font-bold rounded-xs">
+                            SR #{complimentaryModalInvoice.srNo}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-neutral-600">
+                          <span><strong>Month:</strong> {complimentaryModalInvoice.billingMonth || 'Current'}</span>
+                          <span>&bull;</span>
+                          <span><strong>Cabin:</strong> {complimentaryModalInvoice.cabinName || 'Center Workspace'}</span>
+                          <span>&bull;</span>
+                          <span><strong>Base Rent:</strong> ₹{Number(complimentaryModalInvoice.amount || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                      </div>
+
+                      {/* Body Form */}
+                      <div className="overflow-y-auto flex-1 pr-1 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Meeting Room Card */}
+                          <div className={`p-4 border rounded transition-all ${
+                            compMeetingRoomEnabled ? 'bg-white border-teal-400 shadow-xs' : 'bg-neutral-50 border-neutral-200 opacity-60'
+                          }`}>
+                            <div className="flex items-center justify-between pb-2 border-b border-neutral-100 mb-3">
+                              <div className="flex items-center gap-2 font-bold text-sm text-[#1B1C1C]">
+                                <Clock size={16} className="text-[#006064]" />
+                                <span>Meeting Room</span>
+                              </div>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                                {compMeetingRoomFreeQuota} Hrs Free / Mo
+                              </span>
+                            </div>
+
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block font-bold text-[#616161] mb-1 text-xs">
+                                  Actual Meeting Hours Used This Month *
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    placeholder={`e.g. ${compMeetingRoomFreeQuota}`}
+                                    value={compMeetingRoomHours}
+                                    onChange={(e) => setCompMeetingRoomHours(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                    disabled={!compMeetingRoomEnabled}
+                                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-sm font-semibold rounded focus:outline-none focus:border-[#006064]"
+                                  />
+                                  <span className="absolute right-3 top-2 text-neutral-400 font-medium text-xs">Hours</span>
+                                </div>
+                              </div>
+
+                              {/* Calculation snippet */}
+                              {(() => {
+                                const actualMtg = typeof compMeetingRoomHours === 'number' ? compMeetingRoomHours : 0;
+                                const extraMtgHours = compMeetingRoomEnabled ? Math.max(0, actualMtg - compMeetingRoomFreeQuota) : 0;
+                                const extraMtgCharge = roundCurrency(extraMtgHours * compMeetingRoomExtraRate);
+
+                                return (
+                                  <div className={`p-2.5 rounded border text-[11px] space-y-1 ${
+                                    extraMtgHours > 0
+                                      ? 'bg-amber-50 border-amber-300 text-amber-950'
+                                      : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                                  }`}>
+                                    <div className="flex items-center justify-between">
+                                      <span>Free Quota:</span>
+                                      <strong className="font-mono">{compMeetingRoomFreeQuota} hrs</strong>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span>Extra Over-Usage:</span>
+                                      <strong className="font-mono font-bold">
+                                        {extraMtgHours} hr{extraMtgHours === 1 ? '' : 's'}
+                                      </strong>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-1 border-t border-dashed border-current font-bold">
+                                      <span>Extra Charge (@ ₹{compMeetingRoomExtraRate}/hr):</span>
+                                      <span className="font-mono text-xs">₹{extraMtgCharge.toLocaleString('en-IN')}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+
+                          {/* Printer Paper Copies Card */}
+                          <div className={`p-4 border rounded transition-all ${
+                            compPrinterPagesEnabled ? 'bg-white border-teal-400 shadow-xs' : 'bg-neutral-50 border-neutral-200 opacity-60'
+                          }`}>
+                            <div className="flex items-center justify-between pb-2 border-b border-neutral-100 mb-3">
+                              <div className="flex items-center gap-2 font-bold text-sm text-[#1B1C1C]">
+                                <Printer size={16} className="text-[#006064]" />
+                                <span>Printer Paper Copies</span>
+                              </div>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                                {compPrinterPagesFreeQuota} Pages Free / Mo
+                              </span>
+                            </div>
+
+                            <div className="space-y-3">
+                              <div>
+                                <label className="block font-bold text-[#616161] mb-1 text-xs">
+                                  Actual Paper Pages Printed This Month *
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    placeholder={`e.g. ${compPrinterPagesFreeQuota}`}
+                                    value={compPrinterPages}
+                                    onChange={(e) => setCompPrinterPages(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                                    disabled={!compPrinterPagesEnabled}
+                                    className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-sm font-semibold rounded focus:outline-none focus:border-[#006064]"
+                                  />
+                                  <span className="absolute right-3 top-2 text-neutral-400 font-medium text-xs">Pages</span>
+                                </div>
+                              </div>
+
+                              {/* Calculation snippet */}
+                              {(() => {
+                                const actualPrint = typeof compPrinterPages === 'number' ? compPrinterPages : 0;
+                                const extraPrintPages = compPrinterPagesEnabled ? Math.max(0, actualPrint - compPrinterPagesFreeQuota) : 0;
+                                const extraPrintCharge = roundCurrency(extraPrintPages * compPrinterPagesExtraRate);
+
+                                return (
+                                  <div className={`p-2.5 rounded border text-[11px] space-y-1 ${
+                                    extraPrintPages > 0
+                                      ? 'bg-amber-50 border-amber-300 text-amber-950'
+                                      : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                                  }`}>
+                                    <div className="flex items-center justify-between">
+                                      <span>Free Quota:</span>
+                                      <strong className="font-mono">{compPrinterPagesFreeQuota} pages</strong>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span>Extra Over-Usage:</span>
+                                      <strong className="font-mono font-bold">
+                                        {extraPrintPages} page{extraPrintPages === 1 ? '' : 's'}
+                                      </strong>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-1 border-t border-dashed border-current font-bold">
+                                      <span>Extra Charge (@ ₹{compPrinterPagesExtraRate}/page):</span>
+                                      <span className="font-mono text-xs">₹{extraPrintCharge.toLocaleString('en-IN')}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Grand Real-time Calculation Summary */}
+                        {(() => {
+                          const actualMtg = typeof compMeetingRoomHours === 'number' ? compMeetingRoomHours : 0;
+                          const actualPrint = typeof compPrinterPages === 'number' ? compPrinterPages : 0;
+
+                          const extraMtgHours = compMeetingRoomEnabled ? Math.max(0, actualMtg - compMeetingRoomFreeQuota) : 0;
+                          const extraMtgCharge = roundCurrency(extraMtgHours * compMeetingRoomExtraRate);
+
+                          const extraPrintPages = compPrinterPagesEnabled ? Math.max(0, actualPrint - compPrinterPagesFreeQuota) : 0;
+                          const extraPrintCharge = roundCurrency(extraPrintPages * compPrinterPagesExtraRate);
+
+                          const totalExtraSubtotal = roundCurrency(extraMtgCharge + extraPrintCharge);
+                          const totalExtraGst = roundCurrency(totalExtraSubtotal * 0.18);
+                          const totalExtraAmount = roundCurrency(totalExtraSubtotal + totalExtraGst);
+
+                          // Existing base rent without overusage
+                          let items: any[] = [];
+                          try {
+                            if (complimentaryModalInvoice.itemsJson) items = JSON.parse(complimentaryModalInvoice.itemsJson);
+                          } catch {}
+                          const baseItems = items.filter((it: any) => !it.isComplimentaryOverusage);
+                          const baseRent = baseItems.length > 0
+                            ? roundCurrency(baseItems.reduce((s, it) => s + (Number(it.amount) || 0), 0))
+                            : roundCurrency(Number(complimentaryModalInvoice.amount || 0));
+
+                          const finalNewSubtotal = roundCurrency(baseRent + totalExtraSubtotal);
+                          const finalNewGst = roundCurrency(finalNewSubtotal * 0.18);
+                          const finalNewTotal = roundCurrency(finalNewSubtotal + finalNewGst);
+
+                          return (
+                            <div className="bg-teal-50/70 border border-teal-200 p-4 rounded space-y-2.5">
+                              <div className="font-bold text-xs uppercase tracking-wide text-teal-950 flex items-center justify-between">
+                                <span>Billing Impact Preview:</span>
+                                {totalExtraSubtotal > 0 ? (
+                                  <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded font-black">
+                                    ⚡ OVER-USAGE DETECTED
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded font-black">
+                                    ✓ WITHIN FREE COMPLIMENTARY QUOTA
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                                <div className="bg-white p-2 border border-teal-100 rounded">
+                                  <div className="text-[10px] text-neutral-500 uppercase">Base Rent</div>
+                                  <div className="font-bold font-mono text-[#1B1C1C]">₹{baseRent.toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="bg-white p-2 border border-teal-100 rounded">
+                                  <div className="text-[10px] text-neutral-500 uppercase">Over-Usage Subtotal</div>
+                                  <div className="font-bold font-mono text-amber-700">+₹{totalExtraSubtotal.toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="bg-white p-2 border border-teal-100 rounded">
+                                  <div className="text-[10px] text-neutral-500 uppercase">18% GST</div>
+                                  <div className="font-bold font-mono text-neutral-600">₹{finalNewGst.toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="bg-emerald-600 text-white p-2 rounded shadow-2xs">
+                                  <div className="text-[10px] uppercase font-bold text-emerald-100">New Grand Total</div>
+                                  <div className="font-black font-mono text-sm">₹{finalNewTotal.toLocaleString('en-IN')}</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="flex items-center justify-between pt-3 border-t border-neutral-200 shrink-0">
+                        <div>
+                          {hasComplimentaryOverusage(complimentaryModalInvoice) && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveComplimentaryUsage}
+                              disabled={compSaving}
+                              className="px-3 py-2 bg-neutral-100 text-neutral-700 hover:bg-neutral-200 text-[11px] font-bold uppercase tracking-wider rounded transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            >
+                              <RotateCcw size={12} /> Clear Over-Usage Charges
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setComplimentaryModalInvoice(null)}
+                            disabled={compSaving}
+                            className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100 rounded cursor-pointer disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveComplimentaryUsage}
+                            disabled={compSaving}
+                            className="px-6 py-2.5 bg-[#006064] hover:bg-[#004d40] text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
+                          >
+                            {compSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                            <span>Save &amp; Apply to Invoice</span>
                           </button>
                         </div>
                       </div>

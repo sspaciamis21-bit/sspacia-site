@@ -52,6 +52,7 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     clientStatus = 'Active',
     clientType = 'DEFAULT',
     contactPersons = [],
+    complimentaryJson,
   } = body;
 
   const resolvedSdrAmount = sdrAmount !== undefined && sdrAmount !== null && sdrAmount !== ''
@@ -83,26 +84,32 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
             : (noOfSeats ? Number(noOfSeats) : null)));
 
   const resolvedRate = isVirtualOffice
-    ? 0
+    ? (ratePerAgreement ? Number(ratePerAgreement) : 24000)
     : (productList.length > 0
         ? (firstProduct.ratePerAgreement ? Number(firstProduct.ratePerAgreement) : null)
         : (ratePerAgreement ? Number(ratePerAgreement) : null));
 
-  const resolvedAmount = amount !== undefined && amount !== null && amount !== ''
-    ? Number(amount)
-    : (productList.length > 0
-        ? productList.reduce((sum, p) => sum + (p.amount ? Number(p.amount) : 0), 0)
-        : null);
+  const resolvedAmount = isVirtualOffice
+    ? (amount !== undefined && amount !== null && amount !== '' ? Number(amount) : 24000)
+    : (amount !== undefined && amount !== null && amount !== ''
+        ? Number(amount)
+        : (productList.length > 0
+            ? productList.reduce((sum, p) => sum + (p.amount ? Number(p.amount) : 0), 0)
+            : null));
 
-  const resolvedGstPercent = productList.length > 0
-    ? (firstProduct.gstPercent ? Number(firstProduct.gstPercent) : 18)
-    : (gstPercent ? Number(gstPercent) : 18);
-
-  const resolvedTotalAmount = totalAmount !== undefined && totalAmount !== null && totalAmount !== ''
-    ? Number(totalAmount)
+  const resolvedGstPercent = isVirtualOffice
+    ? 0
     : (productList.length > 0
-        ? productList.reduce((sum, p) => sum + (p.totalAmount ? Number(p.totalAmount) : 0), 0)
-        : null);
+        ? (firstProduct.gstPercent !== undefined && firstProduct.gstPercent !== null && firstProduct.gstPercent !== '' ? Number(firstProduct.gstPercent) : 18)
+        : (gstPercent !== undefined && gstPercent !== null && gstPercent !== '' ? Number(gstPercent) : 18));
+
+  const resolvedTotalAmount = isVirtualOffice
+    ? (totalAmount !== undefined && totalAmount !== null && totalAmount !== '' ? Number(totalAmount) : 24000)
+    : (totalAmount !== undefined && totalAmount !== null && totalAmount !== ''
+        ? Number(totalAmount)
+        : (productList.length > 0
+            ? productList.reduce((sum, p) => sum + (p.totalAmount ? Number(p.totalAmount) : 0), 0)
+            : null));
 
   const structuredAddress = buildHoAddress({
     line1: hoAddressLine1 as string | undefined,
@@ -180,17 +187,20 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     paymentDueDay: isOneTime ? null : (paymentDueDay ? Number(paymentDueDay) : null),
     clientStatus: clientStatus ? String(clientStatus) : (isOneTime ? 'One-Time' : 'Active'),
     clientType: clientType === 'VIRTUAL_OFFICE' ? 'VIRTUAL_OFFICE' : (clientType === 'ONE_TIME' ? 'ONE_TIME' : 'DEFAULT'),
+    complimentaryJson: (isOneTime || isVirtualOffice)
+      ? null
+      : (complimentaryJson ? (typeof complimentaryJson === 'string' ? complimentaryJson : JSON.stringify(complimentaryJson)) : null),
     contactPersons: Array.isArray(contactPersons) ? contactPersons : [],
     products: productList.map((p: Record<string, unknown>, idx: number) => {
       const sDate = parsedSessionDate(p.sessionDate || p.agreementStartDate);
       return {
-        cabinName: p.cabinName ? String(p.cabinName).trim() : null,
-        noOfSeats: isOneTime ? 1 : (p.noOfSeats ? Number(p.noOfSeats) : null),
-        ratePerAgreement: p.ratePerAgreement ? Number(p.ratePerAgreement) : null,
-        amount: p.amount ? Number(p.amount) : null,
-        gstPercent: p.gstPercent !== undefined && p.gstPercent !== null && p.gstPercent !== '' ? Number(p.gstPercent) : 18,
-        totalAmount: p.totalAmount ? Number(p.totalAmount) : null,
-        paymentDuration: isOneTime ? 'ONE_TIME' : (p.paymentDuration ? String(p.paymentDuration).trim() : 'MONTHLY'),
+        cabinName: isVirtualOffice ? (p.cabinName ? String(p.cabinName).trim() : 'Virtual Office') : (p.cabinName ? String(p.cabinName).trim() : null),
+        noOfSeats: isVirtualOffice ? 0 : (isOneTime ? 1 : (p.noOfSeats ? Number(p.noOfSeats) : null)),
+        ratePerAgreement: isVirtualOffice ? 24000 : (p.ratePerAgreement ? Number(p.ratePerAgreement) : null),
+        amount: isVirtualOffice ? 24000 : (p.amount ? Number(p.amount) : null),
+        gstPercent: isVirtualOffice ? 0 : (p.gstPercent !== undefined && p.gstPercent !== null && p.gstPercent !== '' ? Number(p.gstPercent) : 18),
+        totalAmount: isVirtualOffice ? 24000 : (p.totalAmount ? Number(p.totalAmount) : null),
+        paymentDuration: isVirtualOffice ? 'YEARLY' : (isOneTime ? 'ONE_TIME' : (p.paymentDuration ? String(p.paymentDuration).trim() : 'MONTHLY')),
         paymentDueDay: isOneTime ? null : (p.paymentDueDay ? Number(p.paymentDueDay) : null),
         firstPaymentDate: isOneTime ? sDate : (p.firstPaymentDate ? new Date(String(p.firstPaymentDate)) : null),
         agreementPdfUrl: isOneTime ? null : (p.agreementPdfUrl ? String(p.agreementPdfUrl) : null),

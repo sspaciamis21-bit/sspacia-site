@@ -81,10 +81,12 @@ export async function GET() {
         where: {
           clientStatus: { in: ['Active', 'On Notice'] },
           OR: [
+            ...(userId ? [{ createdById: userId }] : []),
             ...(searchEmail ? [{ contactPersons: { some: { email: { equals: searchEmail } } } }] : []),
             ...(user?.companyName ? [{ companyName: { equals: user.companyName } }] : []),
           ],
         },
+        orderBy: { id: 'desc' },
         include: {
           products: { orderBy: { sortOrder: 'asc' } },
           contactPersons: { orderBy: { sortOrder: 'asc' } },
@@ -103,18 +105,27 @@ export async function GET() {
         approvedInvoices = await (prisma as any).invoiceRecord.findMany({
           where: {
             clientMasterId: clientMasterRecord.id,
-            status: 'APPROVED',
+            status: { in: ['APPROVED', 'PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED'] },
           },
           include: {
             attachedInvoice: true,
           },
-          orderBy: { sentAt: 'desc' },
+          orderBy: { id: 'desc' },
           take: 6,
         });
       }
     } catch (cmErr) {
       console.warn('[User Dashboard] ClientMaster lookup note:', cmErr);
     }
+
+    const firstProduct = clientMasterRecord?.products?.[0];
+    const derivedLocation = clientMasterRecord?.cabinName?.includes('Premier House')
+      ? 'Premier House, SG Highway'
+      : clientMasterRecord?.cabinName?.includes('Mercado')
+      ? 'Mercado, CG Road'
+      : clientMasterRecord?.cabinName?.includes('Agarwal')
+      ? 'Agarwal Complex, CG Road'
+      : (clientMasterRecord?.createdBy?.assignedLocations?.[0]?.location?.name || 'SSPACIA Centre');
 
     return NextResponse.json({
       data: {
@@ -128,12 +139,19 @@ export async function GET() {
         clientMaster: clientMasterRecord ? {
           id: clientMasterRecord.id,
           clientId: clientMasterRecord.clientId,
+          clientType: clientMasterRecord.clientType,
           companyName: clientMasterRecord.companyName,
           cabinName: clientMasterRecord.cabinName,
           noOfSeats: clientMasterRecord.noOfSeats,
+          ratePerAgreement: clientMasterRecord.ratePerAgreement || firstProduct?.ratePerAgreement || '0',
+          amount: clientMasterRecord.amount || firstProduct?.amount || '0',
+          gstPercent: clientMasterRecord.gstPercent || firstProduct?.gstPercent || '0',
+          totalAmount: clientMasterRecord.totalAmount || firstProduct?.totalAmount || '0',
+          paymentDuration: firstProduct?.paymentDuration || 'YEARLY',
+          clientStatus: clientMasterRecord.clientStatus,
           agreementStartDate: clientMasterRecord.agreementStartDate,
           agreementEndDate: clientMasterRecord.agreementEndDate,
-          locationName: clientMasterRecord.createdBy?.assignedLocations?.[0]?.location?.name || 'SSPACIA Centre',
+          locationName: derivedLocation,
           products: clientMasterRecord.products || [],
           contactPersons: clientMasterRecord.contactPersons || [],
         } : null,

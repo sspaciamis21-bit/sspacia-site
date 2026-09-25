@@ -74,6 +74,7 @@ export async function PUT(
       signedAt,
       signedByName,
       isDigitalSignRequired,
+      complimentaryUsageJson,
     } = body;
 
     const updateData: any = {};
@@ -88,7 +89,8 @@ export async function PUT(
     if (billingMonth !== undefined) updateData.billingMonth = billingMonth;
     if (status !== undefined) updateData.status = status;
     if (remarks !== undefined) updateData.remarks = remarks;
-    if (itemsJson !== undefined) updateData.itemsJson = itemsJson;
+    if (itemsJson !== undefined) updateData.itemsJson = itemsJson ? (typeof itemsJson === 'string' ? itemsJson : JSON.stringify(itemsJson)) : null;
+    if (complimentaryUsageJson !== undefined) updateData.complimentaryUsageJson = complimentaryUsageJson ? (typeof complimentaryUsageJson === 'string' ? complimentaryUsageJson : JSON.stringify(complimentaryUsageJson)) : null;
     if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
     if (lateFeePerDay !== undefined) updateData.lateFeePerDay = Number(lateFeePerDay);
     if (lateDays !== undefined && waivedLateDays === undefined && waivedLateFee === undefined) updateData.lateDays = Number(lateDays);

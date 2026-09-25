@@ -15,6 +15,11 @@ const CENTRE_DETAILS: Record<string, { name: string; address: string; area: stri
     address: '6th Floor, Mercado, Chimanlal Girdharlal Rd, opp. Municipal Market, Vasant Vihar, Ellisbridge, Ahmedabad, Gujarat 380009',
     area: 'CG Road',
   },
+  'mercado': {
+    name: 'Mercado',
+    address: '6th Floor, Mercado, Chimanlal Girdharlal Rd, opp. Municipal Market, Vasant Vihar, Ellisbridge, Ahmedabad, Gujarat 380009',
+    area: 'CG Road',
+  },
   'premier-house': {
     name: 'Premier House',
     address: 'Premier House, Opp. Gurudwara, SG Highway, Ahmedabad, Gujarat 380054',
@@ -66,13 +71,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Valid email address is required' }, { status: 400 });
     }
 
+    // Enforce fixed 12-month tenure and ₹24,000 yearly rate (Address Usage Only, 0% GST)
     const centre = CENTRE_DETAILS[centreKey] || CENTRE_DETAILS['agarwal-complex'];
-    const months = Number(planMonths) > 0 ? Number(planMonths) : 12;
+    const months = 12;
 
-    // Compute dates
+    // Compute dates (Strictly 1 Year)
     const startDate = new Date();
     const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + months);
+    endDate.setFullYear(endDate.getFullYear() + 1);
 
     // Get next Sr No
     const lastRecord = await (prisma as any).clientMaster.findFirst({
@@ -85,10 +91,9 @@ export async function POST(request: Request) {
     const randomSuffix = Math.floor(100000 + Math.random() * 900000);
     const clientId = `SSP-VO-${randomSuffix}`;
 
-    const durationLabel = months >= 24 ? 'TWO_YEARS' : months >= 12 ? 'YEARLY' : months >= 6 ? 'HALF_YEARLY' : 'MONTHLY';
     const voCabinName = `Virtual Office - ${centre.name} (${centre.area})`;
 
-    // Create Client Master record with clientType: 'VIRTUAL_OFFICE'
+    // Create Client Master record with clientType: 'VIRTUAL_OFFICE', fixed rate 24,000, 0% GST, YEARLY
     const newEntry = await (prisma as any).clientMaster.create({
       data: {
         srNo: nextSrNo,
@@ -97,16 +102,16 @@ export async function POST(request: Request) {
         hoCity: hoCity || 'Ahmedabad',
         hoState: hoState || 'Gujarat',
         hoPinCode: hoPinCode || null,
-        gstStatus: gstNo && gstNo.trim() ? 'REGISTERED' : gstStatus,
-        gstNo: gstNo ? gstNo.trim().toUpperCase() : null,
+        gstStatus: 'UNREGISTERED',
+        gstNo: null,
         agreementStartDate: startDate,
         agreementEndDate: endDate,
         cabinName: voCabinName,
         noOfSeats: 0,
-        ratePerAgreement: '0',
-        amount: '0',
-        gstPercent: '18',
-        totalAmount: '0',
+        ratePerAgreement: '24000',
+        amount: '24000',
+        gstPercent: '0',
+        totalAmount: '24000',
         paymentDueDay: startDate.getDate(),
         clientStatus: 'Active',
         clientType: 'VIRTUAL_OFFICE',
@@ -116,7 +121,7 @@ export async function POST(request: Request) {
           create: [
             {
               name: contactName.trim(),
-              designation: 'Director / Authorized Signatory',
+              designation: 'Authorized Representative',
               mobileNo: contactPhone.trim(),
               email: contactEmail.trim().toLowerCase(),
               sortOrder: 0,
@@ -128,11 +133,11 @@ export async function POST(request: Request) {
             {
               cabinName: voCabinName,
               noOfSeats: 0,
-              ratePerAgreement: '0',
-              amount: '0',
-              gstPercent: '18',
-              totalAmount: '0',
-              paymentDuration: durationLabel,
+              ratePerAgreement: '24000',
+              amount: '24000',
+              gstPercent: '0',
+              totalAmount: '24000',
+              paymentDuration: 'YEARLY',
               paymentDueDay: startDate.getDate(),
               firstPaymentDate: startDate,
               agreementStartDate: startDate,
@@ -149,6 +154,54 @@ export async function POST(request: Request) {
       },
     });
 
+    // Create initial InvoiceRecord for ₹24,000 (0% GST for Address Usage)
+    const billingMonth = startDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    try {
+      await (prisma as any).invoiceRecord.create({
+        data: {
+          clientMasterId: newEntry.id,
+          srNo: nextSrNo,
+          companyName: newEntry.companyName,
+          cabinName: voCabinName,
+          noOfSeats: 0,
+          ratePerAgreement: 24000,
+          amount: 24000,
+          gstPercent: 0,
+          totalAmount: 24000,
+          paymentDuration: 'YEARLY',
+          paymentDueDay: startDate.getDate(),
+          dueDate: startDate,
+          productGroupKey: 'VIRTUAL_OFFICE_ANNUAL',
+          itemsJson: JSON.stringify([
+            {
+              description: `Virtual Office Annual Membership - ${centre.name} (${centre.area}) [Commercial Address & Mail Handling Only]`,
+              amount: 24000,
+              gstPercent: 0,
+              totalAmount: 24000,
+            },
+          ]),
+          billingMonth,
+          status: 'APPROVED',
+          createdById: createdById,
+        },
+      });
+    } catch (invErr) {
+      console.warn('Could not auto-create VO invoiceRecord:', invErr);
+    }
+
+    // Also update User profile if companyName is not yet populated
+    try {
+      await (prisma as any).user.update({
+        where: { id: createdById },
+        data: {
+          companyName: companyName.trim(),
+          phone: contactPhone.trim(),
+        },
+      });
+    } catch {
+      // Ignore if user cannot be updated
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -157,10 +210,13 @@ export async function POST(request: Request) {
         companyName: newEntry.companyName,
         centre: `${centre.name} (${centre.area})`,
         address: centre.address,
-        duration: duration || `${months} Months`,
+        duration: '1 Year (Annual)',
+        rate: 24000,
+        gstPercent: 0,
+        totalAmount: 24000,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
-        message: 'Virtual Office registration received successfully! Welcome to SSPACIA.',
+        message: 'Virtual Office registration activated successfully! Welcome to SSPACIA.',
       },
     });
   } catch (error: any) {

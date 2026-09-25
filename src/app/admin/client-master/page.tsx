@@ -33,7 +33,9 @@ import {
   AlertTriangle,
   FileSpreadsheet,
   Globe,
-  Tag
+  Tag,
+  Gift,
+  Printer
 } from 'lucide-react';
 import { ClientTerminationModal } from '@/components/admin/client-termination-modal';
 import { toast } from 'sonner';
@@ -98,6 +100,34 @@ interface ClientMasterProductItem {
   endTime?: string | null;
 }
 
+export interface ComplimentaryEntitlement {
+  type: 'MEETING_ROOM' | 'PRINTER_PAGES';
+  name: string;
+  freeQuota: number; // e.g. 2 hrs or 100 pages
+  unit: 'HOURS' | 'PAGES';
+  extraRate: number; // e.g. 500 for meeting room, 1 for printer pages
+  isEnabled: boolean;
+}
+
+export const DEFAULT_COMPLIMENTARY_ENTITLEMENTS: ComplimentaryEntitlement[] = [
+  {
+    type: 'MEETING_ROOM',
+    name: 'Meeting Room',
+    freeQuota: 2,
+    unit: 'HOURS',
+    extraRate: 500,
+    isEnabled: true,
+  },
+  {
+    type: 'PRINTER_PAGES',
+    name: 'Printer Pages',
+    freeQuota: 100,
+    unit: 'PAGES',
+    extraRate: 1,
+    isEnabled: true,
+  },
+];
+
 interface ClientMasterEntry {
   id: number;
   srNo: number;
@@ -149,6 +179,7 @@ interface ClientMasterEntry {
   paymentDueDay?: number | null;
   clientStatus: string | null;
   clientType?: 'DEFAULT' | 'VIRTUAL_OFFICE' | 'ONE_TIME' | null;
+  complimentaryJson?: string | null;
   isDispatchedToInvoices?: boolean;
   dispatchedMonths?: string[];
   targetBillingMonth?: string;
@@ -469,6 +500,9 @@ export default function ClientMasterRegistryPage() {
   const [selectedTargetDueDay, setSelectedTargetDueDay] = useState<string>('ALL');
   const [showDispatchDueDayModal, setShowDispatchDueDayModal] = useState(false);
   const [uploadingProductAgrIdx, setUploadingProductAgrIdx] = useState<number | null>(null);
+
+  // Complimentary Monthly Entitlements (Meeting Room & Printer Pages)
+  const [complimentaryEntitlements, setComplimentaryEntitlements] = useState<ComplimentaryEntitlement[]>(DEFAULT_COMPLIMENTARY_ENTITLEMENTS);
 
   // TDS
   const [willDeductTds, setWillDeductTds] = useState(false);
@@ -964,6 +998,7 @@ export default function ClientMasterRegistryPage() {
     setProrateCustomAmount('');
     setPaymentDueDay('');
     setClientStatus('Active');
+    setComplimentaryEntitlements(DEFAULT_COMPLIMENTARY_ENTITLEMENTS);
     setApplyEscalationToTotal(true);
     setShowExistingEscalationPrompt(false);
 
@@ -1114,6 +1149,25 @@ export default function ClientMasterRegistryPage() {
     setSdrPdfName(entry.sdrPdfName || '');
     setPaymentDueDay(entry.paymentDueDay ?? '');
     setClientStatus(entry.clientStatus || 'Active');
+
+    if (entry.complimentaryJson) {
+      try {
+        const parsed = JSON.parse(entry.complimentaryJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const merged = DEFAULT_COMPLIMENTARY_ENTITLEMENTS.map((def) => {
+            const found = parsed.find((p: any) => p.type === def.type);
+            return found ? { ...def, ...found } : def;
+          });
+          setComplimentaryEntitlements(merged);
+        } else {
+          setComplimentaryEntitlements(DEFAULT_COMPLIMENTARY_ENTITLEMENTS);
+        }
+      } catch {
+        setComplimentaryEntitlements(DEFAULT_COMPLIMENTARY_ENTITLEMENTS);
+      }
+    } else {
+      setComplimentaryEntitlements(DEFAULT_COMPLIMENTARY_ENTITLEMENTS);
+    }
 
     setShowAddClientModal(true);
   };
@@ -1314,6 +1368,7 @@ export default function ClientMasterRegistryPage() {
             ? (productRows[0]?.paymentDueDay !== '' ? Number(productRows[0]?.paymentDueDay) : (paymentDueDay !== '' ? Number(paymentDueDay) : 5))
             : (paymentDueDay !== '' ? Number(paymentDueDay) : null)),
       clientStatus: isOneTime ? (clientStatus || 'One-Time') : clientStatus,
+      complimentaryJson: (isOneTime || isVO) ? null : JSON.stringify(complimentaryEntitlements),
     };
 
     try {
@@ -2191,6 +2246,32 @@ export default function ClientMasterRegistryPage() {
                               <div className="text-[10px] text-[#616161]">
                                 {entry.noOfSeats || 0} seats @ ₹{Number(entry.ratePerAgreement || 0).toLocaleString('en-IN')}
                               </div>
+                              {(() => {
+                                if (entry.clientType && entry.clientType !== 'DEFAULT') return null;
+                                let compSummary = '2h Mtg | 100p Print';
+                                if (entry.complimentaryJson) {
+                                  try {
+                                    const items: any[] = JSON.parse(entry.complimentaryJson);
+                                    if (Array.isArray(items)) {
+                                      const parts: string[] = [];
+                                      items.forEach((it) => {
+                                        if (it.isEnabled !== false) {
+                                          if (it.type === 'MEETING_ROOM') parts.push(`${it.freeQuota}h Mtg`);
+                                          if (it.type === 'PRINTER_PAGES') parts.push(`${it.freeQuota}p Print`);
+                                        }
+                                      });
+                                      if (parts.length > 0) compSummary = parts.join(' | ');
+                                      else compSummary = 'No Compl.';
+                                    }
+                                  } catch {}
+                                }
+                                return (
+                                  <div className="mt-1 flex items-center gap-1 text-[9px] font-bold text-teal-800 bg-teal-50 border border-teal-200/80 px-1.5 py-0.5 rounded w-fit" title="Monthly Complimentary Entitlement (Meeting Room & Printer Copies)">
+                                    <Gift size={9} className="text-teal-700 shrink-0" />
+                                    <span>{compSummary}</span>
+                                  </div>
+                                );
+                              })()}
                             </>
                           )}
                         </td>
@@ -2469,9 +2550,11 @@ export default function ClientMasterRegistryPage() {
                             ...first,
                             cabinName: 'Virtual Office',
                             noOfSeats: 0,
-                            ratePerAgreement: 0,
-                            gstPercent: first.gstPercent ?? 18,
-                            paymentDuration: first.paymentDuration || 'MONTHLY',
+                            ratePerAgreement: 24000,
+                            amount: 24000,
+                            gstPercent: 0,
+                            totalAmount: 24000,
+                            paymentDuration: 'YEARLY',
                             paymentDueDay: first.paymentDueDay ?? 5,
                             hasSeparateAgreement: false,
                             billingType: 'REGULAR',
@@ -3722,10 +3805,10 @@ export default function ClientMasterRegistryPage() {
                         <Globe size={18} className="text-indigo-600 shrink-0 mt-0.5" />
                         <div>
                           <div className="font-bold text-xs uppercase tracking-wider text-indigo-900">
-                            Virtual Office Plan Selected (Address &amp; Mailing Only)
+                            Virtual Office Plan Selected (Address &amp; Mailing Only • ₹24,000 / Year • No GST)
                           </div>
                           <div className="text-[11px] text-indigo-700 mt-0.5">
-                            This client only utilizes the centre address for business/tax/postal registration. Physical cabins, seats, and mid-month calculators are not required.
+                            Commercial address and mail/courier reception usage only. Fixed at ₹24,000/year with 0% GST. Not for GST registration or ROC company incorporation.
                           </div>
                         </div>
                       </div>
@@ -3775,12 +3858,12 @@ export default function ClientMasterRegistryPage() {
                               min="0"
                               max="100"
                               step="any"
-                              placeholder="18"
-                              value={productRows[0]?.gstPercent ?? 18}
+                              placeholder="0"
+                              value={productRows[0]?.gstPercent ?? 0}
                               onChange={(e) => {
-                                const gstVal = e.target.value === '' ? '' : Number(e.target.value);
+                                const gstVal = e.target.value === '' ? 0 : Number(e.target.value);
                                 const amt = Number(productRows[0]?.amount || 0);
-                                const gstPct = gstVal !== '' ? Number(gstVal) : 18;
+                                const gstPct = Number(gstVal);
                                 const total = amt > 0 ? Math.round(amt * (1 + gstPct / 100)) : '';
                                 handleUpdateProductRow(0, 'gstPercent', gstVal);
                                 handleUpdateProductRow(0, 'totalAmount', total);
@@ -3816,15 +3899,11 @@ export default function ClientMasterRegistryPage() {
                               Payment Duration Type
                             </label>
                             <select
-                              value={productRows[0]?.paymentDuration || 'MONTHLY'}
+                              value={productRows[0]?.paymentDuration || 'YEARLY'}
                               onChange={(e) => handleUpdateProductRow(0, 'paymentDuration', e.target.value)}
                               className="w-full bg-white border border-[#006064]/30 px-3 py-2 text-xs focus:outline-none focus:border-[#006064] font-bold text-[#006064]"
                             >
-                              <option value="MONTHLY">Monthly (1 Month)</option>
-                              <option value="QUARTERLY">Quarterly (3 Months)</option>
-                              <option value="HALF_YEARLY">Half-Yearly (6 Months)</option>
-                              <option value="YEARLY">Yearly (12 Months)</option>
-                              <option value="TWO_YEARS">2 Years (24 Months)</option>
+                              <option value="YEARLY">Yearly (Fixed Annual - ₹24,000 / Year)</option>
                             </select>
                           </div>
 
@@ -4657,6 +4736,184 @@ export default function ClientMasterRegistryPage() {
                   )}
                 </div>
 
+                {/* SECTION 6.5: Complimentary Monthly Entitlements (Full-Time Clients Only) */}
+                {clientType === 'DEFAULT' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+                      <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C]">
+                        <Gift size={16} className="text-[#006064]" /> 6.5. Complimentary Monthly Entitlements (Meeting Room & Printer Pages)
+                      </div>
+                      <span className="text-[11px] font-semibold text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded-full">
+                        Free Monthly Quotas
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-[#616161]">
+                      Configure monthly complimentary allowances given to this client. When generating/reviewing monthly invoices, Community Managers can check actual usage and bill any excess at the specified rates (Meeting Room: ₹500/hr, Printer Pages: ₹1/page).
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Meeting Room Card */}
+                      <div className={`p-4 border rounded transition-all ${
+                        complimentaryEntitlements.find((c) => c.type === 'MEETING_ROOM')?.isEnabled
+                          ? 'bg-white border-teal-400 shadow-xs'
+                          : 'bg-[#F8F9FA] border-neutral-200 opacity-75'
+                      }`}>
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-100">
+                          <label className="flex items-center gap-2.5 cursor-pointer font-bold text-sm text-[#1B1C1C]">
+                            <input
+                              type="checkbox"
+                              checked={complimentaryEntitlements.find((c) => c.type === 'MEETING_ROOM')?.isEnabled ?? true}
+                              onChange={(e) => {
+                                setComplimentaryEntitlements((prev) =>
+                                  prev.map((c) => (c.type === 'MEETING_ROOM' ? { ...c, isEnabled: e.target.checked } : c))
+                                );
+                              }}
+                              className="w-4 h-4 text-[#006064] rounded focus:ring-0"
+                            />
+                            <span className="flex items-center gap-1.5">
+                              <Clock size={15} className="text-[#006064]" />
+                              Meeting Room (Complimentary)
+                            </span>
+                          </label>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                            Default: 2 Hrs
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <label className="block font-bold text-[#616161] mb-1">
+                              Free Hours / Month
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={complimentaryEntitlements.find((c) => c.type === 'MEETING_ROOM')?.freeQuota ?? 2}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setComplimentaryEntitlements((prev) =>
+                                    prev.map((c) => (c.type === 'MEETING_ROOM' ? { ...c, freeQuota: val } : c))
+                                  );
+                                }}
+                                disabled={!complimentaryEntitlements.find((c) => c.type === 'MEETING_ROOM')?.isEnabled}
+                                className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-sm font-semibold rounded disabled:bg-neutral-100"
+                              />
+                              <span className="absolute right-3 top-2 text-neutral-400 font-medium text-xs">Hrs</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-[#616161] mb-1">
+                              Over-Usage Rate
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                value={complimentaryEntitlements.find((c) => c.type === 'MEETING_ROOM')?.extraRate ?? 500}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setComplimentaryEntitlements((prev) =>
+                                    prev.map((c) => (c.type === 'MEETING_ROOM' ? { ...c, extraRate: val } : c))
+                                  );
+                                }}
+                                disabled={!complimentaryEntitlements.find((c) => c.type === 'MEETING_ROOM')?.isEnabled}
+                                className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-sm font-semibold rounded disabled:bg-neutral-100"
+                              />
+                              <span className="absolute right-3 top-2 text-neutral-400 font-medium text-xs">₹/Hr</span>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="mt-2.5 text-[11px] text-neutral-500 italic">
+                          💡 Client gets {complimentaryEntitlements.find((c) => c.type === 'MEETING_ROOM')?.freeQuota ?? 2} hrs free meeting room every month. Extra hours billed @ ₹{complimentaryEntitlements.find((c) => c.type === 'MEETING_ROOM')?.extraRate ?? 500}/hr (+18% GST).
+                        </p>
+                      </div>
+
+                      {/* Printer Pages Card */}
+                      <div className={`p-4 border rounded transition-all ${
+                        complimentaryEntitlements.find((c) => c.type === 'PRINTER_PAGES')?.isEnabled
+                          ? 'bg-white border-teal-400 shadow-xs'
+                          : 'bg-[#F8F9FA] border-neutral-200 opacity-75'
+                      }`}>
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-neutral-100">
+                          <label className="flex items-center gap-2.5 cursor-pointer font-bold text-sm text-[#1B1C1C]">
+                            <input
+                              type="checkbox"
+                              checked={complimentaryEntitlements.find((c) => c.type === 'PRINTER_PAGES')?.isEnabled ?? true}
+                              onChange={(e) => {
+                                setComplimentaryEntitlements((prev) =>
+                                  prev.map((c) => (c.type === 'PRINTER_PAGES' ? { ...c, isEnabled: e.target.checked } : c))
+                                );
+                              }}
+                              className="w-4 h-4 text-[#006064] rounded focus:ring-0"
+                            />
+                            <span className="flex items-center gap-1.5">
+                              <Printer size={15} className="text-[#006064]" />
+                              Printer Paper Copies (Complimentary)
+                            </span>
+                          </label>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                            Default: 100 Pages
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <label className="block font-bold text-[#616161] mb-1">
+                              Free Pages / Month
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                value={complimentaryEntitlements.find((c) => c.type === 'PRINTER_PAGES')?.freeQuota ?? 100}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10) || 0;
+                                  setComplimentaryEntitlements((prev) =>
+                                    prev.map((c) => (c.type === 'PRINTER_PAGES' ? { ...c, freeQuota: val } : c))
+                                  );
+                                }}
+                                disabled={!complimentaryEntitlements.find((c) => c.type === 'PRINTER_PAGES')?.isEnabled}
+                                className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-sm font-semibold rounded disabled:bg-neutral-100"
+                              />
+                              <span className="absolute right-3 top-2 text-neutral-400 font-medium text-xs">Pages</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-[#616161] mb-1">
+                              Over-Usage Rate
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={complimentaryEntitlements.find((c) => c.type === 'PRINTER_PAGES')?.extraRate ?? 1}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setComplimentaryEntitlements((prev) =>
+                                    prev.map((c) => (c.type === 'PRINTER_PAGES' ? { ...c, extraRate: val } : c))
+                                  );
+                                }}
+                                disabled={!complimentaryEntitlements.find((c) => c.type === 'PRINTER_PAGES')?.isEnabled}
+                                className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-sm font-semibold rounded disabled:bg-neutral-100"
+                              />
+                              <span className="absolute right-3 top-2 text-neutral-400 font-medium text-xs">₹/Page</span>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="mt-2.5 text-[11px] text-neutral-500 italic">
+                          💡 Client gets {complimentaryEntitlements.find((c) => c.type === 'PRINTER_PAGES')?.freeQuota ?? 100} free printer pages every month. Extra pages billed @ ₹{complimentaryEntitlements.find((c) => c.type === 'PRINTER_PAGES')?.extraRate ?? 1}/page (+18% GST).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* SECTION 7: TDS Deduction Options */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#1B1C1C] border-b border-neutral-200 pb-2">
@@ -5467,6 +5724,50 @@ export default function ClientMasterRegistryPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Complimentary Monthly Entitlements */}
+                  {(() => {
+                    if (entryToViewDetails.clientType && entryToViewDetails.clientType !== 'DEFAULT') return null;
+                    let compItems: any[] = [];
+                    if (entryToViewDetails.complimentaryJson) {
+                      try {
+                        const parsed = JSON.parse(entryToViewDetails.complimentaryJson);
+                        if (Array.isArray(parsed) && parsed.length > 0) compItems = parsed;
+                      } catch {}
+                    }
+                    if (compItems.length === 0) {
+                      compItems = [
+                        { type: 'MEETING_ROOM', name: 'Meeting Room', freeQuota: 2, unit: 'HOURS', extraRate: 500, isEnabled: true },
+                        { type: 'PRINTER_PAGES', name: 'Printer Pages', freeQuota: 100, unit: 'PAGES', extraRate: 1, isEnabled: true },
+                      ];
+                    }
+                    return (
+                      <div className="space-y-2">
+                        <h4 className="font-bold uppercase tracking-wider text-[#1B1C1C] flex items-center gap-2">
+                          <Gift size={14} className="text-[#006064]" /> Complimentary Monthly Entitlements
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {compItems.map((item, idx) => (
+                            <div key={idx} className="bg-teal-50/60 p-3 border border-teal-200 rounded">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-xs text-teal-950 flex items-center gap-1.5">
+                                  {item.type === 'MEETING_ROOM' ? <Clock size={14} className="text-teal-700" /> : <Printer size={14} className="text-teal-700" />}
+                                  {item.name || (item.type === 'MEETING_ROOM' ? 'Meeting Room' : 'Printer Pages')}
+                                </span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${item.isEnabled !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-200 text-neutral-600'}`}>
+                                  {item.isEnabled !== false ? 'Active' : 'Disabled'}
+                                </span>
+                              </div>
+                              <div className="mt-2 text-xs text-neutral-700 space-y-1">
+                                <div>Free Quota: <strong className="text-teal-800">{item.freeQuota} {item.unit === 'HOURS' ? 'Hours / Month' : 'Pages / Month'}</strong></div>
+                                <div className="text-[11px] text-neutral-500">Over-usage: Charged @ ₹{item.extraRate}/{item.unit === 'HOURS' ? 'hr' : 'page'} (+18% GST)</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* TDS & SDR Details */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">

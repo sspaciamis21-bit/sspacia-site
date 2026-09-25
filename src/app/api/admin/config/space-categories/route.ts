@@ -15,7 +15,7 @@ export const GET = withPermission('settings', 'read', async () => {
         name: 'VIRTUAL_OFFICE',
         displayName: 'Virtual Office',
         slug: 'virtual-office',
-        description: 'Virtual Office & GST Registration Address',
+        description: 'Virtual Office Commercial Address & Mail Handling',
         isActive: true,
         sortOrder: 3,
       },

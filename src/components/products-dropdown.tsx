@@ -159,7 +159,7 @@ export function ProductsDropdown({ onLinkClick }: ProductsDropdownProps) {
               onClick={onLinkClick}
               className="block text-[10.5px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline px-1 py-0.5 flex items-center justify-between"
             >
-              <span>🌐 Virtual Office &amp; GST →</span>
+              <span>🌐 Virtual Office Address →</span>
               <span className="text-[8px] font-extrabold bg-indigo-100 text-indigo-800 px-1 py-0.5 rounded-2xs">3 Centres</span>
             </Link>
           </div>

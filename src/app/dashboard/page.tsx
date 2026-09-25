@@ -14,7 +14,12 @@ import {
   Zap,
   Users,
   Briefcase,
-  Loader2
+  Loader2,
+  Globe,
+  Mail,
+  MapPin,
+  CheckCircle2,
+  Receipt
 } from 'lucide-react';
 import { FadeUp } from '@/components/ui/fade-up';
 import Link from 'next/link';
@@ -24,34 +29,40 @@ export default function UserDashboardPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ totalBookings: 0, activePasses: 0, pendingTickets: 0, totalTickets: 0 });
-
-  // Mock data for UI demonstration until API is ready
-  const membershipData = {
-    productName: "Premium Dedicated Desk Cluster",
-    companyName: user?.companyName || "Personal Account",
-    startDate: "2026-01-01",
-    endDate: "2026-12-31",
-    guestCredits: 12,
-    totalCredits: 20,
-    status: "Active"
-  };
+  const [clientMaster, setClientMaster] = useState<any>(null);
 
   useEffect(() => {
     fetch('/api/user/dashboard')
       .then(r => r.json())
       .then(json => {
         if (json.data) {
-          setStats(json.data.stats);
+          setStats(json.data.stats || { totalBookings: 0, activePasses: 0, pendingTickets: 0, totalTickets: 0 });
+          setClientMaster(json.data.clientMaster || null);
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
+  const isVirtualOffice = clientMaster?.clientType === 'VIRTUAL_OFFICE' || 
+    (clientMaster?.cabinName && clientMaster.cabinName.toLowerCase().includes('virtual office'));
+
+  // Default fallback if no client master assigned yet
+  const membershipData = {
+    productName: clientMaster?.cabinName || (isVirtualOffice ? "Virtual Office - Commercial Address" : "Premium Dedicated Desk Cluster"),
+    companyName: clientMaster?.companyName || user?.companyName || "Personal Account",
+    startDate: clientMaster?.agreementStartDate || "2026-01-01",
+    endDate: clientMaster?.agreementEndDate || "2026-12-31",
+    clientId: clientMaster?.clientId || "SSP-2026-X8",
+    status: clientMaster?.clientStatus || "Active",
+    guestCredits: 12,
+    totalCredits: 20,
+  };
+
   const quickActions = [
     { title: 'My Bookings', icon: Calendar, href: '/dashboard/bookings' },
+    { title: 'Contracts & Invoices', icon: Receipt, href: '/dashboard/contracts' },
     { title: 'Support Node', icon: Ticket, href: '/dashboard/tickets' },
-    { title: 'Billing Stack', icon: CreditCard, href: '/dashboard/billing' },
     { title: 'Profile Info', icon: Settings, href: '/dashboard/profile' }
   ];
 
@@ -78,8 +89,10 @@ export default function UserDashboardPage() {
             <div className="relative z-10 flex flex-col h-full justify-between gap-12">
               <div className="space-y-8">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 bg-green-400"></div>
-                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/70">Active Profile</span>
+                  <div className="h-2 w-2 bg-emerald-400 animate-pulse"></div>
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/70">
+                    {isVirtualOffice ? 'Virtual Office Account' : 'Active Profile'}
+                  </span>
                 </div>
                 <div className="space-y-2">
                   <h1 className="font-display text-5xl md:text-6xl font-bold tracking-tight text-white uppercase leading-none">
@@ -87,8 +100,8 @@ export default function UserDashboardPage() {
                     <span className="text-white/90">{user?.name?.split(' ')[0] || 'Member'}.</span>
                   </h1>
                   <div className="flex items-center gap-2 text-white/80 font-bold uppercase tracking-widest text-[10px] mt-4 border-l border-white/20 pl-4 py-1">
-                     <Building2 className="w-3.5 h-3.5" />
-                     {user?.companyName || "Sspacia Member"}
+                     <Building2 className="w-3.5 h-3.5 text-emerald-300" />
+                     {clientMaster?.companyName || user?.companyName || "Sspacia Member"}
                   </div>
                 </div>
               </div>
@@ -104,15 +117,65 @@ export default function UserDashboardPage() {
             </div>
           </div>
 
-          {/* Credits Summary */}
-          <div className="bg-[#1B1B1B] rounded-none p-12 flex flex-col justify-between relative overflow-hidden border border-white/10 shadow-xl">
-             <div className="absolute top-0 right-0 w-48 h-48 bg-[var(--primary)]/20 blur-[100px] -mr-20 -mt-20"></div>
-             <div className="relative z-10">
+          {/* Credits / Plan Summary Card */}
+          {isVirtualOffice ? (
+            <div className="bg-[#1B1B1B] rounded-none p-10 md:p-12 flex flex-col justify-between relative overflow-hidden border border-white/10 shadow-xl">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 blur-[100px] -mr-20 -mt-20"></div>
+              <div className="relative z-10">
+                <div className="flex justify-between items-center mb-8">
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-400">
+                    Plan Overview
+                  </span>
+                  <div className="p-2.5 bg-white/5 border border-white/10 text-emerald-400">
+                    <Globe className="w-5 h-5" />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-4xl md:text-5xl font-bold text-white tracking-tighter">₹24,000</p>
+                    <span className="text-white/40 text-xs font-bold uppercase tracking-wider">/ Year</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mt-1">
+                    0% GST • Commercial Address Usage Only
+                  </p>
+                </div>
+                
+                <div className="mt-6 space-y-2 pt-4 border-t border-white/5 text-[11px] text-white/70">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Commercial Address Active</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Front Desk Courier &amp; Mail Logging</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Meeting Rooms On-Demand (Member Rate)</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
+                <div>
+                  <p className="text-[8px] font-bold text-white/30 uppercase tracking-widest">Support Tier</p>
+                  <p className="text-xs font-bold text-emerald-400 mt-0.5 uppercase tracking-tight">Standard Commercial</p>
+                </div>
+                <div className="p-2 bg-emerald-500/10 border border-emerald-500/20">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-[#1B1B1B] rounded-none p-12 flex flex-col justify-between relative overflow-hidden border border-white/10 shadow-xl">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-[var(--primary)]/20 blur-[100px] -mr-20 -mt-20"></div>
+              <div className="relative z-10">
                 <div className="flex justify-between items-center mb-10">
-                   <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/30">Credits Summary</span>
-                   <div className="p-2.5 bg-white/5 border border-white/10 text-[var(--primary)]">
-                     <Zap className="w-5 h-5" />
-                   </div>
+                  <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/30">Credits Summary</span>
+                  <div className="p-2.5 bg-white/5 border border-white/10 text-[var(--primary)]">
+                    <Zap className="w-5 h-5" />
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <p className="text-5xl font-bold text-white tracking-tighter">{membershipData.guestCredits}<span className="text-white/20 text-xl ml-2 tracking-tighter">/ {membershipData.totalCredits}</span></p>
@@ -120,23 +183,24 @@ export default function UserDashboardPage() {
                 </div>
                 
                 <div className="mt-8 space-y-4">
-                   <div className="w-full h-1.5 bg-white/5 rounded-none overflow-hidden">
-                      <div className="h-full bg-[var(--primary)] transition-all duration-1000 cubic-bezier(0.4, 0, 0.2, 1)" style={{ width: `${(membershipData.guestCredits/membershipData.totalCredits)*100}%` }}></div>
-                   </div>
-                   <p className="text-[9px] text-white/20 font-bold uppercase tracking-wider">Credits reset on the 1st of every month.</p>
+                  <div className="w-full h-1.5 bg-white/5 rounded-none overflow-hidden">
+                    <div className="h-full bg-[var(--primary)] transition-all duration-1000 cubic-bezier(0.4, 0, 0.2, 1)" style={{ width: `${(membershipData.guestCredits/membershipData.totalCredits)*100}%` }}></div>
+                  </div>
+                  <p className="text-[9px] text-white/20 font-bold uppercase tracking-wider">Credits reset on the 1st of every month.</p>
                 </div>
-             </div>
-             
-             <div className="mt-8 pt-8 border-t border-white/5 flex items-center justify-between">
+              </div>
+              
+              <div className="mt-8 pt-8 border-t border-white/5 flex items-center justify-between">
                 <div>
-                   <p className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Support Priority</p>
-                   <p className="text-xs font-bold text-[var(--primary)] mt-1 uppercase tracking-tight">Tier 1 Elite</p>
+                  <p className="text-[8px] font-bold text-white/20 uppercase tracking-widest">Support Priority</p>
+                  <p className="text-xs font-bold text-[var(--primary)] mt-1 uppercase tracking-tight">Tier 1 Elite</p>
                 </div>
                 <div className="p-2 bg-green-500/5 border border-green-500/10">
                   <ShieldCheck className="w-4 h-4 text-green-500/40" />
                 </div>
-             </div>
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       </FadeUp>
 
@@ -147,41 +211,82 @@ export default function UserDashboardPage() {
              <div className="bg-[var(--surface-lowest)] rounded-none p-10 md:p-14 border border-[var(--outline-variant)] shadow-sm relative overflow-hidden group min-h-[420px] flex flex-col justify-center">
                 <div className="absolute top-0 right-0 p-8">
                    <div className="h-14 w-14 bg-[var(--primary)]/5 rounded-none flex items-center justify-center border border-[var(--primary)]/5 transition-transform duration-500 group-hover:scale-105">
-                      <Briefcase className="w-6 h-6 text-[var(--primary)]" />
+                      {isVirtualOffice ? (
+                        <Globe className="w-6 h-6 text-[var(--primary)]" />
+                      ) : (
+                        <Briefcase className="w-6 h-6 text-[var(--primary)]" />
+                      )}
                    </div>
                 </div>
-                                <div className="space-y-10">
+
+                <div className="space-y-8">
                    <div>
                       <h2 className="text-[9px] font-bold text-[var(--primary)] uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
                          <div className="h-1 w-1 bg-[var(--primary)]"></div> 
-                         Active Membership
+                         {isVirtualOffice ? 'Virtual Office Membership' : 'Active Membership'}
                       </h2>
-                      <h3 className="text-4xl md:text-5xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight leading-none max-w-lg mb-6">
-                         {membershipData.productName}
+                      <h3 className="text-3xl md:text-5xl font-display font-bold text-[#1B1C1C] uppercase tracking-tight leading-none max-w-xl mb-4">
+                         {isVirtualOffice ? 'Commercial Address & Mail Presence' : membershipData.productName}
                       </h3>
-                      <div className="flex flex-wrap items-center gap-4 mt-4 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">
-                         <span className="flex items-center gap-2 bg-[var(--surface-low)] px-3 py-1.5 border border-[var(--outline-variant)]">Agreement ID: <span className="text-[#1B1C1C]">SSP-2026-X8</span></span>
-                         <span className="flex items-center gap-2 bg-[var(--surface-low)] px-3 py-1.5 border border-[var(--outline-variant)]">Status: <span className="text-[var(--primary)]">{membershipData.status}</span></span>
+                      {clientMaster?.locationName && (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-600 font-semibold mb-3">
+                          <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>{clientMaster.locationName}</span>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-[#9E9E9E] uppercase tracking-widest">
+                         <span className="flex items-center gap-2 bg-[var(--surface-low)] px-3 py-1.5 border border-[var(--outline-variant)]">
+                           Client ID: <span className="text-[#1B1C1C] font-mono">{membershipData.clientId}</span>
+                         </span>
+                         <span className="flex items-center gap-2 bg-[var(--surface-low)] px-3 py-1.5 border border-[var(--outline-variant)]">
+                           Status: <span className="text-[var(--primary)] font-bold">{membershipData.status}</span>
+                         </span>
+                         {isVirtualOffice && (
+                           <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 font-bold">
+                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                             Annual Plan (₹24,000 / Year • No GST)
+                           </span>
+                         )}
                       </div>
                    </div>
                    
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      <div className="space-y-3 p-8 border border-[var(--outline-variant)] hover:bg-[var(--surface-low)] transition-all rounded-none bg-[var(--surface-low)]/30">
-                         <div className="flex items-center gap-3">
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2 p-6 border border-[var(--outline-variant)] hover:bg-[var(--surface-low)] transition-all rounded-none bg-[var(--surface-low)]/30">
+                         <div className="flex items-center gap-2">
                             <Calendar className="w-3.5 h-3.5 text-[var(--primary)]" />
-                             <span className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Start Date</span>
+                            <span className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Agreement Start</span>
                          </div>
-                         <p className="text-2xl font-bold text-[#1B1C1C] tracking-tight">{new Date(membershipData.startDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                         <p className="text-xl font-bold text-[#1B1C1C] tracking-tight">
+                           {new Date(membershipData.startDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                         </p>
                       </div>
                       
-                      <div className="space-y-3 p-8 border border-[var(--outline-variant)] hover:bg-[var(--surface-low)] transition-all rounded-none bg-[var(--surface-low)]/30">
-                         <div className="flex items-center gap-3">
+                      <div className="space-y-2 p-6 border border-[var(--outline-variant)] hover:bg-[var(--surface-low)] transition-all rounded-none bg-[var(--surface-low)]/30">
+                         <div className="flex items-center gap-2">
                             <Clock className="w-3.5 h-3.5 text-orange-500" />
-                             <span className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">End Date</span>
+                            <span className="text-[9px] font-bold text-[#9E9E9E] uppercase tracking-widest">Agreement Expiry</span>
                          </div>
-                         <p className="text-2xl font-bold text-[#1B1C1C] tracking-tight">{new Date(membershipData.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                         <p className="text-xl font-bold text-[#1B1C1C] tracking-tight">
+                           {new Date(membershipData.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                         </p>
                       </div>
                    </div>
+
+                   {/* Features and Usage Note */}
+                   {isVirtualOffice && (
+                     <div className="p-4 bg-emerald-50/50 border border-emerald-200/60 rounded-none text-xs text-gray-700 space-y-1">
+                       <p className="font-bold text-[#004D40] text-xs">Included Services for Virtual Office:</p>
+                       <p className="text-[11px] text-gray-600 leading-relaxed">
+                         • Business mailing and commercial address usage on letterheads, business cards &amp; online presence.
+                       </p>
+                       <p className="text-[11px] text-gray-600 leading-relaxed">
+                         • Front-desk reception receiving couriers and letters with live status logging.
+                       </p>
+                       <p className="text-[11px] text-gray-600 leading-relaxed">
+                         • On-demand access to premium conference rooms and meeting spaces booked anytime through your portal.
+                       </p>
+                     </div>
+                   )}
                 </div>
              </div>
            </FadeUp>
@@ -199,7 +304,7 @@ export default function UserDashboardPage() {
                         </h3>
                         <Users className="w-4 h-4 text-[#9E9E9E]" />
                      </div>
-                          <div className="space-y-6">
+                     <div className="space-y-6">
                         <div className="flex items-center justify-between group transition-all">
                            <span className="text-[11px] font-bold text-[#616161] uppercase tracking-wider group-hover:text-[var(--primary)]">Pending Tickets</span>
                            <span className="text-3xl font-bold text-[#1B1C1C]">{loading ? '--' : stats.pendingTickets}</span>
@@ -216,7 +321,7 @@ export default function UserDashboardPage() {
                   </div>
                </div>
             </FadeUp>
-                        <FadeUp delay={0.3}>
+            <FadeUp delay={0.3}>
                 <Link href="/dashboard/tickets" className="bg-[#1B1B1B] hover:bg-[var(--primary)] p-10 rounded-none flex items-center justify-between group transition-all duration-500 shadow-xl border border-white/5">
                    <div className="space-y-2">
                       <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest">Need Assistance?</p>
@@ -250,3 +355,4 @@ export default function UserDashboardPage() {
     </div>
   );
 }
+
