@@ -104,6 +104,7 @@ export async function GET() {
     const liveInvoices = await prisma.invoiceRecord.findMany({
       orderBy: { id: 'asc' },
       include: {
+        attachedInvoice: true,
         clientMaster: {
           include: {
             products: true,
@@ -265,6 +266,159 @@ export async function GET() {
       };
     });
 
+    // ── 1. PENDING RENEWALS ───────────────────────────────────────────────
+    const nowTime = new Date().getTime();
+    const pendingRenewals: any[] = [];
+
+    clients.forEach(c => {
+      // Exclude terminated clients unless they still have an active agreement date
+      if (c.clientStatus === 'Terminated' && !c.agreementEndDate) return;
+
+      const center = resolveCenter(c.clientId, null, c.createdBy);
+      let productName = c.cabinName || '';
+      if (c.products && c.products.length > 0) {
+        productName = c.products.map((p: any) => p.cabinName).filter(Boolean).join(', ');
+      }
+      if (!productName) {
+        productName = normalizeProduct(null, null, c.companyName);
+      }
+
+      const agrStart = c.agreementStartDate ? new Date(c.agreementStartDate).toISOString().split('T')[0] : '';
+      const agrEnd = c.agreementEndDate ? new Date(c.agreementEndDate).toISOString().split('T')[0] : '';
+      const lockStart = c.agreementStartDate ? new Date(c.agreementStartDate).toISOString().split('T')[0] : '';
+      const lockEnd = c.lockinEndDate ? new Date(c.lockinEndDate).toISOString().split('T')[0] : '';
+
+      let daysToAgreementEnd: number | null = null;
+      let renewalStatus = 'Active';
+
+      if (c.agreementEndDate) {
+        const endMs = new Date(c.agreementEndDate).getTime();
+        daysToAgreementEnd = Math.ceil((endMs - nowTime) / (1000 * 60 * 60 * 24));
+
+        if (daysToAgreementEnd < 0) {
+          renewalStatus = 'Expired';
+        } else if (daysToAgreementEnd <= 15) {
+          renewalStatus = 'Urgent (<= 15d)';
+        } else if (daysToAgreementEnd <= 60) {
+          renewalStatus = 'Upcoming (<= 60d)';
+        } else {
+          renewalStatus = 'Active';
+        }
+      }
+
+      let noticePeriodStr = '-';
+      if (c.noticePeriodMonths) {
+        noticePeriodStr = `${c.noticePeriodMonths} Month(s) (${c.noticePeriodApplicable || 'AFTER_LOCKIN'})`;
+      }
+
+      pendingRenewals.push({
+        center,
+        companyName: c.companyName || '-',
+        productName,
+        agreementStartDate: agrStart,
+        agreementEndDate: agrEnd,
+        lockinStartDate: lockStart,
+        lockinEndDate: lockEnd,
+        noticePeriod: noticePeriodStr,
+        daysToAgreementEnd: daysToAgreementEnd !== null ? daysToAgreementEnd : '',
+        renewalStatus,
+        clientStatus: c.clientStatus || 'Active'
+      });
+    });
+
+    // Sort renewals: center first, then agreementEndDate ascending
+    pendingRenewals.sort((a, b) => {
+      if (a.center !== b.center) return a.center.localeCompare(b.center);
+      if (!a.agreementEndDate && !b.agreementEndDate) return 0;
+      if (!a.agreementEndDate) return 1;
+      if (!b.agreementEndDate) return -1;
+      return a.agreementEndDate.localeCompare(b.agreementEndDate);
+    });
+
+    // ── 2. PENDING PAYMENT RECEIVES (From April 2026 to Present) ───────────
+    const pendingPayReceive: any[] = [];
+    const validMonthPrefixes = [
+      'april', 'may', 'june', 'july', 'august', 'september',
+      'october', 'november', 'december', 'january', 'february', 'march'
+    ];
+
+    function isEligibleMonth(m?: string | null): boolean {
+      if (!m) return false;
+      const lower = m.toLowerCase();
+      return validMonthPrefixes.some(v => lower.includes(v));
+    }
+
+    function formatPdfUrl(url?: string | null): string {
+      if (!url) return '';
+      const s = String(url).trim();
+      if (!s) return '';
+      if (s.startsWith('http://') || s.startsWith('https://')) return s;
+      if (s.startsWith('/')) return `https://sspacia.com${s}`;
+      return `https://sspacia.com/${s}`;
+    }
+
+    // 2a. Check Old Invoices (April 2026 onwards)
+    oldInvoices.forEach((inv: any) => {
+      if (!isEligibleMonth(inv.month)) return;
+
+      const invAmt = Number(inv.amount || inv.receiveAmount || 0);
+      const recAmt = Number(inv.receiveAmount || 0);
+      const balAmt = Math.max(0, invAmt - recAmt);
+
+      if (balAmt <= 0) return;
+
+      const rawComp = (inv.companyName || '').trim().toLowerCase();
+      const cleanComp = rawComp.replace(/[^a-z0-9]/g, '');
+      const client = clientMap.get(rawComp) || clientMap.get(cleanComp);
+      const center = resolveCenter(client?.clientId, inv.locationName, client?.createdBy);
+
+      const status = recAmt > 0 ? 'PARTIAL' : 'PENDING';
+      const invoiceLink = formatPdfUrl(inv.tallyPdfUrl || inv.attachmentUrl);
+
+      pendingPayReceive.push({
+        center,
+        invoiceMonth: inv.month || 'April 2026',
+        companyName: inv.companyName || '-',
+        invoiceLink,
+        invoicedAmount: invAmt,
+        receivedAmount: recAmt,
+        balanceAmount: balAmt,
+        paymentStatus: status,
+        invoiceNo: inv.invoiceNo || '-'
+      });
+    });
+
+    // 2b. Check Live Invoices (April 2026 onwards)
+    liveInvoices.forEach((inv: any) => {
+      const invAmt = Number(inv.totalAmount || inv.amount || 0);
+      const recAmt = Number(inv.receiveAmount || 0);
+      const balAmt = Math.max(0, invAmt - recAmt);
+
+      if (balAmt <= 0 || inv.paymentStatus === 'RECEIVED' || inv.paymentStatus === 'PAID') return;
+
+      const center = resolveCenter(inv.clientMaster?.clientId, null, inv.clientMaster?.createdBy);
+      const invoiceLink = formatPdfUrl(inv.digitallySignedPdfUrl || inv.attachedInvoice?.fileUrl);
+      const status = recAmt > 0 ? 'PARTIAL' : 'PENDING';
+
+      pendingPayReceive.push({
+        center,
+        invoiceMonth: inv.billingMonth || 'Current Month',
+        companyName: inv.companyName || inv.clientMaster?.companyName || 'Unknown Client',
+        invoiceLink,
+        invoicedAmount: invAmt,
+        receivedAmount: recAmt,
+        balanceAmount: balAmt,
+        paymentStatus: status,
+        invoiceNo: inv.digitallySignedPdfName || `INV-${inv.id}`
+      });
+    });
+
+    // Sort pending pay receive: center first, then companyName
+    pendingPayReceive.sort((a, b) => {
+      if (a.center !== b.center) return a.center.localeCompare(b.center);
+      return a.companyName.localeCompare(b.companyName);
+    });
+
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
@@ -272,8 +426,12 @@ export async function GET() {
       months: MONTHS,
       invoiceCount: invoiceRows.length,
       sdrCount: sdrRows.length,
+      pendingRenewalsCount: pendingRenewals.length,
+      pendingPayReceiveCount: pendingPayReceive.length,
       invoiceRows,
-      sdrRows
+      sdrRows,
+      pendingRenewals,
+      pendingPayReceive
     });
   } catch (error: any) {
     console.error('Reports API error:', error);
