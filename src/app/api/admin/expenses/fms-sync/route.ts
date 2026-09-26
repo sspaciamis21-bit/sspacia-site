@@ -29,32 +29,51 @@ async function fetchAllExpenseFmsItems() {
 
   return records.map((exp: any) => {
     const centerName = exp.locationName || exp.location?.name || 'Mercado';
-    const expenseDate = formatExpenseDate(exp.expenseDate);
+    let isoDateStr = '';
+    if (exp.expenseDate) {
+      const d = new Date(exp.expenseDate);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        isoDateStr = `${y}-${m}-${day}`;
+      }
+    }
+
     const category = (exp.category || 'GENERAL EXPENSE').trim();
     const description = (exp.description || '').trim();
     const headerItemDesc = `${category} - ${description}`;
 
     // Step 1: Accountant Check
-    const step1Actual = exp.accountantApprovedAt ? formatFmsTimestamp(exp.accountantApprovedAt) : '';
-    const step1Status = exp.accountantApprovalStatus === 'APPROVED' ? 'Approved' : (exp.accountantApprovalStatus === 'REJECTED' ? 'Rejected' : (step1Actual ? 'Done' : ''));
+    // If accountantApprovedAt exists (accountant reviewed/approved/rejected), use it.
+    // If missing but superAdminApprovedAt exists (historical expense before accountant step), fallback to superAdminApprovedAt!
+    let step1Actual = '';
+    let step1Status = 'Pending';
+    if (exp.accountantApprovedAt) {
+      step1Actual = formatFmsTimestamp(exp.accountantApprovedAt);
+      step1Status = exp.accountantApprovalStatus === 'REJECTED' ? 'Rejected' : 'Done';
+    } else if (exp.superAdminApprovedAt) {
+      step1Actual = formatFmsTimestamp(exp.superAdminApprovedAt);
+      step1Status = 'Done';
+    }
 
     // Step 2: Super Admin Approval
     const step2Actual = exp.superAdminApprovedAt ? formatFmsTimestamp(exp.superAdminApprovedAt) : '';
-    const step2Status = exp.superAdminApprovalStatus === 'APPROVED' ? 'Approved' : (exp.superAdminApprovalStatus === 'REJECTED' ? 'Rejected' : (step2Actual ? 'Done' : ''));
+    const step2Status = step2Actual ? (exp.superAdminApprovalStatus === 'REJECTED' ? 'Rejected' : 'Done') : 'Pending';
 
     // Step 3: 3rd Payment Approval ("Sir Pays")
     const step3Actual = exp.paymentApprovedAt ? formatFmsTimestamp(exp.paymentApprovedAt) : '';
-    const step3Status = exp.paymentApprovalStatus === 'APPROVED' ? 'Approved' : (exp.paymentApprovalStatus === 'REJECTED' ? 'Rejected' : (step3Actual ? 'Done' : ''));
+    const step3Status = step3Actual ? (exp.paymentApprovalStatus === 'REJECTED' ? 'Rejected' : 'Done') : 'Pending';
 
     // Step 4: UTR Details Entry
     const isPaid = exp.paymentStatus === 'PAID' || Boolean(exp.utrNumber);
     const step4Actual = isPaid ? formatFmsTimestamp(exp.updatedAt || exp.paymentApprovedAt || new Date()) : '';
-    const step4Status = isPaid ? 'Done' : '';
+    const step4Status = isPaid ? 'Done' : 'Pending';
 
     return {
       id: exp.id,
       centerName,
-      expenseDate,
+      expenseDate: isoDateStr || formatExpenseDate(exp.expenseDate),
       headerItemDesc,
       step1Actual,
       step1Status,

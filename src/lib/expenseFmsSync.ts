@@ -110,7 +110,7 @@ export async function syncExpenseStep1Accountant(expenseRecordId: number, status
     expenseDate: details.expenseDate,
     headerItemDesc: details.headerItemDesc,
     actual: actualTime,
-    status: status,
+    status: status === 'Rejected' ? 'Rejected' : 'Done',
   });
 }
 
@@ -131,7 +131,7 @@ export async function syncExpenseStep2SuperAdmin(expenseRecordId: number, status
     expenseDate: details.expenseDate,
     headerItemDesc: details.headerItemDesc,
     actual: actualTime,
-    status: status,
+    status: status === 'Rejected' ? 'Rejected' : 'Done',
   });
 }
 
@@ -152,7 +152,7 @@ export async function syncExpenseStep3PaymentApproval(expenseRecordId: number, s
     expenseDate: details.expenseDate,
     headerItemDesc: details.headerItemDesc,
     actual: actualTime,
-    status: status,
+    status: status === 'Rejected' ? 'Rejected' : 'Done',
   });
 }
 
