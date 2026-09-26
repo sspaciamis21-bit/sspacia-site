@@ -11,11 +11,6 @@ const WEBHOOK_URL =
 
 async function fetchAugSepItems() {
   const invoices = await (prisma as any).invoiceRecord.findMany({
-    where: {
-      billingMonth: {
-        in: ['August 2026', 'September 2026', 'august 2026', 'september 2026'],
-      },
-    },
     orderBy: [
       { billingMonth: 'asc' },
       { id: 'asc' },
@@ -58,29 +53,23 @@ async function fetchAugSepItems() {
     const attachedTime = inv.attachedInvoice?.createdAt ? formatFmsTimestamp(inv.attachedInvoice.createdAt) : updatedTime;
     const signedTime = inv.signedAt ? formatFmsTimestamp(inv.signedAt) : updatedTime;
 
-    // Step 1: Review Invoices
-    const isReviewed = status !== 'PENDING_CM_REVIEW';
-    const step1Planned = createdTime;
-    const step1Actual = isReviewed ? updatedTime : '';
-    const step1Status = isReviewed ? 'Done' : 'Pending';
-
-    // Step 2: Send to Accountant to attach tally pdf
+    // Step 1: Review Invoices & Send to Accountant to attach tally pdf
     const isSentToAccountant = ['SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED'].includes(status);
-    const step2Planned = isReviewed ? updatedTime : '';
-    const step2Actual = isSentToAccountant ? updatedTime : '';
-    const step2Status = isSentToAccountant ? 'Done' : (isReviewed ? 'Pending' : '');
+    const step1Planned = createdTime;
+    const step1Actual = isSentToAccountant ? updatedTime : '';
+    const step1Status = isSentToAccountant ? 'Done' : 'Pending';
 
-    // Step 3: Attach Tally Invoice PDF (Accounts Tab)
+    // Step 2: Attach Tally Invoice PDF and send back to CM
     const isAttached = ['INVOICE_ATTACHED', 'APPROVED'].includes(status);
-    const step3Planned = isSentToAccountant ? updatedTime : '';
-    const step3Actual = isAttached ? attachedTime : '';
-    const step3Status = isAttached ? 'Done' : (isSentToAccountant ? 'Pending' : '');
+    const step2Planned = isSentToAccountant ? step1Actual : '';
+    const step2Actual = isAttached ? attachedTime : '';
+    const step2Status = isAttached ? 'Done' : (isSentToAccountant ? 'Pending' : '');
 
-    // Step 4: Approve and send Inv to client
+    // Step 3: Approve and send Inv to client
     const isApproved = status === 'APPROVED';
-    const step4Planned = isAttached ? attachedTime : '';
-    const step4Actual = isApproved ? signedTime : '';
-    const step4Status = isApproved ? 'Done' : (isAttached ? 'Pending' : '');
+    const step3Planned = isAttached ? step2Actual : '';
+    const step3Actual = isApproved ? signedTime : '';
+    const step3Status = isApproved ? 'Done' : (isAttached ? 'Pending' : '');
 
     return {
       id: inv.id,
@@ -97,9 +86,6 @@ async function fetchAugSepItems() {
       step3Planned,
       step3Actual,
       step3Status,
-      step4Planned,
-      step4Actual,
-      step4Status,
     };
   });
 }

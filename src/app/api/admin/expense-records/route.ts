@@ -3,6 +3,13 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyToken } from '@/lib/jwt';
 import { onOffSAApproval } from '@/lib/expense-approval-config';
+import {
+  syncExpenseCreated,
+  syncExpenseStep1Accountant,
+  syncExpenseStep2SuperAdmin,
+  syncExpenseStep3PaymentApproval,
+  syncExpenseStep4Utr,
+} from '@/lib/expenseFmsSync';
 
 const ACCOUNTANT_EMAIL = 'ssinfrazone21@gmail.com';
 
@@ -551,6 +558,24 @@ export async function POST(request: Request) {
         createdByName: user.name,
         createdByRole: isSuperAdmin ? 'ADMIN' : isAccountant ? 'ACCOUNTANT' : 'COMMUNITY_MANAGER',
       },
+    });
+
+    // Real-time Event-Driven Synchronization to Google Sheets "EXPENSE FMS" Tab
+    syncExpenseCreated(createdRecord.id).then(() => {
+      if (initialAccApprovalStatus === 'APPROVED') {
+        syncExpenseStep1Accountant(createdRecord.id, 'Approved').catch(() => {});
+      }
+      if (initialAdminApprovalStatus === 'APPROVED') {
+        syncExpenseStep2SuperAdmin(createdRecord.id, 'Approved').catch(() => {});
+      }
+      if (calculatedPaymentApprovalStatus === 'APPROVED') {
+        syncExpenseStep3PaymentApproval(createdRecord.id, 'Approved').catch(() => {});
+      }
+      if (isSettled || utrNumber) {
+        syncExpenseStep4Utr(createdRecord.id).catch(() => {});
+      }
+    }).catch((fmsErr) => {
+      console.warn('[EXPENSE_FMS_SYNC_WARN] Creation:', fmsErr);
     });
 
     return NextResponse.json({

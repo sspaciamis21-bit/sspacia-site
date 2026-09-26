@@ -2,19 +2,16 @@
  * invoiceWorkflowFmsSync.ts — Multi-step Live Event-Driven Invoice Workflow FMS Synchronization
  * Target Spreadsheet: https://docs.google.com/spreadsheets/d/1a7ajEb9clt8ORnM73rtKem0_bT9Ifl8T5J6mifoonX0/edit
  *
- * Steps synchronized:
- * 1. "Review Invoices" (Tab: "expense fms", Cols I:L)
- *    - Triggered when invoice entry arrives in invoice section (Planned)
- *    - Actual logged when Community Manager reviews invoice entry
- * 2. "Send to Accountant to attach tally pdf" (Tab: "expense fms", Cols M:P)
- *    - Planned set when review is done
- *    - Actual logged when CM clicks "Send to Accountant"
- * 3. "Attach Tally Invoice PDF" (Tab: "Accounts", Cols U:X)
- *    - Planned set when CM sends to accountant
- *    - Actual logged when Accountant (dipendra) attaches Tally Invoice PDF
- * 4. "Approve and send Inv to client" (Tab: "expense fms", Cols Q:T)
- *    - Planned set when accountant attaches tally pdf
- *    - Actual logged when CM approves & sends invoice to client
+ * Steps synchronized into Tab: "INV PROCESS FMS" (Cols A to O):
+ * 1. "Review Invoices & Send to Accountant to attach tally pdf" (Cols D:G)
+ *    - Triggered when invoice entry arrives in invoice section (Planned: Col D)
+ *    - Actual logged when Community Manager clicks "Send to Accountant" (Actual: Col E, Status: Col F -> "Done")
+ * 2. "Attach Tally Invoice PDF and send back to CM" (Cols H:K)
+ *    - Planned automatically set = Step 1 Actual (Col H, Status: Col J -> "Pending")
+ *    - Actual logged when Accountant (dipendra) attaches Tally Invoice PDF (Actual: Col I, Status: Col J -> "Done")
+ * 3. "Approve and send Inv to client" (Cols L:O)
+ *    - Planned automatically set = Step 2 Actual (Col L, Status: Col N -> "Pending")
+ *    - Actual logged when CM approves invoice (Actual: Col M, Status: Col N -> "Done")
  */
 
 import prisma from '@/lib/prisma';
@@ -24,23 +21,19 @@ const WEBHOOK_URL =
   'https://script.google.com/macros/s/AKfycbzUagdoyhVrN-e-mmfe3oBfpH8ue1fB2hGLyrkTynE41J5VHbe9eiKDPVOklLG2AYVuDQ/exec';
 
 /**
- * Format IST timestamp to match Google Sheet: "dd/MM/yyyy, hh:mm:ss a"
- * e.g. "14/08/2026, 04:16:31 pm"
+ * Format IST timestamp to match Google Sheet: "dd/MM/yyyy HH:mm:ss" (24-hour, NO AM/PM)
+ * e.g. "14/08/2026 16:16:31"
  */
 export function formatFmsTimestamp(date: Date = new Date()): string {
   const istDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
   const day = String(istDate.getDate()).padStart(2, '0');
   const month = String(istDate.getMonth() + 1).padStart(2, '0');
   const year = istDate.getFullYear();
-  let hours = istDate.getHours();
+  const hours = String(istDate.getHours()).padStart(2, '0');
   const minutes = String(istDate.getMinutes()).padStart(2, '0');
   const seconds = String(istDate.getSeconds()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'pm' : 'am';
-  hours = hours % 12;
-  hours = hours ? hours : 12; // 0 becomes 12
-  const paddedHours = String(hours).padStart(2, '0');
 
-  return `${day}/${month}/${year}, ${paddedHours}:${minutes}:${seconds} ${ampm}`;
+  return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
 }
 
 /**

@@ -4,6 +4,12 @@ import prisma from '@/lib/prisma';
 import { verifyToken } from '@/lib/jwt';
 import { sendEmail } from '@/lib/email';
 import { onOffSAApproval } from '@/lib/expense-approval-config';
+import {
+  syncExpenseStep1Accountant,
+  syncExpenseStep2SuperAdmin,
+  syncExpenseStep3PaymentApproval,
+  syncExpenseStep4Utr,
+} from '@/lib/expenseFmsSync';
 
 async function getAuthUser() {
   const cookieStore = await cookies();
@@ -109,6 +115,10 @@ export async function POST(
         },
       });
 
+      syncExpenseStep1Accountant(recordId, 'Approved').catch((err) => {
+        console.warn('[EXPENSE_FMS_SYNC_WARN] Step 1 Approve:', err);
+      });
+
       return NextResponse.json({
         success: true,
         data: updated,
@@ -144,6 +154,10 @@ export async function POST(
           rejectionRemarks: reason,
           accountantRemarks: reason,
         },
+      });
+
+      syncExpenseStep1Accountant(recordId, 'Rejected').catch((err) => {
+        console.warn('[EXPENSE_FMS_SYNC_WARN] Step 1 Reject:', err);
       });
 
       return NextResponse.json({
@@ -269,6 +283,10 @@ async function addCategoryToDropdown(catName: string) {
         data: updateData,
       });
 
+      syncExpenseStep2SuperAdmin(recordId, 'Approved').catch((err) => {
+        console.warn('[EXPENSE_FMS_SYNC_WARN] Step 2 Approve:', err);
+      });
+
       return NextResponse.json({
         success: true,
         data: updated,
@@ -304,6 +322,10 @@ async function addCategoryToDropdown(catName: string) {
           rejectionRemarks: reason,
           superAdminRemarks: reason,
         },
+      });
+
+      syncExpenseStep2SuperAdmin(recordId, 'Rejected').catch((err) => {
+        console.warn('[EXPENSE_FMS_SYNC_WARN] Step 2 Reject:', err);
       });
 
       return NextResponse.json({
@@ -401,6 +423,10 @@ async function addCategoryToDropdown(catName: string) {
         paymentApprovedByName: user.name,
         paymentApprovedAt: new Date(),
         paymentApprovalRemarks: remarks ? String(remarks).trim() : null,
+      });
+
+      syncExpenseStep3PaymentApproval(recordId, 'Approved').catch((err) => {
+        console.warn('[EXPENSE_FMS_SYNC_WARN] Step 3 Approve:', err);
       });
 
       return NextResponse.json({
@@ -570,7 +596,7 @@ SSPACIA Coworking
       },
     });
 
-    const statusMsg = finalUtr
+      const statusMsg = finalUtr
       ? `Expense approved successfully! Payment UTR: ${finalUtr}${
           emailSent
             ? ` | Alert email sent to ${recipientEmail}`
@@ -579,6 +605,12 @@ SSPACIA Coworking
             : ''
         }`
       : 'Expense payment and disbursal details saved successfully!';
+
+    if (finalUtr || updated.paymentStatus === 'PAID') {
+      syncExpenseStep4Utr(recordId).catch((err) => {
+        console.warn('[EXPENSE_FMS_SYNC_WARN] Step 4 UTR:', err);
+      });
+    }
 
     return NextResponse.json({
       success: true,
