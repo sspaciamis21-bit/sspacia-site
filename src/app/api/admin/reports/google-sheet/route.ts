@@ -357,7 +357,7 @@ export async function GET() {
       return `https://sspacia.com/${s}`;
     }
 
-    // 2a. Check Old Invoices (April 2026 onwards)
+    // 2a. Check Old Invoices (April 2026 onwards) - ONLY PENDING (zero payment received)
     oldInvoices.forEach((inv: any) => {
       if (!isEligibleMonth(inv.month)) return;
 
@@ -365,14 +365,14 @@ export async function GET() {
       const recAmt = Number(inv.receiveAmount || 0);
       const balAmt = Math.max(0, invAmt - recAmt);
 
-      if (balAmt <= 0) return;
+      // User requirement: ONLY PENDING (invoice exists, but 0 payment has arrived). No partials!
+      if (balAmt <= 0 || recAmt > 0) return;
 
       const rawComp = (inv.companyName || '').trim().toLowerCase();
       const cleanComp = rawComp.replace(/[^a-z0-9]/g, '');
       const client = clientMap.get(rawComp) || clientMap.get(cleanComp);
       const center = resolveCenter(client?.clientId, inv.locationName, client?.createdBy);
 
-      const status = recAmt > 0 ? 'PARTIAL' : 'PENDING';
       const invoiceLink = formatPdfUrl(inv.tallyPdfUrl || inv.attachmentUrl);
 
       pendingPayReceive.push({
@@ -381,24 +381,24 @@ export async function GET() {
         companyName: inv.companyName || '-',
         invoiceLink,
         invoicedAmount: invAmt,
-        receivedAmount: recAmt,
+        receivedAmount: 0,
         balanceAmount: balAmt,
-        paymentStatus: status,
+        paymentStatus: 'PENDING',
         invoiceNo: inv.invoiceNo || '-'
       });
     });
 
-    // 2b. Check Live Invoices (April 2026 onwards)
+    // 2b. Check Live Invoices (April 2026 onwards) - ONLY PENDING (zero payment received)
     liveInvoices.forEach((inv: any) => {
       const invAmt = Number(inv.totalAmount || inv.amount || 0);
       const recAmt = Number(inv.receiveAmount || 0);
       const balAmt = Math.max(0, invAmt - recAmt);
 
-      if (balAmt <= 0 || inv.paymentStatus === 'RECEIVED' || inv.paymentStatus === 'PAID') return;
+      // User requirement: ONLY PENDING (invoice exists, but 0 payment has arrived). No partials!
+      if (balAmt <= 0 || recAmt > 0 || inv.paymentStatus === 'RECEIVED' || inv.paymentStatus === 'PAID' || inv.paymentStatus === 'PARTIAL') return;
 
       const center = resolveCenter(inv.clientMaster?.clientId, null, inv.clientMaster?.createdBy);
       const invoiceLink = formatPdfUrl(inv.digitallySignedPdfUrl || inv.attachedInvoice?.fileUrl);
-      const status = recAmt > 0 ? 'PARTIAL' : 'PENDING';
 
       pendingPayReceive.push({
         center,
@@ -406,9 +406,9 @@ export async function GET() {
         companyName: inv.companyName || inv.clientMaster?.companyName || 'Unknown Client',
         invoiceLink,
         invoicedAmount: invAmt,
-        receivedAmount: recAmt,
+        receivedAmount: 0,
         balanceAmount: balAmt,
-        paymentStatus: status,
+        paymentStatus: 'PENDING',
         invoiceNo: inv.digitallySignedPdfName || `INV-${inv.id}`
       });
     });
