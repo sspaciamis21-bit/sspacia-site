@@ -109,7 +109,7 @@ export async function POST(request: Request) {
 
     const todayDate = getTodayIst();
 
-    // Format IST timestamp: M/D/YYYY HH:mm:ss
+    // Format IST timestamp: DD/MM/YYYY HH:mm:ss (24-hour, matching Google Sheets CONFIG.TIMESTAMP_FORMAT)
     const now = new Date();
     const istDate = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
     const month = istDate.getMonth() + 1;
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     const hours = istDate.getHours();
     const minutes = String(istDate.getMinutes()).padStart(2, '0');
     const seconds = String(istDate.getSeconds()).padStart(2, '0');
-    const timestampFormatted = `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
+    const timestampFormatted = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year} ${String(hours).padStart(2, '0')}:${minutes}:${seconds}`;
 
     const newEntry: DailyFmsCheckItem = {
       date: todayDate,

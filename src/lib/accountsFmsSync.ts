@@ -299,15 +299,16 @@ export async function syncAccountsDailyFmsActual(customDate?: Date | string) {
     const hours = istDate.getHours();
     const minutes = String(istDate.getMinutes()).padStart(2, '0');
     const seconds = String(istDate.getSeconds()).padStart(2, '0');
-    // Format: M/D/YYYY HH:mm:ss (e.g. "9/11/2026 17:15:20" matching screenshot row 18)
-    const actualTimestamp = `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
+    // Format: DD/MM/YYYY HH:mm:ss (24-hour, matching Google Sheets CONFIG.TIMESTAMP_FORMAT)
+    const actualTimestamp = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year} ${String(hours).padStart(2, '0')}:${minutes}:${seconds}`;
 
     const payload = {
       action: 'accounts_daily_fms_check',
       sheetName: 'Accounts',
       actual: actualTimestamp,
+      actualIso: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${minutes}:${seconds}`,
       date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-      targetDate: `${month}/${day}/${year}`,
+      targetDate: `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`,
       targetDay: day,
       targetMonth: month,
       targetYear: year,
@@ -409,7 +410,7 @@ export async function repopulateDailyFmsChecks() {
           sheetName: 'Accounts',
           actual: check.timestamp,
           date: check.date,
-          targetDate: `${m}/${d}/${y}`,
+          targetDate: `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`,
           targetDay: d,
           targetMonth: m,
           targetYear: y,
