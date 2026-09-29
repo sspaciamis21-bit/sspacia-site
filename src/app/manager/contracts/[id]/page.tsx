@@ -32,7 +32,6 @@ import { generateInitialAgreement } from '@/lib/clm/templates';
 import type { Contract, ContractStatusName, NegotiationMessage } from '@/types/clm';
 
 import Image from 'next/image';
-import '@/components/clm/clm.css';
 
 const getPeriod = (start: string, end: string) => {
     const s = new Date(start);

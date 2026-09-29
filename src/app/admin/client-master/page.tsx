@@ -425,6 +425,7 @@ export default function ClientMasterRegistryPage() {
   const [brokerName, setBrokerName] = useState('');
   const [brokerCommissionPercent, setBrokerCommissionPercent] = useState<number | ''>('');
   const [brokerCommissionAmount, setBrokerCommissionAmount] = useState<number | ''>('');
+  const [isCommissionManuallyOverridden, setIsCommissionManuallyOverridden] = useState(false);
   const [invoiceToBeRaised, setInvoiceToBeRaised] = useState('CLIENT');
 
   // One-Time Extended Hours State
@@ -477,6 +478,44 @@ export default function ClientMasterRegistryPage() {
 
   // Multi-Product Row State
   const [productRows, setProductRows] = useState<ProductRow[]>([createEmptyProductRow()]);
+
+  // Auto-calculate Broker Commission Amount and sync row totalAmounts (Gross - Commission % + GST)
+  useEffect(() => {
+    if (!hasBrokerCommission) return;
+
+    const pct = (brokerCommissionPercent !== '' && Number(brokerCommissionPercent) > 0)
+      ? Number(brokerCommissionPercent)
+      : 0;
+
+    const totalBase = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+
+    if (!isCommissionManuallyOverridden) {
+      if (pct > 0 && totalBase > 0) {
+        const autoAmt = Math.round(((totalBase * pct) / 100) * 100) / 100;
+        setBrokerCommissionAmount(autoAmt);
+      } else if (brokerCommissionPercent === '') {
+        setBrokerCommissionAmount('');
+      }
+    }
+
+    // Auto-update each session row totalAmount to (Gross - Commission) + GST (unless manually overridden)
+    setProductRows((prev) => {
+      let changed = false;
+      const next = prev.map((r) => {
+        if (r.isTotalAmountManuallyEdited || r.amount === '' || Number(r.amount) <= 0) return r;
+        const gross = Number(r.amount);
+        const taxable = pct > 0 ? Math.max(0, gross * (1 - pct / 100)) : gross;
+        const gst = r.gstPercent !== '' ? Number(r.gstPercent) : 18;
+        const newTotal = Math.round(taxable * (1 + gst / 100));
+        if (r.totalAmount !== newTotal) {
+          changed = true;
+          return { ...r, totalAmount: newTotal };
+        }
+        return r;
+      });
+      return changed ? next : prev;
+    });
+  }, [hasBrokerCommission, brokerCommissionPercent, productRows, isCommissionManuallyOverridden]);
 
   // Master product options list (Invoice Products)
   const [availableProducts, setAvailableProducts] = useState<string[]>([]);
@@ -605,8 +644,12 @@ export default function ClientMasterRegistryPage() {
         if (!row.isTotalAmountManuallyEdited) {
           const baseAmt = row.amount !== '' ? Number(row.amount) : 0;
           const gstPct = row.gstPercent !== '' ? Number(row.gstPercent) : 0;
+          const pct = (hasBrokerCommission && brokerCommissionPercent !== '' && Number(brokerCommissionPercent) > 0)
+            ? Number(brokerCommissionPercent)
+            : 0;
+          const taxableAmt = pct > 0 ? Math.max(0, baseAmt * (1 - pct / 100)) : baseAmt;
           row.totalAmount = (row.amount !== '' && Number(row.amount) > 0)
-            ? computeProductTotal(baseAmt, gstPct)
+            ? computeProductTotal(taxableAmt, gstPct)
             : '';
         }
       }
@@ -949,6 +992,7 @@ export default function ClientMasterRegistryPage() {
     setBrokerName('');
     setBrokerCommissionPercent('');
     setBrokerCommissionAmount('');
+    setIsCommissionManuallyOverridden(false);
     setInvoiceToBeRaised('CLIENT');
     setHasExtendedHours(false);
     setExtendedStartTime('');
@@ -1022,6 +1066,7 @@ export default function ClientMasterRegistryPage() {
     setBrokerName(entry.brokerName || '');
     setBrokerCommissionPercent(entry.brokerCommissionPercent ?? '');
     setBrokerCommissionAmount(entry.brokerCommissionAmount ?? '');
+    setIsCommissionManuallyOverridden(entry.brokerCommissionAmount !== null && entry.brokerCommissionAmount !== undefined);
     setInvoiceToBeRaised(entry.invoiceToBeRaised || 'CLIENT');
 
     setCompanyName(entry.companyName || '');
@@ -1415,6 +1460,13 @@ export default function ClientMasterRegistryPage() {
       return;
     }
 
+    const rowCommPct = hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : undefined;
+    const rowCommAmt = hasBrokerCommission
+      ? (brokerCommissionAmount !== '' && productRows.length === 1
+          ? Number(brokerCommissionAmount)
+          : (rowCommPct ? Math.round(((amt * rowCommPct) / 100) * 100) / 100 : undefined))
+      : undefined;
+
     try {
       const res = await fetch(`/api/admin/client-master/${cId}/generate-invoice`, {
         method: 'POST',
@@ -1428,6 +1480,11 @@ export default function ClientMasterRegistryPage() {
           amount: amt,
           gstPercent: sessionRow.gstPercent !== '' ? Number(sessionRow.gstPercent) : 18,
           totalAmount: sessionRow.totalAmount !== '' ? Number(sessionRow.totalAmount) : Math.round(amt * 1.18),
+          bookingId: (hasBrokerCommission && bookingId) ? bookingId.trim() : undefined,
+          brokerName: (hasBrokerCommission && brokerName) ? brokerName.trim() : undefined,
+          brokerCommissionPercent: rowCommPct,
+          brokerCommissionAmount: rowCommAmt,
+          billedTo: hasBrokerCommission ? (invoiceToBeRaised || 'BROKER') : 'CLIENT',
         }),
       });
 
@@ -2702,9 +2759,12 @@ export default function ClientMasterRegistryPage() {
                                 onChange={(e) => {
                                   const pct = e.target.value === '' ? '' : Number(e.target.value);
                                   setBrokerCommissionPercent(pct);
-                                  const base = Number(productRows[0]?.amount) || 0;
-                                  if (pct !== '' && base > 0) {
-                                    setBrokerCommissionAmount(Math.round(((base * pct) / 100) * 100) / 100);
+                                  setIsCommissionManuallyOverridden(false);
+                                  const totalBase = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                                  if (pct !== '' && totalBase > 0) {
+                                    setBrokerCommissionAmount(Math.round(((totalBase * pct) / 100) * 100) / 100);
+                                  } else if (pct === '') {
+                                    setBrokerCommissionAmount('');
                                   }
                                 }}
                                 className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold"
@@ -2720,9 +2780,29 @@ export default function ClientMasterRegistryPage() {
                                 step="0.01"
                                 placeholder="Auto-calculated or override"
                                 value={brokerCommissionAmount}
-                                onChange={(e) => setBrokerCommissionAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                                onChange={(e) => {
+                                  setIsCommissionManuallyOverridden(true);
+                                  setBrokerCommissionAmount(e.target.value === '' ? '' : Number(e.target.value));
+                                }}
                                 className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold font-mono"
                               />
+                              {hasBrokerCommission && (brokerCommissionPercent !== '' || brokerCommissionAmount !== '') && (() => {
+                                const totalBase = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                                const comm = Number(brokerCommissionAmount || 0);
+                                const directBase = Math.max(0, totalBase - comm);
+                                return (
+                                  <div className="mt-1.5 p-2 bg-emerald-50 border border-emerald-300 rounded text-xs space-y-0.5">
+                                    <div className="flex justify-between items-center text-emerald-950 font-bold">
+                                      <span>⚡ Direct Net (SSPACIA Share):</span>
+                                      <span className="font-mono text-sm">₹{directBase.toLocaleString('en-IN')}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-neutral-500 text-[10px]">
+                                      <span>Base Total: ₹{totalBase.toLocaleString('en-IN')}</span>
+                                      <span>Comm: -₹{comm.toLocaleString('en-IN')}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
 
                             <div className="md:col-span-2">
@@ -3185,7 +3265,11 @@ export default function ClientMasterRegistryPage() {
                                     onChange={(e) => {
                                       const val = e.target.value === '' ? '' : Number(e.target.value);
                                       const currentGst = row.gstPercent !== '' ? Number(row.gstPercent) : 18;
-                                      const calculatedTotal = val === '' ? '' : Math.round(Number(val) * (1 + currentGst / 100));
+                                      const pct = (hasBrokerCommission && brokerCommissionPercent !== '' && Number(brokerCommissionPercent) > 0)
+                                        ? Number(brokerCommissionPercent)
+                                        : 0;
+                                      const taxableVal = (pct > 0 && val !== '') ? Number(val) * (1 - pct / 100) : val;
+                                      const calculatedTotal = taxableVal === '' ? '' : Math.round(Number(taxableVal) * (1 + currentGst / 100));
                                       handleUpdateProductRow(idx, 'amount', val);
                                       handleUpdateProductRow(idx, 'totalAmount', calculatedTotal);
                                     }}
@@ -3207,8 +3291,12 @@ export default function ClientMasterRegistryPage() {
                                       handleUpdateProductRow(idx, 'gstPercent', gstVal);
                                       if (row.amount !== '') {
                                         const base = Number(row.amount) || 0;
+                                        const pct = (hasBrokerCommission && brokerCommissionPercent !== '' && Number(brokerCommissionPercent) > 0)
+                                          ? Number(brokerCommissionPercent)
+                                          : 0;
+                                        const taxableBase = pct > 0 ? base * (1 - pct / 100) : base;
                                         const g = gstVal !== '' ? Number(gstVal) : 18;
-                                        handleUpdateProductRow(idx, 'totalAmount', Math.round(base * (1 + g / 100)));
+                                        handleUpdateProductRow(idx, 'totalAmount', Math.round(taxableBase * (1 + g / 100)));
                                       }
                                     }}
                                     className="w-full bg-white border border-[var(--outline-variant)] px-3 py-2 text-xs focus:outline-none text-center font-bold"
@@ -3229,6 +3317,26 @@ export default function ClientMasterRegistryPage() {
                                   />
                                 </div>
                               </div>
+
+                              {hasBrokerCommission && Number(brokerCommissionPercent) > 0 && Number(row.amount) > 0 && (() => {
+                                const rowBase = Number(row.amount) || 0;
+                                const pct = Number(brokerCommissionPercent);
+                                const rowComm = Math.round(((rowBase * pct) / 100) * 100) / 100;
+                                const rowTaxable = Math.max(0, rowBase - rowComm);
+                                const gstRate = row.gstPercent !== '' ? Number(row.gstPercent) : 18;
+                                const rowGst = Math.round(((rowTaxable * gstRate) / 100) * 100) / 100;
+                                const rowDirectTot = Math.round(rowTaxable + rowGst);
+                                return (
+                                  <div className="mt-2 pt-2 border-t border-dashed border-amber-200 flex flex-wrap items-center justify-between text-[11px] text-amber-900 bg-amber-50/60 px-2.5 py-1 rounded">
+                                    <span className="font-semibold text-amber-800">
+                                      Gross ₹{rowBase.toLocaleString('en-IN')} − Less {pct}% Comm: -₹{rowComm.toLocaleString('en-IN')} = Taxable ₹{rowTaxable.toLocaleString('en-IN')}
+                                    </span>
+                                    <span className="font-bold text-emerald-800">
+                                      ⚡ +{gstRate}% GST (₹{rowGst.toLocaleString('en-IN')}) = Total: ₹{rowDirectTot.toLocaleString('en-IN')}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })}
@@ -3237,40 +3345,73 @@ export default function ClientMasterRegistryPage() {
                       {/* Grand Total Summary for One-Time Sessions */}
                       {(() => {
                         const totalSessions = productRows.length;
-                        const subtotalAmt = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                        const grossSubtotal = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                        const commPct = hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : 0;
+                        const commAmt = hasBrokerCommission && brokerCommissionAmount !== ''
+                          ? Number(brokerCommissionAmount)
+                          : (commPct > 0 ? Math.round(((grossSubtotal * commPct) / 100) * 100) / 100 : 0);
+                        const taxableDirectAmt = Math.max(0, grossSubtotal - commAmt);
                         const totalGst = productRows.reduce((sum, r) => {
                           const b = Number(r.amount) || 0;
+                          const taxableRow = (hasBrokerCommission && commPct > 0) ? b * (1 - commPct / 100) : b;
                           const g = r.gstPercent !== '' ? Number(r.gstPercent) : 18;
-                          return sum + (b * g / 100);
+                          return sum + (taxableRow * g / 100);
                         }, 0);
-                        const grandTotalAmt = Math.round(subtotalAmt + totalGst);
+                        const grandTotalAmt = Math.round(taxableDirectAmt + totalGst);
 
                         return (
-                          <div className="bg-gradient-to-r from-amber-700 to-amber-900 p-4 sm:p-5 text-white rounded-xs shadow-md space-y-2">
+                          <div className="bg-gradient-to-r from-amber-700 via-amber-800 to-amber-950 p-4 sm:p-5 text-white rounded-xs shadow-md space-y-3">
                             <div className="flex flex-wrap items-center justify-between gap-4">
                               <div>
-                                <div className="font-black text-xs uppercase tracking-widest text-amber-200">
-                                  Total for {totalSessions} Booking Session{totalSessions > 1 ? 's' : ''}
+                                <div className="font-black text-xs uppercase tracking-widest text-amber-200 flex items-center gap-1.5">
+                                  <span>Total for {totalSessions} Booking Session{totalSessions > 1 ? 's' : ''}</span>
+                                  {hasBrokerCommission && (
+                                    <span className="px-2 py-0.5 bg-amber-500/30 text-amber-200 border border-amber-400/40 rounded text-[10px] font-bold">
+                                      Broker: {brokerName || 'Platform'} ({commPct}%)
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-[11px] text-amber-100 font-light">
-                                  One-time payment breakdown (Excluded from recurring monthly auto-dispatch)
+                                  {hasBrokerCommission && commPct > 0
+                                    ? `Commission (${commPct}%) deducted from booking amount, then ${totalGst > 0 ? '18% ' : ''}GST added`
+                                    : 'One-time payment breakdown (Excluded from recurring monthly auto-dispatch)'}
                                 </div>
                               </div>
 
-                              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                              <div className="flex flex-wrap items-center gap-3 sm:gap-5">
                                 <div className="text-center">
-                                  <div className="text-[9px] uppercase tracking-wider text-amber-200 mb-0.5">Subtotal Amount</div>
-                                  <div className="font-bold text-sm sm:text-base font-mono">₹{subtotalAmt.toLocaleString('en-IN')}</div>
+                                  <div className="text-[9px] uppercase tracking-wider text-amber-200 mb-0.5">
+                                    {hasBrokerCommission && commPct > 0 ? 'Gross Booking' : 'Subtotal Amount'}
+                                  </div>
+                                  <div className="font-bold text-sm sm:text-base font-mono">₹{grossSubtotal.toLocaleString('en-IN')}</div>
                                 </div>
+
+                                {hasBrokerCommission && commPct > 0 && (
+                                  <>
+                                    <div className="text-center bg-black/20 px-2.5 py-1 rounded border border-amber-400/30">
+                                      <div className="text-[9px] uppercase tracking-wider text-amber-300 mb-0.5">Less Comm ({commPct}%)</div>
+                                      <div className="font-bold text-sm sm:text-base font-mono text-amber-200">-₹{commAmt.toLocaleString('en-IN')}</div>
+                                    </div>
+
+                                    <div className="text-center bg-white/10 px-2.5 py-1 rounded border border-white/20">
+                                      <div className="text-[9px] uppercase tracking-wider text-emerald-300 mb-0.5">Taxable Direct Amt</div>
+                                      <div className="font-bold text-sm sm:text-base font-mono text-emerald-200">₹{taxableDirectAmt.toLocaleString('en-IN')}</div>
+                                    </div>
+                                  </>
+                                )}
 
                                 <div className="text-center">
                                   <div className="text-[9px] uppercase tracking-wider text-amber-200 mb-0.5">Total GST (18%)</div>
                                   <div className="font-bold text-sm sm:text-base font-mono">₹{Math.round(totalGst).toLocaleString('en-IN')}</div>
                                 </div>
 
-                                <div className="text-center bg-white/20 px-4 py-2 rounded-xs border border-white/40 shadow-inner">
-                                  <div className="text-[9px] uppercase tracking-wider text-amber-100 mb-0.5">Grand Total</div>
-                                  <div className="font-black text-lg sm:text-xl font-mono">₹{grandTotalAmt.toLocaleString('en-IN')}</div>
+                                <div className="text-center bg-emerald-700/90 px-3.5 py-2 rounded-xs border border-emerald-400 shadow-md">
+                                  <div className="text-[9px] uppercase tracking-wider text-emerald-100 font-black mb-0.5 flex items-center justify-center gap-1">
+                                    <span>⚡ Grand Total</span>
+                                  </div>
+                                  <div className="font-black text-lg sm:text-xl font-mono text-white">
+                                    ₹{grandTotalAmt.toLocaleString('en-IN')}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -3356,9 +3497,12 @@ export default function ClientMasterRegistryPage() {
                             onChange={(e) => {
                               const pct = e.target.value === '' ? '' : Number(e.target.value);
                               setBrokerCommissionPercent(pct);
-                              const base = Number(productRows[0]?.amount) || 0;
-                              if (pct !== '' && base > 0) {
-                                setBrokerCommissionAmount(Math.round(((base * pct) / 100) * 100) / 100);
+                              setIsCommissionManuallyOverridden(false);
+                              const totalBase = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                              if (pct !== '' && totalBase > 0) {
+                                setBrokerCommissionAmount(Math.round(((totalBase * pct) / 100) * 100) / 100);
+                              } else if (pct === '') {
+                                setBrokerCommissionAmount('');
                               }
                             }}
                             className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold"
@@ -3374,9 +3518,29 @@ export default function ClientMasterRegistryPage() {
                             step="0.01"
                             placeholder="Auto-calculated or override"
                             value={brokerCommissionAmount}
-                            onChange={(e) => setBrokerCommissionAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                            onChange={(e) => {
+                              setIsCommissionManuallyOverridden(true);
+                              setBrokerCommissionAmount(e.target.value === '' ? '' : Number(e.target.value));
+                            }}
                             className="w-full bg-white border border-[var(--outline-variant)] px-4 py-3 text-sm focus:outline-none focus:border-[#006064] font-bold font-mono"
                           />
+                          {hasBrokerCommission && (brokerCommissionPercent !== '' || brokerCommissionAmount !== '') && (() => {
+                            const totalBase = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+                            const comm = Number(brokerCommissionAmount || 0);
+                            const directBase = Math.max(0, totalBase - comm);
+                            return (
+                              <div className="mt-1.5 p-2 bg-emerald-50 border border-emerald-300 rounded text-xs space-y-0.5">
+                                <div className="flex justify-between items-center text-emerald-950 font-bold">
+                                  <span>⚡ Direct Net (SSPACIA Share):</span>
+                                  <span className="font-mono text-sm">₹{directBase.toLocaleString('en-IN')}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-neutral-500 text-[10px]">
+                                  <span>Base Total: ₹{totalBase.toLocaleString('en-IN')}</span>
+                                  <span>Comm: -₹{comm.toLocaleString('en-IN')}</span>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-neutral-200 pt-3">

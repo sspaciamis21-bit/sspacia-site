@@ -17,7 +17,6 @@ import { motion } from 'motion/react';
 import UserContractCard from '@/components/clm/UserContractCard';
 import { userContractsApi } from '@/lib/clm/api';
 import type { ContractRequest, ContractSummary } from '@/types/clm';
-import '@/components/clm/clm.css';
 
 export default function UserContractsListPage() {
   const [requests, setRequests] = useState<ContractRequest[]>([]);

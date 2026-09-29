@@ -19,7 +19,6 @@ import { toast } from 'sonner';
 import StatusBadge from '@/components/clm/StatusBadge';
 import { adminRequestsApi, adminContractsApi } from '@/lib/clm/api';
 import type { ContractRequest, ContractSummary, ContractStatusName } from '@/types/clm';
-import '@/components/clm/clm.css';
 
 // Local interfaces removed in favor of @/types/clm
 

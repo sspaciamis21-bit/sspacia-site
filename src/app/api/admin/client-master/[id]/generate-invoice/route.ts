@@ -135,22 +135,49 @@ export async function POST(
       : (client.brokerCommissionAmount || (resolvedCommPct ? (amount * resolvedCommPct) / 100 : null));
     const resolvedBilledTo = bodyBilledTo || (client.hasBrokerCommission ? 'BROKER' : (client.invoiceToBeRaised || 'CLIENT'));
 
+    let finalTaxableAmount = amount;
+    let finalTotalAmount = totalAmount;
+    let finalItems = items;
+    let finalCabinSummary = cabinSummary;
+
+    if (resolvedBilledTo === 'BROKER' && resolvedCommPct && resolvedCommPct > 0) {
+      const commDeduction = resolvedCommAmt !== null && resolvedCommAmt !== undefined
+        ? Number(resolvedCommAmt)
+        : (amount * resolvedCommPct) / 100;
+      finalTaxableAmount = Math.max(0, amount - commDeduction);
+      const taxAmt = (finalTaxableAmount * gstPercent) / 100;
+      finalTotalAmount = Math.round(finalTaxableAmount + taxAmt);
+      finalCabinSummary = `${cabinSummary} (Less ${amount}-${resolvedCommPct}%)`;
+      finalItems = [
+        {
+          cabinName: `${cabinName} (Less ${amount}-${resolvedCommPct}%)`,
+          sessionDate: validSessionDate.toISOString().split('T')[0],
+          startTime: startTime || null,
+          endTime: endTime || null,
+          amount: finalTaxableAmount,
+          gstPercent,
+          totalAmount: finalTotalAmount,
+          noOfSeats: 1,
+        },
+      ];
+    }
+
     const newInvoice = await (prisma as any).invoiceRecord.create({
       data: {
         clientMasterId: client.id,
         srNo: client.srNo,
         companyName: client.companyName,
-        cabinName: cabinSummary,
+        cabinName: finalCabinSummary,
         noOfSeats: 1,
-        ratePerAgreement: amount,
-        amount,
+        ratePerAgreement: finalTaxableAmount,
+        amount: finalTaxableAmount,
         gstPercent,
-        totalAmount,
+        totalAmount: finalTotalAmount,
         paymentDuration: 'ONE_TIME',
         paymentDueDay: validSessionDate.getDate(),
         dueDate: validSessionDate,
         productGroupKey: 'ONE_TIME_SESSION',
-        itemsJson: JSON.stringify(items),
+        itemsJson: JSON.stringify(finalItems),
         gstNo: client.gstNo || null,
         billingMonth,
         bookingId: resolvedBookingId,

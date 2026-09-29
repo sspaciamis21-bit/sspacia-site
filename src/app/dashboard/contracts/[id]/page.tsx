@@ -30,8 +30,6 @@ import { userContractsApi } from '@/lib/clm/api';
 
 import type { Contract, ContractStatusName, NegotiationMessage } from '@/types/clm';
 
-import '@/components/clm/clm.css';
-
 // ContentRenderer is replaced by ProfessionalEditor in readOnly mode for high-fidelity rendering
 
 const getPeriod = (start: string, end: string) => {

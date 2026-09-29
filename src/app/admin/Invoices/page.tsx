@@ -3080,6 +3080,16 @@ export default function AdminInvoicesWorkflowPage() {
                             <div className="font-black text-sm text-[var(--primary)]">
                               ₹{Number(invoice.totalAmount || 0).toLocaleString('en-IN')}
                             </div>
+                            {invoice.brokerCommissionPercent !== null && invoice.brokerCommissionPercent !== undefined && Number(invoice.brokerCommissionPercent) > 0 && (
+                              <div className="mt-1 flex flex-col items-end">
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 rounded text-[9px] font-bold"
+                                  title={`Broker Commission: ${invoice.brokerCommissionPercent}%`}
+                                >
+                                  <span>Broker Comm: {invoice.brokerCommissionPercent}%</span>
+                                </span>
+                              </div>
+                            )}
                             {hasProration(invoice) && (() => {
                               const summary = getProrationSummary(invoice);
                               return (
