@@ -169,13 +169,22 @@ export async function GET() {
 
     const rawTransactions: any[] = [];
 
-    // 3. FETCH DEBITS: Disbursed / Settled Vendor Operating Expenses
-    // An expense reflects as a bank debit once disbursed with a UTR or marked PAID by Accountant
+    // 3. FETCH DEBITS: Disbursed / Settled Vendor Operating Expenses & Bulk Uploaded Expenses
+    // An expense reflects as a bank debit once disbursed with a UTR, marked PAID, or approved by management
     const approvedExpenses = await (prisma as any).expenseRecord.findMany({
       where: {
         OR: [
           { paymentStatus: 'PAID' },
           { utrNumber: { not: null } },
+          { approvalStatus: 'APPROVED' },
+          { accountantApprovalStatus: 'APPROVED' },
+          { superAdminApprovalStatus: 'APPROVED' },
+          { paymentApprovalStatus: 'APPROVED' },
+        ],
+        NOT: [
+          { approvalStatus: 'REJECTED' },
+          { superAdminApprovalStatus: 'REJECTED' },
+          { paymentStatus: 'REJECTED' },
         ],
       },
       include: {
@@ -188,10 +197,12 @@ export async function GET() {
     });
 
     approvedExpenses.forEach((exp: any) => {
-      // Must be actually disbursed with UTR or marked PAID
-      const hasUtr = exp.utrNumber && String(exp.utrNumber).trim().length > 0;
-      const isPaid = exp.paymentStatus === 'PAID';
-      if (!hasUtr && !isPaid) return;
+      // Must not be rejected
+      const isRejected =
+        exp.approvalStatus === 'REJECTED' ||
+        exp.superAdminApprovalStatus === 'REJECTED' ||
+        exp.paymentStatus === 'REJECTED';
+      if (isRejected) return;
 
       const debitAmount = Number(exp.receiveAmount || exp.amount || 0);
       if (debitAmount <= 0) return;
@@ -355,9 +366,10 @@ export async function GET() {
 
       if (crAlloc > 0) {
         const crRef = `IFT/CR/${prefix ? `${prefix}/` : ''}${invId}${partNum > 0 ? `P${partNum}` : ''}`;
+        const crTimestamp = (typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime()) + 1; // slight offset to order after credit
         rawTransactions.push({
           type: 'DEBIT',
-          rawDate: new Date(rawDate).getTime() + 1, // slight offset to order after credit
+          rawDate: crTimestamp,
           valueDate: formattedDate,
           postDate: formattedDate,
           details: `WDL TFR IFT/AU-${bankRules.crAccount.accountNo}/${clientName} - FUND CIRCULATION TO CR A/C (AU BANK)`,
@@ -380,9 +392,10 @@ export async function GET() {
 
       if (vfAlloc > 0) {
         const vfRef = `IFT/VF/${prefix ? `${prefix}/` : ''}${invId}${partNum > 0 ? `P${partNum}` : ''}`;
+        const vfTimestamp = (typeof rawDate === 'number' ? rawDate : new Date(rawDate).getTime()) + 2; // slight offset to order after credit
         rawTransactions.push({
           type: 'DEBIT',
-          rawDate: new Date(rawDate).getTime() + 2, // slight offset to order after credit
+          rawDate: vfTimestamp,
           valueDate: formattedDate,
           postDate: formattedDate,
           details: `WDL TFR IFT/AU-${bankRules.variableFixedAccount.accountNo}/${clientName} - FUND CIRCULATION TO VAR+FIXED A/C (AU BANK)`,
@@ -412,19 +425,16 @@ export async function GET() {
         ],
       });
 
-      // Track already credited live invoice signatures (company + month or UTR) to avoid double-counting
+      // Track already credited live invoice signatures (company + month) to avoid double-counting
       const liveCreditedKeys = new Set<string>();
       approvedInvoices.forEach((inv: any) => {
         const hasPayment = Number(inv.receiveAmount || 0) > 0 || Boolean(inv.utrNumber);
         if (!hasPayment) return;
 
-        const cName = (inv.companyName || '').trim().toLowerCase();
-        const bMonth = (inv.billingMonth || '').trim().toLowerCase();
+        const cName = (inv.companyName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const bMonth = (inv.billingMonth || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
         if (cName && bMonth) {
           liveCreditedKeys.add(`${cName}|${bMonth}`);
-        }
-        if (inv.utrNumber) {
-          liveCreditedKeys.add(inv.utrNumber.trim().toLowerCase());
         }
       });
 
@@ -433,12 +443,11 @@ export async function GET() {
       paidOldInvoices.forEach((inv: any) => {
         const clientName = (inv.companyName || 'CLIENT').trim().toUpperCase();
         const billingMonth = inv.month ? `[${inv.month}]` : '';
-        const cKey = (inv.companyName || '').trim().toLowerCase();
-        const mKey = (inv.month || '').trim().toLowerCase();
-        const utrKey = (inv.utrNumber || '').trim().toLowerCase();
+        const cKey = (inv.companyName || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const mKey = (inv.month || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
-        // If this invoice payment is already credited via live invoiceRecord with same company+month or same UTR, skip to avoid duplicates
-        if ((cKey && mKey && liveCreditedKeys.has(`${cKey}|${mKey}`)) || (utrKey && liveCreditedKeys.has(utrKey))) {
+        // If this invoice payment is already credited via live invoiceRecord with same company+month, skip to avoid duplicates
+        if (cKey && mKey && liveCreditedKeys.has(`${cKey}|${mKey}`)) {
           return;
         }
 

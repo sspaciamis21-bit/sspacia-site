@@ -111,11 +111,13 @@ export async function POST(request: Request) {
 
       const fmsRes = await fetch(WEBHOOK_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
           action: 'expense_fms_bootstrap_sync',
           items,
         }),
+        redirect: 'follow',
+        signal: AbortSignal.timeout(60000),
       });
 
       const fmsText = await fmsRes.text();
