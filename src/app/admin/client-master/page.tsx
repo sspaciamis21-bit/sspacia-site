@@ -1066,7 +1066,7 @@ export default function ClientMasterRegistryPage() {
     setBrokerName(entry.brokerName || '');
     setBrokerCommissionPercent(entry.brokerCommissionPercent ?? '');
     setBrokerCommissionAmount(entry.brokerCommissionAmount ?? '');
-    setIsCommissionManuallyOverridden(entry.brokerCommissionAmount !== null && entry.brokerCommissionAmount !== undefined);
+    setIsCommissionManuallyOverridden(false);
     setInvoiceToBeRaised(entry.invoiceToBeRaised || 'CLIENT');
 
     setCompanyName(entry.companyName || '');
@@ -1301,9 +1301,11 @@ export default function ClientMasterRegistryPage() {
       hasBrokerCommission: Boolean(hasBrokerCommission),
       brokerName: hasBrokerCommission && brokerName.trim() ? brokerName.trim() : null,
       brokerCommissionPercent: hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : null,
-      brokerCommissionAmount: hasBrokerCommission && brokerCommissionAmount !== ''
-        ? Number(brokerCommissionAmount)
-        : (hasBrokerCommission && brokerCommissionPercent !== '' ? (rawAmount * Number(brokerCommissionPercent)) / 100 : null),
+      brokerCommissionAmount: hasBrokerCommission
+        ? (hasBrokerCommission && brokerCommissionPercent !== ''
+            ? Math.round(((rawAmount * Number(brokerCommissionPercent)) / 100) * 100) / 100
+            : (brokerCommissionAmount !== '' ? Number(brokerCommissionAmount) : null))
+        : null,
       invoiceToBeRaised: hasBrokerCommission ? invoiceToBeRaised : 'CLIENT',
 
       companyName: companyName.trim() || (isOneTime ? 'One-Time Client' : 'Untitled Client'),
@@ -1483,9 +1485,9 @@ export default function ClientMasterRegistryPage() {
 
     const rowCommPct = hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : undefined;
     const rowCommAmt = hasBrokerCommission
-      ? (brokerCommissionAmount !== '' && productRows.length === 1
-          ? Number(brokerCommissionAmount)
-          : (rowCommPct ? Math.round(((amt * rowCommPct) / 100) * 100) / 100 : undefined))
+      ? (rowCommPct
+          ? Math.round(((amt * rowCommPct) / 100) * 100) / 100
+          : (brokerCommissionAmount !== '' && productRows.length === 1 ? Number(brokerCommissionAmount) : undefined))
       : undefined;
 
     const resolvedBilledTo = hasBrokerCommission ? (invoiceToBeRaised || 'BROKER') : 'CLIENT';
@@ -3382,9 +3384,11 @@ export default function ClientMasterRegistryPage() {
                         const totalSessions = productRows.length;
                         const grossSubtotal = productRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
                         const commPct = hasBrokerCommission && brokerCommissionPercent !== '' ? Number(brokerCommissionPercent) : 0;
-                        const commAmt = hasBrokerCommission && brokerCommissionAmount !== ''
-                          ? Number(brokerCommissionAmount)
-                          : (commPct > 0 ? Math.round(((grossSubtotal * commPct) / 100) * 100) / 100 : 0);
+                        const commAmt = hasBrokerCommission
+                          ? (commPct > 0
+                              ? Math.round(((grossSubtotal * commPct) / 100) * 100) / 100
+                              : (brokerCommissionAmount !== '' ? Number(brokerCommissionAmount) : 0))
+                          : 0;
                         const taxableDirectAmt = Math.max(0, grossSubtotal - commAmt);
                         const totalGst = productRows.reduce((sum, r) => {
                           const b = Number(r.amount) || 0;
@@ -3392,7 +3396,8 @@ export default function ClientMasterRegistryPage() {
                           const g = r.gstPercent !== '' ? Number(r.gstPercent) : 18;
                           return sum + (taxableRow * g / 100);
                         }, 0);
-                        const grandTotalAmt = Math.round(taxableDirectAmt + totalGst);
+                        const sessionRowTotalsSum = productRows.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0);
+                        const grandTotalAmt = sessionRowTotalsSum > 0 ? sessionRowTotalsSum : Math.round(taxableDirectAmt + totalGst);
 
                         return (
                           <div className="bg-gradient-to-r from-amber-700 via-amber-800 to-amber-950 p-4 sm:p-5 text-white rounded-xs shadow-md space-y-3">
