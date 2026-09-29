@@ -11,6 +11,7 @@ export async function GET(request: Request) {
     const locations = await prisma.location.findMany({
       where: {
         isActive: true,
+        slug: { notIn: ['common', 'common-expenses'] },
         ...(citySlug ? { city: { slug: citySlug } } : {}),
       },
       select: {
