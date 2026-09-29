@@ -37,7 +37,7 @@ function createSmtpTransport() {
       secure: port === 465,
       auth: { user, pass },
       tls: { rejectUnauthorized: false },
-    } as nodemailer.TransportOptions),
+    } as any),
     sender: user,
   };
 }

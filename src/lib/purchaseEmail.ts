@@ -173,7 +173,7 @@ Please procure and dispatch to ${centerName}.
         secure: isSecure,
         auth: { user, pass },
         tls: { rejectUnauthorized: false },
-      } as nodemailer.TransportOptions);
+      } as any);
 
       const info = await transporter.sendMail({
         from: `"SSPACIA Community Manager" <${user}>`,

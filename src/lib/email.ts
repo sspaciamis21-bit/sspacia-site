@@ -31,7 +31,7 @@ export function getEmailTransporter() {
     secure: port === 465,
     auth: { user, pass },
     tls: { rejectUnauthorized: false },
-  } as nodemailer.TransportOptions);
+  } as any);
 
   return { transporter, sender: user };
 }
@@ -44,7 +44,7 @@ export async function sendEmail({ to, cc, subject, html, text, fromName, attachm
     const { transporter, sender } = getEmailTransporter();
     const senderName = fromName || "SSPACIA Coworking";
 
-    const mailOptions: nodemailer.SendMailOptions = {
+    const mailOptions: any = {
       from: `"${senderName}" <${sender}>`,
       to: Array.isArray(to) ? to.join(', ') : to,
       subject,

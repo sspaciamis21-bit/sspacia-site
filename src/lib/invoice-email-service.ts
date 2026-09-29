@@ -463,7 +463,7 @@ Website: https://sspacia.com | Email: cm@sspacia.com | WhatsApp: +91 76003 93779
           secure: isSecure,
           auth: { user, pass },
           tls: { rejectUnauthorized: false },
-        } as nodemailer.TransportOptions);
+        } as any);
 
         const info = await transporter.sendMail({
           from: `"SSPACIA Community Manager" <${user}>`,
