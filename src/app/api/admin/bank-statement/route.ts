@@ -38,27 +38,41 @@ async function getAuthUser() {
 function parseDateRobust(input: any): Date | null {
   if (!input) return null;
   if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
+  if (typeof input === 'number') {
+    const d = new Date(input);
+    return isNaN(d.getTime()) ? null : d;
+  }
   const s = String(input).trim();
   if (!s) return null;
 
-  // Match DD-MM-YYYY or DD/MM/YYYY (e.g. 17-09-2026 or 17/09/2026)
+  // YYYY-MM-DD or YYYY/MM/DD (e.g. 2026-04-13 or 2026/04/13)
+  const yyyymmdd = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if (yyyymmdd) {
+    const y = parseInt(yyyymmdd[1], 10);
+    const m = parseInt(yyyymmdd[2], 10) - 1;
+    const d = parseInt(yyyymmdd[3], 10);
+    const dateObj = new Date(y, m, d, 12, 0, 0);
+    if (!isNaN(dateObj.getTime())) return dateObj;
+  }
+
+  // DD-MM-YYYY or DD/MM/YYYY (e.g. 17-09-2026 or 17/09/2026)
   const ddmmyyyy = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
   if (ddmmyyyy) {
     const day = parseInt(ddmmyyyy[1], 10);
     const month = parseInt(ddmmyyyy[2], 10) - 1;
     const year = parseInt(ddmmyyyy[3], 10);
-    const d = new Date(year, month, day, 12, 0, 0);
-    if (!isNaN(d.getTime())) return d;
+    const dateObj = new Date(year, month, day, 12, 0, 0);
+    if (!isNaN(dateObj.getTime())) return dateObj;
   }
 
-  // Match DD-Mon-YYYY (e.g. 17-Sep-2026 or 17 Sep 2026)
-  const ddMmmYyyy = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,})[-\s](\d{4})/);
+  // Match DD-Mon-YYYY or DD Mon YYYY (e.g. 17-Sep-2026, 17 Sep 2026, 17 September 2026)
+  const ddMmmYyyy = s.match(/^(\d{1,2})[-\s]([A-Za-z]+)[-\s](\d{4})/);
   if (ddMmmYyyy) {
     const d = new Date(s);
     if (!isNaN(d.getTime())) return d;
   }
 
-  // ISO or standard format (YYYY-MM-DD)
+  // ISO or standard format
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
@@ -72,24 +86,23 @@ function formatDateDDMMYYYY(dateInput: any): string {
   return `${day}/${month}/${year}`;
 }
 
-
 function resolveOldInvoiceDate(partOrInvDate: any, monthStr: string | null, createdAt: any): { rawTimestamp: number; formattedDate: string } {
   if (partOrInvDate) {
-    const d = new Date(partOrInvDate);
-    if (!isNaN(d.getTime())) {
+    const d = parseDateRobust(partOrInvDate);
+    if (d) {
       return { rawTimestamp: d.getTime(), formattedDate: formatDateDDMMYYYY(d) };
     }
   }
   if (monthStr) {
     const parts = String(monthStr).trim().split(/\s+/);
     if (parts.length >= 2) {
-      const d = new Date(`${parts[0]} 05, ${parts[1]} 10:00:00`);
-      if (!isNaN(d.getTime())) {
+      const d = parseDateRobust(`05 ${parts[0]} ${parts[1]}`);
+      if (d) {
         return { rawTimestamp: d.getTime(), formattedDate: formatDateDDMMYYYY(d) };
       }
     }
   }
-  const fallbackDate = new Date(createdAt || Date.now());
+  const fallbackDate = parseDateRobust(createdAt) || new Date();
   return { rawTimestamp: fallbackDate.getTime(), formattedDate: formatDateDDMMYYYY(fallbackDate) };
 }
 
@@ -157,7 +170,7 @@ export async function GET() {
     const rawTransactions: any[] = [];
 
     // 3. FETCH DEBITS: Disbursed / Settled Vendor Operating Expenses
-    // An expense only reflects as a bank debit once disbursed with a UTR or marked PAID by Accountant
+    // An expense reflects as a bank debit once disbursed with a UTR or marked PAID by Accountant
     const approvedExpenses = await (prisma as any).expenseRecord.findMany({
       where: {
         OR: [
@@ -183,15 +196,15 @@ export async function GET() {
       const debitAmount = Number(exp.receiveAmount || exp.amount || 0);
       if (debitAmount <= 0) return;
 
-      // CRITICAL: Debited date in bank statement MUST come from the payment date entered by Accountant
-      // (payReceiveDate or utrDate), NEVER the expense date!
-      const paymentDateInput = exp.payReceiveDate || exp.utrDate || exp.updatedAt;
+      // Debited date in bank statement comes from payment date entered by Accountant
+      // (payReceiveDate or utrDate), or expenseDate, NEVER just updatedAt!
+      const paymentDateInput = exp.payReceiveDate || exp.utrDate || exp.expenseDate || exp.createdAt;
       const parsedPaymentDate = parseDateRobust(paymentDateInput) || new Date();
       const formattedDate = formatDateDDMMYYYY(parsedPaymentDate);
       const rawTimestamp = parsedPaymentDate.getTime();
       const mode = exp.accPaymentMode || exp.paymentMode || 'NEFT';
       const ref = exp.utrNumber || `CMS${exp.id}`;
-      const vendor = exp.vendorName ? exp.vendorName.toUpperCase() : 'VENDOR';
+      const vendor = exp.vendorName ? exp.vendorName.toUpperCase() : (exp.category ? exp.category.toUpperCase() : 'VENDOR');
       const center = exp.locationName || exp.location?.name || 'GENERAL';
       const desc = exp.description ? exp.description.toUpperCase() : 'OPERATING EXPENSE';
 
@@ -214,10 +227,15 @@ export async function GET() {
       });
     });
 
-    // 4. FETCH CREDITS: Client Invoice Payments Received
+    // 4. FETCH CREDITS: Client Invoice Payments Received (Live Invoices)
     const approvedInvoices = await (prisma as any).invoiceRecord.findMany({
       where: {
-        status: 'APPROVED',
+        OR: [
+          { status: 'APPROVED' },
+          { receiveAmount: { not: null } },
+          { utrNumber: { not: null } },
+          { payReceiveDate: { not: null } },
+        ],
       },
       select: {
         id: true,
@@ -250,6 +268,8 @@ export async function GET() {
           const parsed = JSON.parse(inv.paymentsJson);
           if (Array.isArray(parsed) && parsed.length > 0) {
             parsedParts = parsed;
+          } else if (parsed && Array.isArray(parsed.installments) && parsed.installments.length > 0) {
+            parsedParts = parsed.installments;
           }
         } catch {
           // ignore
@@ -261,15 +281,17 @@ export async function GET() {
           const partAmt = parseFloat(part.receiveAmount || part.amount || '0') || 0;
           if (partAmt <= 0) return;
 
-          const rawDate = part.payReceiveDate || part.utrDate || inv.payReceiveDate || inv.createdAt;
-          const formattedDate = formatDateDDMMYYYY(rawDate);
-          const mode = part.paymentMode || 'NEFT';
-          const ref = part.utrNumber || `INV${inv.id}P${pIdx + 1}`;
+          const rawDate = part.payReceiveDate || part.utrDate || inv.payReceiveDate || inv.utrDate || inv.createdAt;
+          const parsedCreditDate = parseDateRobust(rawDate) || new Date();
+          const formattedDate = formatDateDDMMYYYY(parsedCreditDate);
+          const rawTimestamp = parsedCreditDate.getTime();
+          const mode = (part.paymentMode || inv.paymentMode || 'NEFT').toUpperCase();
+          const ref = part.utrNumber || inv.utrNumber || `INV${inv.id}P${pIdx + 1}`;
 
           // Primary Account Credit (100% Inward)
           rawTransactions.push({
             type: 'CREDIT',
-            rawDate: new Date(rawDate).getTime(),
+            rawDate: rawTimestamp,
             valueDate: formattedDate,
             postDate: formattedDate,
             details: `DEP TFR ${mode}/${ref}/${clientName} - INVOICE ${billingMonth} PAYMENT RECEIVED`,
@@ -281,18 +303,20 @@ export async function GET() {
           });
 
           // 3-Account Fund Circulation Splits (Internal Transfers out of Primary ICICI)
-          applyCirculationSplits(partAmt, rawDate, formattedDate, clientName, ref, inv.id, pIdx + 1);
+          applyCirculationSplits(partAmt, rawTimestamp, formattedDate, clientName, ref, inv.id, pIdx + 1);
         });
       } else if (Number(inv.receiveAmount || 0) > 0) {
         const recAmt = Number(inv.receiveAmount);
         const rawDate = inv.payReceiveDate || inv.utrDate || inv.createdAt;
-        const formattedDate = formatDateDDMMYYYY(rawDate);
-        const mode = inv.paymentMode || 'NEFT';
+        const parsedCreditDate = parseDateRobust(rawDate) || new Date();
+        const formattedDate = formatDateDDMMYYYY(parsedCreditDate);
+        const rawTimestamp = parsedCreditDate.getTime();
+        const mode = (inv.paymentMode || 'NEFT').toUpperCase();
         const ref = inv.utrNumber || `INV${inv.id}`;
 
         rawTransactions.push({
           type: 'CREDIT',
-          rawDate: new Date(rawDate).getTime(),
+          rawDate: rawTimestamp,
           valueDate: formattedDate,
           postDate: formattedDate,
           details: `DEP TFR ${mode}/${ref}/${clientName} - INVOICE ${billingMonth} PAYMENT RECEIVED`,
@@ -303,7 +327,7 @@ export async function GET() {
           clientName: inv.companyName,
         });
 
-        applyCirculationSplits(recAmt, rawDate, formattedDate, clientName, ref, inv.id, 0);
+        applyCirculationSplits(recAmt, rawTimestamp, formattedDate, clientName, ref, inv.id, 0);
       }
     });
 
@@ -371,18 +395,15 @@ export async function GET() {
       }
     }
 
-    // 4b. FETCH CREDITS: Old Invoices & Past Records Archive Payments Received (April, May, June, July, etc.)
+    // 4b. FETCH CREDITS: Old Invoices & Past Records Archive Payments Received (April, May, June, July, August, September)
     try {
       const paidOldInvoices = await (prisma as any).oldInvoiceHistory.findMany({
         where: {
-          NOT: [
-            { month: { contains: 'August' } },
-            { month: { contains: 'September' } },
-          ],
           OR: [
-            { receiveAmount: { gt: 0 } },
+            { receiveAmount: { not: null } },
             { utrNumber: { not: null } },
             { payReceiveDate: { not: null } },
+            { paymentsJson: { not: null } },
           ],
         },
         orderBy: [
@@ -394,6 +415,9 @@ export async function GET() {
       // Track already credited live invoice signatures (company + month or UTR) to avoid double-counting
       const liveCreditedKeys = new Set<string>();
       approvedInvoices.forEach((inv: any) => {
+        const hasPayment = Number(inv.receiveAmount || 0) > 0 || Boolean(inv.utrNumber);
+        if (!hasPayment) return;
+
         const cName = (inv.companyName || '').trim().toLowerCase();
         const bMonth = (inv.billingMonth || '').trim().toLowerCase();
         if (cName && bMonth) {
@@ -403,6 +427,8 @@ export async function GET() {
           liveCreditedKeys.add(inv.utrNumber.trim().toLowerCase());
         }
       });
+
+      const processedMergedGroups = new Set<string>();
 
       paidOldInvoices.forEach((inv: any) => {
         const clientName = (inv.companyName || 'CLIENT').trim().toUpperCase();
@@ -416,20 +442,67 @@ export async function GET() {
           return;
         }
 
-        // Check for multi-part payments in paymentsJson
+        // Check for multi-part or merged payments in paymentsJson
         let parsedParts: any[] = [];
+        let isMerged = false;
+        let mergedIds: number[] = [];
+
         if (inv.paymentsJson) {
           try {
             const parsed = JSON.parse(inv.paymentsJson);
             if (Array.isArray(parsed) && parsed.length > 0) {
               parsedParts = parsed;
+            } else if (parsed && parsed.isMerged && Array.isArray(parsed.mergedInvoiceIds)) {
+              isMerged = true;
+              mergedIds = parsed.mergedInvoiceIds;
+              if (Array.isArray(parsed.installments) && parsed.installments.length > 0) {
+                parsedParts = parsed.installments;
+              }
             }
           } catch {
             // ignore
           }
         }
 
-        if (parsedParts.length > 0) {
+        if (isMerged && mergedIds.length > 0) {
+          const groupKey = mergedIds.slice().sort().join(',');
+          if (processedMergedGroups.has(groupKey)) {
+            return; // Consolidated payment for this merged group already processed
+          }
+          processedMergedGroups.add(groupKey);
+
+          if (parsedParts.length > 0) {
+            parsedParts.forEach((part: any, pIdx: number) => {
+              const partAmt = parseFloat(String(part.receiveAmount || part.amount || '0')) || 0;
+              if (partAmt <= 0) return;
+
+              const rawDateInput = part.payReceiveDate || part.utrDate || inv.payReceiveDate || inv.utrDate;
+              const { rawTimestamp, formattedDate } = resolveOldInvoiceDate(rawDateInput, inv.month, inv.createdAt);
+              const mode = (part.paymentMode || inv.paymentMode || 'NEFT').toUpperCase();
+              const ref = part.utrNumber || inv.utrNumber || `OLDINV${inv.id}P${pIdx + 1}`;
+
+              rawTransactions.push({
+                type: 'CREDIT',
+                rawDate: rawTimestamp,
+                valueDate: formattedDate,
+                postDate: formattedDate,
+                details: `DEP TFR ${mode}/${ref}/${clientName} - INVOICE ${billingMonth} PAYMENT RECEIVED (MERGED ${mergedIds.length} INVOICES)`,
+                refNo: ref,
+                debit: null,
+                credit: partAmt,
+                source: 'OLD_INVOICE_PAYMENT',
+                clientName: inv.companyName,
+                oldInvoiceId: inv.id,
+                invoiceUrl: inv.invoiceUrl,
+              });
+
+              applyCirculationSplits(partAmt, rawTimestamp, formattedDate, clientName, ref, inv.id, pIdx + 1, 'OLD');
+            });
+            return;
+          }
+        }
+
+        if (parsedParts.length > 0 && !isMerged) {
           parsedParts.forEach((part: any, pIdx: number) => {
             const partAmt = parseFloat(String(part.receiveAmount || part.amount || '0')) || 0;
             if (partAmt <= 0) return;
@@ -513,7 +586,9 @@ export async function GET() {
         if (payAmt <= 0) return;
 
         const rawDate = p.paidAt || p.createdAt;
-        const formattedDate = formatDateDDMMYYYY(rawDate);
+        const parsedOnlineDate = parseDateRobust(rawDate) || new Date();
+        const formattedDate = formatDateDDMMYYYY(parsedOnlineDate);
+        const rawTimestamp = parsedOnlineDate.getTime();
         const mode = p.method || 'ONLINE';
         const ref = p.transactionRef || p.gatewayPaymentId || p.paymentNumber || `WEB${p.id}`;
         const custName = p.booking?.customer?.name ? p.booking.customer.name.toUpperCase() : 'WEBSITE CLIENT';
@@ -521,7 +596,7 @@ export async function GET() {
 
         rawTransactions.push({
           type: 'CREDIT',
-          rawDate: new Date(rawDate).getTime(),
+          rawDate: rawTimestamp,
           valueDate: formattedDate,
           postDate: formattedDate,
           details: `DEP TFR ${mode}/${ref}/${custName} - ${prodName}`,
@@ -541,10 +616,10 @@ export async function GET() {
       if (a.rawDate !== b.rawDate) {
         return a.rawDate - b.rawDate;
       }
-      // If same timestamp, Credits come before Debits
+      // If same date/timestamp, Credits (inward money) come before Debits (outward payment)
       if (a.credit !== null && b.debit !== null) return -1;
       if (a.debit !== null && b.credit !== null) return 1;
-      return 0;
+      return (a.refNo || '').localeCompare(b.refNo || '');
     });
 
     const openingBalance = Number(config.openingBalance) || 0;
