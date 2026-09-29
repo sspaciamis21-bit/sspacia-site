@@ -1919,6 +1919,42 @@ export default function AdminInvoicesWorkflowPage() {
     if (!sendToAccountantInvoice) return;
     const finalDigitalRequired = digitalRequiredParam !== undefined ? digitalRequiredParam : digitalSignChoice;
     setActionLoading(true);
+
+    const invAmt = Number(sendToAccountantInvoice.amount || 0);
+    const invGst = Number(sendToAccountantInvoice.gstPercent || 18);
+    const invCommPct = Number(
+      sendToAccountantInvoice.brokerCommissionPercent ||
+      (sendToAccountantInvoice.clientMaster as any)?.brokerCommissionPercent ||
+      0
+    );
+    const invCommAmt = Number(
+      sendToAccountantInvoice.brokerCommissionAmount ||
+      (sendToAccountantInvoice.clientMaster as any)?.brokerCommissionAmount ||
+      0
+    );
+
+    let grossBase = Number(sendToAccountantInvoice.ratePerAgreement || 0);
+    if (!grossBase || grossBase < invAmt) {
+      grossBase = (sendToAccountantInvoice.billedTo === 'BROKER' && invCommPct > 0 && invCommPct < 100)
+        ? Math.round(invAmt / (1 - invCommPct / 100))
+        : invAmt;
+    }
+    if (grossBase <= 0) grossBase = invAmt;
+
+    let finalTotal = Number(sendToAccountantInvoice.totalAmount || 0);
+    let finalTaxable = invAmt;
+
+    if (invCommPct > 0) {
+      const commDeduction = invCommAmt > 0 ? invCommAmt : Math.round(((grossBase * invCommPct) / 100) * 100) / 100;
+      if (sendRecipientChoice === 'BROKER') {
+        finalTaxable = Math.max(0, grossBase - commDeduction);
+        finalTotal = Math.round(finalTaxable * (1 + invGst / 100));
+      } else {
+        finalTaxable = grossBase;
+        finalTotal = Math.round(grossBase * (1 + invGst / 100));
+      }
+    }
+
     try {
       const res = await fetch(`/api/admin/Invoices/${sendToAccountantInvoice.id}/status`, {
         method: 'PATCH',
@@ -1927,6 +1963,8 @@ export default function AdminInvoicesWorkflowPage() {
           status: 'SENT_TO_ACCOUNTANT',
           isDigitalSignRequired: finalDigitalRequired,
           billedTo: sendRecipientChoice,
+          totalAmount: finalTotal,
+          amount: finalTaxable,
         }),
       });
       const json = await res.json();
@@ -3930,24 +3968,71 @@ export default function AdminInvoicesWorkflowPage() {
                       </div>
 
                       {/* Invoice Summary Box */}
-                      <div className="bg-[#F8F9FA] p-3.5 border border-neutral-200 rounded-xs space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-[#1B1C1C] text-sm">{sendToAccountantInvoice.companyName}</span>
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-900 border border-blue-200 text-[10px] font-bold rounded-xs">
-                            SR #{sendToAccountantInvoice.srNo}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-600">
-                          <span><strong>Month:</strong> {sendToAccountantInvoice.billingMonth || 'Current'}</span>
-                          <span>&bull;</span>
-                          <span><strong>Cabin:</strong> {sendToAccountantInvoice.cabinName || 'Center Space'}</span>
-                          <span>&bull;</span>
-                          <span><strong>Seats:</strong> {sendToAccountantInvoice.noOfSeats || 1}</span>
-                        </div>
-                        <div className="pt-1 text-sm font-black text-[#006064]">
-                          Total Amount: ₹{Number(sendToAccountantInvoice.totalAmount || 0).toLocaleString('en-IN')}
-                        </div>
-                      </div>
+                      {(() => {
+                        const invAmt = Number(sendToAccountantInvoice.amount || 0);
+                        const invGst = Number(sendToAccountantInvoice.gstPercent || 18);
+                        const invCommPct = Number(
+                          sendToAccountantInvoice.brokerCommissionPercent ||
+                          (sendToAccountantInvoice.clientMaster as any)?.brokerCommissionPercent ||
+                          0
+                        );
+                        const invCommAmt = Number(
+                          sendToAccountantInvoice.brokerCommissionAmount ||
+                          (sendToAccountantInvoice.clientMaster as any)?.brokerCommissionAmount ||
+                          0
+                        );
+
+                        let grossBase = Number(sendToAccountantInvoice.ratePerAgreement || 0);
+                        if (!grossBase || grossBase < invAmt) {
+                          grossBase = (sendToAccountantInvoice.billedTo === 'BROKER' && invCommPct > 0 && invCommPct < 100)
+                            ? Math.round(invAmt / (1 - invCommPct / 100))
+                            : invAmt;
+                        }
+                        if (grossBase <= 0) grossBase = invAmt;
+
+                        let modalDisplayTotal = Number(sendToAccountantInvoice.totalAmount || 0);
+                        let modalCalculationBadge = '';
+
+                        if (invCommPct > 0) {
+                          const commDeduction = invCommAmt > 0 ? invCommAmt : Math.round(((grossBase * invCommPct) / 100) * 100) / 100;
+                          if (sendRecipientChoice === 'BROKER') {
+                            const taxable = Math.max(0, grossBase - commDeduction);
+                            modalDisplayTotal = Math.round(taxable * (1 + invGst / 100));
+                            modalCalculationBadge = `Broker Net: Gross ₹${grossBase.toLocaleString('en-IN')} − ${invCommPct}% Comm (-₹${commDeduction.toLocaleString('en-IN')}) = ₹${taxable.toLocaleString('en-IN')} + ${invGst}% GST`;
+                          } else {
+                            modalDisplayTotal = Math.round(grossBase * (1 + invGst / 100));
+                            modalCalculationBadge = `Client Gross: Full ₹${grossBase.toLocaleString('en-IN')} + ${invGst}% GST (0% Commission)`;
+                          }
+                        }
+
+                        return (
+                          <div className="bg-[#F8F9FA] p-3.5 border border-neutral-200 rounded-xs space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-extrabold text-[#1B1C1C] text-sm">{sendToAccountantInvoice.companyName}</span>
+                              <span className="px-2 py-0.5 bg-blue-100 text-blue-900 border border-blue-200 text-[10px] font-bold rounded-xs">
+                                SR #{sendToAccountantInvoice.srNo}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-600">
+                              <span><strong>Month:</strong> {sendToAccountantInvoice.billingMonth || 'Current'}</span>
+                              <span>&bull;</span>
+                              <span><strong>Cabin:</strong> {sendToAccountantInvoice.cabinName || 'Center Space'}</span>
+                              <span>&bull;</span>
+                              <span><strong>Seats:</strong> {sendToAccountantInvoice.noOfSeats || 1}</span>
+                            </div>
+                            <div className="pt-1 flex flex-wrap items-baseline gap-2">
+                              <span className="text-base font-black text-[#006064]">
+                                Total Amount: ₹{modalDisplayTotal.toLocaleString('en-IN')}
+                              </span>
+                              {modalCalculationBadge && (
+                                <span className="text-[10.5px] font-bold text-amber-900 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-xs">
+                                  {modalCalculationBadge}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Complimentary Over-Usage Notice & Quick Link (Full-Time Clients Only) */}
                       {sendToAccountantInvoice.paymentDuration !== 'ONE_TIME' &&

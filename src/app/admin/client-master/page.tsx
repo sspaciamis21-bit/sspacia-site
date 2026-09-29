@@ -1118,19 +1118,39 @@ export default function ClientMasterRegistryPage() {
 
     if (entry.products && entry.products.length > 0) {
       setProductRows(
-        entry.products.map((p) => ({
-          id: p.id,
-          cabinName: p.cabinName || '',
-          noOfSeats: p.noOfSeats ?? '',
-          ratePerAgreement: p.ratePerAgreement ?? '',
-          amount: p.amount ?? '',
-          gstPercent: p.gstPercent ?? 18,
-          totalAmount: p.totalAmount ?? '',
-          paymentDuration: p.paymentDuration || 'MONTHLY',
-          paymentDueDay: p.paymentDueDay ?? entry.paymentDueDay ?? 5,
-          firstPaymentDate: p.firstPaymentDate ? new Date(p.firstPaymentDate).toISOString().split('T')[0] : '',
-          isAmountManuallyEdited: true,
-          isTotalAmountManuallyEdited: true,
+        entry.products.map((p) => {
+          let resolvedTotal: number | '' = (p.totalAmount !== null && p.totalAmount !== undefined && (p.totalAmount as any) !== '')
+            ? Number(p.totalAmount)
+            : '';
+          const pAmt = (p.amount !== null && p.amount !== undefined && (p.amount as any) !== '') ? Number(p.amount) : 0;
+          const pGst = (p.gstPercent !== null && p.gstPercent !== undefined && (p.gstPercent as any) !== '') ? Number(p.gstPercent) : 18;
+          const commPct = (entry.hasBrokerCommission && entry.brokerCommissionPercent !== null && entry.brokerCommissionPercent !== undefined && (entry.brokerCommissionPercent as any) !== '')
+            ? Number(entry.brokerCommissionPercent)
+            : 0;
+
+          if (commPct > 0 && pAmt > 0) {
+            const rowComm = Math.round(((pAmt * commPct) / 100) * 100) / 100;
+            const taxable = Math.max(0, pAmt - rowComm);
+            const netDirectTot = Math.round(taxable * (1 + pGst / 100));
+            // If total was saved as old gross total without commission (e.g. 2124), sync it to net direct total (1487)
+            if (resolvedTotal === '' || Math.abs(Number(resolvedTotal) - Math.round(pAmt * (1 + pGst / 100))) <= 1) {
+              resolvedTotal = netDirectTot;
+            }
+          }
+
+          return {
+            id: p.id,
+            cabinName: p.cabinName || '',
+            noOfSeats: p.noOfSeats ?? '',
+            ratePerAgreement: p.ratePerAgreement ?? '',
+            amount: p.amount ?? '',
+            gstPercent: p.gstPercent ?? 18,
+            totalAmount: resolvedTotal,
+            paymentDuration: p.paymentDuration || 'MONTHLY',
+            paymentDueDay: p.paymentDueDay ?? entry.paymentDueDay ?? 5,
+            firstPaymentDate: p.firstPaymentDate ? new Date(p.firstPaymentDate).toISOString().split('T')[0] : '',
+            isAmountManuallyEdited: true,
+            isTotalAmountManuallyEdited: true,
           hasSeparateAgreement: Boolean(p.agreementPdfUrl),
           agreementPdfUrl: p.agreementPdfUrl || '',
           agreementPdfName: p.agreementPdfName || '',
@@ -1147,8 +1167,9 @@ export default function ClientMasterRegistryPage() {
           sessionDate: p.sessionDate ? new Date(p.sessionDate).toISOString().split('T')[0] : (p.agreementStartDate ? new Date(p.agreementStartDate).toISOString().split('T')[0] : ''),
           startTime: p.startTime || '',
           endTime: p.endTime || '',
-        }))
-      );
+        };
+      })
+    );
     } else {
       setProductRows([
         {
@@ -1467,6 +1488,15 @@ export default function ClientMasterRegistryPage() {
           : (rowCommPct ? Math.round(((amt * rowCommPct) / 100) * 100) / 100 : undefined))
       : undefined;
 
+    const resolvedBilledTo = hasBrokerCommission ? (invoiceToBeRaised || 'BROKER') : 'CLIENT';
+    const rowGst = sessionRow.gstPercent !== '' ? Number(sessionRow.gstPercent) : 18;
+    const isBrokerBilling = resolvedBilledTo === 'BROKER' && rowCommPct && rowCommPct > 0;
+    const deductionAmt = isBrokerBilling
+      ? (rowCommAmt !== undefined ? Number(rowCommAmt) : (amt * Number(rowCommPct)) / 100)
+      : 0;
+    const taxableAmt = Math.max(0, amt - deductionAmt);
+    const calculatedSessionTotal = Math.round(taxableAmt * (1 + rowGst / 100));
+
     try {
       const res = await fetch(`/api/admin/client-master/${cId}/generate-invoice`, {
         method: 'POST',
@@ -1478,13 +1508,13 @@ export default function ClientMasterRegistryPage() {
           endTime: sessionRow.endTime || '',
           cabinName: sessionRow.cabinName || 'Meeting Room',
           amount: amt,
-          gstPercent: sessionRow.gstPercent !== '' ? Number(sessionRow.gstPercent) : 18,
-          totalAmount: sessionRow.totalAmount !== '' ? Number(sessionRow.totalAmount) : Math.round(amt * 1.18),
+          gstPercent: rowGst,
+          totalAmount: calculatedSessionTotal,
           bookingId: (hasBrokerCommission && bookingId) ? bookingId.trim() : undefined,
           brokerName: (hasBrokerCommission && brokerName) ? brokerName.trim() : undefined,
           brokerCommissionPercent: rowCommPct,
           brokerCommissionAmount: rowCommAmt,
-          billedTo: hasBrokerCommission ? (invoiceToBeRaised || 'BROKER') : 'CLIENT',
+          billedTo: resolvedBilledTo,
         }),
       });
 
@@ -3135,7 +3165,12 @@ export default function ClientMasterRegistryPage() {
                         {productRows.map((row, idx) => {
                           const amt = Number(row.amount) || 0;
                           const gst = row.gstPercent !== '' ? Number(row.gstPercent) : 18;
-                          const tot = row.totalAmount !== '' ? Number(row.totalAmount) : Math.round(amt * (1 + gst / 100));
+                          const commPct = (hasBrokerCommission && brokerCommissionPercent !== '' && Number(brokerCommissionPercent) > 0)
+                            ? Number(brokerCommissionPercent)
+                            : 0;
+                          const taxableAmt = commPct > 0 ? amt * (1 - commPct / 100) : amt;
+                          const fallbackTot = Math.round(taxableAmt * (1 + gst / 100));
+                          const tot = row.totalAmount !== '' ? Number(row.totalAmount) : fallbackTot;
 
                           return (
                             <div
