@@ -42,6 +42,7 @@ export interface BankTransactionItem {
   credit: number | null;
   balance: number;
   vendorName?: string | null;
+  clientName?: string | null;
   category?: string | null;
   locationName?: string | null;
   paymentMode?: string | null;
@@ -354,8 +355,9 @@ export function BankStatementModal({
         const detailsMatch = t.details?.toLowerCase().includes(q);
         const refMatch = t.refNo?.toLowerCase().includes(q);
         const vendorMatch = t.vendorName?.toLowerCase().includes(q);
+        const clientMatch = t.clientName?.toLowerCase().includes(q);
         const amountMatch = String(t.debit || "").includes(q) || String(t.credit || "").includes(q);
-        if (!detailsMatch && !refMatch && !vendorMatch && !amountMatch) return false;
+        if (!detailsMatch && !refMatch && !vendorMatch && !clientMatch && !amountMatch) return false;
       }
 
       // 2. Date Filtering

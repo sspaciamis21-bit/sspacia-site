@@ -48,6 +48,95 @@ async function postToFms(payload: Record<string, any>) {
   }
 }
 
+export function formatExpenseHeaderDesc(category?: string | null, description?: string | null): string {
+  const cat = (category || '').trim();
+  const desc = (description || '').trim();
+  return cat && desc ? `${cat} - ${desc}` : cat || desc || 'Expense Entry';
+}
+
+export async function fetchAllExpenseFmsItems() {
+  const records = await (prisma as any).expenseRecord.findMany({
+    orderBy: [
+      { expenseDate: 'asc' },
+      { id: 'asc' },
+    ],
+    include: {
+      location: { select: { id: true, name: true } },
+    },
+  });
+
+  return records.map((exp: any) => {
+    const centerName = exp.locationName || exp.location?.name || 'Mercado';
+    let isoDateStr = '';
+    if (exp.expenseDate) {
+      const d = new Date(exp.expenseDate);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        isoDateStr = `${y}-${m}-${day}`;
+      }
+    }
+
+    const headerItemDesc = formatExpenseHeaderDesc(exp.category, exp.description);
+
+    // Step 1: Accountant Approve/Reject with remarks Expense Entered by CM's
+    let step1Actual = '';
+    let step1Status = 'Pending';
+    if (exp.accountantApprovedAt) {
+      step1Actual = formatFmsTimestamp(exp.accountantApprovedAt);
+      step1Status = exp.accountantApprovalStatus === 'REJECTED' ? 'Rejected' : 'Done';
+    } else if (exp.superAdminApprovedAt) {
+      step1Actual = formatFmsTimestamp(exp.superAdminApprovedAt);
+      step1Status = exp.accountantApprovalStatus === 'REJECTED' ? 'Rejected' : 'Done';
+    }
+
+    // Step 2: Get Approval From Super Admin For The Same
+    let step2Actual = '';
+    let step2Status = 'Pending';
+    if (exp.superAdminApprovedAt) {
+      step2Actual = formatFmsTimestamp(exp.superAdminApprovedAt);
+      step2Status = exp.superAdminApprovalStatus === 'REJECTED' ? 'Rejected' : 'Done';
+    }
+
+    // Step 3: Take Approval before entering UTR Details
+    let step3Actual = '';
+    let step3Status = 'Pending';
+    if (exp.paymentApprovedAt) {
+      step3Actual = formatFmsTimestamp(exp.paymentApprovedAt);
+      step3Status = exp.paymentApprovalStatus === 'REJECTED' ? 'Rejected' : 'Done';
+    }
+
+    // Step 4: Enter UTR Details
+    let step4Actual = '';
+    let step4Status = 'Pending';
+    const isPaid = exp.paymentStatus === 'PAID' || Boolean(exp.utrNumber);
+    if (isPaid) {
+      step4Actual = formatFmsTimestamp(exp.updatedAt || exp.paymentApprovedAt || new Date());
+      step4Status = 'Done';
+    }
+
+    return {
+      id: exp.id,
+      centerName,
+      expenseDate: isoDateStr || formatExpenseDate(exp.expenseDate),
+      headerItemDesc,
+      step1Planned: '',
+      step1Actual,
+      step1Status,
+      step2Planned: '',
+      step2Actual,
+      step2Status,
+      step3Planned: '',
+      step3Actual,
+      step3Status,
+      step4Planned: '',
+      step4Actual,
+      step4Status,
+    };
+  });
+}
+
 async function getExpenseDetails(expenseRecordId: number) {
   try {
     const exp = await (prisma as any).expenseRecord.findUnique({
@@ -60,9 +149,7 @@ async function getExpenseDetails(expenseRecordId: number) {
 
     const centerName = exp.locationName || exp.location?.name || 'Mercado';
     const expenseDate = formatExpenseDate(exp.expenseDate);
-    const category = (exp.category || 'GENERAL EXPENSE').trim();
-    const description = (exp.description || '').trim();
-    const headerItemDesc = `${category} - ${description}`;
+    const headerItemDesc = formatExpenseHeaderDesc(exp.category, exp.description);
 
     return {
       record: exp,

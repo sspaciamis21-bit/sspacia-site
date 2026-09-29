@@ -78,8 +78,31 @@ function parseDateRobust(input: any): Date | null {
 }
 
 function formatDateDDMMYYYY(dateInput: any): string {
+  if (!dateInput) return '';
+  if (typeof dateInput === 'string') {
+    const s = dateInput.trim();
+    const m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+    if (m) {
+      return `${String(m[3]).padStart(2, '0')}/${String(m[2]).padStart(2, '0')}/${m[1]}`;
+    }
+    const ddmmyyyy = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+    if (ddmmyyyy) {
+      return `${String(ddmmyyyy[1]).padStart(2, '0')}/${String(ddmmyyyy[2]).padStart(2, '0')}/${ddmmyyyy[3]}`;
+    }
+  }
   const d = parseDateRobust(dateInput);
   if (!d) return '';
+  try {
+    const parts = d.toLocaleDateString('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).split('/');
+    if (parts.length === 3) {
+      return `${parts[0]}/${parts[1]}/${parts[2]}`;
+    }
+  } catch {}
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
@@ -90,7 +113,7 @@ function resolveOldInvoiceDate(partOrInvDate: any, monthStr: string | null, crea
   if (partOrInvDate) {
     const d = parseDateRobust(partOrInvDate);
     if (d) {
-      return { rawTimestamp: d.getTime(), formattedDate: formatDateDDMMYYYY(d) };
+      return { rawTimestamp: d.getTime(), formattedDate: formatDateDDMMYYYY(partOrInvDate) };
     }
   }
   if (monthStr) {
@@ -211,20 +234,20 @@ export async function GET() {
       // (payReceiveDate or utrDate), or expenseDate, NEVER just updatedAt!
       const paymentDateInput = exp.payReceiveDate || exp.utrDate || exp.expenseDate || exp.createdAt;
       const parsedPaymentDate = parseDateRobust(paymentDateInput) || new Date();
-      const formattedDate = formatDateDDMMYYYY(parsedPaymentDate);
+      const formattedDate = formatDateDDMMYYYY(paymentDateInput || parsedPaymentDate);
       const rawTimestamp = parsedPaymentDate.getTime();
-      const mode = exp.accPaymentMode || exp.paymentMode || 'NEFT';
-      const ref = exp.utrNumber || `CMS${exp.id}`;
-      const vendor = exp.vendorName ? exp.vendorName.toUpperCase() : (exp.category ? exp.category.toUpperCase() : 'VENDOR');
-      const center = exp.locationName || exp.location?.name || 'GENERAL';
-      const desc = exp.description ? exp.description.toUpperCase() : 'OPERATING EXPENSE';
+      const mode = (exp.accPaymentMode || exp.paymentMode || 'NEFT').toUpperCase();
+      const ref = exp.utrNumber ? String(exp.utrNumber).trim() : `CMS${exp.id}`;
+      const vendor = (exp.vendorName || exp.category || 'VENDOR').trim().toUpperCase();
+      const center = (exp.locationName || exp.location?.name || '').trim();
+      const desc = (exp.description || 'OPERATING EXPENSE').trim().toUpperCase();
 
       rawTransactions.push({
         type: 'DEBIT',
         rawDate: rawTimestamp,
         valueDate: formattedDate,
         postDate: formattedDate,
-        details: `WDL TFR ${mode}/${ref}/${vendor}/${center} - ${desc}`,
+        details: `WDL TFR ${mode}/${ref}/${vendor} - ${formattedDate} - ${ref}${center ? ` - ${center}` : ''} - ${desc}`,
         refNo: ref,
         debit: debitAmount,
         credit: null,
@@ -305,7 +328,7 @@ export async function GET() {
             rawDate: rawTimestamp,
             valueDate: formattedDate,
             postDate: formattedDate,
-            details: `DEP TFR ${mode}/${ref}/${clientName} - INVOICE ${billingMonth} PAYMENT RECEIVED`,
+            details: `DEP TFR ${mode}/${ref}/${clientName} - ${formattedDate} - ${ref}${billingMonth ? ` - INVOICE ${billingMonth}` : ''} PAYMENT RECEIVED`,
             refNo: ref,
             debit: null,
             credit: partAmt,
@@ -330,7 +353,7 @@ export async function GET() {
           rawDate: rawTimestamp,
           valueDate: formattedDate,
           postDate: formattedDate,
-          details: `DEP TFR ${mode}/${ref}/${clientName} - INVOICE ${billingMonth} PAYMENT RECEIVED`,
+          details: `DEP TFR ${mode}/${ref}/${clientName} - ${formattedDate} - ${ref}${billingMonth ? ` - INVOICE ${billingMonth}` : ''} PAYMENT RECEIVED`,
           refNo: ref,
           debit: null,
           credit: recAmt,
@@ -495,7 +518,7 @@ export async function GET() {
                 rawDate: rawTimestamp,
                 valueDate: formattedDate,
                 postDate: formattedDate,
-                details: `DEP TFR ${mode}/${ref}/${clientName} - INVOICE ${billingMonth} PAYMENT RECEIVED (MERGED ${mergedIds.length} INVOICES)`,
+                details: `DEP TFR ${mode}/${ref}/${clientName} - ${formattedDate} - ${ref}${billingMonth ? ` - INVOICE ${billingMonth}` : ''} PAYMENT RECEIVED (MERGED ${mergedIds.length} INVOICES)`,
                 refNo: ref,
                 debit: null,
                 credit: partAmt,
@@ -508,6 +531,40 @@ export async function GET() {
               applyCirculationSplits(partAmt, rawTimestamp, formattedDate, clientName, ref, inv.id, pIdx + 1, 'OLD');
             });
             return;
+          } else {
+            // Fallback for merged payment if installments array is empty but mergedTotalReceiveAmount exists
+            let mergedTotalAmt = 0;
+            try {
+              const parsedMerged = inv.paymentsJson ? JSON.parse(inv.paymentsJson) : {};
+              mergedTotalAmt = parseFloat(String(parsedMerged.mergedTotalReceiveAmount || inv.receiveAmount || '0')) || 0;
+            } catch {
+              mergedTotalAmt = parseFloat(String(inv.receiveAmount || '0')) || 0;
+            }
+
+            if (mergedTotalAmt > 0) {
+              const rawDateInput = inv.payReceiveDate || inv.utrDate;
+              const { rawTimestamp, formattedDate } = resolveOldInvoiceDate(rawDateInput, inv.month, inv.createdAt);
+              const mode = (inv.paymentMode || 'NEFT').toUpperCase();
+              const ref = inv.utrNumber || `OLDINV${inv.id}`;
+
+              rawTransactions.push({
+                type: 'CREDIT',
+                rawDate: rawTimestamp,
+                valueDate: formattedDate,
+                postDate: formattedDate,
+                details: `DEP TFR ${mode}/${ref}/${clientName} - ${formattedDate} - ${ref}${billingMonth ? ` - INVOICE ${billingMonth}` : ''} PAYMENT RECEIVED (MERGED ${mergedIds.length} INVOICES)`,
+                refNo: ref,
+                debit: null,
+                credit: mergedTotalAmt,
+                source: 'OLD_INVOICE_PAYMENT',
+                clientName: inv.companyName,
+                oldInvoiceId: inv.id,
+                invoiceUrl: inv.invoiceUrl,
+              });
+
+              applyCirculationSplits(mergedTotalAmt, rawTimestamp, formattedDate, clientName, ref, inv.id, 0, 'OLD');
+              return;
+            }
           }
         }
 
@@ -526,7 +583,7 @@ export async function GET() {
               rawDate: rawTimestamp,
               valueDate: formattedDate,
               postDate: formattedDate,
-              details: `DEP TFR ${mode}/${ref}/${clientName} - INVOICE ${billingMonth} PAYMENT RECEIVED`,
+              details: `DEP TFR ${mode}/${ref}/${clientName} - ${formattedDate} - ${ref}${billingMonth ? ` - INVOICE ${billingMonth}` : ''} PAYMENT RECEIVED`,
               refNo: ref,
               debit: null,
               credit: partAmt,
@@ -551,7 +608,7 @@ export async function GET() {
               rawDate: rawTimestamp,
               valueDate: formattedDate,
               postDate: formattedDate,
-              details: `DEP TFR ${mode}/${ref}/${clientName} - INVOICE ${billingMonth} PAYMENT RECEIVED`,
+              details: `DEP TFR ${mode}/${ref}/${clientName} - ${formattedDate} - ${ref}${billingMonth ? ` - INVOICE ${billingMonth}` : ''} PAYMENT RECEIVED`,
               refNo: ref,
               debit: null,
               credit: recAmt,
@@ -596,9 +653,9 @@ export async function GET() {
 
         const rawDate = p.paidAt || p.createdAt;
         const parsedOnlineDate = parseDateRobust(rawDate) || new Date();
-        const formattedDate = formatDateDDMMYYYY(parsedOnlineDate);
+        const formattedDate = formatDateDDMMYYYY(rawDate || parsedOnlineDate);
         const rawTimestamp = parsedOnlineDate.getTime();
-        const mode = p.method || 'ONLINE';
+        const mode = (p.method || 'ONLINE').toUpperCase();
         const ref = p.transactionRef || p.gatewayPaymentId || p.paymentNumber || `WEB${p.id}`;
         const custName = p.booking?.customer?.name ? p.booking.customer.name.toUpperCase() : 'WEBSITE CLIENT';
         const prodName = p.booking?.product?.name ? p.booking.product.name.toUpperCase() : 'COWORKING BOOKING';
@@ -608,12 +665,13 @@ export async function GET() {
           rawDate: rawTimestamp,
           valueDate: formattedDate,
           postDate: formattedDate,
-          details: `DEP TFR ${mode}/${ref}/${custName} - ${prodName}`,
+          details: `DEP TFR ${mode}/${ref}/${custName} - ${formattedDate} - ${ref} - ${prodName}`,
           refNo: ref,
           debit: null,
           credit: payAmt,
           source: 'WEBSITE_BOOKING',
           customerName: custName,
+          clientName: custName,
         });
       });
     } catch (e) {
@@ -651,6 +709,7 @@ export async function GET() {
         credit: tx.credit,
         balance: runningBalance,
         vendorName: tx.vendorName,
+        clientName: tx.clientName,
         category: tx.category,
         locationName: tx.locationName,
         paymentMode: tx.paymentMode,
