@@ -104,6 +104,7 @@ export default function ManagerLayout({
       if (
         !isRole('ADMIN') &&
         !isRole('COMMUNITY_MANAGER') &&
+        !isRole('MANAGER') &&
         !isRole('ACCOUNTS') &&
         !isRole('ACCOUNTANT') &&
         !isAccountant &&

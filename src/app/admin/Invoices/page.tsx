@@ -229,7 +229,7 @@ export default function AdminInvoicesWorkflowPage() {
 
   const userRole = (user?.role || '').toUpperCase();
   const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' || userRole === 'SUPER-ADMIN' || isRole('ADMIN');
-  const isCommunityManager = isRole('COMMUNITY_MANAGER');
+  const isCommunityManager = isRole('COMMUNITY_MANAGER') || isRole('MANAGER') || userRole === 'COMMUNITY_MANAGER' || userRole === 'COMMUNITY MANAGER' || userRole === 'MANAGER' || userRole.includes('MANAGER');
   const isAccountsRole = userRole === 'ACCOUNTS' || userRole === 'ACCOUNTANT' || isRole('ACCOUNTS') || isRole('ACCOUNTANT');
   const userEmail = user?.email?.toLowerCase() || '';
 

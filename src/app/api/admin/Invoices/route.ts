@@ -40,7 +40,7 @@ export async function GET(request: Request) {
 
     const where: any = {};
 
-    const isInternalStaff = ['ADMIN', 'SUPER_ADMIN', 'SUPERADMIN', 'COMMUNITY_MANAGER', 'COMMUNITY MANAGER'].includes(userRole) || userEmail === 'ssinfrazone21@gmail.com';
+    const isInternalStaff = ['ADMIN', 'SUPER_ADMIN', 'SUPERADMIN', 'COMMUNITY_MANAGER', 'COMMUNITY MANAGER', 'MANAGER'].includes(userRole) || userRole.includes('MANAGER') || userEmail === 'ssinfrazone21@gmail.com';
 
     if (!isInternalStaff && userEmail) {
       // Client Portal perspective: strictly show APPROVED invoices belonging to client's company
