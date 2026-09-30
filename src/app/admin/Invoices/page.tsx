@@ -303,6 +303,7 @@ export default function AdminInvoicesWorkflowPage() {
   const [entryToAttachInvoice, setEntryToAttachInvoice] = useState<InvoiceRecord | null>(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [selectedInvoiceFile, setSelectedInvoiceFile] = useState<File | null>(null);
+  const [isDraggingPdf, setIsDraggingPdf] = useState(false);
 
   // CM Review Attached PDF Modal
   const [entryToReviewInvoice, setEntryToReviewInvoice] = useState<InvoiceRecord | null>(null);
@@ -2088,7 +2089,11 @@ export default function AdminInvoicesWorkflowPage() {
       const attachJson = await attachRes.json();
 
       if (attachJson.success) {
-        toast.success('Tally Invoice PDF attached & sent to Community Manager!');
+        toast.success(
+          entryToAttachInvoice.attachedInvoice || entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS'
+            ? 'Revised Tally Invoice PDF replaced & sent to Community Manager!'
+            : 'Tally Invoice PDF attached & sent to Community Manager!'
+        );
         setEntryToAttachInvoice(null);
         setSelectedInvoiceFile(null);
         fetchData();
@@ -3427,149 +3432,226 @@ export default function AdminInvoicesWorkflowPage() {
             <>
               {/* MODAL 1: Accountant Attach Tally Invoice PDF */}
               <AnimatePresence>
-                {entryToAttachInvoice && (
-                  <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
-                    >
-                      <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
-                        <h3 className="text-base font-bold text-[#1B1C1C] flex items-center gap-2">
-                          <Paperclip size={18} className="text-[var(--primary)]" /> Attach Tally PDF Invoice
-                        </h3>
-                        <button
-                          onClick={() => {
-                            setEntryToAttachInvoice(null);
-                            setSelectedInvoiceFile(null);
-                          }}
-                          className="text-neutral-400 hover:text-neutral-700"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
+                {entryToAttachInvoice && (() => {
+                  const isReplacing = Boolean(
+                    entryToAttachInvoice.attachedInvoice ||
+                    entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS' ||
+                    entryToAttachInvoice.status === 'INVOICE_ATTACHED'
+                  );
+                  const isSplit = Boolean(
+                    entryToAttachInvoice.splitsJson && (() => {
+                      try { return JSON.parse(entryToAttachInvoice.splitsJson || '[]').length > 1; } catch { return false; }
+                    })()
+                  );
 
-                      <div className="bg-[#F8F9FA] p-3 border border-[var(--outline-variant)]/60 space-y-1 shrink-0">
-                        <div className="font-bold text-[#1B1C1C] text-sm">Company: {entryToAttachInvoice.companyName}</div>
-                        <div className="text-[#616161]">
-                          SR No: #{entryToAttachInvoice.srNo} | Billing Month: {entryToAttachInvoice.billingMonth}
-                        </div>
-                        <div className="font-bold text-[var(--primary)]">
-                          Total Amount: ₹{Number(entryToAttachInvoice.totalAmount || 0).toLocaleString('en-IN')}
-                        </div>
-                      </div>
-
-                      {/* Itemized Line Items for Tally Preparation */}
-                      <div className="border border-neutral-200 rounded p-3 bg-white space-y-2 shrink-0 max-h-48 overflow-y-auto">
-                        <div className="flex items-center justify-between border-b border-neutral-200 pb-1.5">
-                          <span className="font-extrabold text-[11px] uppercase tracking-wider text-[#1B1C1C] flex items-center gap-1.5">
-                            <Receipt size={13} className="text-[#006064]" /> Line Items for Tally Entry
-                          </span>
-                          <span className="text-[10px] text-neutral-500 font-semibold">Enter these exact items into Tally</span>
-                        </div>
-
-                        {(() => {
-                          let items: any[] = [];
-                          if (entryToAttachInvoice.itemsJson) {
-                            try {
-                              const parsed = JSON.parse(entryToAttachInvoice.itemsJson);
-                              if (Array.isArray(parsed) && parsed.length > 0) items = parsed;
-                            } catch {}
-                          }
-                          if (items.length === 0) {
-                            items = [{
-                              cabinName: entryToAttachInvoice.cabinName || 'Workspace Rent',
-                              noOfSeats: entryToAttachInvoice.noOfSeats || 1,
-                              amount: Number(entryToAttachInvoice.amount || 0),
-                              gstPercent: Number(entryToAttachInvoice.gstPercent || 18),
-                              totalAmount: Number(entryToAttachInvoice.totalAmount || 0),
-                            }];
-                          }
-                          return (
-                            <div className="space-y-1.5">
-                              <table className="w-full text-left text-[11px] border-collapse">
-                                <thead>
-                                  <tr className="border-b border-neutral-200 text-neutral-500 text-[10px] uppercase">
-                                    <th className="py-1">Description / Item</th>
-                                    <th className="py-1 text-center">Qty / Seats</th>
-                                    <th className="py-1 text-right">Subtotal</th>
-                                    <th className="py-1 text-right">GST (18%)</th>
-                                    <th className="py-1 text-right font-bold">Total</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-neutral-100">
-                                  {items.map((it, idx) => (
-                                    <tr key={idx} className={it.isComplimentaryOverusage ? 'bg-teal-50/70 font-medium' : ''}>
-                                      <td className="py-1.5 pr-2">
-                                        <div className="font-bold flex items-center gap-1">
-                                          {it.isComplimentaryOverusage && <Gift size={11} className="text-teal-700 shrink-0" />}
-                                          <span>{it.cabinName}</span>
-                                        </div>
-                                        {it.isComplimentaryOverusage && (
-                                          <div className="text-[10px] text-teal-800">
-                                            Actual: {it.actualUsed} &bull; Free Quota: {it.freeQuota} &bull; Extra: {it.extraUsed}
-                                          </div>
-                                        )}
-                                      </td>
-                                      <td className="py-1.5 text-center">{it.noOfSeats || 1}</td>
-                                      <td className="py-1.5 text-right font-mono">₹{Number(it.amount || 0).toLocaleString('en-IN')}</td>
-                                      <td className="py-1.5 text-right font-mono text-neutral-500">₹{(Number(it.totalAmount || 0) - Number(it.amount || 0)).toLocaleString('en-IN')}</td>
-                                      <td className="py-1.5 text-right font-mono font-bold text-[#006064]">₹{Number(it.totalAmount || 0).toLocaleString('en-IN')}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                                <tfoot>
-                                  <tr className="border-t-2 border-neutral-300 font-extrabold text-[11px]">
-                                    <td colSpan={2} className="py-1.5 uppercase">Grand Total (for Tally)</td>
-                                    <td className="py-1.5 text-right font-mono">₹{Number(entryToAttachInvoice.amount || 0).toLocaleString('en-IN')}</td>
-                                    <td className="py-1.5 text-right font-mono text-neutral-500">₹{(Number(entryToAttachInvoice.totalAmount || 0) - Number(entryToAttachInvoice.amount || 0)).toLocaleString('en-IN')}</td>
-                                    <td className="py-1.5 text-right font-mono text-teal-900 text-xs">₹{Number(entryToAttachInvoice.totalAmount || 0).toLocaleString('en-IN')}</td>
-                                  </tr>
-                                </tfoot>
-                              </table>
+                  return (
+                    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="bg-white border border-neutral-300 w-full max-w-2xl shadow-2xl text-xs my-auto max-h-[92vh] flex flex-col rounded-lg overflow-hidden"
+                      >
+                        {/* 1. FIXED HEADER */}
+                        <div className={`p-4 border-b flex items-center justify-between shrink-0 ${isReplacing ? 'bg-red-50/90 border-red-200' : 'bg-neutral-50 border-neutral-200'}`}>
+                          <div className="flex items-center gap-2.5">
+                            <div className={`p-2 rounded-full shrink-0 ${isReplacing ? 'bg-red-100 text-red-700' : 'bg-teal-100 text-teal-800'}`}>
+                              {isReplacing ? <RotateCcw size={18} /> : <Paperclip size={18} />}
                             </div>
-                          );
-                        })()}
-                      </div>
-
-                      {entryToAttachInvoice.isDigitalSignRequired && (
-                        <div className="p-3.5 bg-gradient-to-r from-amber-500/15 via-amber-500/25 to-amber-500/15 border-2 border-amber-500 rounded-xs text-amber-950 space-y-1.5 shrink-0 shadow-xs">
-                          <div className="font-black text-xs uppercase tracking-wide flex items-center gap-2 text-amber-950">
-                            <AlertTriangle size={17} className="text-amber-700 shrink-0" />
-                            <span>⚠️ ATTENTION ACCOUNTANT: DIGITALLY SIGNED INVOICE REQUIRED</span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className={`text-base font-bold ${isReplacing ? 'text-red-950' : 'text-[#1B1C1C]'}`}>
+                                  {isReplacing ? 'Replace Tally PDF Invoice' : 'Attach Tally PDF Invoice'}
+                                </h3>
+                                {isReplacing && (
+                                  <span className="px-2 py-0.5 bg-red-600 text-white font-extrabold text-[9px] uppercase tracking-wider rounded">
+                                    REVISION / REPLACEMENT
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-neutral-500">
+                                {isReplacing
+                                  ? 'Upload revised PDF generated from Tally to replace the previously attached invoice'
+                                  : 'Attach official Tally PDF invoice to send to Community Manager'}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-[11.5px] font-semibold text-amber-900 leading-relaxed pl-6">
-                            Community Manager marked that this invoice <strong>requires an official digital signature</strong>. Please ensure you apply your official digital signature (DSC token) in Tally and attach the digitally signed PDF.
-                          </div>
+                          <button
+                            onClick={() => {
+                              setEntryToAttachInvoice(null);
+                              setSelectedInvoiceFile(null);
+                            }}
+                            className="p-1 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200/50 rounded-full transition-colors"
+                            title="Close"
+                          >
+                            <X size={18} />
+                          </button>
                         </div>
-                      )}
 
-                      {entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS' && entryToAttachInvoice.remarks && (
-                        <div className="p-3 bg-red-50 border border-red-200 text-red-800 space-y-1 shrink-0">
-                          <div className="font-bold flex items-center gap-1.5">
-                            <AlertTriangle size={14} /> Community Manager Revision Remarks:
+                        {/* 2. SCROLLABLE BODY */}
+                        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
+                          {/* Invoice Meta Summary Card */}
+                          <div className="bg-[#F8F9FA] p-3.5 border border-neutral-200 rounded space-y-1.5 shrink-0">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="font-extrabold text-[#1B1C1C] text-sm">
+                                Company: {entryToAttachInvoice.companyName}
+                              </div>
+                              <div className="font-mono font-black text-sm text-[var(--primary)] bg-teal-50 border border-teal-200 px-2.5 py-0.5 rounded">
+                                Total: ₹{Number(entryToAttachInvoice.totalAmount || 0).toLocaleString('en-IN')}
+                              </div>
+                            </div>
+                            <div className="text-[#616161] flex items-center gap-2 text-[11px]">
+                              <span>SR No: #{entryToAttachInvoice.srNo}</span>
+                              <span>&bull;</span>
+                              <span>Billing Month: <strong>{entryToAttachInvoice.billingMonth}</strong></span>
+                              {entryToAttachInvoice.cabinName && (
+                                <>
+                                  <span>&bull;</span>
+                                  <span>Desk/Cabin: {entryToAttachInvoice.cabinName}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
-                          <div className="italic">"{entryToAttachInvoice.remarks}"</div>
-                        </div>
-                      )}
 
-                      {/* CHECK IF SPLIT INVOICES EXIST */}
-                      <div className="overflow-y-auto flex-1 pr-1 space-y-3">
-                        {entryToAttachInvoice.splitsJson && (() => {
-                          let splits: InvoiceSplitGroup[] = [];
-                          try {
-                            splits = JSON.parse(entryToAttachInvoice.splitsJson || '[]');
-                          } catch { }
+                          {/* Community Manager Revision Remarks (If rejected or revision requested) */}
+                          {entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS' && entryToAttachInvoice.remarks && (
+                            <div className="p-3.5 bg-red-50/90 border-2 border-red-300 rounded text-red-900 space-y-1.5 shadow-2xs">
+                              <div className="font-bold flex items-center gap-1.5 text-xs text-red-800 uppercase tracking-wide">
+                                <AlertTriangle size={15} className="text-red-600 shrink-0" />
+                                <span>Community Manager Revision Remarks (Action Required):</span>
+                              </div>
+                              <div className="italic text-xs bg-white/80 p-2.5 rounded border border-red-200 text-red-950 font-medium">
+                                "{entryToAttachInvoice.remarks}"
+                              </div>
+                              <div className="text-[11px] text-red-700">
+                                Please regenerate or update the invoice in Tally according to these remarks and upload the replacement PDF below.
+                              </div>
+                            </div>
+                          )}
 
-                          if (splits.length > 1) {
+                          {/* Digital Signature Warning */}
+                          {entryToAttachInvoice.isDigitalSignRequired && (
+                            <div className="p-3 bg-amber-50 border border-amber-300 rounded text-amber-950 space-y-1 shadow-2xs">
+                              <div className="font-extrabold text-xs uppercase tracking-wide flex items-center gap-2 text-amber-950">
+                                <AlertTriangle size={16} className="text-amber-700 shrink-0" />
+                                <span>⚠️ ATTENTION ACCOUNTANT: DIGITALLY SIGNED INVOICE REQUIRED</span>
+                              </div>
+                              <div className="text-[11.5px] font-medium text-amber-900 leading-relaxed pl-6">
+                                Community Manager marked that this invoice <strong>requires an official digital signature (DSC)</strong>. Please ensure you apply your official DSC token in Tally before attaching the PDF.
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Currently Attached Invoice Details (If Replacing) */}
+                          {entryToAttachInvoice.attachedInvoice?.fileUrl && (
+                            <div className="p-3 bg-amber-50/70 border border-amber-300 rounded flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-8 h-8 rounded bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                                  <FileText size={16} />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-[10px] text-amber-800 font-bold uppercase tracking-wider">
+                                    Current File on Record (Will be Replaced):
+                                  </div>
+                                  <div className="font-bold text-neutral-800 text-xs truncate max-w-[320px]">
+                                    {entryToAttachInvoice.attachedInvoice.fileName || 'Attached Invoice PDF'}
+                                  </div>
+                                </div>
+                              </div>
+                              <a
+                                href={entryToAttachInvoice.attachedInvoice.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2.5 py-1 bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 font-bold text-[10px] rounded uppercase tracking-wider flex items-center gap-1 shrink-0 transition-colors shadow-2xs"
+                              >
+                                <Eye size={12} /> View Existing PDF
+                              </a>
+                            </div>
+                          )}
+
+                          {/* Itemized Line Items for Tally Entry */}
+                          <div className="border border-neutral-200 rounded p-3 bg-white space-y-2">
+                            <div className="flex items-center justify-between border-b border-neutral-200 pb-1.5">
+                              <span className="font-extrabold text-[11px] uppercase tracking-wider text-[#1B1C1C] flex items-center gap-1.5">
+                                <Receipt size={13} className="text-[#006064]" /> Line Items for Tally Entry
+                              </span>
+                              <span className="text-[10px] text-neutral-500 font-semibold">Enter these exact items into Tally</span>
+                            </div>
+
+                            {(() => {
+                              let items: any[] = [];
+                              if (entryToAttachInvoice.itemsJson) {
+                                try {
+                                  const parsed = JSON.parse(entryToAttachInvoice.itemsJson);
+                                  if (Array.isArray(parsed) && parsed.length > 0) items = parsed;
+                                } catch {}
+                              }
+                              if (items.length === 0) {
+                                items = [{
+                                  cabinName: entryToAttachInvoice.cabinName || 'Workspace Rent',
+                                  noOfSeats: entryToAttachInvoice.noOfSeats || 1,
+                                  amount: Number(entryToAttachInvoice.amount || 0),
+                                  gstPercent: Number(entryToAttachInvoice.gstPercent || 18),
+                                  totalAmount: Number(entryToAttachInvoice.totalAmount || 0),
+                                }];
+                              }
+                              return (
+                                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                                  <table className="w-full text-left text-[11px] border-collapse">
+                                    <thead>
+                                      <tr className="border-b border-neutral-200 text-neutral-500 text-[10px] uppercase">
+                                        <th className="py-1">Description / Item</th>
+                                        <th className="py-1 text-center">Qty / Seats</th>
+                                        <th className="py-1 text-right">Subtotal</th>
+                                        <th className="py-1 text-right">GST (18%)</th>
+                                        <th className="py-1 text-right font-bold">Total</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-neutral-100">
+                                      {items.map((it, idx) => (
+                                        <tr key={idx} className={it.isComplimentaryOverusage ? 'bg-teal-50/70 font-medium' : ''}>
+                                          <td className="py-1.5 pr-2">
+                                            <div className="font-bold flex items-center gap-1">
+                                              {it.isComplimentaryOverusage && <Gift size={11} className="text-teal-700 shrink-0" />}
+                                              <span>{it.cabinName}</span>
+                                            </div>
+                                            {it.isComplimentaryOverusage && (
+                                              <div className="text-[10px] text-teal-800">
+                                                Actual: {it.actualUsed} &bull; Free Quota: {it.freeQuota} &bull; Extra: {it.extraUsed}
+                                              </div>
+                                            )}
+                                          </td>
+                                          <td className="py-1.5 text-center">{it.noOfSeats || 1}</td>
+                                          <td className="py-1.5 text-right font-mono">₹{Number(it.amount || 0).toLocaleString('en-IN')}</td>
+                                          <td className="py-1.5 text-right font-mono text-neutral-500">₹{(Number(it.totalAmount || 0) - Number(it.amount || 0)).toLocaleString('en-IN')}</td>
+                                          <td className="py-1.5 text-right font-mono font-bold text-[#006064]">₹{Number(it.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                    <tfoot>
+                                      <tr className="border-t-2 border-neutral-300 font-extrabold text-[11px]">
+                                        <td colSpan={2} className="py-1.5 uppercase">Grand Total (for Tally)</td>
+                                        <td className="py-1.5 text-right font-mono">₹{Number(entryToAttachInvoice.amount || 0).toLocaleString('en-IN')}</td>
+                                        <td className="py-1.5 text-right font-mono text-neutral-500">₹{(Number(entryToAttachInvoice.totalAmount || 0) - Number(entryToAttachInvoice.amount || 0)).toLocaleString('en-IN')}</td>
+                                        <td className="py-1.5 text-right font-mono text-teal-900 text-xs">₹{Number(entryToAttachInvoice.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Split Invoices Upload Section */}
+                          {isSplit && entryToAttachInvoice.splitsJson && (() => {
+                            let splits: InvoiceSplitGroup[] = [];
+                            try { splits = JSON.parse(entryToAttachInvoice.splitsJson || '[]'); } catch { }
                             return (
                               <div className="space-y-3">
                                 <div className="p-2.5 bg-purple-50 border border-purple-200 text-purple-900 text-[11px] font-bold flex items-center gap-1.5">
                                   <Scissors size={14} className="text-purple-700" />
                                   <span>This invoice is split into {splits.length} Sub-Invoices. Please attach a Tally PDF for each:</span>
                                 </div>
-
                                 <div className="space-y-3">
                                   {splits.map((grp, idx) => (
                                     <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm space-y-2">
@@ -3581,24 +3663,9 @@ export default function AdminInvoicesWorkflowPage() {
                                           ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
                                         </span>
                                       </div>
-
-                                      {/* DATES BADGES FOR ACCOUNTANT */}
-                                      <div className="flex flex-wrap items-center gap-2 text-[10px] bg-purple-50/80 p-1.5 border border-purple-200 rounded text-purple-950 font-medium">
-                                        <div className="flex items-center gap-1">
-                                          <Calendar size={11} className="text-purple-700 shrink-0" />
-                                          <span><strong>Invoice Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} to {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
-                                        </div>
-                                        <span className="text-purple-300">|</span>
-                                        <div className="flex items-center gap-1 text-red-800 font-bold">
-                                          <Clock size={11} className="text-red-600 shrink-0" />
-                                          <span>Due Date: {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
-                                        </div>
-                                      </div>
-
                                       <div className="text-[10px] text-neutral-500">
                                         {grp.noOfSeats} seats | Subtotal: ₹{Number(grp.amount || 0).toLocaleString('en-IN')} + GST: ₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}
                                       </div>
-
                                       {grp.attachedInvoice?.fileUrl ? (
                                         <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-2 rounded text-emerald-900">
                                           <div className="flex items-center gap-2">
@@ -3655,86 +3722,188 @@ export default function AdminInvoicesWorkflowPage() {
                                 </div>
                               </div>
                             );
-                          }
-                          return null;
-                        })()}
+                          })()}
 
-                        {/* Single Invoice PDF Upload (if not split) */}
-                        {(!entryToAttachInvoice.splitsJson || (() => {
-                          try { return JSON.parse(entryToAttachInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
-                        })()) && (
-                            <div className="space-y-2">
-                              <label className="block font-bold uppercase text-[#616161]">
-                                Select Tally Invoice PDF File *
-                              </label>
-                              <input
-                                type="file"
-                                accept="application/pdf,.pdf"
-                                onChange={(e) => {
-                                  if (e.target.files && e.target.files[0]) {
-                                    setSelectedInvoiceFile(e.target.files[0]);
-                                  }
-                                }}
-                                className="w-full bg-[#F8F9FA] border border-[var(--outline-variant)] px-3 py-2 text-xs"
-                              />
-                              {selectedInvoiceFile && (
-                                <div className="text-emerald-700 font-bold flex items-center gap-1">
-                                  <Check size={14} /> Selected: {selectedInvoiceFile.name} (
-                                  {(selectedInvoiceFile.size / 1024).toFixed(1)} KB)
+                          {/* Single Invoice PDF Upload Dropzone (Primary Flow) */}
+                          {!isSplit && (
+                            <div className="space-y-2 pt-1">
+                              <div className="flex items-center justify-between">
+                                <label className="block font-extrabold uppercase text-[11px] tracking-wider text-neutral-800 flex items-center gap-1.5">
+                                  <Upload size={14} className={isReplacing ? 'text-red-600' : 'text-[#006064]'} />
+                                  <span>{isReplacing ? 'Select Replacement Tally PDF File *' : 'Select Tally Invoice PDF File *'}</span>
+                                </label>
+                                {selectedInvoiceFile && (
+                                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded flex items-center gap-1">
+                                    <Check size={12} /> Ready to Submit
+                                  </span>
+                                )}
+                              </div>
+
+                              {!selectedInvoiceFile ? (
+                                <label
+                                  onDragOver={(e) => { e.preventDefault(); setIsDraggingPdf(true); }}
+                                  onDragLeave={() => setIsDraggingPdf(false)}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    setIsDraggingPdf(false);
+                                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                      const f = e.dataTransfer.files[0];
+                                      if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
+                                        setSelectedInvoiceFile(f);
+                                      } else {
+                                        toast.error('Please upload a PDF file (.pdf)');
+                                      }
+                                    }
+                                  }}
+                                  className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                                    isDraggingPdf
+                                      ? 'border-[#006064] bg-cyan-50 scale-[1.01]'
+                                      : isReplacing
+                                      ? 'border-red-300 bg-red-50/40 hover:bg-red-50/80 hover:border-red-500'
+                                      : 'border-cyan-300 bg-cyan-50/30 hover:bg-cyan-50 hover:border-cyan-600'
+                                  }`}
+                                >
+                                  <input
+                                    type="file"
+                                    accept="application/pdf,.pdf"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      if (e.target.files && e.target.files[0]) {
+                                        setSelectedInvoiceFile(e.target.files[0]);
+                                      }
+                                    }}
+                                  />
+                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2.5 shadow-2xs ${
+                                    isReplacing ? 'bg-red-100 text-red-700' : 'bg-cyan-100 text-cyan-800'
+                                  }`}>
+                                    <Upload size={22} />
+                                  </div>
+                                  <div className="font-extrabold text-sm text-neutral-900">
+                                    {isReplacing ? 'Click to Browse Replacement Tally PDF' : 'Click to Browse Tally PDF Invoice'}
+                                  </div>
+                                  <div className="text-[11px] text-neutral-500 mt-1">
+                                    or drag & drop the PDF file here
+                                  </div>
+                                  <div className="mt-3 px-4 py-1.5 bg-white border border-neutral-300 rounded font-bold text-xs uppercase tracking-wider text-neutral-700 shadow-2xs hover:bg-neutral-100 flex items-center gap-1.5">
+                                    <Paperclip size={13} /> Choose PDF From Computer
+                                  </div>
+                                </label>
+                              ) : (
+                                <div className="border-2 border-emerald-400 bg-emerald-50/80 rounded-lg p-4 flex items-center justify-between gap-3 shadow-2xs">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                                      <FileCheck size={20} />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="font-extrabold text-neutral-900 text-sm truncate max-w-[360px]">
+                                        {selectedInvoiceFile.name}
+                                      </div>
+                                      <div className="text-[11px] text-emerald-800 font-medium flex items-center gap-1.5 mt-0.5">
+                                        <span>{(selectedInvoiceFile.size / 1024).toFixed(1)} KB</span>
+                                        <span>&bull;</span>
+                                        <span className="font-bold">PDF Ready to {isReplacing ? 'Replace' : 'Attach'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <label className="px-3 py-1.5 bg-white border border-emerald-300 text-emerald-900 text-xs font-bold rounded cursor-pointer hover:bg-emerald-100 transition-colors shadow-2xs">
+                                      Change
+                                      <input
+                                        type="file"
+                                        accept="application/pdf,.pdf"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                          if (e.target.files && e.target.files[0]) {
+                                            setSelectedInvoiceFile(e.target.files[0]);
+                                          }
+                                        }}
+                                      />
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedInvoiceFile(null)}
+                                      className="p-1.5 text-neutral-400 hover:text-red-600 rounded transition-colors"
+                                      title="Remove file"
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </div>
                           )}
-                      </div>
+                        </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEntryToAttachInvoice(null);
-                            setSelectedInvoiceFile(null);
-                          }}
-                          className="px-4 py-2 font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
-                        >
-                          Cancel
-                        </button>
-                        {(!entryToAttachInvoice.splitsJson || (() => {
-                          try { return JSON.parse(entryToAttachInvoice.splitsJson || '[]').length <= 1; } catch { return true; }
-                        })()) ? (
-                          <button
-                            type="button"
-                            onClick={handleUploadInvoicePdf}
-                            disabled={uploadingPdf || !selectedInvoiceFile}
-                            className="px-6 py-2.5 bg-[var(--primary)] text-white font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
-                          >
-                            {uploadingPdf ? (
-                              <>
-                                <Loader2 size={14} className="animate-spin" /> Uploading PDF...
-                              </>
+                        {/* 3. FIXED FOOTER */}
+                        <div className="p-3.5 sm:p-4 bg-neutral-50 border-t border-neutral-200 flex items-center justify-between shrink-0">
+                          <div className="text-[11px] text-neutral-500 truncate max-w-[280px]">
+                            {selectedInvoiceFile ? (
+                              <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                <Check size={13} className="shrink-0" /> Ready: {selectedInvoiceFile.name}
+                              </span>
+                            ) : isReplacing ? (
+                              <span className="text-red-700 font-bold">Select replacement PDF above to enable button</span>
                             ) : (
-                              <>
-                                <Upload size={14} /> Attach & Send to CM
-                              </>
+                              <span className="text-neutral-400">Select PDF above to enable button</span>
                             )}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEntryToAttachInvoice(null);
-                              setSelectedInvoiceFile(null);
-                              fetchData();
-                            }}
-                            className="px-6 py-2.5 bg-emerald-700 text-white font-bold uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-2"
-                          >
-                            <CheckCircle2 size={14} /> Done / Send to CM
-                          </button>
-                        )}
-                      </div>
-                    </motion.div>
-                  </div>
-                )}
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEntryToAttachInvoice(null);
+                                setSelectedInvoiceFile(null);
+                              }}
+                              className="px-4 py-2 font-bold uppercase tracking-wider text-neutral-600 hover:bg-neutral-200/60 rounded text-xs transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            {!isSplit ? (
+                              <button
+                                type="button"
+                                onClick={handleUploadInvoicePdf}
+                                disabled={uploadingPdf || !selectedInvoiceFile}
+                                className={`px-6 py-2.5 font-bold uppercase tracking-wider text-white text-xs rounded shadow-xs flex items-center gap-2 transition-all ${
+                                  uploadingPdf || !selectedInvoiceFile
+                                    ? 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
+                                    : isReplacing
+                                    ? 'bg-red-600 hover:bg-red-700 cursor-pointer'
+                                    : 'bg-[var(--primary)] hover:opacity-90 cursor-pointer'
+                                }`}
+                              >
+                                {uploadingPdf ? (
+                                  <>
+                                    <Loader2 size={14} className="animate-spin" /> Uploading PDF...
+                                  </>
+                                ) : isReplacing ? (
+                                  <>
+                                    <RotateCcw size={14} /> Replace & Send to CM
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload size={14} /> Attach & Send to CM
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEntryToAttachInvoice(null);
+                                  setSelectedInvoiceFile(null);
+                                  fetchData();
+                                }}
+                                className="px-6 py-2.5 bg-emerald-700 text-white font-bold uppercase tracking-wider hover:bg-emerald-800 rounded flex items-center gap-2 cursor-pointer shadow-xs"
+                              >
+                                <CheckCircle2 size={14} /> Done / Send to CM
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    </div>
+                  );
+                })()}
               </AnimatePresence>
 
               {/* MODAL 2: CM Review Attached Tally Invoice PDF */}
