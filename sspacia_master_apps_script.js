@@ -429,7 +429,15 @@ function findExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerIte
  */
 function getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc) {
   var targetRow = findExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc);
-  if (targetRow !== -1) return targetRow;
+  if (targetRow !== -1) {
+    if (!sheet.getRange(targetRow, 1).getValue() && centerName) sheet.getRange(targetRow, 1).setValue(centerName).setFontWeight("bold").setHorizontalAlignment("center");
+    if (!sheet.getRange(targetRow, 2).getValue() && expenseDate) setDateOnlyValue(sheet.getRange(targetRow, 2), expenseDate);
+    if (!sheet.getRange(targetRow, 3).getValue() && headerItemDesc) {
+      var dCell = sheet.getRange(targetRow, 3).setValue(headerItemDesc).setFontWeight("bold");
+      if (recordId) dCell.setNote("id:" + recordId);
+    }
+    return targetRow;
+  }
 
   var lastRow = Math.max(sheet.getLastRow(), 6);
   for (var r = 7; r <= lastRow + 1; r++) {
@@ -928,11 +936,29 @@ function handleInvoiceWorkflowFms(payload) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
+  else if (action === "invoice_fms_sort_sheet") {
+    var sortRes = sortExistingInvProcessSheet();
+    return ContentService.createTextOutput(JSON.stringify(sortRes)).setMimeType(ContentService.MimeType.JSON);
+  }
+
   else if (action === "invoice_fms_bootstrap_sync") {
     setupInvoiceWorkflowHeaders();
     var items = payload.items || [];
     if (items.length === 0) {
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "No items to sync" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Chronologically sort items by invoiceMonth (e.g. August 2026 -> September 2026 -> October 2026)
+    items.sort(function(a, b) {
+      var keyA = parseInvoiceMonthSortKey(a.invoiceMonth || "");
+      var keyB = parseInvoiceMonthSortKey(b.invoiceMonth || "");
+      if (keyA !== keyB) return keyA - keyB;
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
+
+    var lastExistingRow = sheet.getLastRow();
+    if (lastExistingRow >= 6) {
+      sheet.getRange(6, 1, lastExistingRow - 5, 15).clearContent();
     }
 
     var rows = [];
@@ -996,6 +1022,95 @@ function handleInvoiceWorkflowFms(payload) {
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
+/**
+ * 📅 Parse Invoice Month into a numeric sort key (e.g., 'August 2026' -> 202608, 'September 2026' -> 202609, 'October 2026' -> 202610)
+ */
+function parseInvoiceMonthSortKey(monthStr) {
+  if (!monthStr) return 0;
+  var clean = String(monthStr).toLowerCase().trim();
+
+  var isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})/);
+  if (isoMatch) {
+    return parseInt(isoMatch[1], 10) * 100 + parseInt(isoMatch[2], 10);
+  }
+
+  var monthMap = {
+    january: 1, jan: 1,
+    february: 2, feb: 2,
+    march: 3, mar: 3,
+    april: 4, apr: 4,
+    may: 5,
+    june: 6, jun: 6,
+    july: 7, jul: 7,
+    august: 8, aug: 8,
+    september: 9, sep: 9, sept: 9,
+    october: 10, oct: 10,
+    november: 11, nov: 11,
+    december: 12, dec: 12
+  };
+
+  var year = 0;
+  var month = 0;
+  var parts = clean.split(/[\s,_\-]+/);
+  for (var p = 0; p < parts.length; p++) {
+    var part = parts[p];
+    if (/^\d{4}$/.test(part)) {
+      year = parseInt(part, 10);
+    } else if (monthMap[part]) {
+      month = monthMap[part];
+    }
+  }
+
+  if (year > 0 && month > 0) {
+    return year * 100 + month;
+  }
+  return 0;
+}
+
+/**
+ * 🔄 Sort Existing INV PROCESS FMS Tab Chronologically by Month (Cols A:O)
+ * Sorts all rows from Row 6 downwards by Invoice Month (Col B) in chronological order:
+ * August 2026 -> September 2026 -> October 2026 ...
+ */
+function sortExistingInvProcessSheet() {
+  var sheet = getInvProcessSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 6) {
+    Logger.log("No data rows to sort in INV PROCESS FMS.");
+    return { status: "notice", message: "No data rows to sort" };
+  }
+
+  var numRows = lastRow - 5;
+  var range = sheet.getRange(6, 1, numRows, 15);
+  var values = range.getValues();
+
+  values.sort(function(rowA, rowB) {
+    var monthA = String(rowA[1] || "");
+    var monthB = String(rowB[1] || "");
+    var keyA = parseInvoiceMonthSortKey(monthA);
+    var keyB = parseInvoiceMonthSortKey(monthB);
+    if (keyA !== keyB) return keyA - keyB;
+    return 0;
+  });
+
+  range.setValues(values);
+
+  var dateCols = [4, 5, 8, 9, 12, 13];
+  for (var dc = 0; dc < dateCols.length; dc++) {
+    sheet.getRange(6, dateCols[dc], numRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+  }
+  var statusCols = [6, 10, 14];
+  for (var sc = 0; sc < statusCols.length; sc++) {
+    sheet.getRange(6, statusCols[sc], numRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
+  }
+  sheet.getRange(6, 1, numRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
+  sheet.getRange(6, 2, numRows, 1).setHorizontalAlignment("center");
+  sheet.getRange(6, 3, numRows, 1).setFontWeight("bold");
+
+  Logger.log("✅ INV PROCESS FMS sorted successfully (" + numRows + " rows)!");
+  return { status: "success", message: "Sorted " + numRows + " rows chronologically by month" };
+}
+
 function populateInvProcessFms() {
   setupInvoiceWorkflowHeaders();
   var apiUrl = "https://sspacia.com/api/admin/Invoices/fms-sync";
@@ -1029,14 +1144,8 @@ function handleSuspenseFms(payload) {
   if (action === "suspense_planned") {
     var payReceiveDate = String(payload.payReceiveDate || getTodayDateString()).trim();
     var suspensePaymentType = String(payload.suspensePaymentType || "Advance Suspense Payment").trim();
-    var planned = String(payload.planned || "").trim();
-    if (!planned) {
-      var now = new Date();
-      var plus4h = new Date(now.getTime() + 4 * 60 * 60 * 1000);
-      var startStr = Utilities.formatDate(now, CONFIG.TIMEZONE, "dd/MM/yyyy HH:mm:ss");
-      var endStr = Utilities.formatDate(plus4h, CONFIG.TIMEZONE, "dd/MM/yyyy HH:mm:ss");
-      planned = startStr + " - " + endStr;
-    }
+    var planned = payload.planned ? parseTimestampToDate(payload.planned) : new Date();
+
     var lastRow = Math.max(sheet.getLastRow(), 5);
     var targetStartRow = 6;
     var foundEmptySlot = false;
@@ -1058,15 +1167,73 @@ function handleSuspenseFms(payload) {
     for (var c = 0; c < 3; c++) {
       var cRow = targetStartRow + c;
       sheet.getRange(cRow, 24).setValue(centersList[c]).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
+      setDateValue(sheet.getRange(cRow, 25), planned);
       sheet.getRange(cRow, 26).clearContent();
       setPlainStatus(sheet.getRange(cRow, 27), "Pending");
     }
     sheet.getRange(targetStartRow, 22, 3, 1).merge().setValue(payReceiveDate).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
     sheet.getRange(targetStartRow, 23, 3, 1).merge().setValue(suspensePaymentType).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
-    sheet.getRange(targetStartRow, 25).setValue(planned).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
     return ContentService.createTextOutput(JSON.stringify({
       status: "success", message: "Suspense Planned logged across rows " + targetStartRow + " to " + (targetStartRow + 2),
-      rowStart: targetStartRow, payReceiveDate: payReceiveDate, suspensePaymentType: suspensePaymentType, planned: planned
+      rowStart: targetStartRow, payReceiveDate: payReceiveDate, suspensePaymentType: suspensePaymentType, planned: getNowTimestampString(planned)
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  else if (action === "suspense_bootstrap_sync") {
+    var items = payload.items || [];
+    if (!items || items.length === 0) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "No suspense items to sync" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var lastExistingRow = sheet.getLastRow();
+    if (lastExistingRow >= 6) {
+      for (var r = 6; r <= lastExistingRow; r += 3) {
+        try { sheet.getRange(r, 22, 3, 1).breakApart(); } catch (e) {}
+        try { sheet.getRange(r, 23, 3, 1).breakApart(); } catch (e) {}
+        try { sheet.getRange(r, 25, 3, 1).breakApart(); } catch (e) {}
+      }
+      var clearCount = lastExistingRow - 5;
+      sheet.getRange(6, 22, clearCount, 7).clearContent().clearFormat().clearNote();
+    }
+
+    var startRow = 6;
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var rStart = startRow + i * 3;
+      var pDate = String(item.payReceiveDate || "").trim();
+      var pType = String(item.suspensePaymentType || "x payment received").trim();
+      var planDeadline = item.planned ? parseTimestampToDate(item.planned) : (item.plannedTimestamp ? parseTimestampToDate(item.plannedTimestamp) : new Date());
+
+      try { sheet.getRange(rStart, 22, 3, 1).breakApart(); } catch (e) {}
+      try { sheet.getRange(rStart, 23, 3, 1).breakApart(); } catch (e) {}
+      try { sheet.getRange(rStart, 25, 3, 1).breakApart(); } catch (e) {}
+
+      for (var c = 0; c < 3; c++) {
+        var rowNum = rStart + c;
+        var center = centersList[c];
+        sheet.getRange(rowNum, 24).setValue(center).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
+        setDateValue(sheet.getRange(rowNum, 25), planDeadline);
+
+        var alloc = item.allocations ? item.allocations.find(function(a) { return String(a.centerName).toLowerCase().trim() === center; }) : null;
+        var actualVal = alloc && alloc.actualTimestamp ? parseTimestampToDate(alloc.actualTimestamp) : "";
+        var statusVal = alloc && alloc.fmsStatus ? alloc.fmsStatus : (actualVal ? "Done" : "Pending");
+
+        if (actualVal) {
+          setDateValue(sheet.getRange(rowNum, 26), actualVal);
+        } else {
+          sheet.getRange(rowNum, 26).clearContent();
+        }
+        setPlainStatus(sheet.getRange(rowNum, 27), statusVal);
+      }
+
+      sheet.getRange(rStart, 22, 3, 1).merge().setValue(pDate).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
+      sheet.getRange(rStart, 23, 3, 1).merge().setValue(pType).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      message: "Populated " + items.length + " suspense records across rows 6 to " + (startRow + items.length * 3 - 1),
+      count: items.length
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -1074,41 +1241,77 @@ function handleSuspenseFms(payload) {
     var centerName = String(payload.centerName || "").toLowerCase().trim();
     var statusVal = String(payload.status || "Done").trim();
     var rowStart = payload.rowStart ? Number(payload.rowStart) : -1;
+    var targetDate = String(payload.payReceiveDate || "").trim();
+    var targetType = String(payload.suspensePaymentType || "").toLowerCase().trim();
     var actualDate = new Date();
     if (payload.actual || payload.actualTimestamp) actualDate = parseTimestampToDate(payload.actual || payload.actualTimestamp);
     var targetRow = -1;
+
+    // 1. If rowStart is known, check within that 3-row block
     if (rowStart >= 6) {
       for (var k = 0; k < 3; k++) {
         var checkR = rowStart + k;
         var cVal = String(sheet.getRange(checkR, 24).getValue() || "").toLowerCase().trim();
-        if (cVal === centerName || centerName.indexOf(cVal) !== -1 || cVal.indexOf(centerName) !== -1) { targetRow = checkR; break; }
-      }
-    }
-    if (targetRow === -1) {
-      var lastRow = sheet.getLastRow();
-      if (lastRow >= 6) {
-        var numRows = lastRow - 5;
-        var xVals = sheet.getRange(6, 24, numRows, 1).getValues();
-        var wVals = sheet.getRange(6, 23, numRows, 1).getValues();
-        var targetType = String(payload.suspensePaymentType || "").toLowerCase().trim();
-        for (var i = xVals.length - 1; i >= 0; i--) {
-          var rowCenter = String(xVals[i][0] || "").toLowerCase().trim();
-          var rowType = String(wVals[i][0] || "").toLowerCase().trim();
-          var centerMatch = (rowCenter === centerName || centerName.indexOf(rowCenter) !== -1 || rowCenter.indexOf(centerName) !== -1);
-          var typeMatch = (!targetType || rowType.indexOf(targetType) !== -1 || targetType.indexOf(rowType) !== -1);
-          if (centerMatch && typeMatch) { targetRow = 6 + i; break; }
+        if (cVal === centerName || centerName.indexOf(cVal) !== -1 || cVal.indexOf(centerName) !== -1) {
+          targetRow = checkR;
+          break;
         }
       }
     }
+
+    // 2. Otherwise scan all 3-row blocks from bottom to top
+    if (targetRow === -1) {
+      var lastRow = sheet.getLastRow();
+      for (var r = lastRow; r >= 6; r -= 3) {
+        var blockStart = 6 + Math.floor((r - 6) / 3) * 3;
+        var bDate = String(sheet.getRange(blockStart, 22).getDisplayValue() || "").trim();
+        var bType = String(sheet.getRange(blockStart, 23).getDisplayValue() || "").toLowerCase().trim();
+
+        var dateMatch = (!targetDate || bDate === targetDate || bDate.indexOf(targetDate) !== -1);
+        var typeMatch = (!targetType || bType.indexOf(targetType) !== -1 || targetType.indexOf(bType) !== -1);
+
+        if (dateMatch && typeMatch) {
+          for (var c = 0; c < 3; c++) {
+            var checkR = blockStart + c;
+            var cVal = String(sheet.getRange(checkR, 24).getValue() || "").toLowerCase().trim();
+            if (cVal === centerName || centerName.indexOf(cVal) !== -1 || cVal.indexOf(centerName) !== -1) {
+              targetRow = checkR;
+              break;
+            }
+          }
+          if (targetRow !== -1) break;
+        }
+      }
+    }
+
+    // 3. Fallback: match by center name alone if still not found
+    if (targetRow === -1) {
+      var lastRow = sheet.getLastRow();
+      for (var r = lastRow; r >= 6; r--) {
+        var cVal = String(sheet.getRange(r, 24).getValue() || "").toLowerCase().trim();
+        if (cVal === centerName || centerName.indexOf(cVal) !== -1 || cVal.indexOf(centerName) !== -1) {
+          targetRow = r;
+          break;
+        }
+      }
+    }
+
     if (targetRow !== -1) {
       setDateValue(sheet.getRange(targetRow, 26), actualDate);
       setPlainStatus(sheet.getRange(targetRow, 27), statusVal);
       return ContentService.createTextOutput(JSON.stringify({
-        status: "success", message: "Suspense Actual logged for " + centerName + " in row " + targetRow,
-        row: targetRow, center: centerName, actual: getNowTimestampString(actualDate), statusValue: statusVal
+        status: "success",
+        message: "Suspense Actual logged for " + centerName + " in row " + targetRow,
+        row: targetRow,
+        center: centerName,
+        actual: getNowTimestampString(actualDate),
+        statusValue: statusVal
       })).setMimeType(ContentService.MimeType.JSON);
     } else {
-      return ContentService.createTextOutput(JSON.stringify({ status: "notice", message: "Could not find matching row for center: " + centerName })).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "notice",
+        message: "Could not find matching row for center: " + centerName
+      })).setMimeType(ContentService.MimeType.JSON);
     }
   }
 
@@ -1156,8 +1359,26 @@ function handleSuspenseFms(payload) {
     }
   }
 
-  return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Unknown suspense action: " + action })).setMimeType(ContentService.MimeType.JSON);
 }
+
+function populateSuspenseFms() {
+  var url = "https://sspacia.com/api/admin/suspense";
+  try {
+    var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (res.getResponseCode() === 200) {
+      var json = JSON.parse(res.getContentText());
+      if (json && json.data && json.data.length > 0) {
+        var result = handleSuspenseFms({ action: "suspense_bootstrap_sync", items: json.data });
+        Logger.log("✅ SUSPENSE FMS Population Complete: " + result.getContent());
+        return;
+      }
+    }
+    Logger.log("Notice: API returned HTTP " + res.getResponseCode());
+  } catch (e) {
+    Logger.log("Notice fetching suspense from API: " + e.toString());
+  }
+}
+
 
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1768,6 +1989,10 @@ function onOpen() {
   ui.createMenu('INV PROCESS FMS')
     .addItem('📥 Populate Invoices into INV PROCESS FMS', 'populateInvProcessFms')
     .addItem('⚙️ Setup INV PROCESS FMS Headers', 'setupInvoiceWorkflowHeaders')
+    .addItem('🔄 Sort Months Chronologically', 'sortExistingInvProcessSheet')
+    .addToUi();
+  ui.createMenu('SUSPENSE FMS')
+    .addItem('📥 Populate SUSPENSE FMS', 'populateSuspenseFms')
     .addToUi();
   ui.createMenu('SSPACIA SCOT')
     .addItem('🚀 Sync Clients from SSPACIA Portal', 'syncScotClients')

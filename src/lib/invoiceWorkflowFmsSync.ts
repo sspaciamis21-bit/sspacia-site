@@ -109,6 +109,28 @@ async function getInvoiceFmsDetails(invoiceRecordId: number) {
 }
 
 /**
+ * Calculate Step 1 Planned Timestamp:
+ * - If automatic month dispatch: always 10:00:00 AM on the dispatch day (last day of the month)
+ * - If manual dispatch, one-time, or virtual office: exact arrival timestamp
+ */
+export function getInvoiceStep1PlannedTimestamp(inv: any): string {
+  const isAutoMonth = inv?.sendType === 'AUTOMATIC_MONTH_END' || inv?.productGroupKey === 'MONTHLY_CONSOLIDATED';
+  const isVO = inv?.productGroupKey === 'YEARLY_VO' || inv?.paymentDuration === 'YEARLY' || inv?.clientMaster?.clientType === 'VIRTUAL_OFFICE';
+  const isOneTime = inv?.clientMaster?.clientType === 'ONE_TIME';
+
+  if (isAutoMonth && !isVO && !isOneTime) {
+    const createdDate = inv?.createdAt ? new Date(inv.createdAt) : new Date();
+    const istDate = new Date(createdDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const day = String(istDate.getDate()).padStart(2, '0');
+    const month = String(istDate.getMonth() + 1).padStart(2, '0');
+    const year = istDate.getFullYear();
+    return `${day}/${month}/${year} 10:00:00`;
+  }
+
+  return formatFmsTimestamp(inv?.createdAt ? new Date(inv.createdAt) : new Date());
+}
+
+/**
  * STEP 1: Invoice Entry Arrives in Invoice Section (Planned)
  * Called when an invoice is created/generated in the invoice section
  */
@@ -117,15 +139,17 @@ export async function syncInvoiceWorkflowArrival(invoiceRecordId: number, custom
     const details = await getInvoiceFmsDetails(invoiceRecordId);
     if (!details) return;
 
-    const arrivalTime = formatFmsTimestamp(customTimestamp || details.invoice.createdAt || new Date());
+    const plannedTime = customTimestamp 
+      ? formatFmsTimestamp(customTimestamp) 
+      : getInvoiceStep1PlannedTimestamp(details.invoice);
 
     return await sendToFmsWebhook({
       action: 'invoice_fms_arrival',
       centerName: details.centerName,
       invoiceMonth: details.invoiceMonth,
       companyName: details.companyName,
-      planned: arrivalTime,
-      timestamp: arrivalTime,
+      planned: plannedTime,
+      timestamp: plannedTime,
     });
   } catch (err) {
     console.warn('[syncInvoiceWorkflowArrival notice]:', err);

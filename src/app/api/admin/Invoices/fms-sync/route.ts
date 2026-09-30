@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import {
   formatFmsTimestamp,
+  getInvoiceStep1PlannedTimestamp,
   setupInvoiceWorkflowFmsHeaders,
 } from '@/lib/invoiceWorkflowFmsSync';
 
@@ -9,12 +10,59 @@ const WEBHOOK_URL =
   process.env.EXPENSE_FMS_APPS_SCRIPT_URL ||
   'https://script.google.com/macros/s/AKfycbzUagdoyhVrN-e-mmfe3oBfpH8ue1fB2hGLyrkTynE41J5VHbe9eiKDPVOklLG2AYVuDQ/exec';
 
+const MONTH_MAP: Record<string, number> = {
+  january: 1, jan: 1,
+  february: 2, feb: 2,
+  march: 3, mar: 3,
+  april: 4, apr: 4,
+  may: 5,
+  june: 6, jun: 6,
+  july: 7, jul: 7,
+  august: 8, aug: 8,
+  september: 9, sep: 9, sept: 9,
+  october: 10, oct: 10,
+  november: 11, nov: 11,
+  december: 12, dec: 12,
+};
+
+export function parseBillingMonthSortKey(monthStr?: string | null, fallbackDate?: Date): number {
+  if (monthStr) {
+    const clean = String(monthStr).trim().toLowerCase();
+
+    // Check for ISO format: YYYY-MM
+    const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})/);
+    if (isoMatch) {
+      const year = parseInt(isoMatch[1], 10);
+      const month = parseInt(isoMatch[2], 10);
+      return year * 100 + month;
+    }
+
+    let year = 0;
+    let month = 0;
+    const tokens = clean.split(/[\s,_\-]+/).filter(Boolean);
+    for (const token of tokens) {
+      if (/^\d{4}$/.test(token)) {
+        year = parseInt(token, 10);
+      } else if (MONTH_MAP[token]) {
+        month = MONTH_MAP[token];
+      }
+    }
+
+    if (year > 0 && month > 0) {
+      return year * 100 + month;
+    }
+  }
+
+  if (fallbackDate) {
+    const d = new Date(fallbackDate);
+    return d.getFullYear() * 100 + (d.getMonth() + 1);
+  }
+
+  return 0;
+}
+
 async function fetchAugSepItems() {
   const invoices = await (prisma as any).invoiceRecord.findMany({
-    orderBy: [
-      { billingMonth: 'asc' },
-      { id: 'asc' },
-    ],
     include: {
       clientMaster: {
         include: {
@@ -38,6 +86,14 @@ async function fetchAugSepItems() {
     },
   });
 
+  // Chronologically sort by billingMonth (August -> September -> October etc.) then by ID
+  invoices.sort((a: any, b: any) => {
+    const keyA = parseBillingMonthSortKey(a.billingMonth, a.createdAt);
+    const keyB = parseBillingMonthSortKey(b.billingMonth, b.createdAt);
+    if (keyA !== keyB) return keyA - keyB;
+    return (a.id || 0) - (b.id || 0);
+  });
+
   return invoices.map((inv: any) => {
     const centerName =
       inv.createdBy?.assignedLocations?.[0]?.location?.name ||
@@ -48,14 +104,13 @@ async function fetchAugSepItems() {
     const companyName = inv.companyName || inv.clientMaster?.companyName || 'Unknown Client';
     const status = inv.status || 'PENDING_CM_REVIEW';
 
-    const createdTime = formatFmsTimestamp(inv.createdAt);
     const updatedTime = formatFmsTimestamp(inv.updatedAt);
     const attachedTime = inv.attachedInvoice?.createdAt ? formatFmsTimestamp(inv.attachedInvoice.createdAt) : updatedTime;
     const signedTime = inv.signedAt ? formatFmsTimestamp(inv.signedAt) : updatedTime;
 
     // Step 1: Review Invoices & Send to Accountant to attach tally pdf
     const isSentToAccountant = ['SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED'].includes(status);
-    const step1Planned = createdTime;
+    const step1Planned = getInvoiceStep1PlannedTimestamp(inv);
     const step1Actual = isSentToAccountant ? updatedTime : '';
     const step1Status = isSentToAccountant ? 'Done' : 'Pending';
 

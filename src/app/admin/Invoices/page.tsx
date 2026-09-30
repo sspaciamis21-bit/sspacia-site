@@ -2238,35 +2238,55 @@ export default function AdminInvoicesWorkflowPage() {
     });
   }, [invoices]);
 
+  // Accountant scope invoices: only invoices that have been sent to or processed by the accountant
+  // (Excludes PENDING_CM_REVIEW invoices, which are still in Community Manager's review stage)
+  const accountantScopeInvoices = useMemo(() => {
+    return invoices.filter((inv) =>
+      ['SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS', 'INVOICE_ATTACHED', 'APPROVED'].includes(inv.status)
+    );
+  }, [invoices]);
+
   // Accountant Arrival counts & auto 5s banner trigger
   const accountantArrivalCounts = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-    const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0];
 
     let todayCount = 0;
     let yesterdayCount = 0;
     let twoDaysCount = 0;
     let pendingAttachCount = 0;
 
-    invoices.forEach((inv) => {
+    accountantScopeInvoices.forEach((inv) => {
       const invArrivalDate = inv.sentAt
         ? new Date(inv.sentAt).toISOString().split('T')[0]
         : (inv.createdAt ? new Date(inv.createdAt).toISOString().split('T')[0] : '');
-      if (invArrivalDate === todayStr) todayCount++;
-      if (invArrivalDate === yesterdayStr) yesterdayCount++;
-      if (invArrivalDate >= twoDaysAgoStr) twoDaysCount++;
+
+      if (invArrivalDate === todayStr) {
+        todayCount++;
+      } else if (invArrivalDate === yesterdayStr) {
+        yesterdayCount++;
+      } else if (invArrivalDate >= threeDaysAgoStr && invArrivalDate < yesterdayStr) {
+        twoDaysCount++;
+      }
+
       if (inv.status === 'SENT_TO_ACCOUNTANT' || inv.status === 'REJECTED_WITH_REMARKS') {
         pendingAttachCount++;
       }
     });
 
-    return { todayCount, yesterdayCount, twoDaysCount, pendingAttachCount };
-  }, [invoices]);
+    return {
+      allCount: accountantScopeInvoices.length,
+      todayCount,
+      yesterdayCount,
+      twoDaysCount,
+      pendingAttachCount,
+    };
+  }, [accountantScopeInvoices]);
 
   // Trigger 5-second one-time arrival notification for accountant
   useEffect(() => {
@@ -2288,9 +2308,9 @@ export default function AdminInvoicesWorkflowPage() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-    const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0];
 
     return invoices.filter((e) => {
       const matchesSearch =
@@ -2315,7 +2335,7 @@ export default function AdminInvoicesWorkflowPage() {
         } else if (accountantArrivalFilter === 'YESTERDAY') {
           matchesArrivalFilter = invArrivalDate === yesterdayStr;
         } else if (accountantArrivalFilter === 'TWO_DAYS_AGO') {
-          matchesArrivalFilter = invArrivalDate >= twoDaysAgoStr;
+          matchesArrivalFilter = invArrivalDate >= threeDaysAgoStr && invArrivalDate < yesterdayStr;
         } else if (accountantArrivalFilter === 'PENDING_ATTACH') {
           matchesArrivalFilter = e.status === 'SENT_TO_ACCOUNTANT' || e.status === 'REJECTED_WITH_REMARKS';
         }
@@ -2683,8 +2703,23 @@ export default function AdminInvoicesWorkflowPage() {
                       ? 'bg-[#006064] text-white border-[#006064] shadow-2xs'
                       : 'bg-white hover:bg-neutral-100 text-gray-700 border-neutral-300'
                       }`}
+                    title="View all client invoices in accountant scope"
                   >
-                    All ({invoices.length})
+                    All ({accountantArrivalCounts.allCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccountantArrivalFilter('PENDING_ATTACH')}
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${accountantArrivalFilter === 'PENDING_ATTACH'
+                      ? 'bg-amber-600 text-white border-amber-700 shadow-2xs ring-2 ring-amber-400/50'
+                      : accountantArrivalCounts.pendingAttachCount > 0
+                        ? 'bg-amber-500 text-white border-amber-600 font-black animate-pulse'
+                        : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+                      }`}
+                    title="Filter to all invoices waiting for Tally PDF attachment from CM"
+                  >
+                    <span>⚡ Pending Tally PDF</span>
+                    <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.pendingAttachCount}</span>
                   </button>
                   <button
                     type="button"
@@ -2693,7 +2728,7 @@ export default function AdminInvoicesWorkflowPage() {
                       ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
                       : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
                       }`}
-                    title="Filter to invoices that arrived today from CM"
+                    title="Filter to invoices that arrived today from CM in accountant view"
                   >
                     <span>📅 Today&apos;s Arrived</span>
                     <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.todayCount}</span>
@@ -2705,7 +2740,7 @@ export default function AdminInvoicesWorkflowPage() {
                       ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
                       : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
                       }`}
-                    title="Filter to invoices that arrived yesterday from CM"
+                    title="Filter to invoices that arrived yesterday from CM in accountant view"
                   >
                     <span>Yesterday&apos;s Arrived</span>
                     <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.yesterdayCount}</span>
@@ -2717,22 +2752,10 @@ export default function AdminInvoicesWorkflowPage() {
                       ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
                       : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
                       }`}
-                    title="Filter to invoices that arrived within the last 2-3 days"
+                    title="Filter to invoices that arrived 2-3 days ago from CM in accountant view"
                   >
                     <span>2-3 Days Ago</span>
                     <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.twoDaysCount}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAccountantArrivalFilter('PENDING_ATTACH')}
-                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-xs border transition-colors cursor-pointer flex items-center gap-1 ${accountantArrivalFilter === 'PENDING_ATTACH'
-                      ? 'bg-amber-600 text-white border-amber-700 shadow-2xs'
-                      : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
-                      }`}
-                    title="Filter to all invoices waiting for Tally PDF attachment"
-                  >
-                    <span>⚡ Pending Tally PDF</span>
-                    <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.pendingAttachCount}</span>
                   </button>
                 </div>
               )}

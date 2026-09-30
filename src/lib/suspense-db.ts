@@ -138,6 +138,68 @@ export function formatIstDate(date: Date = new Date()): string {
 }
 
 /**
+ * Calculates deadline based on working hours: 10:00 AM to 7:00 PM (10:00 to 19:00 = 9 hrs/day).
+ * Default SLA is 8 working hours.
+ * Example: Created at 30/09/2026 15:10:00 -> 3 hrs 50 min left today until 19:00 ->
+ * Remaining 4 hrs 10 min rolls to tomorrow from 10:00 AM -> Deadline is 01/10/2026 14:10:00.
+ */
+export function calculateWorkingHoursDeadline(
+  createdDate: Date = new Date(),
+  workingHoursToAdd: number = 8,
+  workStartHour: number = 10,
+  workEndHour: number = 19
+): Date {
+  const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+  const utcMs = createdDate.getTime();
+  const istMs = utcMs + IST_OFFSET_MS;
+  let ist = new Date(istMs);
+
+  let dayOfWeek = ist.getUTCDay(); // 0 = Sun
+  let h = ist.getUTCHours();
+
+  if (dayOfWeek === 0) {
+    ist.setUTCDate(ist.getUTCDate() + 1);
+    ist.setUTCHours(workStartHour, 0, 0, 0);
+  } else if (h < workStartHour) {
+    ist.setUTCHours(workStartHour, 0, 0, 0);
+  } else if (h >= workEndHour) {
+    ist.setUTCDate(ist.getUTCDate() + 1);
+    if (ist.getUTCDay() === 0) ist.setUTCDate(ist.getUTCDate() + 1);
+    ist.setUTCHours(workStartHour, 0, 0, 0);
+  }
+
+  let remainingMs = workingHoursToAdd * 60 * 60 * 1000;
+
+  while (remainingMs > 0) {
+    if (ist.getUTCDay() === 0) {
+      ist.setUTCDate(ist.getUTCDate() + 1);
+      ist.setUTCHours(workStartHour, 0, 0, 0);
+      continue;
+    }
+
+    const endOfToday = new Date(ist.getTime());
+    endOfToday.setUTCHours(workEndHour, 0, 0, 0);
+
+    const availableMsToday = endOfToday.getTime() - ist.getTime();
+
+    if (remainingMs <= availableMsToday) {
+      ist = new Date(ist.getTime() + remainingMs);
+      remainingMs = 0;
+    } else {
+      remainingMs -= availableMsToday;
+      ist.setUTCDate(ist.getUTCDate() + 1);
+      if (ist.getUTCDay() === 0) {
+        ist.setUTCDate(ist.getUTCDate() + 1);
+      }
+      ist.setUTCHours(workStartHour, 0, 0, 0);
+    }
+  }
+
+  const finalUtcMs = ist.getTime() - IST_OFFSET_MS;
+  return new Date(finalUtcMs);
+}
+
+/**
  * Create a new suspense payment and initialize 3 center allocations
  */
 export async function createSuspensePayment(data: {
@@ -158,11 +220,8 @@ export async function createSuspensePayment(data: {
   await ensureSuspenseTablesExist();
 
   const now = new Date();
-  const fourHoursLater = new Date(now.getTime() + 4 * 60 * 60 * 1000);
-
-  const startTimestampStr = formatIstDateTime(now);
-  const endTimestampStr = formatIstDateTime(fourHoursLater);
-  const plannedTimestamp = `${startTimestampStr} - ${endTimestampStr}`;
+  const deadlineDate = calculateWorkingHoursDeadline(now, 8);
+  const plannedTimestamp = formatIstDateTime(deadlineDate);
 
   // Insert SuspensePayment
   await prisma.$executeRawUnsafe(
@@ -189,7 +248,7 @@ export async function createSuspensePayment(data: {
     data.enteredByName || null,
     now,
     plannedTimestamp,
-    fourHoursLater
+    deadlineDate
   );
 
   const lastInsert: any[] = await prisma.$queryRawUnsafe('SELECT LAST_INSERT_ID() as id');
