@@ -41,8 +41,35 @@ yarn-error.log*
 next-env.d.ts
 public/*.zip
 
-# scratch
+# scratch & temporary scripts
 scratch/
+**/scratch/
+scripts/scratch/
+scripts/*scratch*
+*scratch*.*
+scratch.*
+*.scratch.*
+temp/
+tmp/
+**/temp/
+**/tmp/
+scripts/temp/
+test-*.js
+test-*.ts
+
+# excel & spreadsheet files
 *.xlsx
-  
- 
+*.xls
+*.csv
+*.xlsm
+*.xlsb
+*.ods
+*.tsv
+
+# Google Apps Script standalone files
+*.gs
+
+# logs and backups
+*.log
+*.tmp
+*.bak
