@@ -6138,13 +6138,16 @@ export default function ClientMasterRegistryPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-500 font-medium">Clients to Dispatch:</span>
                     <span className="font-bold text-gray-900">
-                      {dispatchModalIds.length > 0 ? `${dispatchModalIds.length} Selected Clients` : `${kpis.activeClients} Active Clients`}
+                      {dispatchModalIds.length > 0 ? `${dispatchModalIds.length} Selected Clients` : `${kpis.activeClients + (kpis.onNotice || 0)} Active & On Notice Clients`}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500 font-medium">Agreement Value Sum:</span>
                     <span className="font-bold text-[#006064]">
-                      ₹{kpis.totalRev.toLocaleString('en-IN')}
+                      ₹{(dispatchModalIds.length > 0
+                        ? entries.filter(e => dispatchModalIds.includes(e.id)).reduce((sum, e) => sum + (Number(e.totalAmount) || Number(e.amount) || 0), 0)
+                        : kpis.totalRev
+                      ).toLocaleString('en-IN')}
                     </span>
                   </div>
                   <div className="flex justify-between">

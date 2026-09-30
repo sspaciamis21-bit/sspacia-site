@@ -36,11 +36,11 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
 
     console.log(`[Auto-Dispatch] 🗓️ Last day of month detected (${today}/${currentMonthIndex + 1}/${currentYear}). Preparing invoices for: "${currentBillingMonth}"`);
 
-    // Fetch all active recurring coworking clients with their products.
+    // Fetch all active and on-notice recurring coworking clients with their products.
     // Strictly exclude ONE_TIME and VIRTUAL_OFFICE clients from automated recurring monthly invoices.
     const clientsToDispatch = await (prisma as any).clientMaster.findMany({
       where: {
-        clientStatus: 'Active',
+        clientStatus: { notIn: ['Terminated', 'Inactive', 'DELETED'] },
         clientType: { notIn: ['ONE_TIME', 'VIRTUAL_OFFICE'] },
       },
       include: {
@@ -49,7 +49,7 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
     });
 
     if (clientsToDispatch.length === 0) {
-      return { dispatched: false, count: 0, message: 'No active clients found to dispatch' };
+      return { dispatched: false, count: 0, message: 'No eligible clients found to dispatch' };
     }
 
     // Check existing invoices to avoid duplicate dispatch for the target billing months

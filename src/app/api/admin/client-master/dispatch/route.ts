@@ -34,14 +34,16 @@ export async function POST(request: Request) {
     // ── Node-based Data Isolation & Super Admin Node Filter for Dispatching ──
     const scopedUserIds = await getNodeScopedUserIds(userId);
 
-    const where: any = {
-      clientStatus: 'Active',
-    };
+    const where: any = {};
 
     // Filter by explicitly selected Client Master IDs if provided; otherwise exclude ONE_TIME and VIRTUAL_OFFICE clients from bulk dispatch
     if (sendType === 'MANUAL' && Array.isArray(clientMasterIds) && clientMasterIds.length > 0) {
       where.id = { in: clientMasterIds.map(Number) };
+      // For manually selected clients, allow Active, On Notice, etc. Exclude only hard DELETED
+      where.clientStatus = { not: 'DELETED' };
     } else {
+      // Bulk dispatch includes Active and On Notice clients (so CM can manage prorate days during notice period)
+      where.clientStatus = { notIn: ['Terminated', 'Inactive', 'DELETED'] };
       where.clientType = { notIn: ['ONE_TIME', 'VIRTUAL_OFFICE'] };
     }
 
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
 
     if (clientsToDispatch.length === 0) {
       return NextResponse.json(
-        { error: 'No active clients found in the selected filter to dispatch.' },
+        { error: 'No eligible clients found in the selected filter to dispatch.' },
         { status: 400 }
       );
     }
