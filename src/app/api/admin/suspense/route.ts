@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       payments,
+      data: payments,
+      items: payments,
       summary: {
         totalCount: payments.length,
         totalAmount,

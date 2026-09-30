@@ -1216,7 +1216,7 @@ function handleSuspenseFms(payload) {
 
         var alloc = item.allocations ? item.allocations.find(function(a) { return String(a.centerName).toLowerCase().trim() === center; }) : null;
         var actualVal = alloc && alloc.actualTimestamp ? parseTimestampToDate(alloc.actualTimestamp) : "";
-        var statusVal = alloc && alloc.fmsStatus ? alloc.fmsStatus : (actualVal ? "Done" : "Pending");
+        var statusVal = actualVal ? "Done" : "Pending";
 
         if (actualVal) {
           setDateValue(sheet.getRange(rowNum, 26), actualVal);
@@ -1238,43 +1238,38 @@ function handleSuspenseFms(payload) {
   }
 
   else if (action === "suspense_actual") {
-    var centerName = String(payload.centerName || "").toLowerCase().trim();
-    var statusVal = String(payload.status || "Done").trim();
+    var rawCenter = String(payload.centerName || "").toLowerCase().trim();
+    var normCenter = normFmsText(rawCenter);
+    var statusVal = "Done"; // FMS status is Done once CM takes action (acceptance or rejection)
     var rowStart = payload.rowStart ? Number(payload.rowStart) : -1;
     var targetDate = String(payload.payReceiveDate || "").trim();
-    var targetType = String(payload.suspensePaymentType || "").toLowerCase().trim();
+    var normTargetDate = normFmsText(targetDate);
     var actualDate = new Date();
     if (payload.actual || payload.actualTimestamp) actualDate = parseTimestampToDate(payload.actual || payload.actualTimestamp);
     var targetRow = -1;
 
-    // 1. If rowStart is known, check within that 3-row block
+    // 1. If rowStart is known, check within that 3-row block (STRICT non-empty check)
     if (rowStart >= 6) {
       for (var k = 0; k < 3; k++) {
         var checkR = rowStart + k;
-        var cVal = String(sheet.getRange(checkR, 24).getValue() || "").toLowerCase().trim();
-        if (cVal === centerName || centerName.indexOf(cVal) !== -1 || cVal.indexOf(centerName) !== -1) {
+        var cVal = normFmsText(sheet.getRange(checkR, 24).getValue());
+        if (cVal && (cVal === normCenter || normCenter.indexOf(cVal) !== -1 || cVal.indexOf(normCenter) !== -1)) {
           targetRow = checkR;
           break;
         }
       }
     }
 
-    // 2. Otherwise scan all 3-row blocks from bottom to top
-    if (targetRow === -1) {
+    // 2. Search by payReceiveDate block in Col 22 (V), then match center in Col 24 (X)
+    if (targetRow === -1 && normTargetDate) {
       var lastRow = sheet.getLastRow();
-      for (var r = lastRow; r >= 6; r -= 3) {
-        var blockStart = 6 + Math.floor((r - 6) / 3) * 3;
-        var bDate = String(sheet.getRange(blockStart, 22).getDisplayValue() || "").trim();
-        var bType = String(sheet.getRange(blockStart, 23).getDisplayValue() || "").toLowerCase().trim();
-
-        var dateMatch = (!targetDate || bDate === targetDate || bDate.indexOf(targetDate) !== -1);
-        var typeMatch = (!targetType || bType.indexOf(targetType) !== -1 || targetType.indexOf(bType) !== -1);
-
-        if (dateMatch && typeMatch) {
+      for (var r = 6; r <= lastRow; r += 3) {
+        var bDate = normFmsText(sheet.getRange(r, 22).getDisplayValue());
+        if (bDate && (bDate === normTargetDate || bDate.indexOf(normTargetDate) !== -1 || normTargetDate.indexOf(bDate) !== -1)) {
           for (var c = 0; c < 3; c++) {
-            var checkR = blockStart + c;
-            var cVal = String(sheet.getRange(checkR, 24).getValue() || "").toLowerCase().trim();
-            if (cVal === centerName || centerName.indexOf(cVal) !== -1 || cVal.indexOf(centerName) !== -1) {
+            var checkR = r + c;
+            var cVal = normFmsText(sheet.getRange(checkR, 24).getValue());
+            if (cVal && (cVal === normCenter || normCenter.indexOf(cVal) !== -1 || cVal.indexOf(normCenter) !== -1)) {
               targetRow = checkR;
               break;
             }
@@ -1284,14 +1279,19 @@ function handleSuspenseFms(payload) {
       }
     }
 
-    // 3. Fallback: match by center name alone if still not found
-    if (targetRow === -1) {
+    // 3. Fallback: match by non-empty center name alone, prioritizing pending rows
+    if (targetRow === -1 && normCenter) {
       var lastRow = sheet.getLastRow();
       for (var r = lastRow; r >= 6; r--) {
-        var cVal = String(sheet.getRange(r, 24).getValue() || "").toLowerCase().trim();
-        if (cVal === centerName || centerName.indexOf(cVal) !== -1 || cVal.indexOf(centerName) !== -1) {
-          targetRow = r;
-          break;
+        var cVal = normFmsText(sheet.getRange(r, 24).getValue());
+        if (cVal && (cVal === normCenter || normCenter.indexOf(cVal) !== -1 || cVal.indexOf(normCenter) !== -1)) {
+          var existingActual = sheet.getRange(r, 26).getValue();
+          if (!existingActual) {
+            targetRow = r;
+            break;
+          } else if (targetRow === -1) {
+            targetRow = r;
+          }
         }
       }
     }
@@ -1301,16 +1301,16 @@ function handleSuspenseFms(payload) {
       setPlainStatus(sheet.getRange(targetRow, 27), statusVal);
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
-        message: "Suspense Actual logged for " + centerName + " in row " + targetRow,
+        message: "Suspense Actual logged for " + rawCenter + " in row " + targetRow,
         row: targetRow,
-        center: centerName,
+        center: rawCenter,
         actual: getNowTimestampString(actualDate),
         statusValue: statusVal
       })).setMimeType(ContentService.MimeType.JSON);
     } else {
       return ContentService.createTextOutput(JSON.stringify({
         status: "notice",
-        message: "Could not find matching row for center: " + centerName
+        message: "Could not find matching row for center: " + rawCenter
       })).setMimeType(ContentService.MimeType.JSON);
     }
   }
@@ -1367,8 +1367,9 @@ function populateSuspenseFms() {
     var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
     if (res.getResponseCode() === 200) {
       var json = JSON.parse(res.getContentText());
-      if (json && json.data && json.data.length > 0) {
-        var result = handleSuspenseFms({ action: "suspense_bootstrap_sync", items: json.data });
+      var items = (json && (json.data || json.payments || json.items)) || [];
+      if (items && items.length > 0) {
+        var result = handleSuspenseFms({ action: "suspense_bootstrap_sync", items: items });
         Logger.log("✅ SUSPENSE FMS Population Complete: " + result.getContent());
         return;
       }

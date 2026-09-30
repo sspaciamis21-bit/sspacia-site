@@ -405,7 +405,7 @@ export async function recordCenterRecognition(params: {
   }
 
   const isOverdue = new Date(existing.deadlineAt).getTime() < now.getTime();
-  const fmsStatus = isOverdue ? 'Overdue' : 'Done';
+  const fmsStatus = 'Done';
 
   // Update allocation for this center
   await prisma.$executeRawUnsafe(

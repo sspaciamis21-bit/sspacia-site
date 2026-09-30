@@ -135,7 +135,7 @@ export async function syncSuspenseActual(params: {
       suspensePaymentType: payment.suspensePaymentType,
       centerName: params.centerName.toLowerCase().trim(),
       actual: params.actualTimestamp,
-      status: params.status,
+      status: 'Done',
     };
 
     console.log(`[Suspense FMS Sync] 📤 Dispatching Suspense Actual for ${params.centerName}:`, payload);
