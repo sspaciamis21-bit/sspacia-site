@@ -192,17 +192,15 @@ export async function GET() {
 
     const rawTransactions: any[] = [];
 
-    // 3. FETCH DEBITS: Disbursed / Settled Vendor Operating Expenses & Bulk Uploaded Expenses
-    // An expense reflects as a bank debit once disbursed with a UTR, marked PAID, or approved by management
+    // 3. FETCH DEBITS: Disbursed / Settled Vendor Operating Expenses
+    // An expense reflects as a bank debit ONLY once the payable process has occurred (Accountant entered Payment Date / UTR during Disbursal or marked PAID)
     const approvedExpenses = await (prisma as any).expenseRecord.findMany({
       where: {
         OR: [
           { paymentStatus: 'PAID' },
+          { payReceiveDate: { not: null } },
+          { utrDate: { not: null } },
           { utrNumber: { not: null } },
-          { approvalStatus: 'APPROVED' },
-          { accountantApprovalStatus: 'APPROVED' },
-          { superAdminApprovalStatus: 'APPROVED' },
-          { paymentApprovalStatus: 'APPROVED' },
         ],
         NOT: [
           { approvalStatus: 'REJECTED' },
@@ -214,7 +212,6 @@ export async function GET() {
         location: { select: { id: true, name: true } },
       },
       orderBy: [
-        { expenseDate: 'asc' },
         { id: 'asc' },
       ],
     });
@@ -227,12 +224,26 @@ export async function GET() {
         exp.paymentStatus === 'REJECTED';
       if (isRejected) return;
 
+      // Disbursal validation: An expense reflects as a debit ONLY after the accountant
+      // completes the final payable step ("Record Disbursal & UTR Details") and enters
+      // the Payment Date (payReceiveDate / utrDate) or UTR / marked PAID
+      const payDate =
+        (exp.payReceiveDate && String(exp.payReceiveDate).trim()) ||
+        (exp.utrDate && String(exp.utrDate).trim());
+      const hasUtr = Boolean(exp.utrNumber && String(exp.utrNumber).trim());
+      const isPaid = exp.paymentStatus === 'PAID';
+
+      // If disbursal has not taken place yet, money has NOT left the bank account
+      if (!payDate && !hasUtr && !isPaid) return;
+
       const debitAmount = Number(exp.receiveAmount || exp.amount || 0);
       if (debitAmount <= 0) return;
 
-      // Debited date in bank statement comes from payment date entered by Accountant
-      // (payReceiveDate or utrDate), or expenseDate, NEVER just updatedAt!
-      const paymentDateInput = exp.payReceiveDate || exp.utrDate || exp.expenseDate || exp.createdAt;
+      // Debited date in bank statement strictly comes from payment date entered by Accountant
+      // during "Record Disbursal & UTR Details" (payReceiveDate or utrDate)
+      const paymentDateInput = payDate || (isPaid || hasUtr ? (exp.expenseDate || exp.createdAt) : null);
+      if (!paymentDateInput) return;
+
       const parsedPaymentDate = parseDateRobust(paymentDateInput) || new Date();
       const formattedDate = formatDateDDMMYYYY(paymentDateInput || parsedPaymentDate);
       const rawTimestamp = parsedPaymentDate.getTime();
