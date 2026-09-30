@@ -38,11 +38,11 @@ export async function POST(request: Request) {
       clientStatus: 'Active',
     };
 
-    // Filter by explicitly selected Client Master IDs if provided; otherwise exclude ONE_TIME clients from bulk dispatch
+    // Filter by explicitly selected Client Master IDs if provided; otherwise exclude ONE_TIME and VIRTUAL_OFFICE clients from bulk dispatch
     if (sendType === 'MANUAL' && Array.isArray(clientMasterIds) && clientMasterIds.length > 0) {
       where.id = { in: clientMasterIds.map(Number) };
     } else {
-      where.clientType = { not: 'ONE_TIME' };
+      where.clientType = { notIn: ['ONE_TIME', 'VIRTUAL_OFFICE'] };
     }
 
     // Super Admin Node Filter: if locationId is passed
@@ -117,6 +117,11 @@ export async function POST(request: Request) {
     let skippedDuplicatesCount = 0;
 
     for (const cm of clientsToDispatch) {
+      // If not explicitly selected by ID, never bulk-dispatch ONE_TIME or VIRTUAL_OFFICE
+      if ((!Array.isArray(clientMasterIds) || clientMasterIds.length === 0) && (cm.clientType === 'ONE_TIME' || cm.clientType === 'VIRTUAL_OFFICE')) {
+        continue;
+      }
+
       if (!forceReDispatch && existingSet.has(cm.id)) {
         skippedDuplicatesCount++;
         continue;

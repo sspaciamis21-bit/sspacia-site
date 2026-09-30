@@ -36,11 +36,12 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
 
     console.log(`[Auto-Dispatch] 🗓️ Last day of month detected (${today}/${currentMonthIndex + 1}/${currentYear}). Preparing invoices for: "${currentBillingMonth}"`);
 
-    // Fetch all active clients with their products (exclude ONE_TIME clients from recurring monthly invoices)
+    // Fetch all active recurring coworking clients with their products.
+    // Strictly exclude ONE_TIME and VIRTUAL_OFFICE clients from automated recurring monthly invoices.
     const clientsToDispatch = await (prisma as any).clientMaster.findMany({
       where: {
         clientStatus: 'Active',
-        clientType: { not: 'ONE_TIME' },
+        clientType: { notIn: ['ONE_TIME', 'VIRTUAL_OFFICE'] },
       },
       include: {
         products: { orderBy: { sortOrder: 'asc' } },
@@ -60,42 +61,16 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
     const invoiceCreates: any[] = [];
 
     for (const cm of clientsToDispatch) {
-      const isVO = cm.clientType === 'VIRTUAL_OFFICE';
-      const products = cm.products && cm.products.length > 0 ? cm.products : [];
-      const rawDuration = (products[0]?.paymentDuration || cm.paymentDuration || 'MONTHLY').toString().toUpperCase();
-      const isYearlyVO = isVO && (rawDuration === 'YEARLY' || rawDuration === '12_MONTHS' || rawDuration === '12 MONTHS');
-
-      let targetBillingMonthForClient = currentBillingMonth;
-      let calculatedDueDate: Date;
-      const primaryDueDay = products[0]?.paymentDueDay ?? cm.paymentDueDay ?? 5;
-
-      if (isYearlyVO) {
-        // Derive renewal month from agreementStartDate
-        const agrDate = cm.agreementStartDate ? new Date(cm.agreementStartDate) : null;
-        if (!agrDate || isNaN(agrDate.getTime())) {
-          // If no agreement date is set, skip auto-generating to avoid incorrect month dispatch
-          continue;
-        }
-        const renewalMonthIndex = agrDate.getMonth(); // 0 = Jan, 10 = Nov
-        // Advance generation is 3 months prior to renewal (August for November)
-        const advanceGenMonthIndex = (renewalMonthIndex - 3 + 12) % 12;
-
-        // Auto-dispatch runs on month-end of currentMonthIndex. Check if this is the advance month:
-        if (currentMonthIndex !== advanceGenMonthIndex) {
-          // Not the renewal dispatch month for this Virtual Office client -> skip
-          continue;
-        }
-
-        const renewalYear = currentMonthIndex > renewalMonthIndex ? currentYear + 1 : currentYear;
-        targetBillingMonthForClient = `${monthNames[renewalMonthIndex]} ${renewalYear}`;
-
-        const daysInRenewalMonth = new Date(renewalYear, renewalMonthIndex + 1, 0).getDate();
-        calculatedDueDate = new Date(renewalYear, renewalMonthIndex, Math.min(primaryDueDay, daysInRenewalMonth));
-      } else {
-        // Standard clients: advance billing for upcoming month
-        const daysInTargetMonth = new Date(targetYear, targetMonthIndex + 1, 0).getDate();
-        calculatedDueDate = new Date(targetYear, targetMonthIndex, Math.min(primaryDueDay, daysInTargetMonth));
+      // Security guard: Virtual Office and One-Time clients must NEVER be auto-dispatched
+      if (cm.clientType === 'VIRTUAL_OFFICE' || cm.clientType === 'ONE_TIME') {
+        continue;
       }
+
+      const products = cm.products && cm.products.length > 0 ? cm.products : [];
+      const primaryDueDay = products[0]?.paymentDueDay ?? cm.paymentDueDay ?? 5;
+      const daysInTargetMonth = new Date(targetYear, targetMonthIndex + 1, 0).getDate();
+      const calculatedDueDate = new Date(targetYear, targetMonthIndex, Math.min(primaryDueDay, daysInTargetMonth));
+      const targetBillingMonthForClient = currentBillingMonth;
 
       const dedupeKey = `${cm.id}_${targetBillingMonthForClient}`;
       if (existingSet.has(dedupeKey)) continue;
@@ -104,7 +79,7 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
       let totalSeats = 0;
       let subAmount = 0;
       let totalAmt = 0;
-      let cabinSummary = cm.cabinName || (isVO ? 'Virtual Office' : 'Workspace');
+      let cabinSummary = cm.cabinName || 'Workspace';
 
       if (products.length > 0) {
         totalSeats = products.reduce((sum: number, p: any) => sum + (Number(p.noOfSeats) || 0), 0);
@@ -135,11 +110,11 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
             amount: subAmount,
             gstPercent: products[0]?.gstPercent || cm.gstPercent || 18,
             totalAmount: totalAmt,
-            paymentDuration: isYearlyVO ? 'YEARLY' : (products[0]?.paymentDuration || 'MONTHLY'),
+            paymentDuration: products[0]?.paymentDuration || 'MONTHLY',
             paymentDueDay: primaryDueDay,
             dueDate: calculatedDueDate,
             firstPaymentDate: products[0]?.firstPaymentDate ? new Date(products[0].firstPaymentDate) : null,
-            productGroupKey: isYearlyVO ? 'YEARLY_VO' : 'MONTHLY_CONSOLIDATED',
+            productGroupKey: 'MONTHLY_CONSOLIDATED',
             itemsJson: products.length > 0 ? JSON.stringify(products) : null,
             splitsJson: null,
             gstNo: cm.gstNo,
