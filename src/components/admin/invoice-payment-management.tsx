@@ -759,7 +759,9 @@ export function InvoicePaymentManagement({
           setAvailableMonths(json.availableBillingMonths);
         }
         if (json.locations && Array.isArray(json.locations)) {
-          setLocations(json.locations);
+          setLocations(
+            json.locations.filter((l: any) => l.slug !== 'common' && l.name?.toLowerCase() !== 'common')
+          );
         }
       } else {
         toast.error(json.error || 'Failed to load approved invoices');
@@ -778,11 +780,12 @@ export function InvoicePaymentManagement({
     fetch('/api/admin/locations')
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) {
-          setLocations(data.map((l: any) => ({ id: l.id, name: l.name })));
-        } else if (data.data && Array.isArray(data.data)) {
-          setLocations(data.data.map((l: any) => ({ id: l.id, name: l.name })));
-        }
+        const rawList = Array.isArray(data) ? data : (data.data && Array.isArray(data.data) ? data.data : []);
+        setLocations(
+          rawList
+            .filter((l: any) => l.slug !== 'common' && l.name?.toLowerCase() !== 'common')
+            .map((l: any) => ({ id: l.id, name: l.name }))
+        );
       })
       .catch(() => {});
   }, []);

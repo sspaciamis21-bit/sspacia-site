@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
+import { PDFDocument } from 'pdf-lib';
 
 export async function POST(request: Request) {
   try {
@@ -43,17 +44,74 @@ export async function POST(request: Request) {
     }
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const rawBuffer = Buffer.from(bytes);
 
-    const fileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    let finalBuffer: Buffer = rawBuffer;
+    let finalMimeType: string = file.type || 'application/pdf';
+    let finalFileName: string = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    let finalFileSize: number = file.size;
+
+    // Check if the uploaded file is an image (JPG, JPEG, PNG, etc.)
+    const isImageMime = file.type && file.type.toLowerCase().startsWith('image/');
+    const isImageExt = /\.(jpe?g|png|webp|bmp|gif)$/i.test(file.name);
+    const isPngSignature = rawBuffer.length > 8 && rawBuffer[0] === 0x89 && rawBuffer[1] === 0x50 && rawBuffer[2] === 0x4E && rawBuffer[3] === 0x47;
+    const isJpgSignature = rawBuffer.length > 3 && rawBuffer[0] === 0xFF && rawBuffer[1] === 0xD8 && rawBuffer[2] === 0xFF;
+
+    if (isImageMime || isImageExt || isPngSignature || isJpgSignature) {
+      try {
+        const pdfDoc = await PDFDocument.create();
+        let embeddedImage: any = null;
+
+        if (isPngSignature || file.type === 'image/png' || /\.png$/i.test(file.name)) {
+          try {
+            embeddedImage = await pdfDoc.embedPng(rawBuffer);
+          } catch {
+            try {
+              embeddedImage = await pdfDoc.embedJpg(rawBuffer);
+            } catch {
+              embeddedImage = null;
+            }
+          }
+        } else {
+          try {
+            embeddedImage = await pdfDoc.embedJpg(rawBuffer);
+          } catch {
+            try {
+              embeddedImage = await pdfDoc.embedPng(rawBuffer);
+            } catch {
+              embeddedImage = null;
+            }
+          }
+        }
+
+        if (embeddedImage) {
+          const page = pdfDoc.addPage([embeddedImage.width, embeddedImage.height]);
+          page.drawImage(embeddedImage, {
+            x: 0,
+            y: 0,
+            width: embeddedImage.width,
+            height: embeddedImage.height,
+          });
+
+          const pdfBytes = await pdfDoc.save();
+          finalBuffer = Buffer.from(pdfBytes);
+          finalMimeType = 'application/pdf';
+          finalFileSize = finalBuffer.length;
+          // Silently rename extension to .pdf
+          finalFileName = finalFileName.replace(/\.[^.]+$/, '') + '.pdf';
+        }
+      } catch (convErr) {
+        console.warn('[SILENT_PDF_CONVERSION_NOTICE] Kept original image format:', convErr);
+      }
+    }
 
     // Store directly in database for serverless (Vercel / Hostinger) compatibility
     const storedDoc = await (prisma as any).storedDocument.create({
       data: {
-        fileName,
-        mimeType: file.type || 'application/pdf',
-        fileData: buffer,
-        fileSize: file.size,
+        fileName: finalFileName,
+        mimeType: finalMimeType,
+        fileData: finalBuffer,
+        fileSize: finalFileSize,
         uploadedById: validUserId,
       },
     });
@@ -68,8 +126,9 @@ export async function POST(request: Request) {
       id: storedDoc.id,
       data: {
         fileUrl,
-        fileName: file.name,
-        fileSize: file.size,
+        fileName: finalFileName,
+        fileSize: finalFileSize,
+        mimeType: finalMimeType,
       },
     });
   } catch (error) {

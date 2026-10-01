@@ -209,10 +209,13 @@ export function SuspenseManagement({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate PDF only
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    if (!isPdf) {
-      toast.error('Only PDF files are allowed for payment advice attachment');
+    // Validate PDF or Image (JPG, JPEG, PNG) - images are silently converted to PDF on server
+    const isAllowed =
+      file.type === 'application/pdf' ||
+      file.type.startsWith('image/') ||
+      /\.(pdf|jpe?g|png)$/i.test(file.name);
+    if (!isAllowed) {
+      toast.error('Only PDF or Image (JPG, PNG) files are allowed for payment advice attachment');
       e.target.value = '';
       return;
     }
@@ -239,8 +242,8 @@ export function SuspenseManagement({
       }
 
       setFormProofUrl(data.fileUrl);
-      setFormProofName(file.name);
-      toast.success(`PDF "${file.name}" uploaded successfully!`);
+      setFormProofName(data.fileName || file.name);
+      toast.success(`Payment advice "${file.name}" attached successfully!`);
     } catch (err: any) {
       console.error('[Suspense PDF Upload]', err);
       toast.error(err?.message || 'Error uploading PDF file');
@@ -320,8 +323,12 @@ export function SuspenseManagement({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      toast.error('Only PDF documents are accepted for payment advice proof.');
+    const isAllowed =
+      file.type === 'application/pdf' ||
+      file.type.startsWith('image/') ||
+      /\.(pdf|jpe?g|png)$/i.test(file.name);
+    if (!isAllowed) {
+      toast.error('Only PDF or Image (JPG, PNG) documents are accepted for payment advice proof.');
       return;
     }
 
@@ -352,8 +359,8 @@ export function SuspenseManagement({
       }
 
       setEditProofUrl(data.fileUrl);
-      setEditProofName(file.name);
-      toast.success(`PDF "${file.name}" uploaded successfully!`);
+      setEditProofName(data.fileName || file.name);
+      toast.success(`Payment advice proof "${file.name}" updated successfully!`);
     } catch (err: any) {
       console.error('[Suspense Edit PDF Upload]', err);
       toast.error(err?.message || 'Error uploading PDF file');
@@ -1337,7 +1344,7 @@ export function SuspenseManagement({
                     Payment Advice / Proof Attachment (PDF Only) *
                   </label>
                   <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 bg-red-100 text-red-700 border border-red-200 rounded-xs">
-                    Mandatory • PDF Only
+                    Mandatory Attachment
                   </span>
                 </div>
 
@@ -1352,7 +1359,7 @@ export function SuspenseManagement({
                     <input
                       type="file"
                       id="suspense-pdf-upload"
-                      accept="application/pdf,.pdf"
+                      accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
                       disabled={uploadingPdf}
                       onChange={handleFileUpload}
                       className="hidden"
@@ -1364,7 +1371,7 @@ export function SuspenseManagement({
                       {uploadingPdf ? (
                         <div className="flex flex-col items-center gap-1.5 py-2">
                           <RefreshCcw size={24} className="animate-spin text-[#006064]" />
-                          <span className="text-xs font-bold text-[#006064]">Uploading & Storing PDF...</span>
+                          <span className="text-xs font-bold text-[#006064]">Uploading & Storing Document...</span>
                           <span className="text-[10px] text-gray-500">Please wait while the document is uploaded</span>
                         </div>
                       ) : (
@@ -1374,7 +1381,7 @@ export function SuspenseManagement({
                           </div>
                           <div>
                             <p className="text-xs font-bold text-gray-900">
-                              Click to browse or upload Payment Advice PDF
+                              Click to browse or upload Payment Advice (PDF / Image)
                             </p>
                             <p className="text-[10px] text-gray-500 mt-0.5">
                               PDF only (Max 50MB) • Shared with 3 Community Managers for allocation
@@ -2018,7 +2025,7 @@ export function SuspenseManagement({
                     <input
                       type="file"
                       id="edit-suspense-pdf-upload"
-                      accept="application/pdf,.pdf"
+                      accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
                       disabled={uploadingEditPdf}
                       onChange={handleEditFileUpload}
                       className="hidden"
@@ -2030,15 +2037,15 @@ export function SuspenseManagement({
                       {uploadingEditPdf ? (
                         <div className="flex flex-col items-center gap-1 py-1">
                           <RefreshCcw size={20} className="animate-spin text-[#006064]" />
-                          <span className="text-xs font-bold text-[#006064]">Uploading PDF...</span>
+                          <span className="text-xs font-bold text-[#006064]">Uploading Document...</span>
                         </div>
                       ) : (
                         <>
                           <FileText size={20} className="text-red-500" />
                           <span className="text-xs font-bold text-gray-800">
-                            Click to upload new Payment Advice PDF
+                            Click to upload new Payment Advice (PDF / Image)
                           </span>
-                          <span className="text-[10px] text-gray-500">PDF only (Max 50MB)</span>
+                          <span className="text-[10px] text-gray-500">PDF, JPG, PNG (Max 50MB)</span>
                         </>
                       )}
                     </label>

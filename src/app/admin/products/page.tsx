@@ -115,7 +115,9 @@ export default function AdminProductsPage() {
         fetch('/api/admin/config/space-categories').then(r => r.json()),
       ]);
 
-      if (locRes.data) setLocations(locRes.data);
+      if (locRes.data) {
+        setLocations(locRes.data.filter((l: any) => l.slug !== 'common' && l.name?.toLowerCase() !== 'common'));
+      }
       if (typeRes.data) setProductTypes(typeRes.data);
       if (catRes.data) setCategories(catRes.data);
     } catch (err) {

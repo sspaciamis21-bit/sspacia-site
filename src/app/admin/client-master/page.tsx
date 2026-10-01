@@ -35,7 +35,8 @@ import {
   Globe,
   Tag,
   Gift,
-  Printer
+  Printer,
+  ExternalLink
 } from 'lucide-react';
 import { ClientTerminationModal } from '@/components/admin/client-termination-modal';
 import { toast } from 'sonner';
@@ -706,7 +707,11 @@ export default function ClientMasterRegistryPage() {
       const json = await res.json();
       const locList = json.data || json.locations || (Array.isArray(json) ? json : []);
       if (Array.isArray(locList)) {
-        setLocations(locList.map((l: any) => ({ id: l.id, name: l.name })));
+        setLocations(
+          locList
+            .filter((l: any) => l.slug !== 'common' && l.name?.toLowerCase() !== 'common')
+            .map((l: any) => ({ id: l.id, name: l.name }))
+        );
       }
     } catch { /* ignore */ }
   }, [isAdmin]);
@@ -2241,6 +2246,17 @@ export default function ClientMasterRegistryPage() {
                             {entry.gstStatus}
                           </span>
                           {entry.gstNo && <div className="font-mono text-[10px]">{entry.gstNo}</div>}
+                          {entry.gstPdfUrl && (
+                            <a
+                              href={entry.gstPdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[9px] text-emerald-700 font-bold hover:underline flex items-center gap-0.5 mt-0.5"
+                              title="Click to view attached GST Certificate"
+                            >
+                              <Paperclip size={9} /> View GST
+                            </a>
+                          )}
                         </td>
 
                         <td className="p-3 space-y-1">
@@ -3748,7 +3764,7 @@ export default function ClientMasterRegistryPage() {
                           <div className="flex items-center gap-2">
                             <input
                               type="file"
-                              accept="application/pdf,.pdf"
+                              accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
                               onChange={(e) => {
                                 if (e.target.files && e.target.files[0]) {
                                   handleFileUpload(e.target.files[0], 'GST');
@@ -3759,8 +3775,24 @@ export default function ClientMasterRegistryPage() {
                             {uploadingGstPdf && <Loader2 size={16} className="animate-spin text-[#006064]" />}
                           </div>
                           {gstPdfName && (
-                            <div className="text-[11px] text-emerald-700 font-bold mt-1 flex items-center gap-1">
-                              <CheckCircle2 size={12} /> Attached: {gstPdfName}
+                            <div className="mt-1">
+                              {gstPdfUrl ? (
+                                <a
+                                  href={gstPdfUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 hover:text-emerald-950 font-bold hover:underline cursor-pointer group bg-emerald-50 px-2 py-1 border border-emerald-300 rounded-xs transition-colors"
+                                  title="Click to view/download attached GST Certificate"
+                                >
+                                  <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                                  <span>Attached: <span className="underline decoration-dotted">{gstPdfName}</span></span>
+                                  <ExternalLink size={11} className="opacity-70 group-hover:opacity-100 shrink-0" />
+                                </a>
+                              ) : (
+                                <div className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
+                                  <CheckCircle2 size={12} /> Attached: {gstPdfName}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -3910,7 +3942,7 @@ export default function ClientMasterRegistryPage() {
                       <div className="flex items-center gap-2">
                         <input
                           type="file"
-                          accept="application/pdf,.pdf"
+                          accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
                           onChange={(e) => {
                             if (e.target.files && e.target.files[0]) {
                               handleFileUpload(e.target.files[0], 'AGREEMENT');
@@ -3921,8 +3953,24 @@ export default function ClientMasterRegistryPage() {
                         {uploadingAgreementPdf && <Loader2 size={16} className="animate-spin text-[#006064]" />}
                       </div>
                       {agreementPdfName && (
-                        <div className="text-[11px] text-emerald-700 font-bold mt-1 flex items-center gap-1">
-                          <CheckCircle2 size={12} /> Attached: {agreementPdfName}
+                        <div className="mt-1">
+                          {agreementPdfUrl ? (
+                            <a
+                              href={agreementPdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 hover:text-emerald-950 font-bold hover:underline cursor-pointer group bg-emerald-50 px-2 py-1 border border-emerald-300 rounded-xs transition-colors"
+                              title="Click to view/download attached Agreement PDF"
+                            >
+                              <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                              <span>Attached: <span className="underline decoration-dotted">{agreementPdfName}</span></span>
+                              <ExternalLink size={11} className="opacity-70 group-hover:opacity-100 shrink-0" />
+                            </a>
+                          ) : (
+                            <div className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
+                              <CheckCircle2 size={12} /> Attached: {agreementPdfName}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -4749,7 +4797,7 @@ export default function ClientMasterRegistryPage() {
                                   <div className="flex items-center gap-1.5">
                                     <input
                                       type="file"
-                                      accept="application/pdf,.pdf"
+                                      accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
                                       onChange={(e) => {
                                         if (e.target.files && e.target.files[0]) {
                                           handleProductFileUpload(e.target.files[0], idx);
@@ -4762,8 +4810,24 @@ export default function ClientMasterRegistryPage() {
                                     )}
                                   </div>
                                   {row.agreementPdfName && (
-                                    <div className="text-[10px] text-teal-800 font-bold mt-0.5 line-clamp-1">
-                                      Attached: {row.agreementPdfName}
+                                    <div className="mt-1">
+                                      {row.agreementPdfUrl ? (
+                                        <a
+                                          href={row.agreementPdfUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 text-[10px] text-teal-800 hover:text-teal-950 font-bold hover:underline cursor-pointer group bg-teal-50 px-1.5 py-0.5 border border-teal-300 rounded-xs transition-colors"
+                                          title="Click to view/download item agreement PDF"
+                                        >
+                                          <CheckCircle2 size={11} className="text-teal-700 shrink-0" />
+                                          <span className="truncate max-w-[180px]">Attached: <span className="underline decoration-dotted">{row.agreementPdfName}</span></span>
+                                          <ExternalLink size={10} className="opacity-70 group-hover:opacity-100 shrink-0" />
+                                        </a>
+                                      ) : (
+                                        <div className="text-[10px] text-teal-800 font-bold line-clamp-1">
+                                          Attached: {row.agreementPdfName}
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>
@@ -5161,7 +5225,7 @@ export default function ClientMasterRegistryPage() {
                           <div className="flex items-center gap-2">
                             <input
                               type="file"
-                              accept="application/pdf,.pdf"
+                              accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
                               onChange={(e) => {
                                 if (e.target.files && e.target.files[0]) {
                                   handleFileUpload(e.target.files[0], 'TDS');
@@ -5172,8 +5236,24 @@ export default function ClientMasterRegistryPage() {
                             {uploadingTdsPdf && <Loader2 size={16} className="animate-spin text-[#006064]" />}
                           </div>
                           {tdsPdfName && (
-                            <div className="text-[11px] text-emerald-700 font-bold mt-1 flex items-center gap-1">
-                              <CheckCircle2 size={12} /> Attached: {tdsPdfName}
+                            <div className="mt-1">
+                              {tdsPdfUrl ? (
+                                <a
+                                  href={tdsPdfUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 hover:text-emerald-950 font-bold hover:underline cursor-pointer group bg-emerald-50 px-2 py-1 border border-emerald-300 rounded-xs transition-colors"
+                                  title="Click to view/download attached TDS Certificate"
+                                >
+                                  <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                                  <span>Attached: <span className="underline decoration-dotted">{tdsPdfName}</span></span>
+                                  <ExternalLink size={11} className="opacity-70 group-hover:opacity-100 shrink-0" />
+                                </a>
+                              ) : (
+                                <div className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
+                                  <CheckCircle2 size={12} /> Attached: {tdsPdfName}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

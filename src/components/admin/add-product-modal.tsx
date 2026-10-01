@@ -195,7 +195,11 @@ export function AddProductModal({ isOpen, onClose, onSuccess, product }: AddProd
 
     fetch('/api/admin/locations')
       .then((r) => r.json())
-      .then((json) => { if (json.data) setLocations(json.data); })
+      .then((json) => {
+        if (json.data) {
+          setLocations(json.data.filter((l: any) => l.slug !== 'common' && l.name?.toLowerCase() !== 'common'));
+        }
+      })
       .catch(() => {});
 
     fetch('/api/admin/config/amenities')

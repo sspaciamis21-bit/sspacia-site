@@ -139,8 +139,8 @@ export async function syncInvoiceWorkflowArrival(invoiceRecordId: number, custom
     const details = await getInvoiceFmsDetails(invoiceRecordId);
     if (!details) return;
 
-    const plannedTime = customTimestamp 
-      ? formatFmsTimestamp(customTimestamp) 
+    const plannedTime = customTimestamp
+      ? formatFmsTimestamp(customTimestamp)
       : getInvoiceStep1PlannedTimestamp(details.invoice);
 
     return await sendToFmsWebhook({

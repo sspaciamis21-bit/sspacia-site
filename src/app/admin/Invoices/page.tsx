@@ -1839,7 +1839,11 @@ export default function AdminInvoicesWorkflowPage() {
       const json = await res.json();
       const locList = json.data || json.locations || (Array.isArray(json) ? json : []);
       if (Array.isArray(locList)) {
-        setLocations(locList.map((l: any) => ({ id: l.id, name: l.name })));
+        setLocations(
+          locList
+            .filter((l: any) => l.slug !== 'common' && l.name?.toLowerCase() !== 'common')
+            .map((l: any) => ({ id: l.id, name: l.name }))
+        );
       }
     } catch { /* ignore */ }
   }, [canUseNodeFilter]);
@@ -3688,7 +3692,7 @@ export default function AdminInvoicesWorkflowPage() {
                                               Replace
                                               <input
                                                 type="file"
-                                                accept="application/pdf,.pdf"
+                                                accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
                                                 className="hidden"
                                                 onChange={(e) => {
                                                   if (e.target.files && e.target.files[0]) {
@@ -3703,7 +3707,7 @@ export default function AdminInvoicesWorkflowPage() {
                                         <div className="flex items-center gap-2">
                                           <input
                                             type="file"
-                                            accept="application/pdf,.pdf"
+                                            accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
                                             onChange={(e) => {
                                               if (e.target.files && e.target.files[0]) {
                                                 handleUploadSplitPdf(idx, e.target.files[0]);
@@ -3765,7 +3769,7 @@ export default function AdminInvoicesWorkflowPage() {
                                 >
                                   <input
                                     type="file"
-                                    accept="application/pdf,.pdf"
+                                    accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
                                     className="hidden"
                                     onChange={(e) => {
                                       if (e.target.files && e.target.files[0]) {
@@ -3779,13 +3783,13 @@ export default function AdminInvoicesWorkflowPage() {
                                     <Upload size={22} />
                                   </div>
                                   <div className="font-extrabold text-sm text-neutral-900">
-                                    {isReplacing ? 'Click to Browse Replacement Tally PDF' : 'Click to Browse Tally PDF Invoice'}
+                                    {isReplacing ? 'Click to Browse Replacement Tally PDF / Document' : 'Click to Browse Tally PDF Invoice / Document'}
                                   </div>
                                   <div className="text-[11px] text-neutral-500 mt-1">
-                                    or drag & drop the PDF file here
+                                    or drag & drop the file here
                                   </div>
                                   <div className="mt-3 px-4 py-1.5 bg-white border border-neutral-300 rounded font-bold text-xs uppercase tracking-wider text-neutral-700 shadow-2xs hover:bg-neutral-100 flex items-center gap-1.5">
-                                    <Paperclip size={13} /> Choose PDF From Computer
+                                    <Paperclip size={13} /> Choose Document From Computer
                                   </div>
                                 </label>
                               ) : (
@@ -3801,7 +3805,7 @@ export default function AdminInvoicesWorkflowPage() {
                                       <div className="text-[11px] text-emerald-800 font-medium flex items-center gap-1.5 mt-0.5">
                                         <span>{(selectedInvoiceFile.size / 1024).toFixed(1)} KB</span>
                                         <span>&bull;</span>
-                                        <span className="font-bold">PDF Ready to {isReplacing ? 'Replace' : 'Attach'}</span>
+                                        <span className="font-bold">Ready to {isReplacing ? 'Replace' : 'Attach'}</span>
                                       </div>
                                     </div>
                                   </div>
@@ -3810,7 +3814,7 @@ export default function AdminInvoicesWorkflowPage() {
                                       Change
                                       <input
                                         type="file"
-                                        accept="application/pdf,.pdf"
+                                        accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
                                         className="hidden"
                                         onChange={(e) => {
                                           if (e.target.files && e.target.files[0]) {
