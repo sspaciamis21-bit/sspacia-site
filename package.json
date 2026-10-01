@@ -77,6 +77,7 @@
     "typescript": "^5.7.0"
   },
   "overrides": {
+    "axios": "^1.20.0",
     "nodemailer": "$nodemailer",
     "deepmerge-ts": "^8.0.2",
     "ip-address": "^10.7.2",
