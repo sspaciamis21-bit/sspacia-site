@@ -66,6 +66,7 @@ export async function POST(_request: Request) {
       customPrimaryEmail: 't6565154@gmail.com',
       customPrimaryName: testContactName,
       customCcEmails: [],
+      skipApprovalCheck: true,
     });
 
     if (!result.success) {

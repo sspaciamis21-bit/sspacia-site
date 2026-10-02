@@ -46,6 +46,13 @@ export async function GET(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
+    if (invoice.status !== 'APPROVED') {
+      return NextResponse.json(
+        { error: 'Invoice must be reviewed and approved by Community Manager before sending to client' },
+        { status: 400 }
+      );
+    }
+
     const locName =
       invoice.createdBy?.assignedLocations?.[0]?.location?.name ||
       invoice.clientMaster?.createdBy?.assignedLocations?.[0]?.location?.name ||
@@ -101,6 +108,22 @@ export async function POST(
 
     const { id } = await params;
     const invoiceRecordId = Number(id);
+
+    const existingInvoice = await (prisma as any).invoiceRecord.findUnique({
+      where: { id: invoiceRecordId },
+      select: { id: true, status: true },
+    });
+
+    if (!existingInvoice) {
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+    }
+
+    if (existingInvoice.status !== 'APPROVED') {
+      return NextResponse.json(
+        { error: 'Invoice must be reviewed and approved by Community Manager before sending to client' },
+        { status: 400 }
+      );
+    }
 
     const body = await request.json().catch(() => ({}));
     const { primaryContactPersonId, customPrimaryEmail, customPrimaryName, customCcEmails } = body;

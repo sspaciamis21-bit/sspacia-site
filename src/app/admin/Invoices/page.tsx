@@ -1896,7 +1896,15 @@ export default function AdminInvoicesWorkflowPage() {
       const json = await res.json();
       if (json.success) {
         if (status === 'SENT_TO_ACCOUNTANT') toast.success('Sent to Accountant for Tally PDF processing!');
-        if (status === 'APPROVED') toast.success('Invoice Approved successfully! ✅');
+        if (status === 'APPROVED') {
+          if (json.emailDispatched) {
+            toast.success(`Invoice Approved & Tax Invoice emailed to ${json.emailRecipient || 'client'}! ✅`);
+          } else if (json.emailError) {
+            toast.success(`Invoice Approved! ⚠️ (Email note: ${json.emailError})`);
+          } else {
+            toast.success('Invoice Approved successfully! ✅');
+          }
+        }
         if (status === 'REJECTED_WITH_REMARKS') toast.success('Revision remarks sent back to Accountant!');
 
         fetchData();
@@ -3321,7 +3329,7 @@ export default function AdminInvoicesWorkflowPage() {
                                         <RotateCcw size={9} /> Resend Email
                                       </button>
                                     </div>
-                                  ) : (invoice.status === 'APPROVED' || invoice.attachedInvoice || invoice.splitsJson || invoice.digitallySignedPdfUrl) ? (
+                                  ) : invoice.status === 'APPROVED' ? (
                                     <button
                                       type="button"
                                       onClick={() => handleOpenSendClientEmailModal(invoice)}
@@ -3385,7 +3393,7 @@ export default function AdminInvoicesWorkflowPage() {
                                 >
                                   <Eye size={12} />
                                 </button>
-                                {(canAccessCM || isAdmin) && (
+                                {(canAccessCM || isAdmin) && invoice.status === 'APPROVED' && (
                                   <button
                                     onClick={() => handleOpenSendClientEmailModal(invoice)}
                                     className="p-1 text-neutral-500 hover:text-emerald-700 hover:bg-emerald-50"

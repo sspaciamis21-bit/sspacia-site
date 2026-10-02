@@ -79,6 +79,7 @@ export interface SendInvoiceEmailOptions {
   customPrimaryEmail?: string;
   customPrimaryName?: string;
   customCcEmails?: string[];
+  skipApprovalCheck?: boolean;
 }
 
 /**
@@ -146,6 +147,14 @@ export async function sendInvoiceApprovalEmail(
 
     if (!invoice) {
       return { success: false, error: `InvoiceRecord #${invoiceRecordId} not found` };
+    }
+
+    const skipApproval = typeof optionsOrId !== 'number' && Boolean((optionsOrId as SendInvoiceEmailOptions).skipApprovalCheck);
+    if (!skipApproval && invoice.status !== 'APPROVED') {
+      return {
+        success: false,
+        error: `Invoice #${invoiceRecordId} is in status '${invoice.status}'. It must be reviewed and approved by the Community Manager before sending to the client.`,
+      };
     }
 
     const companyName = (invoice.companyName || invoice.clientMaster?.companyName || 'Valued Client').trim();

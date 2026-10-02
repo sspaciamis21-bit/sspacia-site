@@ -48,17 +48,26 @@ export async function PATCH(
       },
     });
 
+    let emailDispatched = false;
+    let emailRecipient: string | null = null;
+    let emailError: string | null = null;
+
     // ── When CM approves invoice, trigger automated Tax Invoice email with attached PDF(s) to the Client ──
     if (status === 'APPROVED') {
-      sendInvoiceApprovalEmail(invoiceRecordId).then((res) => {
-        if (res.success) {
-          console.log(`[Invoice Status] ✅ Tax Invoice email delivered to client for Invoice #${invoiceRecordId}`);
+      try {
+        const mailRes = await sendInvoiceApprovalEmail(invoiceRecordId);
+        if (mailRes.success) {
+          emailDispatched = true;
+          emailRecipient = mailRes.recipient || null;
+          console.log(`[Invoice Status] ✅ Tax Invoice email delivered to client for Invoice #${invoiceRecordId} (${mailRes.recipient})`);
         } else {
-          console.warn(`[Invoice Status] ⚠️ Tax Invoice email notice for Invoice #${invoiceRecordId}: ${res.error}`);
+          emailError = mailRes.error || 'Failed to dispatch email';
+          console.warn(`[Invoice Status] ⚠️ Tax Invoice email notice for Invoice #${invoiceRecordId}: ${mailRes.error}`);
         }
-      }).catch((err) => {
+      } catch (err: any) {
+        emailError = err?.message || 'Error dispatching email';
         console.error(`[Invoice Status] ❌ Async email error on Invoice #${invoiceRecordId}:`, err);
-      });
+      }
 
       // ── Synchronize to Google Sheets 'Accounts' Tab (Live Planned) ──
       syncLiveInvoicePlanned(invoiceRecordId).catch((fmsErr) => {
@@ -102,7 +111,13 @@ export async function PATCH(
     }
 
 
-    return NextResponse.json({ success: true, data: updated });
+    return NextResponse.json({
+      success: true,
+      data: updated,
+      emailDispatched,
+      emailRecipient,
+      emailError,
+    });
   } catch (error) {
     console.error('Update invoice record status error:', error);
     return NextResponse.json({ error: 'Failed to update invoice status' }, { status: 500 });
