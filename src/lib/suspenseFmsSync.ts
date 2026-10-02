@@ -7,6 +7,7 @@ import {
   getSuspensePaymentById,
   updateSuspenseFmsRow,
   SuspensePaymentRecord,
+  formatIstDateTime,
 } from './suspense-db';
 
 const WEBHOOK_URL =
@@ -63,12 +64,17 @@ async function postToFms(payload: Record<string, any>) {
 
 /**
  * ── 1. SUSPENSE PLANNED (Triggered when Accountant submits a new Suspense Entry) ──
- * Populates 3 rows in tab 'expense fms':
+ * Populates 3 rows in tab 'SUSPENSE' (Cols A to H, Row 7+):
  * - Row 1: mercado
  * - Row 2: premier house
  * - Row 3: agarwal complex
- * - Merges Col V (Pay Receive Date), Col W (Suspense Payment Type), Col Y (Planned Timestamp Range)
- * - Sets Col Z (Actual) to empty, Col AA (Status) to "Pending"
+ * - Merges Col A (Pay Receive Date) & Col B (Suspense Payment Type)
+ * - Col C: Center
+ * - Col D: Log TimeStamp (exact accountant creation timestamp, unmerged)
+ * - Col E: Planned (Left blank for user formula)
+ * - Col F: Actual (empty)
+ * - Col G: Status (Left blank for user formula)
+ * - Col H: Delay (Left blank for user formula)
  */
 export async function syncSuspensePlanned(suspenseId: number) {
   try {
@@ -78,12 +84,15 @@ export async function syncSuspensePlanned(suspenseId: number) {
       return { success: false, error: 'Payment not found' };
     }
 
+    const logTimestamp = formatIstDateTime(new Date(payment.createdAt || payment.enteredAt));
+
     const payload = {
       action: 'suspense_planned',
-      sheetName: 'expense fms',
+      sheetName: 'SUSPENSE',
       suspenseId: payment.id,
       payReceiveDate: payment.payReceiveDate,
       suspensePaymentType: payment.suspensePaymentType,
+      logTimestamp,
       planned: payment.plannedTimestamp,
       amount: payment.amount,
       payerName: payment.payerName || '',
@@ -98,7 +107,7 @@ export async function syncSuspensePlanned(suspenseId: number) {
     if (result.success && result.data && result.data.rowStart) {
       const rowStart = Number(result.data.rowStart);
       await updateSuspenseFmsRow(suspenseId, rowStart);
-      console.log(`[Suspense FMS Sync] ✅ Synced to expense fms at row ${rowStart}`);
+      console.log(`[Suspense FMS Sync] ✅ Synced to SUSPENSE tab at row ${rowStart}`);
     }
 
     return result;
@@ -110,9 +119,9 @@ export async function syncSuspensePlanned(suspenseId: number) {
 
 /**
  * ── 2. SUSPENSE ACTUAL (Triggered when CM Accepts or Rejects for their Center) ──
- * Updates the corresponding center's row in tab 'expense fms':
- * - Sets Col Z (Actual) to the review timestamp
- * - Sets Col AA (Status) to "Done" (or "Overdue")
+ * Updates the corresponding center's row in tab 'SUSPENSE':
+ * - Sets Col F (Actual) to the review timestamp
+ * - Leaves Col G (Status) and Col H (Delay) untouched for user formulas
  */
 export async function syncSuspenseActual(params: {
   suspenseId: number;
@@ -128,7 +137,7 @@ export async function syncSuspenseActual(params: {
 
     const payload = {
       action: 'suspense_actual',
-      sheetName: 'expense fms',
+      sheetName: 'SUSPENSE',
       suspenseId: payment.id,
       rowStart: payment.fmsRowStart || null,
       payReceiveDate: payment.payReceiveDate,
@@ -142,7 +151,7 @@ export async function syncSuspenseActual(params: {
     const result = await postToFms(payload);
 
     if (result.success) {
-      console.log(`[Suspense FMS Sync] ✅ Synced Actual to expense fms for ${params.centerName}`);
+      console.log(`[Suspense FMS Sync] ✅ Synced Actual to SUSPENSE tab for ${params.centerName}`);
     }
 
     return result;
@@ -154,7 +163,7 @@ export async function syncSuspenseActual(params: {
 
 /**
  * ── 3. SUSPENSE UPDATE (Triggered when Accountant edits an existing Suspense Entry) ──
- * Updates Col V (Pay Receive Date) & Col W (Suspense Payment Type) for this entry's 3-row block.
+ * Updates Col A (Pay Receive Date), Col B (Suspense Payment Type) & Col D (Log TimeStamp) for this entry's 3-row block.
  * If the entry was not yet logged in Google Sheets, automatically performs suspense_planned!
  */
 export async function syncSuspenseUpdate(suspenseId: number) {
@@ -170,13 +179,16 @@ export async function syncSuspenseUpdate(suspenseId: number) {
       return await syncSuspensePlanned(suspenseId);
     }
 
+    const logTimestamp = formatIstDateTime(new Date(payment.createdAt || payment.enteredAt));
+
     const payload = {
       action: 'suspense_update',
-      sheetName: 'expense fms',
+      sheetName: 'SUSPENSE',
       suspenseId: payment.id,
       rowStart: payment.fmsRowStart,
       payReceiveDate: payment.payReceiveDate,
       suspensePaymentType: payment.suspensePaymentType,
+      logTimestamp,
       amount: payment.amount,
       payerName: payment.payerName || '',
       paymentMode: payment.paymentMode || '',
@@ -187,7 +199,7 @@ export async function syncSuspenseUpdate(suspenseId: number) {
     const result = await postToFms(payload);
 
     if (result.success) {
-      console.log(`[Suspense FMS Sync] ✅ Updated expense fms at row ${payment.fmsRowStart}`);
+      console.log(`[Suspense FMS Sync] ✅ Updated SUSPENSE tab at row ${payment.fmsRowStart}`);
     }
 
     return result;
@@ -231,7 +243,7 @@ export async function resyncSuspensePayment(suspenseId: number) {
 
 /**
  * ── 5. SUSPENSE DELETE ──
- * Completely removes the suspense entry from Google Sheets tab 'expense fms' (unmerges and clears Rows V to AB)
+ * Completely removes the suspense entry from Google Sheets tab 'SUSPENSE' (unmerges and clears Cols A to H)
  */
 export async function syncSuspenseDelete(params: {
   id: number;
@@ -242,7 +254,7 @@ export async function syncSuspenseDelete(params: {
   try {
     const payload = {
       action: 'suspense_delete',
-      sheetName: 'expense fms',
+      sheetName: 'SUSPENSE',
       suspenseId: params.id,
       rowStart: params.fmsRowStart || null,
       payReceiveDate: params.payReceiveDate || '',

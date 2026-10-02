@@ -37,6 +37,7 @@ export interface SuspensePaymentRecord {
   deadlineAt: string | Date;
   fmsRowStart?: number | null;
   overallStatus: 'PENDING' | 'IDENTIFIED' | 'REJECTED_ALL' | 'OVERDUE';
+  logTimestamp?: string;
   createdAt: string | Date;
   updatedAt: string | Date;
   allocations?: SuspenseCenterAllocationData[];
@@ -291,10 +292,16 @@ export async function getSuspensePaymentById(id: number): Promise<SuspensePaymen
     id
   );
 
+  const formattedAllocations = allocations.map((a: any) => ({
+    ...a,
+    actualTimestamp: a.actualTimestamp || (a.reviewedAt ? formatIstDateTime(new Date(a.reviewedAt)) : null),
+  }));
+
   return {
     ...payment,
     amount: Number(payment.amount),
-    allocations,
+    logTimestamp: formatIstDateTime(new Date(payment.createdAt || payment.enteredAt)),
+    allocations: formattedAllocations,
   };
 }
 
@@ -372,11 +379,18 @@ export async function getSuspensePayments(filter?: {
       }
     }
 
+    const logTimestamp = formatIstDateTime(new Date(p.createdAt || p.enteredAt));
+    const formattedAllocs = allocs.map((a: any) => ({
+      ...a,
+      actualTimestamp: a.actualTimestamp || (a.reviewedAt ? formatIstDateTime(new Date(a.reviewedAt)) : null),
+    }));
+
     return {
       ...p,
       amount: Number(p.amount),
       overallStatus: overall,
-      allocations: allocs,
+      logTimestamp,
+      allocations: formattedAllocs,
     };
   });
 }

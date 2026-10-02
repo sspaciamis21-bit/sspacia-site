@@ -2,8 +2,8 @@
  * =============================================================================
  * SSPACIA MASTER GOOGLE APPS SCRIPT ENGINE (100% LIVE EVENT-DRIVEN)
  * =============================================================================
- * 1. EXPENSE FMS (Tab: "EXPENSE FMS" - Cols A to S: Data Set + 4 Approval Steps)
- * 2. SUSPENSE ADVANCE PAYMENT FMS (Tab: "SUSPENSE" - Cols V to AB)
+ * 1. EXPENSE FMS (Tab: "EXPENSE FMS" - Cols A to T: Data Set + Log Timestamp + 4 Approval Steps)
+ * 2. SUSPENSE ADVANCE PAYMENT FMS (Tab: "SUSPENSE" - Cols A to H: Data Set + Log TimeStamp)
  * 3. INVOICE PROCESS FMS (Tab: "INV PROCESS FMS" - Cols A to O: Strict Gating)
  * 4. ACCOUNTS FMS (Tab: "Accounts" - Old Invoices archive & Daily Checks Cols Q:T)
  * 5. SCOT SSPACIA (Dedicated Spreadsheet: 12kfSFji8Jkq6a-lja0y2tQdohPL99s-_HVaoDzdacsE, Tab: "scot-sspacia")
@@ -278,94 +278,110 @@ function setPlainStatus(cell, statusVal) {
 
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🌟 MODULE 1: EXPENSE FMS (Tab: "EXPENSE FMS" - Cols A to S)
+// 🌟 MODULE 1: EXPENSE FMS (Tab: "EXPENSE FMS" - Cols A to T)
 // ═════════════════════════════════════════════════════════════════════════════
-// LAYOUT (matches existing sheet):
-//   Row 1: Part of DATA SET merge (A1:C5)
-//   Row 2: Step headers (D2:G2, H2:K2, L2:O2, P2:S2) + DATA SET text
-//   Row 3: Doer (Dipendra)
-//   Row 4: Tool (sspacia site)
-//   Row 5: Hours/Reference
-//   Row 6: Subheaders (Center | Expense Date | header - item desc | Planned | Actual | Status | TimeDelay × 4)
-//   Row 7+: DATA ROWS
+// LAYOUT:
+//   Rows 2-5, Cols A-D (Merged): Data Set
+//   Rows 2-5, Cols E-H: Approve or reject with remarks Expense Entered by CM's (Dipendra | sspacia site | 8)
+//   Rows 2-5, Cols I-L: Get Approval From Super Admin For The Same (Dipendra | sspacia site | 8)
+//   Rows 2-5, Cols M-P: Take Approval before entering UTR Details (Dipendra | sspacia site | 8)
+//   Rows 2-5, Cols Q-T: Enter UTR Details (Dipendra | sspacia site | 4)
 //
-// Cols A to C: DATA SET
-// Cols D to G: Step 1: Approve or reject with remarks Expense Entered by CM's
-// Cols H to K: Step 2: Get Approval From Super Admin For The Same
-// Cols L to O: Step 3: Take Approval before entering UTR Details
-// Cols P to S: Step 4: Enter UTR Details
+//   Row 6: Subheaders:
+//     Col A (1): Center
+//     Col B (2): Expense Date
+//     Col C (3): header - item desc
+//     Col D (4): Log Timestamp (exact timestamp when submitted by CM or accountant)
+//     Col E (5): Planned (Step 1 - left for user formula)
+//     Col F (6): Actual (Step 1 - accountant approve/reject or log timestamp if accountant-entered)
+//     Col G (7): Status (Step 1 - left for user formula)
+//     Col H (8): TimeDelay (Step 1 - left for user formula)
+//     Col I (9): Planned (Step 2 - left for user formula)
+//     Col J (10): Actual (Step 2 - Super Admin approval)
+//     Col K (11): Status (Step 2 - left for user formula)
+//     Col L (12): TimeDelay (Step 2 - left for user formula)
+//     Col M (13): Planned (Step 3 - left for user formula)
+//     Col N (14): Actual (Step 3 - UTR approval before entering UTR)
+//     Col O (15): Status (Step 3 - left for user formula)
+//     Col P (16): TimeDelay (Step 3 - left for user formula)
+//     Col Q (17): Planned (Step 4 - left for user formula)
+//     Col R (18): Actual (Step 4 - accountant submitted UTR details)
+//     Col S (19): Status (Step 4 - left for user formula)
+//     Col T (20): TimeDelay (Step 4 - left for user formula)
+//
+//   Row 7+: Data rows in ascending chronological order
 // ═════════════════════════════════════════════════════════════════════════════
 
 function setupExpenseFmsHeaders() {
   var sheet = getExpenseFmsSheet();
 
   // Safely break apart entire header area to avoid merge conflicts
-  try { sheet.getRange("A1:S6").breakApart(); } catch (e) {}
+  try { sheet.getRange("A1:T6").breakApart(); } catch (e) {}
 
-  // ── 1. DATA SET (Cols A to C, Rows 1-5) ──────────────────────────────────
-  sheet.getRange("A1:C5").merge()
-       .setValue("DATA SET")
+  // ── 1. DATA SET (Cols A to D, Rows 2-5) ──────────────────────────────────
+  sheet.getRange("A2:D5").merge()
+       .setValue("Data Set")
        .setFontFamily("Roboto")
        .setFontSize(14)
        .setFontWeight("bold")
        .setHorizontalAlignment("center")
        .setVerticalAlignment("middle");
 
-  // ── 2. Step 1: Approve or reject with remarks Expense Entered by CM's (Cols D to G) ──
-  sheet.getRange("D2:G2").merge().setValue("Approve or reject with remarks Expense Entered by CM's").setFontWeight("bold");
-  sheet.getRange("D3:G3").merge().setValue("Dipendra");
-  sheet.getRange("D4:G4").merge().setValue("sspacia site");
-  sheet.getRange("D5:G5").merge().setValue("8");
+  // ── 2. Step 1: Approve or reject with remarks Expense Entered by CM's (Cols E to H) ──
+  sheet.getRange("E2:H2").merge().setValue("Approve or reject with remarks Expense Entered by CM's").setFontWeight("bold");
+  sheet.getRange("E3:H3").merge().setValue("Dipendra");
+  sheet.getRange("E4:H4").merge().setValue("sspacia site");
+  sheet.getRange("E5:H5").merge().setValue("8");
 
-  // ── 3. Step 2: Get Approval From Super Admin For The Same (Cols H to K) ──
-  sheet.getRange("H2:K2").merge().setValue("Get Approval From Super Admin For The Same").setFontWeight("bold");
-  sheet.getRange("H3:K3").merge().setValue("Dipendra");
-  sheet.getRange("H4:K4").merge().setValue("sspacia site");
-  sheet.getRange("H5:K5").merge().setValue("2");
+  // ── 3. Step 2: Get Approval From Super Admin For The Same (Cols I to L) ──
+  sheet.getRange("I2:L2").merge().setValue("Get Approval From Super Admin For The Same").setFontWeight("bold");
+  sheet.getRange("I3:L3").merge().setValue("Dipendra");
+  sheet.getRange("I4:L4").merge().setValue("sspacia site");
+  sheet.getRange("I5:L5").merge().setValue("8");
 
-  // ── 4. Step 3: Take Approval before entering UTR Details (Cols L to O) ──
-  sheet.getRange("L2:O2").merge().setValue("Take Approval before entering UTR Details").setFontWeight("bold");
-  sheet.getRange("L3:O3").merge().setValue("Dipendra");
-  sheet.getRange("L4:O4").merge().setValue("sspacia site");
-  sheet.getRange("L5:O5").merge().setValue("2");
+  // ── 4. Step 3: Take Approval before entering UTR Details (Cols M to P) ──
+  sheet.getRange("M2:P2").merge().setValue("Take Approval before entering UTR Details").setFontWeight("bold");
+  sheet.getRange("M3:P3").merge().setValue("Dipendra");
+  sheet.getRange("M4:P4").merge().setValue("sspacia site");
+  sheet.getRange("M5:P5").merge().setValue("8");
 
-  // ── 5. Step 4: Enter UTR Details (Cols P to S) ──
-  sheet.getRange("P2:S2").merge().setValue("Enter UTR Details").setFontWeight("bold");
-  sheet.getRange("P3:S3").merge().setValue("Dipendra");
-  sheet.getRange("P4:S4").merge().setValue("sspacia site");
-  sheet.getRange("P5:S5").merge().setValue("2");
+  // ── 5. Step 4: Enter UTR Details (Cols Q to T) ──
+  sheet.getRange("Q2:T2").merge().setValue("Enter UTR Details").setFontWeight("bold");
+  sheet.getRange("Q3:T3").merge().setValue("Dipendra");
+  sheet.getRange("Q4:T4").merge().setValue("sspacia site");
+  sheet.getRange("Q5:T5").merge().setValue("4");
 
   // ── Subheaders (Row 6) ──────────────────────────────────────────────────
   sheet.getRange(6, 1).setValue("Center");
   sheet.getRange(6, 2).setValue("Expense Date");
   sheet.getRange(6, 3).setValue("header - item desc");
+  sheet.getRange(6, 4).setValue("Log Timestamp");
 
   var subHeaders = ["Planned", "Actual", "Status", "TimeDelay"];
   for (var s = 0; s < 4; s++) {
-    var startCol = 4 + s * 4; // Col 4 (D), Col 8 (H), Col 12 (L), Col 16 (P)
+    var startCol = 5 + s * 4; // Col 5 (E), Col 9 (I), Col 13 (M), Col 17 (Q)
     for (var h = 0; h < 4; h++) {
       sheet.getRange(6, startCol + h).setValue(subHeaders[h]);
     }
   }
 
-  // Format Header Block (A1:S6)
-  sheet.getRange("A1:S6")
+  // Format Header Block (A1:T6)
+  sheet.getRange("A1:T6")
        .setFontFamily("Roboto")
        .setFontSize(10)
        .setHorizontalAlignment("center")
-       .setVerticalAlignment("middle")
-       .setBackground(null)
-       .setFontColor(null);
-  sheet.getRange("A1:C5").setFontSize(14);
-  sheet.getRange("A6:S6").setFontWeight("bold");
-  sheet.getRange("A1:S6").setBorder(true, true, true, true, true, true, "#000000", SpreadsheetApp.BorderStyle.SOLID);
+       .setVerticalAlignment("middle");
+  sheet.getRange("A2:D5").setFontSize(14).setFontWeight("bold");
+  sheet.getRange("A6:T6").setFontWeight("bold");
+  sheet.getRange("A2:T6").setBorder(true, true, true, true, true, true, "#000000", SpreadsheetApp.BorderStyle.SOLID);
 
   // Column Widths
   sheet.setColumnWidth(1, 130); // Center
   sheet.setColumnWidth(2, 110); // Expense Date
   sheet.setColumnWidth(3, 260); // header - item desc
-  for (var c = 4; c <= 19; c++) {
-    var mod = (c - 4) % 4;
+  sheet.setColumnWidth(4, 160); // Log Timestamp
+  for (var c = 5; c <= 20; c++) {
+    var mod = (c - 5) % 4;
     if (mod === 0 || mod === 1) sheet.setColumnWidth(c, 160); // Planned, Actual
     else sheet.setColumnWidth(c, 90);                         // Status, TimeDelay
   }
@@ -378,7 +394,7 @@ function setupExpenseFmsHeaders() {
   sheet.setRowHeight(6, 28);
   sheet.setFrozenRows(6);
 
-  return { status: "success", message: "EXPENSE FMS headers successfully configured on tab 'EXPENSE FMS' (Cols A:S, Subheaders Row 6, Data Row 7+)" };
+  return { status: "success", message: "EXPENSE FMS headers successfully configured on tab 'EXPENSE FMS' (Cols A:T, Subheaders Row 6, Data Row 7+)" };
 }
 
 /**
@@ -427,7 +443,7 @@ function findExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerIte
  * Find or create an expense row in the EXPENSE FMS sheet.
  * Data rows start at ROW 7.
  */
-function getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc) {
+function getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc, logTimestamp) {
   var targetRow = findExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc);
   if (targetRow !== -1) {
     if (!sheet.getRange(targetRow, 1).getValue() && centerName) sheet.getRange(targetRow, 1).setValue(centerName).setFontWeight("bold").setHorizontalAlignment("center");
@@ -435,6 +451,9 @@ function getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, he
     if (!sheet.getRange(targetRow, 3).getValue() && headerItemDesc) {
       var dCell = sheet.getRange(targetRow, 3).setValue(headerItemDesc).setFontWeight("bold");
       if (recordId) dCell.setNote("id:" + recordId);
+    }
+    if (logTimestamp && (!sheet.getRange(targetRow, 4).getValue() || String(sheet.getRange(targetRow, 4).getValue()).trim() === "")) {
+      setDateValue(sheet.getRange(targetRow, 4), logTimestamp);
     }
     return targetRow;
   }
@@ -455,7 +474,10 @@ function getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, he
   if (recordId) {
     descCell.setNote("id:" + recordId);
   }
-  sheet.getRange(targetRow, 1, 1, 19).setFontFamily("Roboto").setFontSize(10).setVerticalAlignment("middle");
+  if (logTimestamp) {
+    setDateValue(sheet.getRange(targetRow, 4), logTimestamp);
+  }
+  sheet.getRange(targetRow, 1, 1, 20).setFontFamily("Roboto").setFontSize(10).setVerticalAlignment("middle");
 
   return targetRow;
 }
@@ -470,19 +492,29 @@ function handleExpenseFms(payload) {
   var expenseDate = String(payload.expenseDate || "").trim();
   var headerItemDesc = String(payload.headerItemDesc || "").trim();
   var timestamp = payload.actual || payload.timestamp || getNowTimestampString();
+  var logTimestamp = payload.logTimestamp || payload.timestamp || getNowTimestampString();
 
   if (action === "expense_fms_setup_headers") {
     var res = setupExpenseFmsHeaders();
     return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
   }
 
-  // ── 1. EXPENSE CREATED: CM enters expense record ─────────────────────────
+  // ── 1. EXPENSE CREATED: CM or Accountant enters expense record ─────────────
   else if (action === "expense_fms_create") {
-    var row = getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc);
+    var row = getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc, logTimestamp);
+
+    // If accountant entered expense, accountant does not approve their own expense,
+    // so Step 1 Actual (Col F: Col 6) is immediately the log timestamp!
+    if (payload.isAccountantEntered || payload.step1Actual) {
+      var s1Time = payload.step1Actual || logTimestamp;
+      setDateValue(sheet.getRange(row, 6), s1Time);
+    }
+
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
-      message: "Expense record created in EXPENSE FMS row " + row,
-      row: row
+      message: "Expense record created in EXPENSE FMS row " + row + " with Log Timestamp in Col D",
+      row: row,
+      logTimestamp: logTimestamp
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -491,12 +523,12 @@ function handleExpenseFms(payload) {
     var row = getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc);
     var actualTime = payload.actual || timestamp;
 
-    // Col E (Col 5): Step 1 Actual (Status Col F & TimeDelay Col G left for user formula)
-    setDateValue(sheet.getRange(row, 5), actualTime);
+    // Col F (Col 6): Step 1 Actual (Col E Planned, Col G Status, Col H TimeDelay left untouched for user formulas)
+    setDateValue(sheet.getRange(row, 6), actualTime);
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
-      message: "Step 1 Accountant approval logged in EXPENSE FMS row " + row,
+      message: "Step 1 Accountant approval logged in EXPENSE FMS Col F row " + row,
       row: row,
       actual: getNowTimestampString(parseTimestampToDate(actualTime))
     })).setMimeType(ContentService.MimeType.JSON);
@@ -507,12 +539,12 @@ function handleExpenseFms(payload) {
     var row = getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc);
     var actualTime = payload.actual || timestamp;
 
-    // Col I (Col 9): Step 2 Actual (Status Col J & TimeDelay Col K left for user formula)
-    setDateValue(sheet.getRange(row, 9), actualTime);
+    // Col J (Col 10): Step 2 Actual (Col I Planned, Col K Status, Col L TimeDelay left untouched for user formulas)
+    setDateValue(sheet.getRange(row, 10), actualTime);
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
-      message: "Step 2 Super Admin approval logged in EXPENSE FMS row " + row,
+      message: "Step 2 Super Admin approval logged in EXPENSE FMS Col J row " + row,
       row: row,
       actual: getNowTimestampString(parseTimestampToDate(actualTime))
     })).setMimeType(ContentService.MimeType.JSON);
@@ -523,12 +555,12 @@ function handleExpenseFms(payload) {
     var row = getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc);
     var actualTime = payload.actual || timestamp;
 
-    // Col M (Col 13): Step 3 Actual (Status Col N & TimeDelay Col O left for user formula)
-    setDateValue(sheet.getRange(row, 13), actualTime);
+    // Col N (Col 14): Step 3 Actual (Col M Planned, Col O Status, Col P TimeDelay left untouched for user formulas)
+    setDateValue(sheet.getRange(row, 14), actualTime);
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
-      message: "Step 3 Payment Approval logged in EXPENSE FMS row " + row,
+      message: "Step 3 Payment Approval logged in EXPENSE FMS Col N row " + row,
       row: row,
       actual: getNowTimestampString(parseTimestampToDate(actualTime))
     })).setMimeType(ContentService.MimeType.JSON);
@@ -539,18 +571,18 @@ function handleExpenseFms(payload) {
     var row = getOrCreateExpenseRowInFms(sheet, recordId, centerName, expenseDate, headerItemDesc);
     var actualTime = payload.actual || timestamp;
 
-    // Col Q (Col 17): Step 4 Actual (Status Col R & TimeDelay Col S left for user formula)
-    setDateValue(sheet.getRange(row, 17), actualTime);
+    // Col R (Col 18): Step 4 Actual (Col Q Planned, Col S Status, Col T TimeDelay left untouched for user formulas)
+    setDateValue(sheet.getRange(row, 18), actualTime);
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
-      message: "Step 4 UTR Details logged in EXPENSE FMS row " + row,
+      message: "Step 4 UTR Details logged in EXPENSE FMS Col R row " + row,
       row: row,
       actual: getNowTimestampString(parseTimestampToDate(actualTime))
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
-  // ── 6. BOOTSTRAP FAST BATCH SYNC ─────────────────────────────────────────
+  // ── 6. BOOTSTRAP FAST BATCH SYNC & POPULATE ──────────────────────────────
   else if (action === "expense_fms_bootstrap_sync") {
     setupExpenseFmsHeaders();
     var items = payload.items || [];
@@ -558,119 +590,225 @@ function handleExpenseFms(payload) {
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "No expense items to sync" })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // ✅ CRITICAL FIX: Clear ALL old data rows (Row 7+) before writing fresh data.
-    // This removes ghost entries (like deleted "GENERAL EXPENSES") that persisted from old syncs.
     var lastExistingRow = sheet.getLastRow();
+
+    // Sort items strictly in ascending order by expenseDate, then id
+    items.sort(function(a, b) {
+      var da = a.expenseDate ? new Date(a.expenseDate).getTime() : 0;
+      var db = b.expenseDate ? new Date(b.expenseDate).getTime() : 0;
+      if (da !== db) return da - db;
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
+
     if (lastExistingRow >= 7) {
-      var clearRows = lastExistingRow - 6;
-      sheet.getRange(7, 1, clearRows, 19).clearContent();
-      sheet.getRange(7, 3, clearRows, 1).clearNote();
-      // Also clear formatting artifacts from old data
-      sheet.getRange(7, 1, clearRows, 19)
+      var numRows = lastExistingRow - 6;
+
+      // Read existing identifiers and notes
+      var notesColC = sheet.getRange(7, 3, numRows, 1).getNotes();
+      var idMap = {};
+      var descMap = {};
+
+      for (var r = 0; r < numRows; r++) {
+        var note = notesColC[r][0] || "";
+        var m = note.match(/id:(\d+)/);
+        if (m) {
+          idMap[m[1]] = 7 + r;
+        }
+      }
+
+      var displayValues = sheet.getRange(7, 1, numRows, 3).getDisplayValues();
+      for (var r = 0; r < numRows; r++) {
+        var key = (displayValues[r][0] + "|" + displayValues[r][1] + "|" + displayValues[r][2]).toLowerCase().replace(/\s+/g, " ").trim();
+        if (!descMap[key]) {
+          descMap[key] = 7 + r;
+        }
+      }
+
+      // Read current values of Col D, F, J, N, R
+      var colD = sheet.getRange(7, 4, numRows, 1).getValues();  // Log Timestamp
+      var colF = sheet.getRange(7, 6, numRows, 1).getValues();  // Step 1 Actual
+      var colJ = sheet.getRange(7, 10, numRows, 1).getValues(); // Step 2 Actual
+      var colN = sheet.getRange(7, 14, numRows, 1).getValues(); // Step 3 Actual
+      var colR = sheet.getRange(7, 18, numRows, 1).getValues(); // Step 4 Actual
+
+      var updatedRows = 0;
+      var newItems = [];
+
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        var targetRow = -1;
+
+        if (it.id && idMap[it.id]) {
+          targetRow = idMap[it.id];
+        } else {
+          var key = ((it.centerName || "") + "|" + (it.expenseDate || "") + "|" + (it.headerItemDesc || "")).toLowerCase().replace(/\s+/g, " ").trim();
+          if (descMap[key]) {
+            targetRow = descMap[key];
+          } else if (i < numRows) {
+            targetRow = 7 + i;
+          }
+        }
+
+        if (targetRow >= 7 && targetRow <= lastExistingRow) {
+          var rowIdx = targetRow - 7;
+
+          // 1. Col D: Log Timestamp
+          if (it.logTimestamp) {
+            colD[rowIdx][0] = parseTimestampToDate(it.logTimestamp) || it.logTimestamp;
+          }
+
+          // 2. Col F: Step 1 Actual
+          // Rule: If accountant entered, use logTimestamp; else if approved, use step1Actual
+          var s1 = it.isAccountantEntered ? it.logTimestamp : (it.step1Actual || "");
+          if (s1 && (!colF[rowIdx][0] || String(colF[rowIdx][0]).trim() === "")) {
+            colF[rowIdx][0] = parseTimestampToDate(s1) || s1;
+          }
+
+          // 3. Col J: Step 2 Actual (Super Admin)
+          if (it.step2Actual && (!colJ[rowIdx][0] || String(colJ[rowIdx][0]).trim() === "")) {
+            colJ[rowIdx][0] = parseTimestampToDate(it.step2Actual) || it.step2Actual;
+          }
+
+          // 4. Col N: Step 3 Actual (Payment Approval)
+          if (it.step3Actual && (!colN[rowIdx][0] || String(colN[rowIdx][0]).trim() === "")) {
+            colN[rowIdx][0] = parseTimestampToDate(it.step3Actual) || it.step3Actual;
+          }
+
+          // 5. Col R: Step 4 Actual (UTR Details)
+          if (it.step4Actual && (!colR[rowIdx][0] || String(colR[rowIdx][0]).trim() === "")) {
+            colR[rowIdx][0] = parseTimestampToDate(it.step4Actual) || it.step4Actual;
+          }
+
+          if (it.id && (!notesColC[rowIdx][0] || notesColC[rowIdx][0].indexOf("id:") === -1)) {
+            notesColC[rowIdx][0] = "id:" + it.id;
+          }
+
+          updatedRows++;
+        } else {
+          newItems.push(it);
+        }
+      }
+
+      // Write back updated columns without touching Planned, Status, TimeDelay formulas!
+      sheet.getRange(7, 4, numRows, 1).setValues(colD).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+      sheet.getRange(7, 6, numRows, 1).setValues(colF).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+      sheet.getRange(7, 10, numRows, 1).setValues(colJ).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+      sheet.getRange(7, 14, numRows, 1).setValues(colN).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+      sheet.getRange(7, 18, numRows, 1).setValues(colR).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+      sheet.getRange(7, 3, numRows, 1).setNotes(notesColC);
+
+      // Append any brand new items at bottom
+      if (newItems.length > 0) {
+        var startAppend = lastExistingRow + 1;
+        var appendRows = [];
+        var appendNotes = [];
+        for (var n = 0; n < newItems.length; n++) {
+          var nit = newItems[n];
+          var s1New = nit.isAccountantEntered ? nit.logTimestamp : (nit.step1Actual || "");
+          appendRows.push([
+            nit.centerName || "Mercado",                                    // Col A: Center
+            parseDateOnly(nit.expenseDate),                                  // Col B: Expense Date
+            nit.headerItemDesc || "",                                        // Col C: header - item desc
+            nit.logTimestamp ? parseTimestampToDate(nit.logTimestamp) : "", // Col D: Log Timestamp
+            "",                                                              // Col E: Planned (Blank for formula)
+            s1New ? parseTimestampToDate(s1New) : "",                        // Col F: Step 1 Actual
+            "",                                                              // Col G: Status (Blank for formula)
+            "",                                                              // Col H: TimeDelay (Blank for formula)
+            "",                                                              // Col I: Planned (Blank for formula)
+            nit.step2Actual ? parseTimestampToDate(nit.step2Actual) : "",   // Col J: Step 2 Actual
+            "",                                                              // Col K: Status (Blank for formula)
+            "",                                                              // Col L: TimeDelay (Blank for formula)
+            "",                                                              // Col M: Planned (Blank for formula)
+            nit.step3Actual ? parseTimestampToDate(nit.step3Actual) : "",   // Col N: Step 3 Actual
+            "",                                                              // Col O: Status (Blank for formula)
+            "",                                                              // Col P: TimeDelay (Blank for formula)
+            "",                                                              // Col Q: Planned (Blank for formula)
+            nit.step4Actual ? parseTimestampToDate(nit.step4Actual) : "",   // Col R: Step 4 Actual
+            "",                                                              // Col S: Status (Blank for formula)
+            ""                                                               // Col T: TimeDelay (Blank for formula)
+          ]);
+          appendNotes.push(["id:" + (nit.id || "")]);
+        }
+        sheet.getRange(startAppend, 1, appendRows.length, 20).setValues(appendRows);
+        sheet.getRange(startAppend, 1, appendRows.length, 1).setHorizontalAlignment("center").setFontWeight("bold");
+        sheet.getRange(startAppend, 2, appendRows.length, 1).setNumberFormat("dd/MM/yyyy").setHorizontalAlignment("center");
+        sheet.getRange(startAppend, 3, appendRows.length, 1).setFontWeight("bold").setNotes(appendNotes);
+        var actCols = [4, 6, 10, 14, 18];
+        for (var a = 0; a < actCols.length; a++) {
+          sheet.getRange(startAppend, actCols[a], appendRows.length, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+        }
+        sheet.getRange(startAppend, 1, appendRows.length, 20).setFontFamily("Roboto").setFontSize(10).setVerticalAlignment("middle");
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Updated " + updatedRows + " existing rows and appended " + newItems.length + " new rows in EXPENSE FMS! All user Planned/Status/TimeDelay formulas preserved!",
+        updatedCount: updatedRows,
+        appendedCount: newItems.length
+      })).setMimeType(ContentService.MimeType.JSON);
+    } else {
+      // First-time setup on fresh empty sheet (starting at Row 7)
+      var rows = [];
+      var notesColC = [];
+
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        var s1First = it.isAccountantEntered ? it.logTimestamp : (it.step1Actual || "");
+
+        rows.push([
+          it.centerName || "Mercado",                                    // Col A: Center
+          parseDateOnly(it.expenseDate),                                  // Col B: Expense Date
+          it.headerItemDesc || "",                                        // Col C: header - item desc
+          it.logTimestamp ? parseTimestampToDate(it.logTimestamp) : "", // Col D: Log Timestamp
+          "",                                                              // Col E: Step 1 Planned
+          s1First ? parseTimestampToDate(s1First) : "",                   // Col F: Step 1 Actual
+          "",                                                              // Col G: Step 1 Status
+          "",                                                              // Col H: Step 1 TimeDelay
+          "",                                                              // Col I: Step 2 Planned
+          it.step2Actual ? parseTimestampToDate(it.step2Actual) : "",     // Col J: Step 2 Actual
+          "",                                                              // Col K: Step 2 Status
+          "",                                                              // Col L: Step 2 TimeDelay
+          "",                                                              // Col M: Step 3 Planned
+          it.step3Actual ? parseTimestampToDate(it.step3Actual) : "",     // Col N: Step 3 Actual
+          "",                                                              // Col O: Step 3 Status
+          "",                                                              // Col P: Step 3 TimeDelay
+          "",                                                              // Col Q: Step 4 Planned
+          it.step4Actual ? parseTimestampToDate(it.step4Actual) : "",     // Col R: Step 4 Actual
+          "",                                                              // Col S: Step 4 Status
+          ""                                                               // Col T: Step 4 TimeDelay
+        ]);
+
+        notesColC.push(["id:" + (it.id || "")]);
+      }
+
+      sheet.getRange(7, 1, rows.length, 20).setValues(rows);
+      sheet.getRange(7, 1, rows.length, 20)
+           .setFontFamily("Roboto")
+           .setFontSize(10)
+           .setVerticalAlignment("middle")
            .setBackground(null)
            .setFontColor(null);
+
+      sheet.getRange(7, 1, rows.length, 1).setHorizontalAlignment("center").setFontWeight("bold");
+      sheet.getRange(7, 2, rows.length, 1).setNumberFormat("dd/MM/yyyy").setHorizontalAlignment("center");
+      sheet.getRange(7, 3, rows.length, 1).setFontWeight("bold").setNotes(notesColC);
+
+      var actCols2 = [4, 6, 10, 14, 18];
+      for (var a2 = 0; a2 < actCols2.length; a2++) {
+        sheet.getRange(7, actCols2[a2], rows.length, 1)
+             .setNumberFormat("dd/MM/yyyy HH:mm:ss")
+             .setHorizontalAlignment("center");
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Populated " + items.length + " expense records in tab 'EXPENSE FMS' (Row 7+) successfully with blank Planned/Status/TimeDelay!",
+        count: items.length
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-
-    var rows = [];
-    var notesColC = [];
-
-    for (var i = 0; i < items.length; i++) {
-      var it = items[i];
-
-      // Parse Expense Date to a real Date object
-      var expDateObj = parseDateOnly(it.expenseDate);
-
-      // Step 2: Super Admin Actual
-      var s2Actual = it.step2Actual ? parseTimestampToDate(it.step2Actual) : "";
-
-      // Step 1: Accountant Check Actual
-      // If Step 1 actual exists (accountant approved/rejected), use it.
-      // If missing but Step 2 actual exists (bulk upload / historical), fallback to Step 2 actual!
-      var s1Actual = it.step1Actual ? parseTimestampToDate(it.step1Actual) : (s2Actual ? s2Actual : "");
-
-      // Step 3: Payment Approval Actual
-      var s3Actual = it.step3Actual ? parseTimestampToDate(it.step3Actual) : "";
-
-      // Step 4: UTR Details Actual
-      var s4Actual = it.step4Actual ? parseTimestampToDate(it.step4Actual) : "";
-
-      rows.push([
-        it.centerName || "Mercado",  // Col A (1): Center
-        expDateObj,                  // Col B (2): Expense Date (real Date object)
-        it.headerItemDesc || "",     // Col C (3): header - item desc
-        "",                          // Col D (4): Step 1 Planned (ALWAYS BLANK in EXPENSE FMS)
-        s1Actual,                    // Col E (5): Step 1 Actual
-        "",                          // Col F (6): Step 1 Status (LEFT BLANK for user formula)
-        "",                          // Col G (7): Step 1 TimeDelay (LEFT BLANK for user formula)
-        "",                          // Col H (8): Step 2 Planned (ALWAYS BLANK in EXPENSE FMS)
-        s2Actual,                    // Col I (9): Step 2 Actual
-        "",                          // Col J (10): Step 2 Status (LEFT BLANK for user formula)
-        "",                          // Col K (11): Step 2 TimeDelay (LEFT BLANK for user formula)
-        "",                          // Col L (12): Step 3 Planned (ALWAYS BLANK in EXPENSE FMS)
-        s3Actual,                    // Col M (13): Step 3 Actual
-        "",                          // Col N (14): Step 3 Status (LEFT BLANK for user formula)
-        "",                          // Col O (15): Step 3 TimeDelay (LEFT BLANK for user formula)
-        "",                          // Col P (16): Step 4 Planned (ALWAYS BLANK in EXPENSE FMS)
-        s4Actual,                    // Col Q (17): Step 4 Actual
-        "",                          // Col R (18): Step 4 Status (LEFT BLANK for user formula)
-        ""                           // Col S (19): Step 4 TimeDelay (LEFT BLANK for user formula)
-      ]);
-
-      notesColC.push(["id:" + (it.id || "")]);
-    }
-
-    // Write all 19 columns to "EXPENSE FMS" Tab starting at ROW 7
-    sheet.getRange(7, 1, rows.length, 19).setValues(rows);
-    sheet.getRange(7, 1, rows.length, 19)
-         .setFontFamily("Roboto")
-         .setFontSize(10)
-         .setVerticalAlignment("middle")
-         .setBackground(null)
-         .setFontColor(null);
-
-    // Col A (Center): Bold, Centered
-    sheet.getRange(7, 1, rows.length, 1).setHorizontalAlignment("center").setFontWeight("bold");
-    
-    // Col B (Expense Date): dd/MM/yyyy format
-    sheet.getRange(7, 2, rows.length, 1)
-         .setNumberFormat("dd/MM/yyyy")
-         .setHorizontalAlignment("center");
-
-    // Col C (Description): Bold, with ID notes
-    sheet.getRange(7, 3, rows.length, 1).setFontWeight("bold").setNotes(notesColC);
-
-    // Format Actual columns (Cols E, I, M, Q) as dd/MM/yyyy HH:mm:ss
-    var actualCols = [5, 9, 13, 17];
-    for (var ac = 0; ac < actualCols.length; ac++) {
-      sheet.getRange(7, actualCols[ac], rows.length, 1)
-           .setNumberFormat("dd/MM/yyyy HH:mm:ss")
-           .setHorizontalAlignment("center");
-    }
-
-    // Format Status and TimeDelay columns as centered bold text for user formulas
-    var formulaCols = [6, 7, 10, 11, 14, 15, 18, 19];
-    for (var fc = 0; fc < formulaCols.length; fc++) {
-      sheet.getRange(7, formulaCols[fc], rows.length, 1)
-           .setHorizontalAlignment("center")
-           .setFontWeight("bold");
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      message: "Populated " + items.length + " expense records in tab 'EXPENSE FMS' (Row 7+) successfully with blank Planned/Status/TimeDelay!",
-      count: items.length
-    })).setMimeType(ContentService.MimeType.JSON);
   }
-
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "error",
-    message: "Unknown expense FMS action: " + action
-  })).setMimeType(ContentService.MimeType.JSON);
 }
 
-/**
- * 🚀 MASTER RUNNER: Populate All Database Expenses into "EXPENSE FMS" Tab
- */
 function populateExpenseFms() {
   setupExpenseFmsHeaders();
   var urls = [
@@ -1132,8 +1270,98 @@ function populateInvProcessFms() {
 
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 🌟 MODULE 3: SUSPENSE ADVANCE PAYMENT FMS (Tab: "SUSPENSE" - Cols V to AB)
+// 🌟 MODULE 3: SUSPENSE ADVANCE PAYMENT FMS (Tab: "SUSPENSE" - Cols A to H)
 // ═════════════════════════════════════════════════════════════════════════════
+// LAYOUT:
+//   Rows 2-5, Cols A-D (Merged): Data Set
+//   Rows 2-5, Cols E-H:
+//     Row 2: Recognise suspense advance payment receive entry entered by accountant
+//     Row 3: Community Managers
+//     Row 4: sspacia site - when entry come in suspense section
+//     Row 5: 8
+//   Row 6: Subheaders:
+//     Col A (1): pay receive date
+//     Col B (2): suspense payment type
+//     Col C (3): center
+//     Col D (4): Log TimeStamp (exact timestamp accountant created entry, unmerged)
+//     Col E (5): planned (left blank for user formula)
+//     Col F (6): actual (exact timestamp when CM yes or no suspense entry)
+//     Col G (7): status (left blank for user formula)
+//     Col H (8): delay (left blank for user formula)
+//   Row 7+: Data rows (3 rows per entry: mercado, premier house, agarwal complex)
+//     - Col A & Col B merged across 3 rows
+//     - Cols C, D, E, F, G, H NOT merged
+// ═════════════════════════════════════════════════════════════════════════════
+
+function setupSuspenseHeaders() {
+  var sheet = getSuspenseSheet();
+
+  // Safely break apart existing merges in A1:H6
+  try { sheet.getRange("A1:H6").breakApart(); } catch (e) {}
+
+  // ── 1. DATA SET (Cols A to D, Rows 2-5) ──────────────────────────────────
+  sheet.getRange("A2:D5").merge()
+       .setValue("Data Set")
+       .setFontFamily("Roboto")
+       .setFontSize(14)
+       .setFontWeight("bold")
+       .setHorizontalAlignment("center")
+       .setVerticalAlignment("middle");
+
+  // ── 2. STEP HEADER (Cols E to H, Rows 2-5) ───────────────────────────────
+  sheet.getRange("E2:H2").merge()
+       .setValue("Recognise suspense advance payment receive entry entered by accountant")
+       .setFontWeight("bold");
+  sheet.getRange("E3:H3").merge().setValue("Community Managers");
+  sheet.getRange("E4:H4").merge().setValue("sspacia site - when entry come in suspense section");
+  sheet.getRange("E5:H5").merge().setValue("8");
+
+  // ── 3. Subheaders (Row 6) ────────────────────────────────────────────────
+  var headers = [
+    "pay receive date",
+    "suspense payment type",
+    "center",
+    "Log TimeStamp",
+    "planned",
+    "actual",
+    "status",
+    "delay"
+  ];
+  for (var c = 0; c < headers.length; c++) {
+    sheet.getRange(6, c + 1).setValue(headers[c]);
+  }
+
+  // Format Header Block (A2:H6)
+  sheet.getRange("A2:H6")
+       .setFontFamily("Roboto")
+       .setFontSize(10)
+       .setHorizontalAlignment("center")
+       .setVerticalAlignment("middle")
+       .setBackground(null)
+       .setFontColor(null);
+  sheet.getRange("A2:D5").setFontSize(14);
+  sheet.getRange("A6:H6").setFontWeight("bold");
+  sheet.getRange("A2:H6").setBorder(true, true, true, true, true, true, "#000000", SpreadsheetApp.BorderStyle.SOLID);
+
+  // Column Widths
+  sheet.setColumnWidth(1, 120); // pay receive date
+  sheet.setColumnWidth(2, 180); // suspense payment type
+  sheet.setColumnWidth(3, 130); // center
+  sheet.setColumnWidth(4, 160); // Log TimeStamp
+  sheet.setColumnWidth(5, 160); // planned
+  sheet.setColumnWidth(6, 160); // actual
+  sheet.setColumnWidth(7, 90);  // status
+  sheet.setColumnWidth(8, 90);  // delay
+
+  sheet.setRowHeight(2, 24);
+  sheet.setRowHeight(3, 22);
+  sheet.setRowHeight(4, 22);
+  sheet.setRowHeight(5, 22);
+  sheet.setRowHeight(6, 28);
+  sheet.setFrozenRows(6);
+
+  return { status: "success", message: "SUSPENSE headers successfully configured on tab 'SUSPENSE' (Cols A:H, Data Row 7+)" };
+}
 
 function handleSuspenseFms(payload) {
   payload = payload || {};
@@ -1141,106 +1369,179 @@ function handleSuspenseFms(payload) {
   var sheet = getSuspenseSheet();
   var centersList = ["mercado", "premier house", "agarwal complex"];
 
-  if (action === "suspense_planned") {
-    var payReceiveDate = String(payload.payReceiveDate || getTodayDateString()).trim();
-    var suspensePaymentType = String(payload.suspensePaymentType || "Advance Suspense Payment").trim();
-    var planned = payload.planned ? parseTimestampToDate(payload.planned) : new Date();
+  if (action === "suspense_setup_headers") {
+    var res = setupSuspenseHeaders();
+    return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
+  }
 
-    var lastRow = Math.max(sheet.getLastRow(), 5);
-    var targetStartRow = 6;
+  // ── 1. SUSPENSE PLANNED: Accountant enters suspense record ─────────────────
+  else if (action === "suspense_planned") {
+    var payReceiveDate = String(payload.payReceiveDate || getTodayDateString()).trim();
+    var suspensePaymentType = String(payload.suspensePaymentType || "x payment received").trim();
+    var logTs = payload.logTimestamp || payload.createdAt || payload.enteredAt || payload.timestamp || getNowTimestampString();
+    var logDate = parseTimestampToDate(logTs);
+
+    var lastRow = Math.max(sheet.getLastRow(), 6);
+    var targetStartRow = 7;
     var foundEmptySlot = false;
-    for (var r = 6; r <= lastRow + 3; r += 3) {
-      var val1 = sheet.getRange(r, 22).getValue();
-      var val2 = sheet.getRange(r, 24).getValue();
-      if ((!val1 || String(val1).trim() === "") && (!val2 || String(val2).trim() === "")) {
-        targetStartRow = r; foundEmptySlot = true; break;
+    for (var r = 7; r <= lastRow + 3; r += 3) {
+      var val1 = sheet.getRange(r, 1).getValue();
+      var val3 = sheet.getRange(r, 3).getValue();
+      if ((!val1 || String(val1).trim() === "") && (!val3 || String(val3).trim() === "")) {
+        targetStartRow = r;
+        foundEmptySlot = true;
+        break;
       }
     }
     if (!foundEmptySlot) {
-      targetStartRow = Math.max(lastRow + 1, 6);
-      var offset = (targetStartRow - 6) % 3;
+      targetStartRow = Math.max(lastRow + 1, 7);
+      var offset = (targetStartRow - 7) % 3;
       if (offset !== 0) targetStartRow += (3 - offset);
     }
-    try { sheet.getRange(targetStartRow, 22, 3, 1).breakApart(); } catch (e) {}
-    try { sheet.getRange(targetStartRow, 23, 3, 1).breakApart(); } catch (e) {}
-    try { sheet.getRange(targetStartRow, 25, 3, 1).breakApart(); } catch (e) {}
+
+    try { sheet.getRange(targetStartRow, 1, 3, 1).breakApart(); } catch (e) {}
+    try { sheet.getRange(targetStartRow, 2, 3, 1).breakApart(); } catch (e) {}
+
     for (var c = 0; c < 3; c++) {
       var cRow = targetStartRow + c;
-      sheet.getRange(cRow, 24).setValue(centersList[c]).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
-      setDateValue(sheet.getRange(cRow, 25), planned);
-      sheet.getRange(cRow, 26).clearContent();
-      setPlainStatus(sheet.getRange(cRow, 27), "Pending");
+      // Col C (3): Center
+      sheet.getRange(cRow, 3).setValue(centersList[c])
+           .setHorizontalAlignment("center")
+           .setVerticalAlignment("middle")
+           .setFontFamily("Roboto")
+           .setFontSize(10);
+
+      // Col D (4): Log TimeStamp (unmerged, exact timestamp accountant created entry)
+      setDateValue(sheet.getRange(cRow, 4), logDate);
+
+      // Col E (5): Planned (Left blank for user formula)
+      // Col F (6): Actual (Cleared on new planned entry)
+      sheet.getRange(cRow, 6).clearContent();
+
+      // Col G (7): Status (Left blank for user formula)
+      // Col H (8): Delay (Left blank for user formula)
     }
-    sheet.getRange(targetStartRow, 22, 3, 1).merge().setValue(payReceiveDate).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
-    sheet.getRange(targetStartRow, 23, 3, 1).merge().setValue(suspensePaymentType).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
+
+    // Col A (1): pay receive date (merged 3 rows)
+    sheet.getRange(targetStartRow, 1, 3, 1).merge()
+         .setValue(payReceiveDate)
+         .setHorizontalAlignment("center")
+         .setVerticalAlignment("middle")
+         .setFontFamily("Roboto")
+         .setFontSize(10);
+
+    // Col B (2): suspense payment type (merged 3 rows)
+    sheet.getRange(targetStartRow, 2, 3, 1).merge()
+         .setValue(suspensePaymentType)
+         .setHorizontalAlignment("center")
+         .setVerticalAlignment("middle")
+         .setFontFamily("Roboto")
+         .setFontSize(10);
+
     return ContentService.createTextOutput(JSON.stringify({
-      status: "success", message: "Suspense Planned logged across rows " + targetStartRow + " to " + (targetStartRow + 2),
-      rowStart: targetStartRow, payReceiveDate: payReceiveDate, suspensePaymentType: suspensePaymentType, planned: getNowTimestampString(planned)
+      status: "success",
+      message: "Suspense Planned logged across rows " + targetStartRow + " to " + (targetStartRow + 2),
+      rowStart: targetStartRow,
+      payReceiveDate: payReceiveDate,
+      suspensePaymentType: suspensePaymentType,
+      logTimestamp: getNowTimestampString(logDate)
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // ── 2. SUSPENSE BOOTSTRAP FAST SYNC ───────────────────────────────────────
   else if (action === "suspense_bootstrap_sync") {
+    setupSuspenseHeaders();
     var items = payload.items || [];
     if (!items || items.length === 0) {
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "No suspense items to sync" })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // Sort items chronologically by id or payReceiveDate
+    items.sort(function(a, b) {
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
+
     var lastExistingRow = sheet.getLastRow();
-    if (lastExistingRow >= 6) {
-      for (var r = 6; r <= lastExistingRow; r += 3) {
-        try { sheet.getRange(r, 22, 3, 1).breakApart(); } catch (e) {}
-        try { sheet.getRange(r, 23, 3, 1).breakApart(); } catch (e) {}
-        try { sheet.getRange(r, 25, 3, 1).breakApart(); } catch (e) {}
+    if (lastExistingRow >= 7) {
+      for (var r = 7; r <= lastExistingRow; r += 3) {
+        try { sheet.getRange(r, 1, 3, 1).breakApart(); } catch (e) {}
+        try { sheet.getRange(r, 2, 3, 1).breakApart(); } catch (e) {}
       }
-      var clearCount = lastExistingRow - 5;
-      sheet.getRange(6, 22, clearCount, 7).clearContent().clearFormat().clearNote();
+      var clearCount = lastExistingRow - 6;
+      // Clear data columns A, B, C, D, F (leave E, G, H user formulas untouched)
+      sheet.getRange(7, 1, clearCount, 4).clearContent();
+      sheet.getRange(7, 6, clearCount, 1).clearContent();
     }
 
-    var startRow = 6;
+    var startRow = 7;
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       var rStart = startRow + i * 3;
       var pDate = String(item.payReceiveDate || "").trim();
       var pType = String(item.suspensePaymentType || "x payment received").trim();
-      var planDeadline = item.planned ? parseTimestampToDate(item.planned) : (item.plannedTimestamp ? parseTimestampToDate(item.plannedTimestamp) : new Date());
+      var logTs = item.logTimestamp || item.createdAt || item.enteredAt || item.timestamp || "";
+      var logDate = logTs ? parseTimestampToDate(logTs) : new Date();
 
-      try { sheet.getRange(rStart, 22, 3, 1).breakApart(); } catch (e) {}
-      try { sheet.getRange(rStart, 23, 3, 1).breakApart(); } catch (e) {}
-      try { sheet.getRange(rStart, 25, 3, 1).breakApart(); } catch (e) {}
+      try { sheet.getRange(rStart, 1, 3, 1).breakApart(); } catch (e) {}
+      try { sheet.getRange(rStart, 2, 3, 1).breakApart(); } catch (e) {}
 
       for (var c = 0; c < 3; c++) {
         var rowNum = rStart + c;
         var center = centersList[c];
-        sheet.getRange(rowNum, 24).setValue(center).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
-        setDateValue(sheet.getRange(rowNum, 25), planDeadline);
 
+        // Col C (3): Center
+        sheet.getRange(rowNum, 3).setValue(center)
+             .setHorizontalAlignment("center")
+             .setVerticalAlignment("middle")
+             .setFontFamily("Roboto")
+             .setFontSize(10);
+
+        // Col D (4): Log TimeStamp (unmerged, exact timestamp)
+        setDateValue(sheet.getRange(rowNum, 4), logDate);
+
+        // Col E (5): Planned (Left blank for user formula)
+
+        // Col F (6): Actual (exact timestamp when CM yes or no suspense entry)
         var alloc = item.allocations ? item.allocations.find(function(a) { return String(a.centerName).toLowerCase().trim() === center; }) : null;
-        var actualVal = alloc && alloc.actualTimestamp ? parseTimestampToDate(alloc.actualTimestamp) : "";
-        var statusVal = actualVal ? "Done" : "Pending";
-
-        if (actualVal) {
-          setDateValue(sheet.getRange(rowNum, 26), actualVal);
+        var actualTs = alloc && (alloc.actualTimestamp || alloc.actual || alloc.reviewedAt);
+        if (actualTs) {
+          setDateValue(sheet.getRange(rowNum, 6), parseTimestampToDate(actualTs));
         } else {
-          sheet.getRange(rowNum, 26).clearContent();
+          sheet.getRange(rowNum, 6).clearContent();
         }
-        setPlainStatus(sheet.getRange(rowNum, 27), statusVal);
+
+        // Col G (7): Status (Left blank for user formula)
+        // Col H (8): Delay (Left blank for user formula)
       }
 
-      sheet.getRange(rStart, 22, 3, 1).merge().setValue(pDate).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
-      sheet.getRange(rStart, 23, 3, 1).merge().setValue(pType).setHorizontalAlignment("center").setVerticalAlignment("middle").setFontFamily("Roboto").setFontSize(10);
+      // Col A (1): pay receive date (merged 3 rows)
+      sheet.getRange(rStart, 1, 3, 1).merge()
+           .setValue(pDate)
+           .setHorizontalAlignment("center")
+           .setVerticalAlignment("middle")
+           .setFontFamily("Roboto")
+           .setFontSize(10);
+
+      // Col B (2): suspense payment type (merged 3 rows)
+      sheet.getRange(rStart, 2, 3, 1).merge()
+           .setValue(pType)
+           .setHorizontalAlignment("center")
+           .setVerticalAlignment("middle")
+           .setFontFamily("Roboto")
+           .setFontSize(10);
     }
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
-      message: "Populated " + items.length + " suspense records across rows 6 to " + (startRow + items.length * 3 - 1),
+      message: "Populated " + items.length + " suspense records across rows 7 to " + (startRow + items.length * 3 - 1) + " (Cols A:H)",
       count: items.length
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // ── 3. SUSPENSE ACTUAL: CM Takes Action (Accepts/Rejects for their Center) ─
   else if (action === "suspense_actual") {
     var rawCenter = String(payload.centerName || "").toLowerCase().trim();
     var normCenter = normFmsText(rawCenter);
-    var statusVal = "Done"; // FMS status is Done once CM takes action (acceptance or rejection)
     var rowStart = payload.rowStart ? Number(payload.rowStart) : -1;
     var targetDate = String(payload.payReceiveDate || "").trim();
     var normTargetDate = normFmsText(targetDate);
@@ -1248,11 +1549,11 @@ function handleSuspenseFms(payload) {
     if (payload.actual || payload.actualTimestamp) actualDate = parseTimestampToDate(payload.actual || payload.actualTimestamp);
     var targetRow = -1;
 
-    // 1. If rowStart is known, check within that 3-row block (STRICT non-empty check)
-    if (rowStart >= 6) {
+    // 1. If rowStart is known, check within that 3-row block in Col C (Col 3)
+    if (rowStart >= 7) {
       for (var k = 0; k < 3; k++) {
         var checkR = rowStart + k;
-        var cVal = normFmsText(sheet.getRange(checkR, 24).getValue());
+        var cVal = normFmsText(sheet.getRange(checkR, 3).getValue());
         if (cVal && (cVal === normCenter || normCenter.indexOf(cVal) !== -1 || cVal.indexOf(normCenter) !== -1)) {
           targetRow = checkR;
           break;
@@ -1260,15 +1561,15 @@ function handleSuspenseFms(payload) {
       }
     }
 
-    // 2. Search by payReceiveDate block in Col 22 (V), then match center in Col 24 (X)
+    // 2. Search by payReceiveDate block in Col A (Col 1), then match center in Col C (Col 3)
     if (targetRow === -1 && normTargetDate) {
       var lastRow = sheet.getLastRow();
-      for (var r = 6; r <= lastRow; r += 3) {
-        var bDate = normFmsText(sheet.getRange(r, 22).getDisplayValue());
+      for (var r = 7; r <= lastRow; r += 3) {
+        var bDate = normFmsText(sheet.getRange(r, 1).getDisplayValue());
         if (bDate && (bDate === normTargetDate || bDate.indexOf(normTargetDate) !== -1 || normTargetDate.indexOf(bDate) !== -1)) {
           for (var c = 0; c < 3; c++) {
             var checkR = r + c;
-            var cVal = normFmsText(sheet.getRange(checkR, 24).getValue());
+            var cVal = normFmsText(sheet.getRange(checkR, 3).getValue());
             if (cVal && (cVal === normCenter || normCenter.indexOf(cVal) !== -1 || cVal.indexOf(normCenter) !== -1)) {
               targetRow = checkR;
               break;
@@ -1279,13 +1580,13 @@ function handleSuspenseFms(payload) {
       }
     }
 
-    // 3. Fallback: match by non-empty center name alone, prioritizing pending rows
+    // 3. Fallback: match by non-empty center name alone, prioritizing empty Col F (Actual)
     if (targetRow === -1 && normCenter) {
       var lastRow = sheet.getLastRow();
-      for (var r = lastRow; r >= 6; r--) {
-        var cVal = normFmsText(sheet.getRange(r, 24).getValue());
+      for (var r = lastRow; r >= 7; r--) {
+        var cVal = normFmsText(sheet.getRange(r, 3).getValue());
         if (cVal && (cVal === normCenter || normCenter.indexOf(cVal) !== -1 || cVal.indexOf(normCenter) !== -1)) {
-          var existingActual = sheet.getRange(r, 26).getValue();
+          var existingActual = sheet.getRange(r, 6).getValue();
           if (!existingActual) {
             targetRow = r;
             break;
@@ -1297,15 +1598,15 @@ function handleSuspenseFms(payload) {
     }
 
     if (targetRow !== -1) {
-      setDateValue(sheet.getRange(targetRow, 26), actualDate);
-      setPlainStatus(sheet.getRange(targetRow, 27), statusVal);
+      // Col F (6): Exact timestamp when CM takes action
+      setDateValue(sheet.getRange(targetRow, 6), actualDate);
+      // Col G (7) & Col H (8) left untouched for user formulas
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
         message: "Suspense Actual logged for " + rawCenter + " in row " + targetRow,
         row: targetRow,
         center: rawCenter,
-        actual: getNowTimestampString(actualDate),
-        statusValue: statusVal
+        actual: getNowTimestampString(actualDate)
       })).setMimeType(ContentService.MimeType.JSON);
     } else {
       return ContentService.createTextOutput(JSON.stringify({
@@ -1315,68 +1616,101 @@ function handleSuspenseFms(payload) {
     }
   }
 
+  // ── 4. SUSPENSE UPDATE: Edit existing entry ────────────────────────────────
   else if (action === "suspense_update" || action === "suspense_edit") {
     var updateRowStart = payload.rowStart ? Number(payload.rowStart) : -1;
     var updatedDate = payload.payReceiveDate ? String(payload.payReceiveDate).trim() : null;
     var updatedType = payload.suspensePaymentType ? String(payload.suspensePaymentType).trim() : null;
-    if (updateRowStart >= 6) {
-      if (updatedDate) sheet.getRange(updateRowStart, 22, 3, 1).setValue(updatedDate);
-      if (updatedType) sheet.getRange(updateRowStart, 23, 3, 1).setValue(updatedType);
+    var updatedLogTs = payload.logTimestamp || payload.createdAt || payload.enteredAt;
+
+    if (updateRowStart >= 7) {
+      if (updatedDate) sheet.getRange(updateRowStart, 1, 3, 1).setValue(updatedDate);
+      if (updatedType) sheet.getRange(updateRowStart, 2, 3, 1).setValue(updatedType);
+      if (updatedLogTs) {
+        var logD = parseTimestampToDate(updatedLogTs);
+        for (var c = 0; c < 3; c++) {
+          setDateValue(sheet.getRange(updateRowStart + c, 4), logD);
+        }
+      }
       return ContentService.createTextOutput(JSON.stringify({
-        status: "success", message: "Suspense Entry updated in rows " + updateRowStart + " to " + (updateRowStart + 2), rowStart: updateRowStart
+        status: "success",
+        message: "Suspense Entry updated in rows " + updateRowStart + " to " + (updateRowStart + 2),
+        rowStart: updateRowStart
       })).setMimeType(ContentService.MimeType.JSON);
     } else {
-      return handleSuspenseFms({ action: "suspense_planned", payReceiveDate: updatedDate, suspensePaymentType: updatedType, planned: payload.planned });
+      return handleSuspenseFms({
+        action: "suspense_planned",
+        payReceiveDate: updatedDate,
+        suspensePaymentType: updatedType,
+        logTimestamp: updatedLogTs
+      });
     }
   }
 
+  // ── 5. SUSPENSE DELETE: Remove entry ───────────────────────────────────────
   else if (action === "suspense_delete") {
     var targetRow = -1;
-    if (payload.rowStart && Number(payload.rowStart) >= 6) {
+    if (payload.rowStart && Number(payload.rowStart) >= 7) {
       targetRow = Number(payload.rowStart);
     } else {
       var searchDate = payload.payReceiveDate ? String(payload.payReceiveDate).trim() : "";
       var searchType = payload.suspensePaymentType ? String(payload.suspensePaymentType).trim().toLowerCase() : "";
       var lastRow = sheet.getLastRow();
-      for (var r = 6; r <= lastRow; r += 3) {
-        var cellDate = String(sheet.getRange(r, 22).getDisplayValue() || "").trim();
-        var cellType = String(sheet.getRange(r, 23).getDisplayValue() || "").trim().toLowerCase();
-        if (cellDate === searchDate && (searchType === "" || cellType === searchType)) { targetRow = r; break; }
+      for (var r = 7; r <= lastRow; r += 3) {
+        var cellDate = String(sheet.getRange(r, 1).getDisplayValue() || "").trim();
+        var cellType = String(sheet.getRange(r, 2).getDisplayValue() || "").trim().toLowerCase();
+        if (cellDate === searchDate && (searchType === "" || cellType === searchType)) {
+          targetRow = r;
+          break;
+        }
       }
     }
-    if (targetRow >= 6) {
-      try { sheet.getRange(targetRow, 22, 3, 1).breakApart(); } catch (e) {}
-      try { sheet.getRange(targetRow, 23, 3, 1).breakApart(); } catch (e) {}
-      try { sheet.getRange(targetRow, 25, 3, 1).breakApart(); } catch (e) {}
-      var rangeToClear = sheet.getRange(targetRow, 22, 3, 7);
-      rangeToClear.clearContent(); rangeToClear.clearFormat(); rangeToClear.clearNote();
-      rangeToClear.setBackground(null); rangeToClear.setFontColor(null);
+    if (targetRow >= 7) {
+      try { sheet.getRange(targetRow, 1, 3, 1).breakApart(); } catch (e) {}
+      try { sheet.getRange(targetRow, 2, 3, 1).breakApart(); } catch (e) {}
+      var rangeToClear = sheet.getRange(targetRow, 1, 3, 8);
+      rangeToClear.clearContent();
       return ContentService.createTextOutput(JSON.stringify({
-        status: "success", action: "suspense_delete", message: "Suspense entry cleared from rows " + targetRow + "-" + (targetRow + 2), rowStart: targetRow
+        status: "success",
+        action: "suspense_delete",
+        message: "Suspense entry cleared from rows " + targetRow + "-" + (targetRow + 2),
+        rowStart: targetRow
       })).setMimeType(ContentService.MimeType.JSON);
     } else {
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", action: "suspense_delete", message: "Entry not found or already removed", rowStart: null })).setMimeType(ContentService.MimeType.JSON);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        action: "suspense_delete",
+        message: "Entry not found or already removed",
+        rowStart: null
+      })).setMimeType(ContentService.MimeType.JSON);
     }
   }
-
 }
 
+/**
+ * 🚀 MASTER RUNNER: Populate All Database Suspense Payments into "SUSPENSE" Tab
+ */
 function populateSuspenseFms() {
-  var url = "https://sspacia.com/api/admin/suspense";
-  try {
-    var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (res.getResponseCode() === 200) {
-      var json = JSON.parse(res.getContentText());
-      var items = (json && (json.data || json.payments || json.items)) || [];
-      if (items && items.length > 0) {
-        var result = handleSuspenseFms({ action: "suspense_bootstrap_sync", items: items });
-        Logger.log("✅ SUSPENSE FMS Population Complete: " + result.getContent());
-        return;
+  setupSuspenseHeaders();
+  var urls = [
+    "https://sspacia.com/api/admin/suspense"
+  ];
+  for (var u = 0; u < urls.length; u++) {
+    try {
+      var res = UrlFetchApp.fetch(urls[u], { muteHttpExceptions: true });
+      if (res.getResponseCode() === 200) {
+        var json = JSON.parse(res.getContentText());
+        var items = (json && (json.data || json.payments || json.items)) || [];
+        if (items && items.length > 0) {
+          var result = handleSuspenseFms({ action: "suspense_bootstrap_sync", items: items });
+          Logger.log("✅ SUSPENSE FMS Population Complete: " + result.getContent());
+          return;
+        }
       }
+      Logger.log("Notice: API " + urls[u] + " returned HTTP " + res.getResponseCode());
+    } catch (e) {
+      Logger.log("Notice fetching suspense from " + urls[u] + ": " + e.toString());
     }
-    Logger.log("Notice: API returned HTTP " + res.getResponseCode());
-  } catch (e) {
-    Logger.log("Notice fetching suspense from API: " + e.toString());
   }
 }
 
@@ -1994,6 +2328,7 @@ function onOpen() {
     .addToUi();
   ui.createMenu('SUSPENSE FMS')
     .addItem('📥 Populate SUSPENSE FMS', 'populateSuspenseFms')
+    .addItem('⚙️ Setup SUSPENSE Headers', 'setupSuspenseHeaders')
     .addToUi();
   ui.createMenu('SSPACIA SCOT')
     .addItem('🚀 Sync Clients from SSPACIA Portal', 'syncScotClients')

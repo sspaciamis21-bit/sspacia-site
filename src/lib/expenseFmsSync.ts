@@ -80,10 +80,21 @@ export async function fetchAllExpenseFmsItems() {
 
     const headerItemDesc = formatExpenseHeaderDesc(exp.category, exp.description);
 
+    const isAccountantEntered =
+      exp.createdByRole === 'ACCOUNTANT' ||
+      (exp.createdByName && exp.createdByName.toLowerCase().includes('account'));
+
+    const logTimestamp = formatFmsTimestamp(exp.createdAt || exp.expenseDate);
+
     // Step 1: Accountant Approve/Reject with remarks Expense Entered by CM's
+    // Rule: If accountant entered expense, accountant does not approve their own expense,
+    // so Step 1 Actual is the log timestamp!
     let step1Actual = '';
     let step1Status = 'Pending';
-    if (exp.accountantApprovedAt) {
+    if (isAccountantEntered) {
+      step1Actual = logTimestamp;
+      step1Status = 'Done';
+    } else if (exp.accountantApprovedAt) {
       step1Actual = formatFmsTimestamp(exp.accountantApprovedAt);
       step1Status = exp.accountantApprovalStatus === 'REJECTED' ? 'Rejected' : 'Done';
     } else if (exp.superAdminApprovedAt) {
@@ -121,6 +132,8 @@ export async function fetchAllExpenseFmsItems() {
       centerName,
       expenseDate: isoDateStr || formatExpenseDate(exp.expenseDate),
       headerItemDesc,
+      logTimestamp,
+      isAccountantEntered,
       step1Planned: '',
       step1Actual,
       step1Status,
@@ -164,11 +177,16 @@ async function getExpenseDetails(expenseRecordId: number) {
 }
 
 /**
- * 1. Initial Expense Entry Creation (Data Set: Center, Expense Date, header - item desc)
+ * 1. Initial Expense Entry Creation (Data Set: Center, Expense Date, header - item desc, Log Timestamp)
  */
 export async function syncExpenseCreated(expenseRecordId: number) {
   const details = await getExpenseDetails(expenseRecordId);
   if (!details) return;
+
+  const isAccountantEntered =
+    details.record.createdByRole === 'ACCOUNTANT' ||
+    (details.record.createdByName && details.record.createdByName.toLowerCase().includes('account'));
+  const logTimestamp = formatFmsTimestamp(details.record.createdAt || details.record.expenseDate || new Date());
 
   return await postToFms({
     action: 'expense_fms_create',
@@ -177,6 +195,9 @@ export async function syncExpenseCreated(expenseRecordId: number) {
     centerName: details.centerName,
     expenseDate: details.expenseDate,
     headerItemDesc: details.headerItemDesc,
+    logTimestamp,
+    isAccountantEntered,
+    step1Actual: isAccountantEntered ? logTimestamp : '',
   });
 }
 
