@@ -75,8 +75,27 @@ export function startCronScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
+  // ── 4. WEEKLY MONDAY 6:00 AM IST — Executive Meeting (EM) / MIS Scorecard Report ──
+  // Cron: '0 6 * * 1' = 6:00 AM every Monday (Asia/Kolkata)
+  // Sends from mis.sspacia01@gmail.com with attached landscape PDFs for all centres
+  cron.schedule('0 6 * * 1', async () => {
+    const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    console.log(`[CRON] ⏰ Weekly Monday 6:00 AM IST EM Report job triggered at ${timestamp}`);
+
+    try {
+      const { dispatchWeeklyEmReportEmail } = await import('@/lib/em-email-service');
+      const result = await dispatchWeeklyEmReportEmail();
+      console.log(`[CRON] ✅ Weekly EM Report email dispatched successfully from mis.sspacia01@gmail.com (MessageID: ${result.messageId})`);
+    } catch (error: any) {
+      console.error(`[CRON] ❌ Failed to dispatch weekly EM report email:`, error?.message || error);
+    }
+  }, {
+    timezone: 'Asia/Kolkata',
+  });
+
   console.log('[CRON] ✅ Scheduler started:');
   console.log('       • 12:00 AM IST — Month-End Invoice Auto-Dispatch');
   console.log('       • 9:00 AM IST  — Daily Agreement & Lock-In Alert Emails');
   console.log('       • 10:00 AM IST — Daily Expense Due Date Alert Emails (7-Day Late Fee Warning)');
+  console.log('       • Mon 6:00 AM  — Weekly Executive Meeting (EM) MIS Report (mis.sspacia01@gmail.com)');
 }

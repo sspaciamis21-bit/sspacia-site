@@ -3,6 +3,12 @@ import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { getNodeScopedUserIds } from '@/lib/auth/getNodeScopedUserIds';
+import { syncLiveInvoicePlanned } from '@/lib/accountsFmsSync';
+import {
+  syncInvoiceWorkflowSentToAccountant,
+  syncInvoiceWorkflowPdfAttached,
+  syncInvoiceWorkflowApprovedClient,
+} from '@/lib/invoiceWorkflowFmsSync';
 
 export async function PUT(
   request: Request,
@@ -147,6 +153,17 @@ export async function PUT(
         attachedInvoice: true,
       },
     });
+
+    if (status !== undefined) {
+      if (status === 'SENT_TO_ACCOUNTANT') {
+        syncInvoiceWorkflowSentToAccountant(id).catch(() => {});
+      } else if (status === 'INVOICE_ATTACHED') {
+        syncInvoiceWorkflowPdfAttached(id).catch(() => {});
+      } else if (status === 'APPROVED') {
+        syncLiveInvoicePlanned(id).catch(() => {});
+        syncInvoiceWorkflowApprovedClient(id).catch(() => {});
+      }
+    }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {

@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { stampPdfWithDigitalSignature } from '@/lib/digital-signature';
 import { syncLiveInvoicePlanned } from '@/lib/accountsFmsSync';
+import { syncInvoiceWorkflowApprovedClient } from '@/lib/invoiceWorkflowFmsSync';
 import fs from 'fs';
 import path from 'path';
 
@@ -159,6 +160,11 @@ export async function POST(
     // ── Synchronize to Google Sheets 'Accounts' Tab (Live Planned) ──
     syncLiveInvoicePlanned(invoiceRecordId).catch((fmsErr) => {
       console.warn('[Apply Digital Signature] Accounts FMS Sync notice:', fmsErr);
+    });
+
+    // ── Synchronize Step 3 to Invoice Workflow FMS (Approved and Sent to Client) ──
+    syncInvoiceWorkflowApprovedClient(invoiceRecordId).catch((fmsErr) => {
+      console.warn('[Apply Digital Signature] Invoice Workflow FMS Approved notice:', fmsErr);
     });
 
     return NextResponse.json({

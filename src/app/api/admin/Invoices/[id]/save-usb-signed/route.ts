@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { stampPdfWithDigitalSignature } from '@/lib/digital-signature';
 import { syncLiveInvoicePlanned } from '@/lib/accountsFmsSync';
+import { syncInvoiceWorkflowApprovedClient } from '@/lib/invoiceWorkflowFmsSync';
 
 export async function POST(
   request: Request,
@@ -78,6 +79,11 @@ export async function POST(
     // ── Synchronize to Google Sheets 'Accounts' Tab (Live Planned) ──
     syncLiveInvoicePlanned(invoiceRecordId).catch((fmsErr) => {
       console.warn('[Save USB Signed] Accounts FMS Sync notice:', fmsErr);
+    });
+
+    // ── Synchronize Step 3 to Invoice Workflow FMS (Approved and Sent to Client) ──
+    syncInvoiceWorkflowApprovedClient(invoiceRecordId).catch((fmsErr) => {
+      console.warn('[Save USB Signed] Invoice Workflow FMS Approved notice:', fmsErr);
     });
 
     return NextResponse.json({

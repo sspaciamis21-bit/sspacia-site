@@ -395,6 +395,16 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Prominent Button to EM Report (Operations MIS Scorecard) */}
+            <Link
+              href="/admin/em-report"
+              className="px-3.5 py-2 bg-[#0c1933] hover:bg-[#111c2e] text-[#d4af37] text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md border border-[#d4af37]/50 transition-all hover:scale-102"
+              title="Open Executive Meeting (EM) MIS Scorecard"
+            >
+              <FileSpreadsheet size={14} className="text-[#d4af37]" />
+              <span>EM Report →</span>
+            </Link>
+
             {/* Quick Link to Super Admin Executive Expenses (P&L & Record Keeping) */}
             <Link
               href="/admin/executive-expenses"

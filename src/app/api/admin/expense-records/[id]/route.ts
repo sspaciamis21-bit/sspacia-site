@@ -3,6 +3,13 @@ import { cookies } from 'next/headers';
 import prisma from '@/lib/prisma';
 import { verifyToken } from '@/lib/jwt';
 import { onOffSAApproval } from '@/lib/expense-approval-config';
+import {
+  syncExpenseCreated,
+  syncExpenseStep1Accountant,
+  syncExpenseStep2SuperAdmin,
+  syncExpenseStep3PaymentApproval,
+  syncExpenseStep4Utr,
+} from '@/lib/expenseFmsSync';
 
 const ACCOUNTANT_EMAIL = 'ssinfrazone21@gmail.com';
 
@@ -398,6 +405,23 @@ export async function PUT(
         );
       }
       updated = await (prisma as any).expenseRecord.findUnique({ where: { id: recordId } });
+    }
+
+    if (updated) {
+      syncExpenseCreated(recordId).then(() => {
+        if (updated.accountantApprovalStatus === 'APPROVED' || updated.approvalStatus === 'APPROVED' || updated.superAdminApprovalStatus === 'APPROVED') {
+          syncExpenseStep1Accountant(recordId, 'Approved').catch(() => {});
+        }
+        if (updated.superAdminApprovalStatus === 'APPROVED' || updated.approvalStatus === 'APPROVED') {
+          syncExpenseStep2SuperAdmin(recordId, 'Approved').catch(() => {});
+        }
+        if (updated.paymentApprovalStatus === 'APPROVED') {
+          syncExpenseStep3PaymentApproval(recordId, 'Approved').catch(() => {});
+        }
+        if (updated.utrNumber || updated.paymentStatus === 'PAID') {
+          syncExpenseStep4Utr(recordId).catch(() => {});
+        }
+      }).catch(() => {});
     }
 
     return NextResponse.json({

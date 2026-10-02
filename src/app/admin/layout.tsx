@@ -103,6 +103,7 @@ export default function AdminLayout({
       p.includes('/admin/invoices') ||
       p.includes('/admin/old-invoices') ||
       p.includes('/admin/expenses') ||
+      p.includes('/admin/em-report') ||
       p.includes('/admin/vendor-master') ||
       p.includes('/admin/occupancy')
     ) {

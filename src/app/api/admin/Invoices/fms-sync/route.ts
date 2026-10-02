@@ -111,11 +111,14 @@ async function fetchAugSepItems() {
     // Step 1: Review Invoices & Send to Accountant to attach tally pdf
     const isSentToAccountant = ['SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED'].includes(status);
     const step1Planned = getInvoiceStep1PlannedTimestamp(inv);
-    const step1Actual = isSentToAccountant ? updatedTime : '';
+    const sentTime = inv.sentAt
+      ? formatFmsTimestamp(inv.sentAt)
+      : (inv.createdAt ? formatFmsTimestamp(inv.createdAt) : updatedTime);
+    const step1Actual = isSentToAccountant ? sentTime : '';
     const step1Status = isSentToAccountant ? 'Done' : 'Pending';
 
     // Step 2: Attach Tally Invoice PDF and send back to CM
-    const isAttached = ['INVOICE_ATTACHED', 'APPROVED'].includes(status);
+    const isAttached = ['INVOICE_ATTACHED', 'APPROVED'].includes(status) && Boolean(inv.attachedInvoice?.createdAt);
     const step2Planned = isSentToAccountant ? step1Actual : '';
     const step2Actual = isAttached ? attachedTime : '';
     const step2Status = isAttached ? 'Done' : (isSentToAccountant ? 'Pending' : '');

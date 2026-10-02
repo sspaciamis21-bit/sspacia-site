@@ -29,7 +29,8 @@ import {
   Check,
   X,
   Upload,
-  Pencil
+  Pencil,
+  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -1025,6 +1026,8 @@ export function SuspenseManagement({
                                 normalizedUserCenter.includes(center.name.toLowerCase()) ||
                                 center.name.toLowerCase().includes(normalizedUserCenter)));
 
+                          const canReviewThisCenter = isSuperAdmin || isAssignedToCurrentCM;
+
                           const isDecisionPending = !alloc || alloc.decision === 'PENDING';
                           const isAccepted = alloc?.decision === 'ACCEPTED';
                           const isRejected = alloc?.decision === 'REJECTED';
@@ -1111,21 +1114,26 @@ export function SuspenseManagement({
                                       <span>Reviewed:</span>
                                       <span className="font-bold text-gray-700">{alloc.actualTimestamp}</span>
                                     </div>
-                                    <div className="flex justify-end">
-                                      <button
-                                        type="button"
-                                        onClick={() => openReviewModal(payment, center.name, alloc.decision === 'ACCEPTED' ? 'ACCEPTED' : 'REJECTED')}
-                                        className="text-[10px] font-bold uppercase text-[#006064] hover:underline cursor-pointer flex items-center gap-1 transition-all"
-                                        title={`Change decision for ${center.displayName}`}
-                                      >
-                                        <Pencil size={11} />
-                                        <span>Change Decision</span>
-                                      </button>
-                                    </div>
+                                    {canReviewThisCenter ? (
+                                      <div className="flex justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={() => openReviewModal(payment, center.name, alloc.decision === 'ACCEPTED' ? 'ACCEPTED' : 'REJECTED')}
+                                          className="text-[10px] font-bold uppercase text-[#006064] hover:underline cursor-pointer flex items-center gap-1 transition-all"
+                                          title={`Change decision for ${center.displayName}`}
+                                        >
+                                          <Pencil size={11} />
+                                          <span>Change Decision</span>
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="text-[9px] text-gray-400 italic text-right">
+                                        {alloc.reviewedByName ? `By ${alloc.reviewedByName}` : 'Reviewed'}
+                                      </div>
+                                    )}
                                   </div>
-                                ) : (
+                                ) : canReviewThisCenter ? (
                                   <div className="space-y-2">
-                                    {/* Action buttons ALWAYS available for Community Managers to review */}
                                     <div className="grid grid-cols-2 gap-1.5">
                                       <button
                                         type="button"
@@ -1146,6 +1154,13 @@ export function SuspenseManagement({
                                         <span>No, Not Ours</span>
                                       </button>
                                     </div>
+                                  </div>
+                                ) : (
+                                  <div className="py-1.5 px-2 bg-gray-50 border border-dashed border-gray-200 text-center select-none rounded-2xs">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center justify-center gap-1">
+                                      <Lock size={11} className="text-gray-400" />
+                                      <span>Restricted to {center.displayName} CM</span>
+                                    </span>
                                   </div>
                                 )}
                               </div>

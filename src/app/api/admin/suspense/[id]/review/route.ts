@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/jwt';
+import prisma from '@/lib/prisma';
 import { recordCenterRecognition } from '@/lib/suspense-db';
 import { syncSuspenseActual } from '@/lib/suspenseFmsSync';
 
@@ -34,6 +37,51 @@ export async function POST(
         { error: "Decision must be either 'ACCEPTED' or 'REJECTED'" },
         { status: 400 }
       );
+    }
+
+    // ── Server-Side Center Permission Enforcement ───────────────────────
+    // Ensure CM of one center cannot recognize for another center
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth-token')?.value;
+    if (token) {
+      const payload = await verifyToken(token);
+      if (payload) {
+        const userRole = String(payload.role || '').toUpperCase();
+        const isAdmin = userRole.includes('ADMIN') || userRole.includes('SUPER');
+
+        if (!isAdmin) {
+          // Fetch user's assigned locations
+          const dbUser: any = await (prisma as any).user.findUnique({
+            where: { id: Number(payload.id) },
+            select: {
+              assignedLocations: {
+                select: { location: { select: { name: true } } },
+              },
+            },
+          });
+
+          const assignedNames: string[] = (dbUser?.assignedLocations || []).map((l: any) =>
+            String(l.location?.name || '').toLowerCase().trim()
+          );
+
+          const targetLower = String(centerName).toLowerCase().trim();
+          const isAuthorizedForCenter = assignedNames.some((an) => {
+            if (targetLower.includes('agarwal') && an.includes('agarwal')) return true;
+            if (targetLower.includes('premier') && an.includes('premier')) return true;
+            if (targetLower.includes('mercado') && an.includes('mercado')) return true;
+            return an === targetLower || targetLower.includes(an);
+          });
+
+          if (!isAuthorizedForCenter && assignedNames.length > 0) {
+            return NextResponse.json(
+              {
+                error: `Unauthorized: You are assigned to "${assignedNames.join(', ')}" and cannot review or recognize entries for "${centerName}".`,
+              },
+              { status: 403 }
+            );
+          }
+        }
+      }
     }
 
     const result = await recordCenterRecognition({
