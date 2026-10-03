@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Clock,
   Laptop,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -332,17 +333,28 @@ export default function DscTestSandbox({ onBack, userEmail }: DscTestSandboxProp
             </p>
           </div>
 
-          {isSigned && (
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <a
+              href="/downloads/mercado-dsc-client.zip"
+              download="mercado-dsc-client.zip"
+              className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-300 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 rounded transition-colors"
+              title="Download standalone client folder for Mercado CM PC"
+            >
+              <Download size={13} className="text-teal-700" />
+              <span>Mercado PC Package (.zip)</span>
+            </a>
+
             <button
               type="button"
               onClick={handleResetTest}
               disabled={isResetting}
-              className="px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 rounded transition-colors self-start sm:self-auto cursor-pointer"
+              className="px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 rounded transition-colors cursor-pointer"
+              title="Reset test invoice to fresh unsigned state"
             >
               {isResetting ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
-              Reset Test to Unsigned
+              <span>{isSigned ? 'Reset to Unsigned' : 'Fresh Unsigned Test'}</span>
             </button>
-          )}
+          </div>
         </div>
 
         <div className="overflow-x-auto">

@@ -58,7 +58,17 @@ const state = g.__sspaciaDscBridge;
  * GET /api/admin/Invoices/dsc-bridge
  * Returns live status of the Mercado USB DSC Gateway and test invoice status
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  if (searchParams.get('reset') === 'true') {
+    state.testInvoice = {
+      signedPdfUrl: null,
+      signedPdfName: null,
+      signedAt: null,
+      signerName: null,
+    };
+  }
+
   const now = Date.now();
   const lastSeen = state.gateway?.lastSeen || 0;
   const isOnline = Boolean(
