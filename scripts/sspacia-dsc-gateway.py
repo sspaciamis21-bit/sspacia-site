@@ -226,7 +226,7 @@ def call_server(server_url: str, endpoint: str, payload: dict) -> dict:
             "User-Agent": "SSPACIA-DSC-Gateway/1.0",
         },
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 

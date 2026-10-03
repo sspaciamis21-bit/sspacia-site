@@ -16,6 +16,7 @@ import {
   Clock,
   Laptop,
   Download,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -472,15 +473,26 @@ export default function DscTestSandbox({ onBack, userEmail }: DscTestSandboxProp
                         )}
                       </button>
                     ) : (
-                      <a
-                        href={bridgeStatus.testInvoice?.signedPdfUrl || '/uploads/test-invoices/HARDIK.pdf'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10.5px] uppercase tracking-wider flex items-center justify-center gap-1.5 w-full rounded shadow-xs transition-colors"
-                      >
-                        <ExternalLink size={13} />
-                        <span>📥 View Signed PDF</span>
-                      </a>
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <a
+                          href={bridgeStatus.testInvoice?.signedPdfUrl || '/uploads/test-invoices/HARDIK.pdf'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 w-full rounded shadow-xs transition-colors"
+                        >
+                          <Eye size={12} />
+                          <span>👁️ View Signed PDF</span>
+                        </a>
+
+                        <a
+                          href={bridgeStatus.testInvoice?.signedPdfUrl || '/uploads/test-invoices/HARDIK.pdf'}
+                          download={bridgeStatus.testInvoice?.signedPdfName || 'Signed_Tax_Invoice_479.pdf'}
+                          className="px-3 py-1.5 bg-teal-800 hover:bg-teal-900 text-white font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 w-full rounded shadow-xs transition-colors"
+                        >
+                          <Download size={12} />
+                          <span>📥 Download Signed PDF</span>
+                        </a>
+                      </div>
                     )}
 
                     {isSigning && (

@@ -7,7 +7,10 @@ export const dynamic = 'force-dynamic';
 
 const BRIDGE_SECRET = 'sspacia_dsc_secure_2026';
 
-// Global state container for Node server to hold gateway heartbeats and active signing jobs
+// Persistent shared state directory on server disk (shared across all Node processes)
+const STATE_DIR = path.join(process.cwd(), 'public', 'uploads', 'test-invoices');
+const STATE_FILE = path.join(STATE_DIR, 'dsc_bridge_shared_state.json');
+
 interface DscJob {
   jobId: string;
   invoiceId?: number;
@@ -23,14 +26,14 @@ interface DscJob {
   completedAt?: number;
 }
 
-interface DscBridgeGlobal {
+interface DscBridgeSharedState {
   gateway: {
     center: string;
     status: 'ONLINE' | 'TOKEN_UNPLUGGED' | 'OFFLINE';
     tokenLabel: string;
     lastSeen: number;
   } | null;
-  jobs: Map<string, DscJob>;
+  jobs: DscJob[];
   testInvoice: {
     signedPdfUrl: string | null;
     signedPdfName: string | null;
@@ -39,11 +42,34 @@ interface DscBridgeGlobal {
   };
 }
 
-const g = global as unknown as { __sspaciaDscBridge?: DscBridgeGlobal };
-if (!g.__sspaciaDscBridge) {
-  g.__sspaciaDscBridge = {
+function loadSharedState(): DscBridgeSharedState {
+  try {
+    if (!fs.existsSync(STATE_DIR)) {
+      fs.mkdirSync(STATE_DIR, { recursive: true });
+    }
+    if (fs.existsSync(STATE_FILE)) {
+      const content = fs.readFileSync(STATE_FILE, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed === 'object') {
+        return {
+          gateway: parsed.gateway || null,
+          jobs: Array.isArray(parsed.jobs) ? parsed.jobs : [],
+          testInvoice: parsed.testInvoice || {
+            signedPdfUrl: null,
+            signedPdfName: null,
+            signedAt: null,
+            signerName: null,
+          },
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[DSC Bridge] loadSharedState notice:', err);
+  }
+
+  return {
     gateway: null,
-    jobs: new Map<string, DscJob>(),
+    jobs: [],
     testInvoice: {
       signedPdfUrl: null,
       signedPdfName: null,
@@ -52,14 +78,30 @@ if (!g.__sspaciaDscBridge) {
     },
   };
 }
-const state = g.__sspaciaDscBridge;
+
+function saveSharedState(state: DscBridgeSharedState) {
+  try {
+    if (!fs.existsSync(STATE_DIR)) {
+      fs.mkdirSync(STATE_DIR, { recursive: true });
+    }
+    // Keep last 15 jobs only
+    if (state.jobs.length > 15) {
+      state.jobs = state.jobs.slice(-15);
+    }
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[DSC Bridge] saveSharedState notice:', err);
+  }
+}
 
 /**
  * GET /api/admin/Invoices/dsc-bridge
  * Returns live status of the Mercado USB DSC Gateway and test invoice status
  */
 export async function GET(request: Request) {
+  const state = loadSharedState();
   const { searchParams } = new URL(request.url);
+
   if (searchParams.get('reset') === 'true') {
     state.testInvoice = {
       signedPdfUrl: null,
@@ -67,6 +109,7 @@ export async function GET(request: Request) {
       signedAt: null,
       signerName: null,
     };
+    saveSharedState(state);
   }
 
   const now = Date.now();
@@ -74,14 +117,16 @@ export async function GET(request: Request) {
   const isOnline = Boolean(
     state.gateway &&
     state.gateway.status === 'ONLINE' &&
-    now - lastSeen < 8000
+    now - lastSeen < 12000
   );
 
   const displayStatus = isOnline
     ? 'ONLINE'
-    : state.gateway && now - lastSeen < 8000
+    : state.gateway && now - lastSeen < 12000
     ? state.gateway.status
     : 'OFFLINE';
+
+  const pendingCount = state.jobs.filter((j) => j.status === 'PENDING').length;
 
   return NextResponse.json({
     success: true,
@@ -90,7 +135,7 @@ export async function GET(request: Request) {
     center: state.gateway?.center || 'Mercado',
     tokenLabel: state.gateway?.tokenLabel || 'None',
     lastSeenMsAgo: lastSeen ? now - lastSeen : null,
-    pendingJobsCount: Array.from(state.jobs.values()).filter((j) => j.status === 'PENDING').length,
+    pendingJobsCount: pendingCount,
     testInvoice: state.testInvoice,
   });
 }
@@ -103,6 +148,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const { action } = body;
+    const state = loadSharedState();
 
     // ── 1. GATEWAY HEARTBEAT ───────────────────────────────────────────────
     if (action === 'HEARTBEAT') {
@@ -118,7 +164,8 @@ export async function POST(request: Request) {
         lastSeen: Date.now(),
       };
 
-      const pendingCount = Array.from(state.jobs.values()).filter((j) => j.status === 'PENDING').length;
+      saveSharedState(state);
+      const pendingCount = state.jobs.filter((j) => j.status === 'PENDING').length;
       return NextResponse.json({ success: true, pendingJobsCount: pendingCount });
     }
 
@@ -129,22 +176,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Unauthorized gateway secret' }, { status: 401 });
       }
 
-      // Mark gateway alive
       if (state.gateway) {
         state.gateway.lastSeen = Date.now();
       }
 
       // Find oldest pending job
-      let nextJob: DscJob | null = null;
-      for (const job of state.jobs.values()) {
-        if (job.status === 'PENDING') {
-          nextJob = job;
-          break;
-        }
-      }
+      const nextJob = state.jobs.find((j) => j.status === 'PENDING');
 
       if (nextJob) {
         nextJob.status = 'IN_PROGRESS';
+        saveSharedState(state);
         return NextResponse.json({
           success: true,
           job: {
@@ -156,6 +197,7 @@ export async function POST(request: Request) {
         });
       }
 
+      saveSharedState(state);
       return NextResponse.json({ success: true, job: null });
     }
 
@@ -170,7 +212,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Missing jobId or signedPdfBase64' }, { status: 400 });
       }
 
-      const job = state.jobs.get(jobId);
+      const job = state.jobs.find((j) => j.jobId === jobId);
       const signedBuffer = Buffer.from(signedPdfBase64, 'base64');
       const fileName = `signed_dsc_${job?.isTest ? 'test_' : ''}${Date.now()}.pdf`;
 
@@ -212,7 +254,7 @@ export async function POST(request: Request) {
         job.completedAt = Date.now();
       }
 
-      // 4. If this is the test invoice, update test state
+      // 4. Update test invoice state (persistent on disk!)
       if (job?.isTest || jobId.startsWith('test_')) {
         state.testInvoice = {
           signedPdfUrl: signedUrl,
@@ -222,7 +264,7 @@ export async function POST(request: Request) {
         };
       }
 
-      // 5. If this is a real invoice record, update prisma
+      // 5. Update real invoice record if present
       if (job?.invoiceId) {
         try {
           await (prisma as any).invoiceRecord.update({
@@ -239,6 +281,8 @@ export async function POST(request: Request) {
         }
       }
 
+      saveSharedState(state);
+
       return NextResponse.json({
         success: true,
         message: 'Signed PDF successfully received and saved!',
@@ -253,14 +297,14 @@ export async function POST(request: Request) {
       const isOnline = Boolean(
         state.gateway &&
         state.gateway.status === 'ONLINE' &&
-        now - lastSeen < 8000
+        now - lastSeen < 12000
       );
 
       if (!isOnline) {
         return NextResponse.json(
           {
             error:
-              'Mercado DSC Gateway is offline. Please start the gateway script on the Mercado laptop with the USB key plugged in.',
+              'Mercado DSC Gateway is offline. Please ensure the USB token is plugged into the Mercado PC and setup-autostart-on-boot.bat was run.',
           },
           { status: 400 }
         );
@@ -285,7 +329,7 @@ export async function POST(request: Request) {
       }
 
       const jobId = `test_${Date.now()}`;
-      state.jobs.set(jobId, {
+      state.jobs.push({
         jobId,
         companyName: 'Fake Client (Agarwal Complex) - Test DSC',
         isTest: true,
@@ -293,6 +337,8 @@ export async function POST(request: Request) {
         status: 'PENDING',
         createdAt: Date.now(),
       });
+
+      saveSharedState(state);
 
       return NextResponse.json({
         success: true,
@@ -308,16 +354,25 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Missing jobId' }, { status: 400 });
       }
 
-      const job = state.jobs.get(jobId);
+      const job = state.jobs.find((j) => j.jobId === jobId);
       if (!job) {
+        // Check if test invoice already finished
+        if (state.testInvoice?.signedPdfUrl) {
+          return NextResponse.json({
+            success: true,
+            status: 'COMPLETED',
+            signedPdfUrl: state.testInvoice.signedPdfUrl,
+            signerName: state.testInvoice.signerName,
+          });
+        }
         return NextResponse.json({ error: 'Job not found' }, { status: 404 });
       }
 
       return NextResponse.json({
         success: true,
         status: job.status,
-        signedPdfUrl: job.signedPdfUrl,
-        signerName: job.signerName,
+        signedPdfUrl: job.signedPdfUrl || state.testInvoice?.signedPdfUrl,
+        signerName: job.signerName || state.testInvoice?.signerName,
         completedAt: job.completedAt,
         error: job.error,
       });
@@ -331,6 +386,7 @@ export async function POST(request: Request) {
         signedAt: null,
         signerName: null,
       };
+      saveSharedState(state);
       return NextResponse.json({ success: true, message: 'Test invoice reset to unsigned' });
     }
 
