@@ -52,6 +52,7 @@ import { useAuth } from '@/context/AuthContext';
 import { InvoicePaymentManagement } from '@/components/admin/invoice-payment-management';
 import { SdrReceiveManagement } from '@/components/admin/sdr-receive-management';
 import { SuspenseManagement } from '@/components/admin/suspense-management';
+import DscTestSandbox from '@/components/admin/dsc-test-sandbox';
 import {
   getBillingMonthInfo,
   calculateInclusiveDays,
@@ -253,7 +254,7 @@ export default function AdminInvoicesWorkflowPage() {
     }
   }, [canAccessCM, canAccessAccountant, userRoleView]);
 
-  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES' | 'SDR_MANAGEMENT' | 'SUSPENSE'>('ACTIVE_WORKFLOW');
+  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES' | 'SDR_MANAGEMENT' | 'SUSPENSE' | 'DSC_TEST'>('ACTIVE_WORKFLOW');
   const [pendingSuspenseCount, setPendingSuspenseCount] = useState(0);
 
   // Fetch pending suspense count for navigation badge
@@ -268,9 +269,9 @@ export default function AdminInvoicesWorkflowPage() {
       .catch(() => {});
   }, [activeSection]);
 
-  // Ensure Payment Receive Management and SDR Receive Management are strictly NOT accessible for CM (SUSPENSE is accessible to both)
+  // Ensure Payment Receive Management and SDR Receive Management are strictly NOT accessible for CM (SUSPENSE and DSC_TEST are accessible to all)
   useEffect(() => {
-    if ((!canAccessAccountant || userRoleView === 'CM') && activeSection !== 'ACTIVE_WORKFLOW' && activeSection !== 'SUSPENSE') {
+    if ((!canAccessAccountant || userRoleView === 'CM') && activeSection !== 'ACTIVE_WORKFLOW' && activeSection !== 'SUSPENSE' && activeSection !== 'DSC_TEST') {
       setActiveSection('ACTIVE_WORKFLOW');
     }
   }, [canAccessAccountant, userRoleView, activeSection]);
@@ -2524,6 +2525,20 @@ export default function AdminInvoicesWorkflowPage() {
                 </span>
               )}
             </button>
+
+            {/* TEST Remote DSC Signing Sandbox Button */}
+            <button
+              type="button"
+              onClick={() => setActiveSection('DSC_TEST')}
+              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${activeSection === 'DSC_TEST'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-amber-900 bg-amber-50/80 border border-amber-300 hover:bg-amber-100'
+                }`}
+              title="Open DSC Remote Digital Signature Sandbox"
+            >
+              <Sparkles size={15} className={activeSection === 'DSC_TEST' ? 'text-amber-200' : 'text-amber-600'} />
+              <span>TEST</span>
+            </button>
           </div>
 
           {canAccessCM && canAccessAccountant && (
@@ -2553,8 +2568,14 @@ export default function AdminInvoicesWorkflowPage() {
         </div>
       </FadeUp>
 
-      {/* ── RENDER SUSPENSE, SDR MANAGEMENT, INVOICE PAYMENT MANAGEMENT OR ACTIVE INVOICE WORKFLOW ── */}
-      {activeSection === 'SUSPENSE' ? (
+      {/* ── RENDER SUSPENSE, SDR MANAGEMENT, INVOICE PAYMENT MANAGEMENT, TEST SANDBOX OR ACTIVE INVOICE WORKFLOW ── */}
+      {activeSection === 'DSC_TEST' ? (
+        <DscTestSandbox
+          onBack={() => setActiveSection('ACTIVE_WORKFLOW')}
+          userRole={userRoleView}
+          userEmail={userEmail}
+        />
+      ) : activeSection === 'SUSPENSE' ? (
         <SuspenseManagement
           isSuperAdmin={isAdmin}
           userRoleView={userRoleView}
