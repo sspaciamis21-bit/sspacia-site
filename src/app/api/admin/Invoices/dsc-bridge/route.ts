@@ -276,6 +276,15 @@ export async function POST(request: Request) {
               signedByName: signerName || 'PRAVEEN DILIPKUMAR AGARWAL',
             },
           });
+
+          // Also replace the attached invoice PDF with the signed PDF
+          await (prisma as any).attachedInvoice.updateMany({
+            where: { invoiceRecordId: job.invoiceId },
+            data: {
+              fileUrl: signedUrl,
+              fileName: fileName,
+            },
+          });
         } catch (invErr) {
           console.error('[DSC Bridge] Invoice record update error:', invErr);
         }
@@ -287,6 +296,101 @@ export async function POST(request: Request) {
         success: true,
         message: 'Signed PDF successfully received and saved!',
         signedPdfUrl: signedUrl,
+      });
+    }
+
+    // ── 4. WEB CLIENT QUEUES REAL INVOICE FOR SIGNING ──────────────────────
+    if (action === 'QUEUE_INVOICE') {
+      const { invoiceId } = body;
+      if (!invoiceId) {
+        return NextResponse.json({ error: 'Missing invoiceId' }, { status: 400 });
+      }
+
+      const now = Date.now();
+      const lastSeen = state.gateway?.lastSeen || 0;
+      const isOnline = Boolean(
+        state.gateway &&
+        state.gateway.status === 'ONLINE' &&
+        now - lastSeen < 12000
+      );
+
+      if (!isOnline) {
+        return NextResponse.json(
+          {
+            error: 'Please ask the CM of Mercado to insert the USB key, then try again.',
+            gatewayStatus: state.gateway?.status || 'OFFLINE',
+          },
+          { status: 400 }
+        );
+      }
+
+      // Fetch invoice record and attached PDF
+      const invoice = await (prisma as any).invoiceRecord.findUnique({
+        where: { id: Number(invoiceId) },
+        include: { attachedInvoice: true },
+      });
+
+      if (!invoice) {
+        return NextResponse.json({ error: 'Invoice record not found' }, { status: 404 });
+      }
+
+      const pdfUrl = invoice.attachedInvoice?.fileUrl;
+      if (!pdfUrl) {
+        return NextResponse.json({ error: 'No accountant invoice PDF attached for this record.' }, { status: 400 });
+      }
+
+      // Load PDF Buffer (from DB storedDocument, HTTP URL, or local disk)
+      let pdfBuffer: Buffer | null = null;
+      if (pdfUrl.includes('/api/admin/stored-documents/')) {
+        const match = pdfUrl.match(/\/api\/admin\/stored-documents\/(\d+)/);
+        if (match && match[1]) {
+          const doc = await (prisma as any).storedDocument.findUnique({
+            where: { id: Number(match[1]) },
+            select: { fileData: true },
+          });
+          if (doc?.fileData) pdfBuffer = Buffer.from(doc.fileData);
+        }
+      }
+
+      if (!pdfBuffer) {
+        if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) {
+          const res = await fetch(pdfUrl);
+          if (res.ok) pdfBuffer = Buffer.from(await res.arrayBuffer());
+        } else {
+          const localPath = path.join(process.cwd(), 'public', pdfUrl.startsWith('/') ? pdfUrl.slice(1) : pdfUrl);
+          if (fs.existsSync(localPath)) {
+            pdfBuffer = fs.readFileSync(localPath);
+          } else {
+            const doc = await (prisma as any).storedDocument.findFirst({
+              where: { fileName: invoice.attachedInvoice?.fileName || '' },
+              select: { fileData: true },
+            });
+            if (doc?.fileData) pdfBuffer = Buffer.from(doc.fileData);
+          }
+        }
+      }
+
+      if (!pdfBuffer) {
+        return NextResponse.json({ error: `Could not load invoice PDF to sign: ${pdfUrl}` }, { status: 404 });
+      }
+
+      const jobId = `inv_${invoice.id}_${Date.now()}`;
+      state.jobs.push({
+        jobId,
+        invoiceId: invoice.id,
+        companyName: invoice.companyName,
+        isTest: false,
+        pdfBase64: pdfBuffer.toString('base64'),
+        status: 'PENDING',
+        createdAt: Date.now(),
+      });
+
+      saveSharedState(state);
+
+      return NextResponse.json({
+        success: true,
+        message: `Invoice for ${invoice.companyName} queued for USB DSC signing!`,
+        jobId,
       });
     }
 

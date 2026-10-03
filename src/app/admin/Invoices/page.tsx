@@ -52,7 +52,6 @@ import { useAuth } from '@/context/AuthContext';
 import { InvoicePaymentManagement } from '@/components/admin/invoice-payment-management';
 import { SdrReceiveManagement } from '@/components/admin/sdr-receive-management';
 import { SuspenseManagement } from '@/components/admin/suspense-management';
-import DscTestSandbox from '@/components/admin/dsc-test-sandbox';
 import {
   getBillingMonthInfo,
   calculateInclusiveDays,
@@ -254,7 +253,7 @@ export default function AdminInvoicesWorkflowPage() {
     }
   }, [canAccessCM, canAccessAccountant, userRoleView]);
 
-  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES' | 'SDR_MANAGEMENT' | 'SUSPENSE' | 'DSC_TEST'>('ACTIVE_WORKFLOW');
+  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES' | 'SDR_MANAGEMENT' | 'SUSPENSE'>('ACTIVE_WORKFLOW');
   const [pendingSuspenseCount, setPendingSuspenseCount] = useState(0);
 
   // Fetch pending suspense count for navigation badge
@@ -269,12 +268,55 @@ export default function AdminInvoicesWorkflowPage() {
       .catch(() => {});
   }, [activeSection]);
 
-  // Ensure Payment Receive Management and SDR Receive Management are strictly NOT accessible for CM (SUSPENSE and DSC_TEST are accessible to all)
+  // Ensure Payment Receive Management and SDR Receive Management are strictly NOT accessible for CM
   useEffect(() => {
-    if ((!canAccessAccountant || userRoleView === 'CM') && activeSection !== 'ACTIVE_WORKFLOW' && activeSection !== 'SUSPENSE' && activeSection !== 'DSC_TEST') {
+    if ((!canAccessAccountant || userRoleView === 'CM') && activeSection !== 'ACTIVE_WORKFLOW' && activeSection !== 'SUSPENSE') {
       setActiveSection('ACTIVE_WORKFLOW');
     }
   }, [canAccessAccountant, userRoleView, activeSection]);
+
+  // Mercado USB DSC Gateway Status & Operations
+  const [dscStatus, setDscStatus] = useState<{ isOnline: boolean; tokenLabel: string | null; lastSeen: number }>({
+    isOnline: false,
+    tokenLabel: null,
+    lastSeen: 0,
+  });
+  const [signingInvoiceId, setSigningInvoiceId] = useState<number | null>(null);
+  const [bulkSigningDsc, setBulkSigningDsc] = useState(false);
+  const [bulkSigningProgress, setBulkSigningProgress] = useState({ current: 0, total: 0 });
+  const [showDscOfflineModal, setShowDscOfflineModal] = useState(false);
+
+  // Poll DSC Bridge Gateway status every 6 seconds
+  useEffect(() => {
+    let isMounted = true;
+    const checkDscGateway = async () => {
+      try {
+        const res = await fetch('/api/admin/Invoices/dsc-bridge', { cache: 'no-store' });
+        const data = await res.json();
+        if (isMounted && data.success) {
+          const isOnline = Boolean(
+            data.gateway &&
+            data.gateway.status === 'ONLINE' &&
+            Date.now() - (data.gateway.lastSeen || 0) < 12000
+          );
+          setDscStatus({
+            isOnline,
+            tokenLabel: data.gateway?.tokenLabel || null,
+            lastSeen: data.gateway?.lastSeen || 0,
+          });
+        }
+      } catch {
+        if (isMounted) setDscStatus((prev) => ({ ...prev, isOnline: false }));
+      }
+    };
+
+    checkDscGateway();
+    const interval = setInterval(checkDscGateway, 6000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -555,6 +597,141 @@ export default function AdminInvoicesWorkflowPage() {
       toast.error('Failed to load client contact details');
     } finally {
       setLoadingEmailPreview(false);
+    }
+  };
+
+  // Remote DSC Signing Handlers (Mercado CM Hardware Token)
+  const handleApplySingleDsc = async (invoiceId: number) => {
+    if (!dscStatus.isOnline) {
+      setShowDscOfflineModal(true);
+      return;
+    }
+
+    setSigningInvoiceId(invoiceId);
+    try {
+      const queueRes = await fetch('/api/admin/Invoices/dsc-bridge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'QUEUE_INVOICE', invoiceId }),
+      });
+      const queueData = await queueRes.json();
+      if (!queueRes.ok || !queueData.success) {
+        if (queueData.error?.includes('insert the USB key') || !dscStatus.isOnline) {
+          setShowDscOfflineModal(true);
+        } else {
+          toast.error(queueData.error || 'Failed to queue invoice for digital signature');
+        }
+        setSigningInvoiceId(null);
+        return;
+      }
+
+      const jobId = queueData.jobId;
+      toast.info('Invoice queued for USB DSC Token. Awaiting hardware signature...');
+
+      let attempts = 0;
+      const pollTimer = setInterval(async () => {
+        attempts++;
+        try {
+          const stRes = await fetch('/api/admin/Invoices/dsc-bridge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'JOB_STATUS', jobId }),
+          });
+          const stData = await stRes.json();
+          if (stData.status === 'COMPLETED' || stData.signedPdfUrl) {
+            clearInterval(pollTimer);
+            setSigningInvoiceId(null);
+            toast.success('Invoice digitally signed successfully with USB Token!');
+            fetchData();
+          } else if (stData.status === 'FAILED') {
+            clearInterval(pollTimer);
+            setSigningInvoiceId(null);
+            toast.error(stData.error || 'DSC Signing failed on hardware token.');
+          } else if (attempts > 30) {
+            clearInterval(pollTimer);
+            setSigningInvoiceId(null);
+            toast.error('Signing timed out. Please verify the USB key on Mercado CM PC.');
+          }
+        } catch {
+          if (attempts > 30) {
+            clearInterval(pollTimer);
+            setSigningInvoiceId(null);
+          }
+        }
+      }, 2000);
+    } catch (err: any) {
+      setSigningInvoiceId(null);
+      toast.error(err?.message || 'Error communicating with DSC Bridge');
+    }
+  };
+
+  const handleBulkApplyDsc = async () => {
+    if (!dscStatus.isOnline) {
+      setShowDscOfflineModal(true);
+      return;
+    }
+
+    const pendingInvoices = filteredInvoices.filter(
+      (inv) => inv.isDigitalSignRequired && inv.status === 'INVOICE_ATTACHED' && !inv.digitallySignedPdfUrl
+    );
+
+    if (pendingInvoices.length === 0) {
+      toast.info('No pending invoices requiring DSC found in current view.');
+      return;
+    }
+
+    setBulkSigningDsc(true);
+    setBulkSigningProgress({ current: 0, total: pendingInvoices.length });
+
+    let successCount = 0;
+    for (let i = 0; i < pendingInvoices.length; i++) {
+      const inv = pendingInvoices[i];
+      setBulkSigningProgress({ current: i + 1, total: pendingInvoices.length });
+      try {
+        const queueRes = await fetch('/api/admin/Invoices/dsc-bridge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'QUEUE_INVOICE', invoiceId: inv.id }),
+        });
+        const queueData = await queueRes.json();
+        if (!queueData.success) {
+          if (queueData.error?.includes('insert the USB key')) {
+            setShowDscOfflineModal(true);
+            break;
+          }
+          continue;
+        }
+
+        const jobId = queueData.jobId;
+        let done = false;
+        let attempts = 0;
+        while (!done && attempts < 25) {
+          await new Promise((r) => setTimeout(r, 1500));
+          attempts++;
+          const stRes = await fetch('/api/admin/Invoices/dsc-bridge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'JOB_STATUS', jobId }),
+          });
+          const stData = await stRes.json();
+          if (stData.status === 'COMPLETED' || stData.signedPdfUrl) {
+            done = true;
+            successCount++;
+          } else if (stData.status === 'FAILED') {
+            done = true;
+          }
+        }
+      } catch (e) {
+        console.error('Bulk sign invoice error:', e);
+      }
+    }
+
+    setBulkSigningDsc(false);
+    fetchData();
+    if (successCount > 0) {
+      toast.success(`Successfully signed ${successCount} invoices with USB DSC!`);
+    } else {
+      toast.error('Could not complete bulk DSC signing. Check USB key connection.');
     }
   };
 
@@ -2380,6 +2557,13 @@ export default function AdminInvoicesWorkflowPage() {
     });
   }, [invoices, searchTerm, userRoleView, accountantArrivalFilter, selectedStatusFilter, selectedCompanyFilter, selectedCycleFilter, selectedDueDayFilter, selectedBillingMonthFilter]);
 
+  // Count of invoices requiring Remote DSC in current filtered view that are attached but not yet signed
+  const pendingDscInvoicesCount = useMemo(() => {
+    return filteredInvoices.filter(
+      (inv) => inv.isDigitalSignRequired && inv.status === 'INVOICE_ATTACHED' && !inv.digitallySignedPdfUrl
+    ).length;
+  }, [filteredInvoices]);
+
   const groupedInvoicesByCompany = useMemo(() => {
     const map = new Map<string, InvoiceRecord[]>();
     for (const inv of filteredInvoices) {
@@ -2526,20 +2710,25 @@ export default function AdminInvoicesWorkflowPage() {
               )}
             </button>
 
-            {/* TEST Remote DSC Signing Sandbox Button */}
-            <button
-              type="button"
-              onClick={() => setActiveSection('DSC_TEST')}
-              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${activeSection === 'DSC_TEST'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-amber-900 bg-amber-50/80 border border-amber-300 hover:bg-amber-100'
+              {/* Live Mercado USB DSC Gateway Status Pill */}
+              <div
+                className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 border rounded-xs ${
+                  dscStatus.isOnline
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                    : 'bg-neutral-100 text-neutral-600 border-neutral-300'
                 }`}
-              title="Open DSC Remote Digital Signature Sandbox"
-            >
-              <Sparkles size={15} className={activeSection === 'DSC_TEST' ? 'text-amber-200' : 'text-amber-600'} />
-              <span>TEST</span>
-            </button>
-          </div>
+                title={
+                  dscStatus.isOnline
+                    ? `Mercado DSC Gateway Online (${dscStatus.tokenLabel || 'USB Token Ready'})`
+                    : 'Mercado DSC Gateway Offline (Token unplugged or PC sleeping)'
+                }
+              >
+                <span className={`w-2 h-2 rounded-full shrink-0 ${dscStatus.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'}`} />
+                <span className="text-[10px] uppercase tracking-wider font-extrabold">
+                  DSC: {dscStatus.isOnline ? 'Connected' : 'Offline'}
+                </span>
+              </div>
+            </div>
 
           {canAccessCM && canAccessAccountant && (
             <div className="flex items-center bg-[#F8F9FA] border border-[var(--outline-variant)] p-1 text-xs font-bold">
@@ -2568,14 +2757,8 @@ export default function AdminInvoicesWorkflowPage() {
         </div>
       </FadeUp>
 
-      {/* ── RENDER SUSPENSE, SDR MANAGEMENT, INVOICE PAYMENT MANAGEMENT, TEST SANDBOX OR ACTIVE INVOICE WORKFLOW ── */}
-      {activeSection === 'DSC_TEST' ? (
-        <DscTestSandbox
-          onBack={() => setActiveSection('ACTIVE_WORKFLOW')}
-          userRole={userRoleView}
-          userEmail={userEmail}
-        />
-      ) : activeSection === 'SUSPENSE' ? (
+      {/* ── RENDER SUSPENSE, SDR MANAGEMENT, INVOICE PAYMENT MANAGEMENT OR ACTIVE INVOICE WORKFLOW ── */}
+      {activeSection === 'SUSPENSE' ? (
         <SuspenseManagement
           isSuperAdmin={isAdmin}
           userRoleView={userRoleView}
@@ -2960,6 +3143,29 @@ export default function AdminInvoicesWorkflowPage() {
                         title="Reset all active filters"
                       >
                         Clear Filters
+                      </button>
+                    )}
+
+                    {/* Bulk Apply DSC Button (Visible for CM and Admin when pending DSC invoices exist) */}
+                    {(userRoleView === 'CM' || isAdmin) && pendingDscInvoicesCount > 0 && (
+                      <button
+                        type="button"
+                        disabled={bulkSigningDsc}
+                        onClick={handleBulkApplyDsc}
+                        className="px-3 py-1.5 bg-[#006064] text-white hover:bg-[#004d40] text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
+                        title="Bulk Apply Remote DSC for all attached invoices requiring digital signature"
+                      >
+                        {bulkSigningDsc ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin" />
+                            <span>Signing DSC ({bulkSigningProgress.current}/{bulkSigningProgress.total})...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Shield size={13} className="text-cyan-200" />
+                            <span>✍️ Bulk Apply DSC ({pendingDscInvoicesCount})</span>
+                          </>
+                        )}
                       </button>
                     )}
 
@@ -3361,15 +3567,78 @@ export default function AdminInvoicesWorkflowPage() {
                                     </button>
                                   ) : null}
 
-                                  {invoice.digitallySignedPdfUrl && (
-                                    <a
-                                      href={invoice.digitallySignedPdfUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="px-3 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 w-full justify-center shadow-xs"
-                                    >
-                                      <Download size={11} /> Signed PDF
-                                    </a>
+                                  {invoice.isDigitalSignRequired && (
+                                    <>
+                                      {invoice.digitallySignedPdfUrl ? (
+                                        <div className="flex flex-col gap-1 w-full">
+                                          <div className="flex items-center gap-1">
+                                            <a
+                                              href={invoice.digitallySignedPdfUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="flex-1 px-2 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-[9.5px] uppercase tracking-wider hover:bg-emerald-100 flex items-center justify-center gap-1 shadow-2xs"
+                                              title="View Digitally Signed PDF in new tab"
+                                            >
+                                              <Eye size={10} /> View Signed
+                                            </a>
+                                            <a
+                                              href={invoice.digitallySignedPdfUrl}
+                                              download={invoice.digitallySignedPdfName || `Signed_Invoice_${invoice.companyName}.pdf`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="px-2 py-1 bg-emerald-700 text-white font-bold text-[9.5px] uppercase tracking-wider hover:bg-emerald-800 flex items-center justify-center gap-1 shadow-2xs"
+                                              title="Download Digitally Signed PDF"
+                                            >
+                                              <Download size={10} /> Download
+                                            </a>
+                                          </div>
+                                          <div className="text-[9px] text-emerald-700 font-medium text-center">
+                                            ✓ DSC Applied (USB Token)
+                                          </div>
+                                        </div>
+                                      ) : invoice.status === 'INVOICE_ATTACHED' ? (
+                                        <button
+                                          type="button"
+                                          disabled={signingInvoiceId === invoice.id || bulkSigningDsc}
+                                          onClick={() => handleApplySingleDsc(invoice.id)}
+                                          className="px-2.5 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
+                                          title="Apply Remote Digital Signature via Mercado USB Key"
+                                        >
+                                          {signingInvoiceId === invoice.id ? (
+                                            <>
+                                              <Loader2 size={11} className="animate-spin" /> Signing...
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Shield size={11} /> ✍️ Apply Digital Sign
+                                            </>
+                                          )}
+                                        </button>
+                                      ) : null}
+                                    </>
+                                  )}
+                                  {!invoice.isDigitalSignRequired && invoice.digitallySignedPdfUrl && (
+                                    <div className="flex items-center gap-1 w-full">
+                                      <a
+                                        href={invoice.digitallySignedPdfUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex-1 px-2 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-[9.5px] uppercase tracking-wider hover:bg-emerald-100 flex items-center justify-center gap-1 shadow-2xs"
+                                        title="View Digitally Signed PDF"
+                                      >
+                                        <Eye size={10} /> View Signed
+                                      </a>
+                                      <a
+                                        href={invoice.digitallySignedPdfUrl}
+                                        download={invoice.digitallySignedPdfName || `Signed_Invoice_${invoice.companyName}.pdf`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-2 py-1 bg-emerald-700 text-white font-bold text-[9.5px] uppercase tracking-wider hover:bg-emerald-800 flex items-center justify-center gap-1 shadow-2xs"
+                                        title="Download Signed PDF"
+                                      >
+                                        <Download size={10} /> Download
+                                      </a>
+                                    </div>
                                   )}
                                 </>
                               )}
@@ -6748,6 +7017,50 @@ export default function AdminInvoicesWorkflowPage() {
                   </div>
                 )}
 
+
+                {/* DSC TOKEN OFFLINE MODAL */}
+                <AnimatePresence>
+                  {showDscOfflineModal && (
+                    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs">
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="bg-white border-2 border-amber-500 max-w-md w-full p-6 shadow-2xl space-y-4"
+                      >
+                        <div className="flex items-center gap-3 text-amber-700">
+                          <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                            <AlertTriangle size={22} className="text-amber-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-base text-[#1B1C1C] uppercase tracking-wide">
+                              USB Key Disconnected
+                            </h3>
+                            <p className="text-xs text-[#616161]">Digital Signature Hardware Token</p>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-amber-50 border border-amber-200 text-amber-950 text-xs font-semibold leading-relaxed">
+                          Please ask the CM of Mercado to insert the USB key, then try again.
+                        </div>
+
+                        <p className="text-[11px] text-[#616161]">
+                          Once the Watchdata / ProxKey USB token is plugged into the Mercado computer, the system detects it automatically within seconds.
+                        </p>
+
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowDscOfflineModal(false)}
+                            className="px-6 py-2.5 bg-[#006064] hover:bg-[#004d40] text-white text-xs font-bold uppercase tracking-wider shadow-xs cursor-pointer"
+                          >
+                            OK, Got It
+                          </button>
+                        </div>
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
 
               </AnimatePresence>
             </>,

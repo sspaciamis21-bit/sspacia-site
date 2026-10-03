@@ -189,6 +189,7 @@ export async function POST(
         sendType: 'MANUAL',
         sentAt: new Date(),
         status: 'PENDING_CM_REVIEW',
+        isDigitalSignRequired: Boolean(client.isDigitalSignRequired),
         createdById: currentUserId,
       },
     });
@@ -251,6 +252,7 @@ export async function POST(
           sendType: 'MANUAL',
           sentAt: new Date(),
           status: 'PENDING_CM_REVIEW',
+          isDigitalSignRequired: Boolean(client.isDigitalSignRequired),
           createdById: currentUserId,
         },
       });

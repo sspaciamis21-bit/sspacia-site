@@ -181,6 +181,7 @@ interface ClientMasterEntry {
   clientStatus: string | null;
   clientType?: 'DEFAULT' | 'VIRTUAL_OFFICE' | 'ONE_TIME' | null;
   complimentaryJson?: string | null;
+  isDigitalSignRequired?: boolean | null;
   isDispatchedToInvoices?: boolean;
   dispatchedMonths?: string[];
   targetBillingMonth?: string;
@@ -559,6 +560,7 @@ export default function ClientMasterRegistryPage() {
   const [uploadingSdrPdf, setUploadingSdrPdf] = useState(false);
   const [paymentDueDay, setPaymentDueDay] = useState<number | ''>('');
   const [clientStatus, setClientStatus] = useState('Active');
+  const [isDigitalSignRequired, setIsDigitalSignRequired] = useState(false);
 
   // Termination Checklist Modal States
   const [showTerminationModal, setShowTerminationModal] = useState(false);
@@ -1047,6 +1049,7 @@ export default function ClientMasterRegistryPage() {
     setProrateCustomAmount('');
     setPaymentDueDay('');
     setClientStatus('Active');
+    setIsDigitalSignRequired(false);
     setComplimentaryEntitlements(DEFAULT_COMPLIMENTARY_ENTITLEMENTS);
     setApplyEscalationToTotal(true);
     setShowExistingEscalationPrompt(false);
@@ -1220,6 +1223,7 @@ export default function ClientMasterRegistryPage() {
     setSdrPdfName(entry.sdrPdfName || '');
     setPaymentDueDay(entry.paymentDueDay ?? '');
     setClientStatus(entry.clientStatus || 'Active');
+    setIsDigitalSignRequired(Boolean(entry.isDigitalSignRequired));
 
     if (entry.complimentaryJson) {
       try {
@@ -1441,6 +1445,7 @@ export default function ClientMasterRegistryPage() {
             ? (productRows[0]?.paymentDueDay !== '' ? Number(productRows[0]?.paymentDueDay) : (paymentDueDay !== '' ? Number(paymentDueDay) : 5))
             : (paymentDueDay !== '' ? Number(paymentDueDay) : null)),
       clientStatus: isOneTime ? (clientStatus || 'One-Time') : clientStatus,
+      isDigitalSignRequired,
       complimentaryJson: (isOneTime || isVO) ? null : JSON.stringify(complimentaryEntitlements),
     };
 
@@ -2200,6 +2205,11 @@ export default function ClientMasterRegistryPage() {
                             {entry.clientType === 'ONE_TIME' && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap">
                                 <Clock size={10} /> One-Time Client
+                              </span>
+                            )}
+                            {entry.isDigitalSignRequired && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap" title="Remote DSC required for this client's invoices">
+                                <Shield size={10} className="text-blue-600" /> DSC
                               </span>
                             )}
                           </div>
@@ -5448,6 +5458,27 @@ export default function ClientMasterRegistryPage() {
                   </>
                 )}
 
+                {/* STANDALONE CLIENT MASTER SETTING: REQUIRE DIGITAL SIGNATURE (DSC)? */}
+                <div className="p-4 bg-[#F8F9FA] border border-neutral-200 rounded-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <label className="block font-bold uppercase text-[#1B1C1C] text-xs flex items-center gap-1.5">
+                      <Shield size={14} className="text-[#006064]" />
+                      Require Digital Signature (DSC)?
+                    </label>
+                    <p className="text-[11px] text-[#616161]">
+                      Select "Yes" if this client requires a digitally signed invoice via USB token. When invoices arrive from the accountant, CM/Admin can apply the digital signature.
+                    </p>
+                  </div>
+                  <select
+                    value={isDigitalSignRequired ? 'YES' : 'NO'}
+                    onChange={(e) => setIsDigitalSignRequired(e.target.value === 'YES')}
+                    className="bg-white border border-[var(--outline-variant)] px-4 py-2 text-xs font-bold focus:outline-none focus:border-[#006064] min-w-[130px] rounded-xs cursor-pointer shadow-xs"
+                  >
+                    <option value="NO">No</option>
+                    <option value="YES">Yes</option>
+                  </select>
+                </div>
+
                 {/* Submit Buttons Footer */}
                 <div className="pt-6 border-t border-neutral-200 flex items-center justify-end gap-4 shrink-0">
                   <button
@@ -5589,6 +5620,11 @@ export default function ClientMasterRegistryPage() {
                     {entryToViewDetails.clientType === 'ONE_TIME' && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-300 text-xs font-black uppercase tracking-wider rounded-xs">
                         <Clock size={12} /> One-Time Client
+                      </span>
+                    )}
+                    {entryToViewDetails.isDigitalSignRequired && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 text-xs font-black uppercase tracking-wider rounded-xs">
+                        <Shield size={12} className="text-blue-600" /> DSC Required
                       </span>
                     )}
                   </h3>

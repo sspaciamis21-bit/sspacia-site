@@ -18,7 +18,22 @@ set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
 set STARTUP_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 set SHORTCUT_VBS=%STARTUP_DIR%\SSPACIA_DSC_Gateway.vbs
 
-echo Creating background autostart script in:
+echo 1. Checking Python installation...
+python --version >nul 2>&1
+if errorlevel 1 (
+    py --version >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] Python is not installed or not in PATH!
+        echo Please download and install Python 3.10+ from python.org and check "Add to PATH".
+        pause
+        exit /b 1
+    )
+)
+
+echo 2. Installing required signing libraries (pyhanko, python-pkcs11, requests, tzlocal)...
+pip install pyhanko python-pkcs11 requests tzlocal cryptography >nul 2>&1
+
+echo 3. Creating background autostart script in:
 echo "%STARTUP_DIR%"
 echo.
 

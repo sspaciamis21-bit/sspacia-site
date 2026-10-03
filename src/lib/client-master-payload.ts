@@ -53,6 +53,7 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     clientType = 'DEFAULT',
     contactPersons = [],
     complimentaryJson,
+    isDigitalSignRequired = false,
   } = body;
 
   const resolvedSdrAmount = sdrAmount !== undefined && sdrAmount !== null && sdrAmount !== ''
@@ -187,6 +188,7 @@ export function mapClientMasterPayload(body: Record<string, unknown>) {
     paymentDueDay: isOneTime ? null : (paymentDueDay ? Number(paymentDueDay) : null),
     clientStatus: clientStatus ? String(clientStatus) : (isOneTime ? 'One-Time' : 'Active'),
     clientType: clientType === 'VIRTUAL_OFFICE' ? 'VIRTUAL_OFFICE' : (clientType === 'ONE_TIME' ? 'ONE_TIME' : 'DEFAULT'),
+    isDigitalSignRequired: Boolean(isDigitalSignRequired),
     complimentaryJson: (isOneTime || isVirtualOffice)
       ? null
       : (complimentaryJson ? (typeof complimentaryJson === 'string' ? complimentaryJson : JSON.stringify(complimentaryJson)) : null),
