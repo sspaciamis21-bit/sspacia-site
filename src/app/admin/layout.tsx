@@ -81,19 +81,32 @@ export default function AdminLayout({
     user?.role?.toUpperCase() === 'ACCOUNTANT' ||
     user?.name?.toLowerCase() === 'accounts';
 
+  const isHr =
+    user?.email?.toLowerCase() === 'hr.ssinfrazone@gmail.com' ||
+    user?.role?.toUpperCase() === 'HR' ||
+    user?.name?.toLowerCase() === 'human resource';
+
+  const isAdmin = isRole('ADMIN') || user?.role?.toUpperCase() === 'ADMIN' || user?.role?.toUpperCase() === 'SUPER_ADMIN';
+
+  const isAllowedToAdmin =
+    isAdmin ||
+    isAccountant ||
+    (isHr && pathname?.startsWith('/admin/expenses'));
+
   useEffect(() => {
     if (!isLoading) {
       if (!user) {
         router.push('/login');
-      } else if (isRole('HR')) {
-        router.push('/hr');
-      } else if (!isRole('ADMIN')) {
+      } else if (isHr) {
+        if (!pathname?.startsWith('/admin/expenses')) {
+          router.push('/hr');
+        }
+      } else if (!isAdmin && !isAccountant) {
         toast.error('Unauthorized access');
         router.push('/');
       }
-
     }
-  }, [user, isLoading, router, isRole]);
+  }, [user, isLoading, router, isAdmin, isAccountant, isHr, pathname]);
 
   // Auto-shrink sidebar on data-heavy pages (Client Master, Invoices, Expenses, Vendor Master, Occupancy CAD) to maximize screen width
   useEffect(() => {
@@ -120,7 +133,7 @@ export default function AdminLayout({
     }
   };
 
-  if (isLoading || !user || !isRole('ADMIN')) {
+  if (isLoading || !user || !isAllowedToAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
         <Loader2 className="h-8 w-8 text-[#006064] animate-spin" />
@@ -192,7 +205,18 @@ export default function AdminLayout({
         </div>
 
         <nav className="flex-1 px-3 md:px-4 py-4 md:py-8 space-y-1.5 overflow-y-auto admin-nav-scrollbar pr-1.5 md:pr-2">
-          {sidebarItems.map((item) => {
+          {sidebarItems
+            .filter((item) => {
+              if (isAdmin) return true;
+              if (isHr) {
+                return item.href === '/admin/expenses' || item.href === '/hr';
+              }
+              if (isAccountant) {
+                return ['/admin/Invoices', '/admin/expenses', '/admin/vendor-master', '/admin/client-master'].includes(item.href);
+              }
+              return true;
+            })
+            .map((item) => {
             const isActive = pathname === item.href || (item.href !== '/admin/dashboard' && pathname?.startsWith(item.href + '/'));
             return (
               <Link

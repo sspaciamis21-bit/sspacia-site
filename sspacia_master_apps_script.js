@@ -1121,58 +1121,92 @@ function handleInvoiceWorkflowFms(payload) {
       return (Number(a.id) || 0) - (Number(b.id) || 0);
     });
 
-    var lastExistingRow = sheet.getLastRow();
-    if (lastExistingRow >= 7) {
-      var clearCount = lastExistingRow - 6;
-      // Clear ONLY script-managed columns: Cols A-D, Col F, Col J, Col N, Col Q
-      // Leaving user formula columns E, G, H, I, K, L, M, O, P 100% UNTOUCHED!
-      sheet.getRange(7, 1, clearCount, 4).clearContent();  // A to D
-      sheet.getRange(7, 6, clearCount, 1).clearContent();  // F
-      sheet.getRange(7, 10, clearCount, 1).clearContent(); // J
-      sheet.getRange(7, 14, clearCount, 1).clearContent(); // N
-      sheet.getRange(7, 17, clearCount, 1).clearContent(); // Q
+    var totalRows = items.length;
+    var lastExistingRow = Math.max(sheet.getLastRow(), 6 + totalRows);
+
+    // Read existing Col E (Step 1 Planned) and Col F (Step 1 Actual) so custom/live timestamps are preserved
+    var existingE = [];
+    var existingF = [];
+    if (sheet.getLastRow() >= 7) {
+      var readCount = Math.min(sheet.getLastRow() - 6, totalRows);
+      existingE = sheet.getRange(7, 5, readCount, 1).getValues();
+      existingF = sheet.getRange(7, 6, readCount, 1).getValues();
+    }
+
+    // Completely wipe all phantom/orphan rows beyond active records (from 7 + totalRows to 100 rows past)
+    var phantomRowCount = Math.max(lastExistingRow - (6 + totalRows), 100);
+    if (phantomRowCount > 0) {
+      sheet.getRange(7 + totalRows, 1, phantomRowCount, 17).clearContent().clearFormat();
     }
 
     var dataSetRows = [];
+    var plannedStep1Rows = [];
     var step1Actuals = [];
+    var step1StatusFormulas = [];
+    var step1TimeDelayFormulas = [];
+    var step2PlannedFormulas = [];
     var step2Actuals = [];
+    var step2StatusFormulas = [];
+    var step2TimeDelayFormulas = [];
+    var step3PlannedFormulas = [];
     var step3Actuals = [];
+    var step3StatusFormulas = [];
+    var step3TimeDelayFormulas = [];
     var emailStatuses = [];
 
-    for (var i = 0; i < items.length; i++) {
+    for (var i = 0; i < totalRows; i++) {
       var it = items[i];
+      var r = 7 + i;
       var center = it.centerName || "Mercado";
       var month = it.invoiceMonth || "";
       var company = it.companyName || "";
 
-      // Log Timestamp: exact timestamp invoice entry arrived / created
-      var logTs = it.logTimestamp || it.createdAt || it.step1Planned || "";
+      // Col D: Log Timestamp (exact timestamp invoice entry arrived / created)
+      var logTs = it.logTimestamp || it.createdAt || "";
       var logDate = logTs ? parseTimestampToDate(logTs) : "";
 
-      // Step 1 Actual: when CM sent to accountant
-      var s1Act = it.step1Actual ? parseTimestampToDate(it.step1Actual) : "";
+      // Col E: Step 1 Planned (Preserve existing if present, otherwise set planned timestamp)
+      var customE = (existingE[i] && existingE[i][0]) ? existingE[i][0] : "";
+      var plan1 = customE ? customE : (it.step1Planned ? parseTimestampToDate(it.step1Planned) : logDate);
 
-      // Step 2 Actual: when accountant attached PDF
+      // Col F: Step 1 Actual (when CM sent to accountant)
+      var customF = (existingF[i] && existingF[i][0]) ? existingF[i][0] : "";
+      var s1Act = "";
+      if (it.status === "PENDING_CM_REVIEW") {
+        s1Act = ""; // Not sent to accountant yet
+      } else if (customF && String(customF) !== String(logDate) && String(customF).trim() !== "") {
+        s1Act = customF;
+      } else if (it.step1Actual && String(it.step1Actual) !== String(logTs)) {
+        s1Act = parseTimestampToDate(it.step1Actual);
+      } else if (customF) {
+        s1Act = customF;
+      } else if (it.step1Actual) {
+        s1Act = parseTimestampToDate(it.step1Actual);
+      }
+
+      // Col J: Step 2 Actual (when accountant attached PDF)
       var s2Act = it.step2Actual ? parseTimestampToDate(it.step2Actual) : "";
 
-      // Step 3 Actual: when CM approved or rejected PDF
+      // Col N: Step 3 Actual (when CM approved or rejected PDF)
       var s3Act = it.step3Actual ? parseTimestampToDate(it.step3Actual) : "";
 
       // Col Q: Website Auto send Email to Client ("Sent" or "Pending")
       var emailSt = (it.emailStatus === "Sent" || it.clientEmailSentAt) ? "Sent" : "Pending";
 
       dataSetRows.push([center, month, company, logDate]);
+      plannedStep1Rows.push([plan1]);
       step1Actuals.push([s1Act]);
+      step1StatusFormulas.push(['=IF(F' + r + '<>"","Done",IF(E' + r + '="","",IF(NOW()>E' + r + ',"Overdue","Pending")))']);
+      step1TimeDelayFormulas.push(['=IF(OR(F' + r + '="",E' + r + '=""),"",IF(F' + r + '>E' + r + ',TEXT(F' + r + '-E' + r + ',"[h]:mm:ss"),""))']);
+      step2PlannedFormulas.push(['=IF(F' + r + '="","",F' + r + '+TIME(8,0,0))']);
       step2Actuals.push([s2Act]);
+      step2StatusFormulas.push(['=IF(J' + r + '<>"","Done",IF(I' + r + '="","",IF(NOW()>I' + r + ',"Overdue","Pending")))']);
+      step2TimeDelayFormulas.push(['=IF(OR(J' + r + '="",I' + r + '=""),"",IF(J' + r + '>I' + r + ',TEXT(J' + r + '-I' + r + ',"[h]:mm:ss"),""))']);
+      step3PlannedFormulas.push(['=IF(J' + r + '="","",J' + r + '+TIME(8,0,0))']);
       step3Actuals.push([s3Act]);
+      step3StatusFormulas.push(['=IF(N' + r + '<>"","Done",IF(M' + r + '="","",IF(NOW()>M' + r + ',"Overdue","Pending")))']);
+      step3TimeDelayFormulas.push(['=IF(OR(N' + r + '="",M' + r + '=""),"",IF(N' + r + '>M' + r + ',TEXT(N' + r + '-M' + r + ',"[h]:mm:ss"),""))']);
       emailStatuses.push([emailSt]);
-    }
-
-    var totalRows = items.length;
-
-    // Completely clear all columns A to Q for any phantom rows beyond active items (e.g. rows 164+)
-    if (lastExistingRow > 6 + totalRows) {
-      sheet.getRange(7 + totalRows, 1, lastExistingRow - (6 + totalRows), 17).clearContent();
     }
 
     // 1. Write Data Set (Cols A to D)
@@ -1182,26 +1216,61 @@ function handleInvoiceWorkflowFms(payload) {
     sheet.getRange(7, 3, totalRows, 1).setFontWeight("bold");
     sheet.getRange(7, 4, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
 
-    // 2. Write Step 1 Actual (Col F: Col 6)
+    // 2. Write Step 1 Planned (Col E: Col 5)
+    sheet.getRange(7, 5, totalRows, 1).setValues(plannedStep1Rows);
+    sheet.getRange(7, 5, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+
+    // 3. Write Step 1 Actual (Col F: Col 6)
     sheet.getRange(7, 6, totalRows, 1).setValues(step1Actuals);
     sheet.getRange(7, 6, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
 
-    // 3. Write Step 2 Actual (Col J: Col 10)
+    // 4. Write Step 1 Status (Col G: Col 7)
+    sheet.getRange(7, 7, totalRows, 1).setFormulas(step1StatusFormulas);
+    sheet.getRange(7, 7, totalRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
+
+    // 5. Write Step 1 TimeDelay (Col H: Col 8)
+    sheet.getRange(7, 8, totalRows, 1).setFormulas(step1TimeDelayFormulas);
+    sheet.getRange(7, 8, totalRows, 1).setHorizontalAlignment("center");
+
+    // 6. Write Step 2 Planned (Col I: Col 9)
+    sheet.getRange(7, 9, totalRows, 1).setFormulas(step2PlannedFormulas);
+    sheet.getRange(7, 9, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+
+    // 7. Write Step 2 Actual (Col J: Col 10)
     sheet.getRange(7, 10, totalRows, 1).setValues(step2Actuals);
     sheet.getRange(7, 10, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
 
-    // 4. Write Step 3 Actual (Col N: Col 14)
+    // 8. Write Step 2 Status (Col K: Col 11)
+    sheet.getRange(7, 11, totalRows, 1).setFormulas(step2StatusFormulas);
+    sheet.getRange(7, 11, totalRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
+
+    // 9. Write Step 2 TimeDelay (Col L: Col 12)
+    sheet.getRange(7, 12, totalRows, 1).setFormulas(step2TimeDelayFormulas);
+    sheet.getRange(7, 12, totalRows, 1).setHorizontalAlignment("center");
+
+    // 10. Write Step 3 Planned (Col M: Col 13)
+    sheet.getRange(7, 13, totalRows, 1).setFormulas(step3PlannedFormulas);
+    sheet.getRange(7, 13, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+
+    // 11. Write Step 3 Actual (Col N: Col 14)
     sheet.getRange(7, 14, totalRows, 1).setValues(step3Actuals);
     sheet.getRange(7, 14, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
 
-    // 5. Write Website Auto Send Email Status (Col Q: Col 17)
+    // 12. Write Step 3 Status (Col O: Col 15)
+    sheet.getRange(7, 15, totalRows, 1).setFormulas(step3StatusFormulas);
+    sheet.getRange(7, 15, totalRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
+
+    // 13. Write Step 3 TimeDelay (Col P: Col 16)
+    sheet.getRange(7, 16, totalRows, 1).setFormulas(step3TimeDelayFormulas);
+    sheet.getRange(7, 16, totalRows, 1).setHorizontalAlignment("center");
+
+    // 14. Write Website Auto Send Email Status (Col Q: Col 17)
     sheet.getRange(7, 17, totalRows, 1).setValues(emailStatuses);
     sheet.getRange(7, 17, totalRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
 
-    // Formatting
+    // General Formatting
     sheet.getRange(7, 1, totalRows, 17)
-         .setFontFamily("Roboto").setFontSize(10).setVerticalAlignment("middle")
-         .setBackground(null).setFontColor(null);
+         .setFontFamily("Roboto").setFontSize(10).setVerticalAlignment("middle");
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success", message: "Populated " + totalRows + " invoice workflow records into INV PROCESS FMS (Rows 7 to " + (6 + totalRows) + ")", count: totalRows

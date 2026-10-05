@@ -99,20 +99,39 @@ async function main() {
       // Col D: Log Timestamp (Exact timestamp when invoice entry was created/generated in invoice section)
       const logTimestamp = formatFmsTimestamp(inv.createdAt);
 
+      // Col E: Step 1 Planned
+      const isAutoMonth = inv?.sendType === 'AUTOMATIC_MONTH_END' || inv?.productGroupKey === 'MONTHLY_CONSOLIDATED';
+      let step1Planned = logTimestamp;
+      if (isAutoMonth && inv?.createdAt) {
+        const createdDate = new Date(inv.createdAt);
+        const istDate = new Date(createdDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        const day = String(istDate.getDate()).padStart(2, '0');
+        const month = String(istDate.getMonth() + 1).padStart(2, '0');
+        const year = istDate.getFullYear();
+        step1Planned = `${day}/${month}/${year} 10:00:00`;
+      }
+
       // Col F: Step 1 Actual (when CM sent to accountant)
-      const isSentToAccountant = ['SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED'].includes(status);
-      const sentTime = inv.sentAt
-        ? formatFmsTimestamp(inv.sentAt)
-        : (inv.createdAt ? formatFmsTimestamp(inv.createdAt) : updatedTime);
-      const step1Actual = isSentToAccountant ? sentTime : '';
+      const isSentToAccountant = ['SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS', 'INVOICE_ATTACHED', 'APPROVED'].includes(status);
+      let step1Actual = '';
+      if (isSentToAccountant) {
+        if (inv.sentAt && Math.abs(new Date(inv.sentAt).getTime() - new Date(inv.createdAt).getTime()) > 5000) {
+          step1Actual = formatFmsTimestamp(inv.sentAt);
+        } else if (inv.status === 'SENT_TO_ACCOUNTANT') {
+          step1Actual = formatFmsTimestamp(inv.updatedAt);
+        } else if (inv.sentAt) {
+          step1Actual = formatFmsTimestamp(inv.sentAt);
+        }
+      }
 
       // Col J: Step 2 Actual (when accountant attached PDF)
-      const isAttached = ['INVOICE_ATTACHED', 'APPROVED'].includes(status) && Boolean(inv.attachedInvoice?.fileUrl || inv.attachedInvoice?.createdAt);
+      const isAttached = ['INVOICE_ATTACHED', 'APPROVED', 'REJECTED_WITH_REMARKS'].includes(status) && Boolean(inv.attachedInvoice?.fileUrl || inv.attachedInvoice?.createdAt);
       const step2Actual = isAttached ? attachedTime : '';
 
       // Col N: Step 3 Actual (when CM approved or rejected tally PDF)
       const isApproved = status === 'APPROVED';
-      const step3Actual = isApproved ? signedTime : '';
+      const isRejected = status === 'REJECTED_WITH_REMARKS';
+      const step3Actual = isApproved ? signedTime : (isRejected ? updatedTime : '');
 
       // Col Q: Website Auto send Email to Client with Attached Invoice (Sent or Pending)
       const emailStatus = inv.clientEmailSentAt ? 'Sent' : 'Pending';
@@ -124,6 +143,7 @@ async function main() {
         companyName,
         status,
         logTimestamp,
+        step1Planned,
         step1Actual,
         step2Actual,
         step3Actual,

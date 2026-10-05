@@ -333,8 +333,14 @@ export default function AdminInvoicesWorkflowPage() {
   const [showArrivalBanner, setShowArrivalBanner] = useState(false);
   const [hasShownArrivalBanner, setHasShownArrivalBanner] = useState(false);
 
-  // Node/Location Filter for Admin
-  const [locations, setLocations] = useState<LocationOption[]>([]);
+const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
+  { id: 1, name: 'Agarwal Complex' },
+  { id: 2, name: 'Mercado' },
+  { id: 3, name: 'Premier House' },
+];
+
+  // Node/Location Filter for Admin & Accountant
+  const [locations, setLocations] = useState<LocationOption[]>(DEFAULT_OPERATING_LOCATIONS);
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('ALL');
 
   // CM Review & Send to Accountant Modal (prompts Digital Signature Required Yes/No + Recipient Selection)
@@ -2007,7 +2013,7 @@ export default function AdminInvoicesWorkflowPage() {
     recalculateEditTotals(updated);
   };
 
-  const canUseNodeFilter = isAdmin || canAccessAccountant;
+  const canUseNodeFilter = isAdmin || canAccessAccountant || isAccountsRole || userEmail === ACCOUNTANT_CM_EMAIL;
 
   // Fetch locations for Admin & Accountant filter dropdown
   const fetchLocations = useCallback(async () => {
@@ -3090,7 +3096,7 @@ export default function AdminInvoicesWorkflowPage() {
 
                   <div className="flex flex-wrap items-center gap-2.5">
                     {/* Node Filter */}
-                    {canUseNodeFilter && locations.length > 0 && (
+                    {canUseNodeFilter && (
                       <div className="flex items-center gap-1 bg-white border border-[var(--outline-variant)] px-2.5 py-1.5">
                         <MapPin size={13} className="text-[#616161]" />
                         <span className="text-[10px] font-bold uppercase text-[#616161]">Node:</span>

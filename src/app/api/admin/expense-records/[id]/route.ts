@@ -93,6 +93,14 @@ export async function PUT(
       roleName === 'ACCOUNTS' ||
       userEmail === ACCOUNTANT_EMAIL ||
       user.name.toLowerCase() === 'accounts';
+    const isHr =
+      roleName === 'HR' ||
+      userEmail === 'hr.ssinfrazone@gmail.com' ||
+      user.name.toLowerCase() === 'human resource';
+
+    if (isHr) {
+      return NextResponse.json({ error: 'HR user has view-only rights to expenses' }, { status: 403 });
+    }
 
     const { id } = await params;
     const recordId = parseInt(id, 10);
@@ -471,6 +479,14 @@ export async function DELETE(
       roleName === 'ACCOUNTS' ||
       userEmail === ACCOUNTANT_EMAIL ||
       user.name.toLowerCase() === 'accounts';
+    const isHr =
+      roleName === 'HR' ||
+      userEmail === 'hr.ssinfrazone@gmail.com' ||
+      user.name.toLowerCase() === 'human resource';
+
+    if (isHr) {
+      return NextResponse.json({ error: 'HR user has view-only rights to expenses' }, { status: 403 });
+    }
     const isManager = roleName === 'COMMUNITY_MANAGER' || roleName === 'MANAGER';
     const assignedLocationIds = user.assignedLocations ? user.assignedLocations.map((al: any) => al.locationId) : [];
 

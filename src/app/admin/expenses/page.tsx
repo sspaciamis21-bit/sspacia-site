@@ -47,7 +47,7 @@ export default function SuperAdminExpensesPage() {
   // Format Switcher: 'REGISTER' (Client Master Style) vs 'SPREADSHEET' (Excel Legacy Grid)
   const [viewMode, setViewMode] = useState<"REGISTER" | "SPREADSHEET">("REGISTER");
 
-  // Role detection: Super Admin vs Accountant
+  // Role detection: Super Admin vs Accountant vs HR
   const userEmail = (user?.email || "").toLowerCase();
   const roleName = ((user?.role as any)?.name || (user as any)?.roleName || (user?.role as any) || '').toLowerCase();
   const isAccountantRole =
@@ -56,8 +56,14 @@ export default function SuperAdminExpensesPage() {
     userEmail === 'ssinfrazone21@gmail.com' ||
     user?.name?.toLowerCase() === 'accounts';
 
+  const isHrRole =
+    roleName === 'hr' ||
+    userEmail === 'hr.ssinfrazone@gmail.com' ||
+    user?.name?.toLowerCase() === 'human resource';
+
   const isSuperAdmin =
-    !isAccountantRole && (
+    !isAccountantRole &&
+    !isHrRole && (
       roleName === 'admin' ||
       roleName === 'super_admin' ||
       roleName === 'super-admin' ||
@@ -65,16 +71,21 @@ export default function SuperAdminExpensesPage() {
       userEmail === 'praveen@sspacia.com'
     );
 
-  const [userRoleView, setUserRoleView] = useState<'CM' | 'ACCOUNTANT'>(isAccountantRole ? 'ACCOUNTANT' : 'CM');
+  const [userRoleView, setUserRoleView] = useState<'CM' | 'ACCOUNTANT'>(
+    (isAccountantRole || isHrRole) ? 'ACCOUNTANT' : 'CM'
+  );
 
   useEffect(() => {
-    if (isAccountantRole || !isSuperAdmin) {
+    if (isHrRole) {
+      setUserRoleView('ACCOUNTANT');
+      setViewMode('REGISTER');
+    } else if (isAccountantRole || !isSuperAdmin) {
       if (isAccountantRole) {
         setUserRoleView('ACCOUNTANT');
       }
       setViewMode('REGISTER');
     }
-  }, [isAccountantRole, isSuperAdmin]);
+  }, [isAccountantRole, isHrRole, isSuperAdmin]);
 
   useEffect(() => {
     fetchExpensesData(true);
@@ -152,7 +163,9 @@ export default function SuperAdminExpensesPage() {
             <h1 className="text-2xl md:text-3xl font-display font-black text-[#1B1C1C] uppercase tracking-tight flex items-center gap-3">
               <span>Center Operating Expenses</span>
               <span className="bg-[#006064] text-white text-[9px] font-mono px-2.5 py-0.5 uppercase tracking-widest font-bold">
-                {isAccountantRole
+                {isHrRole
+                  ? "HR AUDIT VIEW (READ ONLY)"
+                  : isAccountantRole
                   ? "ACCOUNTANT PORTAL"
                   : viewMode === "REGISTER"
                   ? "CLIENT MASTER STYLE"
@@ -160,7 +173,9 @@ export default function SuperAdminExpensesPage() {
               </span>
             </h1>
             <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">
-              {isAccountantRole
+              {isHrRole
+                ? "Human Resource executive view-only audit of center operating expenses. Modification and disbursal rights are restricted."
+                : isAccountantRole
                 ? "Accountant payment verification, settlement & month-wise expense audit. CM columns are read-only."
                 : viewMode === "REGISTER"
                 ? "Structured Client Master-style expense register with vendor bills, payments & Super Admin approval."
@@ -169,6 +184,17 @@ export default function SuperAdminExpensesPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {/* HR Link to HR Portal */}
+            {isHrRole && (
+              <Link
+                href="/hr"
+                className="bg-[#004D40] hover:bg-[#006064] text-white px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                title="Return to Careers & HR Portal"
+              >
+                <span>← Back to HR Portal</span>
+              </Link>
+            )}
+
             {/* FORMAT SWITCHER: ONLY VISIBLE TO SUPER ADMIN */}
             {isSuperAdmin && (
               <div className="flex items-center gap-1 bg-gray-100 p-1 border border-gray-300">
@@ -259,7 +285,9 @@ export default function SuperAdminExpensesPage() {
           initialLocationId={activeLocationId}
           isAccountant={isAccountantRole}
           isAdmin={isSuperAdmin}
-          currentUserName={user?.name || (isAccountantRole ? "Accountant" : "Super Admin")}
+          isHr={isHrRole}
+          isReadOnly={isHrRole}
+          currentUserName={user?.name || (isHrRole ? "Human Resource" : isAccountantRole ? "Accountant" : "Super Admin")}
           onSwitchToSpreadsheet={isSuperAdmin ? () => setViewMode("SPREADSHEET") : undefined}
         />
       )}

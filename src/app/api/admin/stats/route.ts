@@ -50,7 +50,7 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
       totalAmenities,
       totalRoles,
       recentBookings,
-    ] = await prisma.$transaction([
+    ] = await Promise.all([
       prisma.location.count({ where: { isActive: true } }),
       prisma.product.count({ where: { isActive: true } }),
       prisma.booking.count(),

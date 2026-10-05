@@ -78,6 +78,29 @@ const prisma = new Proxy({} as PrismaClient, {
     // Top-level methods: $queryRaw, $executeRaw, $transaction, $disconnect, etc.
     if (typeof val === 'function') {
       return async function (...args: any[]) {
+        if (prop === '$transaction' && Array.isArray(args[0])) {
+          try {
+            return await (getRawPrisma() as any).$transaction(...args);
+          } catch (err: any) {
+            const msg = String(err?.message || '');
+            if (
+              msg.includes('Prisma Client promises') ||
+              msg.includes('All elements of the array need to be')
+            ) {
+              return await Promise.all(args[0]);
+            }
+            if (isPrismaPanic(err)) {
+              const fresh = resetPrisma();
+              try {
+                return await (fresh as any).$transaction(...args);
+              } catch (retryErr: any) {
+                return await Promise.all(args[0]);
+              }
+            }
+            throw err;
+          }
+        }
+
         try {
           return await (getRawPrisma() as any)[prop](...args);
         } catch (err: any) {

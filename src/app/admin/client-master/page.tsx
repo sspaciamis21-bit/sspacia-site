@@ -317,8 +317,14 @@ export default function ClientMasterRegistryPage() {
   const [selectedClientStatusFilter, setSelectedClientStatusFilter] = useState('ALL');
   const [selectedClientTypeFilter, setSelectedClientTypeFilter] = useState('ALL');
 
-  // Node/Location filter (Admin only)
-  const [locations, setLocations] = useState<LocationOption[]>([]);
+const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
+  { id: 1, name: 'Agarwal Complex' },
+  { id: 2, name: 'Mercado' },
+  { id: 3, name: 'Premier House' },
+];
+
+  // Node/Location filter (Admin & Accountant)
+  const [locations, setLocations] = useState<LocationOption[]>(DEFAULT_OPERATING_LOCATIONS);
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('ALL');
 
   // Excel-Style Column Filters
@@ -701,9 +707,11 @@ export default function ClientMasterRegistryPage() {
     });
   };
 
-  // Fetch locations for Admin filter dropdown
+  const canUseNodeFilter = isAdmin || isAccountant;
+
+  // Fetch locations for Admin & Accountant filter dropdown
   const fetchLocations = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!canUseNodeFilter) return;
     try {
       const res = await fetch('/api/admin/locations?limit=100');
       const json = await res.json();
@@ -716,14 +724,14 @@ export default function ClientMasterRegistryPage() {
         );
       }
     } catch { /* ignore */ }
-  }, [isAdmin]);
+  }, [canUseNodeFilter]);
 
   // Fetch data
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (isAdmin && selectedLocationFilter !== 'ALL') {
+      if (canUseNodeFilter && selectedLocationFilter !== 'ALL') {
         params.set('locationId', selectedLocationFilter);
       }
       if (selectedTargetMonth) {
@@ -747,7 +755,7 @@ export default function ClientMasterRegistryPage() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, selectedLocationFilter, selectedTargetMonth]);
+  }, [canUseNodeFilter, selectedLocationFilter, selectedTargetMonth]);
 
   useEffect(() => {
     fetchLocations();
@@ -1907,8 +1915,8 @@ export default function ClientMasterRegistryPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-              {/* Admin-only Node/Location filter */}
-              {isAdmin && locations.length > 0 && (
+              {/* Admin & Accountant Node/Location filter */}
+              {canUseNodeFilter && (
                 <>
                   <div className="flex items-center gap-1.5 text-xs font-bold text-[#616161]">
                     <MapPin size={14} /> Node:

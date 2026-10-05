@@ -54,6 +54,10 @@ export async function GET(request: Request) {
       roleName === 'ACCOUNTS' ||
       userEmail === ACCOUNTANT_EMAIL ||
       user.name.toLowerCase() === 'accounts';
+    const isHr =
+      roleName === 'HR' ||
+      userEmail === 'hr.ssinfrazone@gmail.com' ||
+      user.name.toLowerCase() === 'human resource';
 
     const url = new URL(request.url);
     const locationIdParam = url.searchParams.get('locationId');
@@ -76,7 +80,7 @@ export async function GET(request: Request) {
 
     // Determine accessible location IDs
     let allowedLocationIds: number[] = [];
-    if (isSuperAdmin || isAccountant) {
+    if (isSuperAdmin || isAccountant || isHr) {
       const allLocs = await prisma.location.findMany({
         where: { isActive: true },
         select: { id: true, name: true, slug: true },
@@ -372,6 +376,14 @@ export async function POST(request: Request) {
       roleName === 'ACCOUNTS' ||
       userEmail === ACCOUNTANT_EMAIL ||
       user.name.toLowerCase() === 'accounts';
+    const isHr =
+      roleName === 'HR' ||
+      userEmail === 'hr.ssinfrazone@gmail.com' ||
+      user.name.toLowerCase() === 'human resource';
+
+    if (isHr) {
+      return NextResponse.json({ error: 'HR user has view-only rights to expenses' }, { status: 403 });
+    }
 
     const body = await request.json();
     const {

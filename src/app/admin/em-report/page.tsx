@@ -21,15 +21,39 @@ import { FadeUp } from '@/components/ui/fade-up';
 import { FullEmScorecard, formatScorecardPct } from '@/lib/em-scorecard-engine';
 
 const CENTRES = ['All Centres', 'Mercado', 'Agarwal Complex', 'Premier House'];
-const PERIODS = [
-  { value: 'weekly', label: 'Weekly (Closed: 21 Sept – 27 Sept 2026)' },
-  { value: 'weekly_current', label: 'Weekly (Current: 28 Sept – 04 Oct 2026)' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'quarterly', label: 'Quarterly' },
-  { value: 'half_yearly', label: 'Half Yearly' },
-  { value: 'yearly', label: 'Yearly' },
-  { value: 'custom', label: 'Custom Date Range' },
-];
+
+function getDynamicPeriods() {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const diffToMonday = (dayOfWeek + 6) % 7;
+
+  // Closed Week (Monday to Sunday of previous week)
+  const prevMon = new Date(now);
+  prevMon.setDate(now.getDate() - diffToMonday - 7);
+  const prevSun = new Date(prevMon);
+  prevSun.setDate(prevMon.getDate() + 6);
+
+  // Current Week (Monday to Sunday of current week)
+  const currMon = new Date(now);
+  currMon.setDate(now.getDate() - diffToMonday);
+  const currSun = new Date(currMon);
+  currSun.setDate(currMon.getDate() + 6);
+
+  const fmt = (d: Date) =>
+    d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  return [
+    { value: 'weekly', label: `Weekly (Closed: ${fmt(prevMon)} – ${fmt(prevSun)})` },
+    { value: 'weekly_current', label: `Weekly (Current: ${fmt(currMon)} – ${fmt(currSun)})` },
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: 'Quarterly' },
+    { value: 'half_yearly', label: 'Half Yearly' },
+    { value: 'yearly', label: 'Yearly' },
+    { value: 'custom', label: 'Custom Date Range' },
+  ];
+}
+
+const PERIODS = getDynamicPeriods();
 
 export default function EmReportAdminPage() {
   const router = useRouter();

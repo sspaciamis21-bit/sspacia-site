@@ -35,7 +35,7 @@ export const GET = withPermission('locations', 'view', async (req: NextRequest) 
     const assignedIds = user.assignedLocations.map((al) => al.locationId);
     const scopeWhere = assignedIds.length > 0 ? { id: { in: assignedIds } } : {};
 
-    const [total, locations] = await prisma.$transaction([
+    const [total, locations] = await Promise.all([
       prisma.location.count({ where: scopeWhere }),
       prisma.location.findMany({
         where: scopeWhere,

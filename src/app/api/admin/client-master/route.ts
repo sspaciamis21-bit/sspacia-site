@@ -14,13 +14,16 @@ export async function GET(request: Request) {
     const token = cookieStore.get('auth-token')?.value;
     let currentUserId: number | null = null;
     let isAdmin = false;
+    let canFilterLocation = false;
 
     if (token) {
       const payload = await verifyToken(token);
       if (payload?.id) {
         currentUserId = Number(payload.id);
         const role = (payload.role as string || '').toUpperCase();
+        const email = (payload.email as string || '').toLowerCase();
         isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'SUPER-ADMIN';
+        canFilterLocation = isAdmin || role === 'ACCOUNTS' || role === 'ACCOUNTANT' || email === 'ssinfrazone21@gmail.com';
       }
     }
 
@@ -53,8 +56,8 @@ export async function GET(request: Request) {
 
     // ── Node-based data isolation ────────────────────────────────
     if (currentUserId) {
-      // Admin filtering by specific location
-      if (isAdmin && locationId && locationId !== 'ALL') {
+      // Admin & Accountant filtering by specific location
+      if (canFilterLocation && locationId && locationId !== 'ALL') {
         const locationUserIds = await getUserIdsByLocation(parseInt(locationId, 10));
         if (locationUserIds) {
           where.createdById = { in: locationUserIds };

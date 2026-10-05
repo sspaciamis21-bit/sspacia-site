@@ -35,6 +35,7 @@ export async function PATCH(
       where: { id: invoiceRecordId },
       data: {
         status,
+        ...(status === 'SENT_TO_ACCOUNTANT' ? { sentAt: new Date() } : {}),
         ...(remarks !== undefined ? { remarks: remarks ? String(remarks).trim() : null } : {}),
         ...(billedTo !== undefined ? { billedTo: String(billedTo).trim() } : {}),
         ...(isDigitalSignRequired !== undefined ? { isDigitalSignRequired: Boolean(isDigitalSignRequired) } : {}),

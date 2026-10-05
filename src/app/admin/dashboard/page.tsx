@@ -467,11 +467,20 @@ export default function AdminDashboardPage() {
                 className="bg-neutral-50 border border-neutral-300 px-2.5 py-1 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#006064] cursor-pointer"
               >
                 <option value="ALL">All Centres (Global)</option>
-                {stats?.locations?.map((loc) => (
-                  <option key={loc.id} value={String(loc.id)}>
-                    {loc.name}
-                  </option>
-                ))}
+                {((stats?.locations && stats.locations.length > 0)
+                  ? stats.locations
+                  : [
+                      { id: 1, name: 'Agarwal Complex' },
+                      { id: 2, name: 'Mercado' },
+                      { id: 3, name: 'Premier House' },
+                    ]
+                )
+                  .filter((loc) => (loc as any).slug !== 'common' && loc.name?.toLowerCase() !== 'common')
+                  .map((loc) => (
+                    <option key={loc.id} value={String(loc.id)}>
+                      {loc.name}
+                    </option>
+                  ))}
               </select>
             </div>
           </div>
@@ -479,7 +488,7 @@ export default function AdminDashboardPage() {
           {/* Active Context & Refresh */}
           <div className="flex items-center gap-2 text-xs w-full sm:w-auto justify-between sm:justify-end">
             <span className="text-[11px] text-gray-500 font-medium">
-              Centre Node: <strong className="text-[#1B1C1C]">{selectedLocation === 'ALL' ? 'All Locations' : (stats?.locations?.find((l) => String(l.id) === selectedLocation)?.name || selectedLocation)}</strong>
+              Centre Node: <strong className="text-[#1B1C1C]">{selectedLocation === 'ALL' ? 'All Locations' : (stats?.locations?.find((l) => String(l.id) === selectedLocation)?.name || (selectedLocation === '1' ? 'Agarwal Complex' : selectedLocation === '2' ? 'Mercado' : selectedLocation === '3' ? 'Premier House' : selectedLocation))}</strong>
             </span>
             <button
               onClick={() => fetchDashboardData(selectedLocation)}
@@ -1192,14 +1201,14 @@ export default function AdminDashboardPage() {
         isOpen={isClientsModalOpen}
         onClose={() => setIsClientsModalOpen(false)}
         clients={(stats?.clientMaster as any)?.allClients || sdrAllCompanies || []}
-        initialCentre={selectedLocation === 'ALL' ? 'ALL' : (stats?.locations?.find(l => String(l.id) === selectedLocation)?.name || 'ALL')}
+        initialCentre={selectedLocation === 'ALL' ? 'ALL' : (stats?.locations?.find(l => String(l.id) === selectedLocation)?.name || (selectedLocation === '1' ? 'Agarwal Complex' : selectedLocation === '2' ? 'Mercado' : selectedLocation === '3' ? 'Premier House' : 'ALL'))}
       />
 
       <WorkspacesDesksModal
         isOpen={isWorkspacesModalOpen}
         onClose={() => setIsWorkspacesModalOpen(false)}
         workspaces={(stats?.productSummary as any)?.allWorkspaces || (stats as any)?.productsList || []}
-        initialCentre={selectedLocation === 'ALL' ? 'ALL' : (stats?.locations?.find(l => String(l.id) === selectedLocation)?.name || 'ALL')}
+        initialCentre={selectedLocation === 'ALL' ? 'ALL' : (stats?.locations?.find(l => String(l.id) === selectedLocation)?.name || (selectedLocation === '1' ? 'Agarwal Complex' : selectedLocation === '2' ? 'Mercado' : selectedLocation === '3' ? 'Premier House' : 'ALL'))}
       />
 
       <MonthlyAgreementModal
@@ -1207,7 +1216,7 @@ export default function AdminDashboardPage() {
         onClose={() => setIsAgreementsModalOpen(false)}
         clients={(stats?.clientMaster as any)?.allClients || sdrAllCompanies || []}
         totalValue={agreementRevenue || 1639532}
-        initialCentre={selectedLocation === 'ALL' ? 'ALL' : (stats?.locations?.find(l => String(l.id) === selectedLocation)?.name || 'ALL')}
+        initialCentre={selectedLocation === 'ALL' ? 'ALL' : (stats?.locations?.find(l => String(l.id) === selectedLocation)?.name || (selectedLocation === '1' ? 'Agarwal Complex' : selectedLocation === '2' ? 'Mercado' : selectedLocation === '3' ? 'Premier House' : 'ALL'))}
       />
 
       <OperatingLocationsModal

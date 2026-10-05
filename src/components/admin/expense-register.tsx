@@ -403,6 +403,8 @@ interface ExpenseRegisterProps {
   initialLocationId?: number | null;
   isAccountant?: boolean;
   isAdmin?: boolean;
+  isHr?: boolean;
+  isReadOnly?: boolean;
   currentUserName?: string;
   onSwitchToSpreadsheet?: () => void;
 }
@@ -492,9 +494,12 @@ export function ExpenseRegister({
   initialLocationId = null,
   isAccountant = false,
   isAdmin = false,
+  isHr = false,
+  isReadOnly = false,
   currentUserName = "User",
   onSwitchToSpreadsheet,
 }: ExpenseRegisterProps) {
+  const isViewOnly = Boolean(isReadOnly || isHr);
   // Data state
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -1539,6 +1544,7 @@ export function ExpenseRegister({
   // - Accountant can ONLY edit & delete their own entries
   // - Community Manager can ONLY edit & delete CM entries
   const canEditOrDeleteEntry = (rec: ExpenseRecordItem) => {
+    if (isViewOnly) return false;
     if (isAdmin) return true; // Super Admin can edit/delete everyone's entries
 
     const isRecordByAccountant =
@@ -2214,6 +2220,10 @@ export function ExpenseRegister({
 
   // Open Add Modal
   const openAddModal = () => {
+    if (isViewOnly) {
+      toast.error("You have view-only rights. Adding expenses is not permitted.");
+      return;
+    }
     setEditingRecord(null);
     const today = new Date().toISOString().split("T")[0];
     const initialLocation =
@@ -2263,6 +2273,10 @@ export function ExpenseRegister({
 
   // Open Edit Modal
   const openEditModal = (rec: ExpenseRecordItem) => {
+    if (isViewOnly) {
+      toast.error("You have view-only rights. Editing expenses is not permitted.");
+      return;
+    }
     if (!canEditOrDeleteEntry(rec)) {
       toast.error(
         isAccountant
@@ -2331,6 +2345,10 @@ export function ExpenseRegister({
 
   // Open Super Admin / Accountant Disbursal & UTR Modal
   const openApproveModal = (rec: ExpenseRecordItem) => {
+    if (isViewOnly) {
+      toast.error("You have view-only rights. Approving expenses or recording UTR is not permitted.");
+      return;
+    }
     const isAccountantRecord =
       rec.createdByRole === "ACCOUNTANT" ||
       rec.createdByName?.toLowerCase()?.includes("account");
@@ -2366,6 +2384,10 @@ export function ExpenseRegister({
 
   // Accountant / Admin: Directly dispatch / resend payment advice alert email to vendor
   const handleSendAlertEmail = async (rec: ExpenseRecordItem) => {
+    if (isViewOnly) {
+      toast.error("You have view-only rights. Dispatching alert emails is not permitted.");
+      return;
+    }
     if (!rec.utrNumber) {
       toast.error("Please enter UTR number before sending payment alert to vendor.");
       openApproveModal(rec);
@@ -2414,6 +2436,10 @@ export function ExpenseRegister({
 
   // Open Settle Modal (Accountant Enter/Edit Vendor & Billing Breakdown Against Expense)
   const openSettleModal = (rec: ExpenseRecordItem) => {
+    if (isViewOnly) {
+      toast.error("You have view-only rights. Editing vendor breakdown is not permitted.");
+      return;
+    }
     setSettlingRecord(rec);
     const initialVendorId = rec.vendorId ? String(rec.vendorId) : "";
     const matchedVendor = vendors.find((v) => String(v.id) === initialVendorId);
@@ -3147,6 +3173,10 @@ export function ExpenseRegister({
 
   // Delete Record
   const handleDelete = async (id: number) => {
+    if (isViewOnly) {
+      toast.error("You have view-only rights. Deleting expenses is not permitted.");
+      return;
+    }
     const target = records.find((r) => r.id === id);
     if (target && !canEditOrDeleteEntry(target)) {
       toast.error(
@@ -3272,15 +3302,17 @@ export function ExpenseRegister({
             </button>
 
             {/* Record Center Operating Expense Button (Opens Modal for CM & Accountant) */}
-            <button
-              type="button"
-              onClick={openAddModal}
-              className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-              title="Record Center Operating Expense: Enter operational expense and attach bill PDF"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Record Center Operating Expense</span>
-            </button>
+            {!isViewOnly && (
+              <button
+                type="button"
+                onClick={openAddModal}
+                className="bg-[#006064] hover:bg-[#00838f] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                title="Record Center Operating Expense: Enter operational expense and attach bill PDF"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Record Center Operating Expense</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -4229,12 +4261,14 @@ export function ExpenseRegister({
                       <p className="text-sm font-semibold text-gray-600">
                         No expense records match your current filters.
                       </p>
-                      <button
-                        onClick={openAddModal}
-                        className="bg-[#006064] text-white px-4 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-[#00838f] transition-all cursor-pointer"
-                      >
-                        + Record Center Operating Expense
-                      </button>
+                      {!isViewOnly && (
+                        <button
+                          onClick={openAddModal}
+                          className="bg-[#006064] text-white px-4 py-1.5 text-xs font-bold uppercase tracking-wider hover:bg-[#00838f] transition-all cursor-pointer"
+                        >
+                          + Record Center Operating Expense
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -5004,7 +5038,7 @@ export function ExpenseRegister({
                                   <span>Edit</span>
                                 </button>
                               )}
-                              {isCMEntry && (
+                              {!isViewOnly && isCMEntry && (
                                 <button
                                   type="button"
                                   onClick={() => openSettleModal(rec)}
@@ -5015,7 +5049,7 @@ export function ExpenseRegister({
                                   <span>Breakdown</span>
                                 </button>
                               )}
-                              {!canEdit && !isCMEntry && (
+                              {(isViewOnly || (!canEdit && !isCMEntry)) && (
                                 <span className="text-[10px] text-gray-300 font-mono">-</span>
                               )}
                             </div>
@@ -5401,7 +5435,7 @@ export function ExpenseRegister({
                             {rec.payReceiveDate || rec.utrDate ? (
                               <div className="flex flex-col items-center justify-center gap-0.5">
                                 <span className="font-bold text-gray-800">{rec.payReceiveDate || rec.utrDate}</span>
-                                {(isAccountant || isAdmin || isPaymentApproved) && (
+                                {!isViewOnly && (isAccountant || isAdmin || isPaymentApproved) && (
                                   <button
                                     type="button"
                                     onClick={() => openApproveModal(rec)}
@@ -5414,14 +5448,18 @@ export function ExpenseRegister({
                                 )}
                               </div>
                             ) : isApproved && (isPaymentApproved || isAccountant || isAdmin) ? (
-                              <button
-                                type="button"
-                                onClick={() => openApproveModal(rec)}
-                                className="px-1.5 py-0.5 text-[8.5px] font-bold uppercase bg-teal-50 hover:bg-teal-100 text-teal-800 border border-dashed border-teal-300 rounded-xs transition-all cursor-pointer shadow-2xs"
-                                title="Click to record payment disbursal date"
-                              >
-                                + Set Date
-                              </button>
+                              !isViewOnly ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openApproveModal(rec)}
+                                  className="px-1.5 py-0.5 text-[8.5px] font-bold uppercase bg-teal-50 hover:bg-teal-100 text-teal-800 border border-dashed border-teal-300 rounded-xs transition-all cursor-pointer shadow-2xs"
+                                  title="Click to record payment disbursal date"
+                                >
+                                  + Set Date
+                                </button>
+                              ) : (
+                                <span className="text-gray-400 text-[10px] font-mono">Pending Date</span>
+                              )
                             ) : (
                               <span className="text-gray-300 text-[10px]">Locked</span>
                             )}

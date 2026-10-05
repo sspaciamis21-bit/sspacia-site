@@ -51,7 +51,7 @@ async function fetchLiveInvProcessEvents(): Promise<{
 } | null> {
   const url = `https://docs.google.com/spreadsheets/d/${FMS_SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=INV%20PROCESS%20FMS`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6000);
+  const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
     if (!res.ok) return null;
@@ -65,7 +65,7 @@ async function fetchLiveInvProcessEvents(): Promise<{
     // Rows 0 and 1 are header blocks ("Data Set" and subheaders). Data starts at index 2
     for (let i = 2; i < lines.length; i++) {
       const row = parseCsvLine(lines[i]);
-      if (row.length < 6) continue;
+      if (row.length < 7) continue;
 
       let centre = (row[0] || '').trim();
       if (!centre || centre.toLowerCase().includes('centre') || centre.toLowerCase().includes('data set')) continue;
@@ -76,31 +76,31 @@ async function fetchLiveInvProcessEvents(): Promise<{
       else if (cLower.includes('mercado')) centre = 'Mercado';
 
       // Task 1: "Review Invoices & Send to Accountant to attach tally pdf"
-      // Col 3 = Planned (when invoice arrives in invoice section)
-      // Col 4 = Actual (when CM sends to accountant)
-      // Col 5 = Status ("Done" / "Pending")
-      const pl1Str = row[3];
-      const ac1Str = row[4];
-      const st1 = (row[5] || '').trim().toLowerCase();
+      // Col 4 (Index 4) = Planned (when invoice arrives in invoice section)
+      // Col 5 (Index 5) = Actual (when CM sends to accountant)
+      // Col 6 (Index 6) = Status ("Done" / "Pending")
+      const pl1Str = row[4];
+      const ac1Str = row[5];
+      const st1 = (row[6] || '').trim().toLowerCase();
       const pl1 = parseFmsDate(pl1Str);
       if (pl1) {
-        const ac1 = st1 === 'done' ? (parseFmsDate(ac1Str) || pl1) : null;
+        const ac1 = (st1 === 'done' || ac1Str) ? (parseFmsDate(ac1Str) || pl1) : null;
         task1Events.push({ centre, planned: pl1, actual: ac1 });
       }
 
       // Task 2: "Approve and send Inv to client" (CM Task)
-      // In FMS: Step 2 Actual (accountant attaches tally pdf) becomes Step 3 Planned (Col 11)!
-      // Col 11 = Planned (accountant attached PDF and sent back to CM)
-      // Col 12 = Actual (when CM approves and sends to client)
-      // Col 13 = Status ("Done" / "Pending")
-      if (row.length >= 14) {
-        const pl2Str = row[11];
-        const ac2Str = row[12];
-        const st2 = (row[13] || '').trim().toLowerCase();
+      // In 17-column FMS layout:
+      // Col 12 (Index 12) = Planned (accountant attached PDF and sent back to CM)
+      // Col 13 (Index 13) = Actual (when CM approves and sends to client)
+      // Col 14 (Index 14) = Status ("Done" / "Pending")
+      if (row.length >= 15) {
+        const pl2Str = row[12];
+        const ac2Str = row[13];
+        const st2 = (row[14] || '').trim().toLowerCase();
         const pl2 = parseFmsDate(pl2Str);
         // Only planned if accountant has already attached tally invoice PDF
         if (pl2) {
-          const ac2 = st2 === 'done' ? (parseFmsDate(ac2Str) || pl2) : null;
+          const ac2 = (st2 === 'done' || ac2Str) ? (parseFmsDate(ac2Str) || pl2) : null;
           task2Events.push({ centre, planned: pl2, actual: ac2 });
         }
       }
@@ -119,6 +119,52 @@ async function fetchLiveInvProcessEvents(): Promise<{
 }
 
 /**
+ * Fetch live Task 3 directly from Google Sheets Tab "SUSPENSE"
+ */
+async function fetchLiveSuspenseEvents(): Promise<FmsEvent[] | null> {
+  const url = `https://docs.google.com/spreadsheets/d/${FMS_SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=SUSPENSE`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    if (!res.ok) return null;
+    const csv = await res.text();
+    const lines = csv.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    if (lines.length < 3) return null;
+
+    const events: FmsEvent[] = [];
+    for (let i = 2; i < lines.length; i++) {
+      const row = parseCsvLine(lines[i]);
+      if (row.length < 5) continue;
+
+      let centre = (row[2] || '').trim();
+      if (!centre) continue;
+      const cLower = centre.toLowerCase();
+      if (cLower.includes('agarwal') || cLower.includes('ac')) centre = 'Agarwal Complex';
+      else if (cLower.includes('premier') || cLower.includes('ph')) centre = 'Premier House';
+      else if (cLower.includes('mercado')) centre = 'Mercado';
+
+      // Col 4 = Planned, Col 5 = Actual, Col 6 = Status
+      const plStr = row[4] || row[3];
+      const acStr = row[5];
+      const st = (row[6] || '').trim().toLowerCase();
+
+      const pl = parseFmsDate(plStr);
+      if (pl) {
+        const ac = (st === 'done' || acStr) ? (parseFmsDate(acStr) || pl) : null;
+        events.push({ centre, planned: pl, actual: ac });
+      }
+    }
+    return events.length > 0 ? events : null;
+  } catch (err) {
+    console.warn('[Live Suspense FMS Fetch Notice] Using DB fallback:', err);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
  * Fetch Tasks 1, 2, 3 directly from Live Google Sheets with DB fallback
  */
 export async function fetchDatabaseFmsEvents(): Promise<{
@@ -128,7 +174,7 @@ export async function fetchDatabaseFmsEvents(): Promise<{
 }> {
   let task1Events: FmsEvent[] = [];
   let task2Events: FmsEvent[] = [];
-  const task3Events: FmsEvent[] = [];
+  let task3Events: FmsEvent[] = [];
 
   // 1. Try to fetch live from Google Sheets "INV PROCESS FMS" tab first
   const liveInvoices = await fetchLiveInvProcessEvents();
@@ -188,15 +234,12 @@ export async function fetchDatabaseFmsEvents(): Promise<{
           'Mercado';
 
         // Task 1: Review Invoices & Send to Accountant
-        // Planned: when invoice arrives in invoice section (getInvoiceStep1PlannedTimestamp)
-        // Actual: when CM sends to accountant
         const isSentToAccountant = ['SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED'].includes(inv.status);
         const pl1 = parseFmsDate(getInvoiceStep1PlannedTimestamp(inv)) || new Date(inv.createdAt);
-        const ac1 = isSentToAccountant ? new Date(inv.updatedAt) : null;
+        const ac1 = isSentToAccountant ? (inv.sentAt ? new Date(inv.sentAt) : new Date(inv.updatedAt)) : null;
         task1Events.push({ centre, planned: pl1, actual: ac1 });
 
         // Task 2: Approve and send Inv to client
-        // Planned: when accountant attached tally invoice pdf and sent back to CM
         if (inv.attachedInvoice?.createdAt) {
           const pl2 = new Date(inv.attachedInvoice.createdAt);
           const ac2 = inv.clientEmailSentAt
@@ -212,41 +255,47 @@ export async function fetchDatabaseFmsEvents(): Promise<{
     }
   }
 
-  // Task 3: Recognise suspense advance pay receive entry within 8 hours
-  try {
-    const allocations: any[] = await (prisma as any).$queryRawUnsafe(`
-      SELECT a.*, p.payReceiveDate, p.plannedTimestamp, p.enteredAt, p.deadlineAt 
-      FROM \`SuspenseCenterAllocation\` a 
-      JOIN \`SuspensePayment\` p ON a.suspensePaymentId = p.id
-    `);
+  // 2. Try to fetch live from Google Sheets "SUSPENSE" tab first
+  const liveSuspense = await fetchLiveSuspenseEvents();
+  if (liveSuspense && liveSuspense.length > 0) {
+    task3Events = liveSuspense;
+  } else {
+    // Task 3 DB Fallback: Recognise suspense advance pay receive entry within 8 hours
+    try {
+      const allocations: any[] = await (prisma as any).$queryRawUnsafe(`
+        SELECT a.*, p.payReceiveDate, p.plannedTimestamp, p.enteredAt, p.deadlineAt 
+        FROM \`SuspenseCenterAllocation\` a 
+        JOIN \`SuspensePayment\` p ON a.suspensePaymentId = p.id
+      `);
 
-    allocations.forEach((a: any) => {
-      let centre = a.centerDisplayName;
-      if (!centre) {
-        const cLower = (a.centerName || '').toLowerCase();
-        if (cLower.includes('agarwal')) centre = 'Agarwal Complex';
-        else if (cLower.includes('premier')) centre = 'Premier House';
-        else centre = 'Mercado';
-      }
+      allocations.forEach((a: any) => {
+        let centre = a.centerDisplayName;
+        if (!centre) {
+          const cLower = (a.centerName || '').toLowerCase();
+          if (cLower.includes('agarwal')) centre = 'Agarwal Complex';
+          else if (cLower.includes('premier')) centre = 'Premier House';
+          else centre = 'Mercado';
+        }
 
-      // Planned date: In FMS / BMP MIS, task is triggered when pay receive entry arrives
-      // Use payReceiveDate (e.g. 09/09/2026, 15/09/2026, 23/09/2026)
-      const pl3 =
-        parseFmsDate(a.payReceiveDate) ||
-        parseFmsDate(a.plannedTimestamp) ||
-        new Date(a.enteredAt || a.createdAt);
+        // Planned date: In FMS, task is triggered when accountant enters it (with planned deadline)
+        const pl3 =
+          parseFmsDate(a.plannedTimestamp) ||
+          (a.deadlineAt ? new Date(a.deadlineAt) : null) ||
+          parseFmsDate(a.payReceiveDate) ||
+          new Date(a.enteredAt || a.createdAt);
 
-      const ac3 =
-        a.reviewedAt && a.decision !== 'PENDING'
-          ? new Date(a.reviewedAt)
-          : a.actualTimestamp
-          ? parseFmsDate(a.actualTimestamp)
-          : null;
+        const ac3 =
+          a.reviewedAt && a.decision !== 'PENDING'
+            ? new Date(a.reviewedAt)
+            : a.actualTimestamp
+            ? parseFmsDate(a.actualTimestamp)
+            : null;
 
-      task3Events.push({ centre, planned: pl3, actual: ac3 });
-    });
-  } catch (err) {
-    console.error('[Scorecard Engine] Error loading suspense from DB:', err);
+        task3Events.push({ centre, planned: pl3, actual: ac3 });
+      });
+    } catch (err) {
+      console.error('[Scorecard Engine] Error loading suspense from DB:', err);
+    }
   }
 
   return { task1Events, task2Events, task3Events };
@@ -535,8 +584,14 @@ async function computeSingleCentreHkLive(centreKey: string, start: Date, end: Da
   let onTimeActual = 0;
 
   tRows.forEach((r) => {
+    const cabin = (r.c?.[0]?.v || '').toString().trim().toLowerCase();
+    const taskId = (r.c?.[7]?.v || '').toString().trim();
     const status = (r.c?.[8]?.v || '').toString().trim().toLowerCase();
-    if (status === 'inactive') return;
+
+    // Skip header row if returned by GViz, or empty rows, or non-active tasks
+    if (!taskId || taskId.toLowerCase() === 'taskid' || cabin === 'cabin' || status === 'status' || status !== 'active') {
+      return;
+    }
 
     // Check customDate / creationDate in column 5
     const c5_v = r.c?.[5]?.v;
@@ -548,7 +603,6 @@ async function computeSingleCentreHkLive(centreKey: string, start: Date, end: Da
       }
     }
 
-    const taskId = r.c?.[7]?.v?.toString().trim();
     const freq = (r.c?.[3]?.v || 'Daily').toString().trim().toLowerCase();
     const defaultTime = r.c?.[4]?.v?.toString().trim() || '';
     const { h: endH, m: endM } = parseTimeEnd(defaultTime);
@@ -724,9 +778,19 @@ export async function generateFullEmScorecard(params: {
   let start: Date;
   let end: Date;
 
+  // Helper for consistent local YYYY-MM-DD date formatting without UTC timezone shift
+  const formatLocalDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
   if (params.startDate && params.endDate) {
-    start = new Date(params.startDate);
-    end = new Date(params.endDate);
+    const [sy, sm, sd] = params.startDate.split('-').map(Number);
+    start = new Date(sy, sm - 1, sd, 0, 0, 0, 0);
+    const [ey, em, ed] = params.endDate.split('-').map(Number);
+    end = new Date(ey, em - 1, ed, 23, 59, 59, 999);
   } else {
     const now = new Date();
     const dayOfWeek = now.getDay(); // 0 is Sun, 1 is Mon
@@ -737,7 +801,7 @@ export async function generateFullEmScorecard(params: {
       monday.setDate(now.getDate() - diffToMonday); // Current Monday
       monday.setHours(0, 0, 0, 0);
       const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
+      sunday.setDate(monday.getDate() + 6); // Current Sunday
       sunday.setHours(23, 59, 59, 999);
       start = monday;
       end = sunday;
@@ -748,20 +812,19 @@ export async function generateFullEmScorecard(params: {
       start = monday;
       end = monthEnd;
     } else {
-      // Default 'weekly' to last completed week (Mon-Sun: 21 Sept – 27 Sept 2026)
-      monday.setDate(now.getDate() - diffToMonday - 7); // Last Monday
+      // Default 'weekly' to previous completed week: Monday to Sunday (e.g. 28 Sept 2026 to 04 Oct 2026 when today is 05 Oct 2026)
+      monday.setDate(now.getDate() - diffToMonday - 7); // Previous Monday
       monday.setHours(0, 0, 0, 0);
       const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
+      sunday.setDate(monday.getDate() + 6); // Previous Sunday
       sunday.setHours(23, 59, 59, 999);
       start = monday;
       end = sunday;
     }
   }
 
-  const formatDateStr = (d: Date) => d.toISOString().split('T')[0];
-  const startDateStr = formatDateStr(start);
-  const endDateStr = formatDateStr(end);
+  const startDateStr = formatLocalDate(start);
+  const endDateStr = formatLocalDate(end);
 
   const displayDateRange = `${start.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} – ${end.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
 
@@ -773,10 +836,25 @@ export async function generateFullEmScorecard(params: {
   const t2Filtered = filterEventsByCentre(task2Events, centre);
   const t3Filtered = filterEventsByCentre(task3Events, centre);
 
-  // 3. Compute Metrics for Tasks 1, 2, 3
+  // 3. Compute Metrics for Tasks 1, 2, 3 in Current Window
   const m1 = calculateTaskMetrics(t1Filtered, start, end);
   const m2 = calculateTaskMetrics(t2Filtered, start, end);
   const m3 = calculateTaskMetrics(t3Filtered, start, end);
+
+  // 3b. Compute Prior Period Metrics for Tasks 1, 2, 3 (for "Last Week Actual %")
+  const periodDurationMs = Math.max(1, end.getTime() - start.getTime());
+  const prevStart = new Date(start.getTime() - periodDurationMs - 1);
+  const prevEnd = new Date(start.getTime() - 1);
+  const prevM1 = calculateTaskMetrics(t1Filtered, prevStart, prevEnd);
+  const prevM2 = calculateTaskMetrics(t2Filtered, prevStart, prevEnd);
+  const prevM3 = calculateTaskMetrics(t3Filtered, prevStart, prevEnd);
+
+  // 3c. Compute Next Period Metrics for Tasks 1, 2, 3 (for "Next Week Planned")
+  const nextStart = new Date(end.getTime() + 1);
+  const nextEnd = new Date(end.getTime() + periodDurationMs + 1);
+  const nextM1 = calculateTaskMetrics(t1Filtered, nextStart, nextEnd);
+  const nextM2 = calculateTaskMetrics(t2Filtered, nextStart, nextEnd);
+  const nextM3 = calculateTaskMetrics(t3Filtered, nextStart, nextEnd);
 
   // 4. Compute Metrics for Housekeeping
   const m4 = await fetchHkScorecardData(centre, start, end);
@@ -804,26 +882,30 @@ export async function generateFullEmScorecard(params: {
           kra: 'All work should be done',
           kpi: '% work not done',
           benchmark: '100%',
-          lastWeekActualPct: 0,
+          lastWeekActualPct: prevM1.workDone.currentWeekPlanned > 0 || prevM1.workDone.allPendingWork > 0
+            ? prevM1.workDone.currentWeekActualPct
+            : 0,
           allPendingWork: effM1.workDone.allPendingWork,
           pendingWorkDoneThisWeek: effM1.workDone.pendingWorkDoneThisWeek,
           currentWeekPlanned: effM1.workDone.currentWeekPlanned,
           currentWeekActual: effM1.workDone.currentWeekActual,
           currentWeekActualPct: effM1.workDone.currentWeekActualPct,
-          nextWeekPlanned: '',
+          nextWeekPlanned: nextM1.workDone.currentWeekPlanned > 0 ? nextM1.workDone.currentWeekPlanned : '',
         },
         {
           taskName: '',
           kra: 'All work should be done on time',
           kpi: '% work not done on time',
           benchmark: '100%',
-          lastWeekActualPct: 0,
+          lastWeekActualPct: prevM1.onTime.currentWeekPlanned > 0 || prevM1.onTime.allPendingWork > 0
+            ? prevM1.onTime.currentWeekActualPct
+            : 0,
           allPendingWork: effM1.onTime.allPendingWork,
           pendingWorkDoneThisWeek: effM1.onTime.pendingWorkDoneThisWeek,
           currentWeekPlanned: effM1.onTime.currentWeekPlanned,
           currentWeekActual: effM1.onTime.currentWeekActual,
           currentWeekActualPct: effM1.onTime.currentWeekActualPct,
-          nextWeekPlanned: '',
+          nextWeekPlanned: nextM1.onTime.currentWeekPlanned > 0 ? nextM1.onTime.currentWeekPlanned : '',
         },
       ],
     },
@@ -839,26 +921,30 @@ export async function generateFullEmScorecard(params: {
           kra: 'All work should be done',
           kpi: '% work not done',
           benchmark: '100%',
-          lastWeekActualPct: 0,
+          lastWeekActualPct: prevM2.workDone.currentWeekPlanned > 0 || prevM2.workDone.allPendingWork > 0
+            ? prevM2.workDone.currentWeekActualPct
+            : 0,
           allPendingWork: effM2.workDone.allPendingWork,
           pendingWorkDoneThisWeek: effM2.workDone.pendingWorkDoneThisWeek,
           currentWeekPlanned: effM2.workDone.currentWeekPlanned,
           currentWeekActual: effM2.workDone.currentWeekActual,
           currentWeekActualPct: effM2.workDone.currentWeekActualPct,
-          nextWeekPlanned: '',
+          nextWeekPlanned: nextM2.workDone.currentWeekPlanned > 0 ? nextM2.workDone.currentWeekPlanned : '',
         },
         {
           taskName: '',
           kra: 'All work should be done on time',
           kpi: '% work not done on time',
           benchmark: '100%',
-          lastWeekActualPct: 0,
+          lastWeekActualPct: prevM2.onTime.currentWeekPlanned > 0 || prevM2.onTime.allPendingWork > 0
+            ? prevM2.onTime.currentWeekActualPct
+            : 0,
           allPendingWork: effM2.onTime.allPendingWork,
           pendingWorkDoneThisWeek: effM2.onTime.pendingWorkDoneThisWeek,
           currentWeekPlanned: effM2.onTime.currentWeekPlanned,
           currentWeekActual: effM2.onTime.currentWeekActual,
           currentWeekActualPct: effM2.onTime.currentWeekActualPct,
-          nextWeekPlanned: '',
+          nextWeekPlanned: nextM2.onTime.currentWeekPlanned > 0 ? nextM2.onTime.currentWeekPlanned : '',
         },
       ],
     },
@@ -874,26 +960,30 @@ export async function generateFullEmScorecard(params: {
           kra: 'All work should be done',
           kpi: '% work not done',
           benchmark: '100%',
-          lastWeekActualPct: 0,
+          lastWeekActualPct: prevM3.workDone.currentWeekPlanned > 0 || prevM3.workDone.allPendingWork > 0
+            ? prevM3.workDone.currentWeekActualPct
+            : 0,
           allPendingWork: effM3.workDone.allPendingWork,
           pendingWorkDoneThisWeek: effM3.workDone.pendingWorkDoneThisWeek,
           currentWeekPlanned: effM3.workDone.currentWeekPlanned,
           currentWeekActual: effM3.workDone.currentWeekActual,
           currentWeekActualPct: effM3.workDone.currentWeekActualPct,
-          nextWeekPlanned: '',
+          nextWeekPlanned: nextM3.workDone.currentWeekPlanned > 0 ? nextM3.workDone.currentWeekPlanned : '',
         },
         {
           taskName: '',
           kra: 'All work should be done on time',
           kpi: '% work not done on time',
           benchmark: '100%',
-          lastWeekActualPct: 0,
+          lastWeekActualPct: prevM3.onTime.currentWeekPlanned > 0 || prevM3.onTime.allPendingWork > 0
+            ? prevM3.onTime.currentWeekActualPct
+            : 0,
           allPendingWork: effM3.onTime.allPendingWork,
           pendingWorkDoneThisWeek: effM3.onTime.pendingWorkDoneThisWeek,
           currentWeekPlanned: effM3.onTime.currentWeekPlanned,
           currentWeekActual: effM3.onTime.currentWeekActual,
           currentWeekActualPct: effM3.onTime.currentWeekActualPct,
-          nextWeekPlanned: '',
+          nextWeekPlanned: nextM3.onTime.currentWeekPlanned > 0 ? nextM3.onTime.currentWeekPlanned : '',
         },
       ],
     },

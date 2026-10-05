@@ -530,6 +530,16 @@ export function HrPortalClient() {
               <ExternalLink className="w-3.5 h-3.5" />
             </Link>
 
+            {/* View Center Operating Expenses (Audit / Read Only) */}
+            <Link
+              href="/admin/expenses"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#006064] hover:bg-[#004d40] rounded-lg transition-colors shadow-xs"
+              title="View Center Operating Expenses (Audit / Read Only)"
+            >
+              <FileText className="w-3.5 h-3.5 text-teal-200" />
+              <span>Center Operating Expenses</span>
+            </Link>
+
             {/* HR Profile / Logout */}
             <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200">
               <div className="hidden sm:block text-right">

@@ -46,6 +46,16 @@ export async function checkPermission(
     return false;
   }
 
+  // HR Role: strictly READ-ONLY for expenses, locations, and reports (cannot add/edit/delete/approve)
+  if (roleName === 'hr') {
+    if (action === 'view' || action === 'read') {
+      if (['expenses', 'expense_records', 'locations', 'reports', 'dashboard'].includes(module)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // Allow Community Managers / Managers operational permissions for other modules
   if (
     roleName === 'community_manager' ||

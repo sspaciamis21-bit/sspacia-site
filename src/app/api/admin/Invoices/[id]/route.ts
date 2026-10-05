@@ -93,7 +93,12 @@ export async function PUT(
     if (totalAmount !== undefined && waivedLateDays === undefined && waivedLateFee === undefined) updateData.totalAmount = totalAmount !== '' ? Number(totalAmount) : null;
     if (gstNo !== undefined) updateData.gstNo = gstNo;
     if (billingMonth !== undefined) updateData.billingMonth = billingMonth;
-    if (status !== undefined) updateData.status = status;
+    if (status !== undefined) {
+      updateData.status = status;
+      if (status === 'SENT_TO_ACCOUNTANT') {
+        updateData.sentAt = new Date();
+      }
+    }
     if (remarks !== undefined) updateData.remarks = remarks;
     if (itemsJson !== undefined) updateData.itemsJson = itemsJson ? (typeof itemsJson === 'string' ? itemsJson : JSON.stringify(itemsJson)) : null;
     if (complimentaryUsageJson !== undefined) updateData.complimentaryUsageJson = complimentaryUsageJson ? (typeof complimentaryUsageJson === 'string' ? complimentaryUsageJson : JSON.stringify(complimentaryUsageJson)) : null;

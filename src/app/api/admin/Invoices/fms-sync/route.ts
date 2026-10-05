@@ -111,14 +111,20 @@ async function fetchAugSepItems() {
     // Step 1: Review Invoices & Send to Accountant to attach tally pdf
     const isSentToAccountant = ['SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS', 'INVOICE_ATTACHED', 'APPROVED'].includes(status);
     const step1Planned = getInvoiceStep1PlannedTimestamp(inv);
-    const sentTime = inv.sentAt
-      ? formatFmsTimestamp(inv.sentAt)
-      : (inv.createdAt ? formatFmsTimestamp(inv.createdAt) : updatedTime);
-    const step1Actual = isSentToAccountant ? sentTime : '';
+    let step1Actual = '';
+    if (isSentToAccountant) {
+      if (inv.sentAt && Math.abs(new Date(inv.sentAt).getTime() - new Date(inv.createdAt).getTime()) > 5000) {
+        step1Actual = formatFmsTimestamp(inv.sentAt);
+      } else if (inv.status === 'SENT_TO_ACCOUNTANT') {
+        step1Actual = formatFmsTimestamp(inv.updatedAt);
+      } else if (inv.sentAt) {
+        step1Actual = formatFmsTimestamp(inv.sentAt);
+      }
+    }
     const step1Status = isSentToAccountant ? 'Done' : 'Pending';
 
     // Step 2: Attach Tally Invoice PDF and send back to CM
-    const isAttached = ['INVOICE_ATTACHED', 'APPROVED'].includes(status) && Boolean(inv.attachedInvoice?.fileUrl || inv.attachedInvoice?.createdAt);
+    const isAttached = ['INVOICE_ATTACHED', 'APPROVED', 'REJECTED_WITH_REMARKS'].includes(status) && Boolean(inv.attachedInvoice?.fileUrl || inv.attachedInvoice?.createdAt);
     const step2Planned = isSentToAccountant ? step1Actual : '';
     const step2Actual = isAttached ? attachedTime : '';
     const step2Status = isAttached ? 'Done' : (isSentToAccountant ? 'Pending' : '');

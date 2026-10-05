@@ -62,10 +62,125 @@ export function CorporateClientsModal({
   const [statusTab, setStatusTab] = useState<"ALL" | "ACTIVE" | "ON_NOTICE" | "VIRTUAL_OFFICE">(initialStatusTab);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<"SEATS_DESC" | "VALUE_DESC" | "NAME_ASC">("VALUE_DESC");
+  const [internalClients, setInternalClients] = useState<CorporateClientItem[]>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (clients && clients.length > 0) {
+      setInternalClients(clients);
+    }
+  }, [clients]);
+
+  // Fallback: If modal opens and clients prop is empty, fetch live from client-master API
+  useEffect(() => {
+    if (isOpen && (!clients || clients.length === 0)) {
+      setLoadingClients(true);
+      fetch('/api/admin/client-master?billingMonth=ALL')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json) => {
+          if (json?.data && Array.isArray(json.data)) {
+            const mapped: CorporateClientItem[] = json.data.map((c: any) => {
+              const isVO = c.clientType === 'VIRTUAL_OFFICE';
+              let clientSeats = 0;
+              let clientParking = 0;
+              let clientVal = 0;
+
+              if (isVO) {
+                clientSeats = 0;
+                clientVal = Number(c.totalAmount || c.amount || 0);
+              } else if (Array.isArray(c.products) && c.products.length > 0) {
+                c.products.forEach((p: any) => {
+                  const isParking = (p.cabinName || '').toLowerCase().includes('parking');
+                  if (isParking) {
+                    clientParking += Number(p.noOfSeats || 1);
+                  } else {
+                    clientSeats += Number(p.noOfSeats || 0);
+                  }
+                  clientVal += Number(p.totalAmount || p.amount || 0);
+                });
+              } else {
+                const isParking = (c.cabinName || '').toLowerCase().includes('parking');
+                if (isParking) {
+                  clientParking = Number(c.noOfSeats || 1);
+                  clientSeats = 0;
+                } else {
+                  clientSeats = Number(c.noOfSeats || 0);
+                }
+                clientVal = Number(c.totalAmount || c.amount || 0);
+              }
+
+              let locName = c.createdBy?.assignedLocations?.[0]?.location?.name;
+              let locId = c.createdBy?.assignedLocations?.[0]?.location?.id || null;
+
+              if (!locName) {
+                const cid = (c.clientId || '').toUpperCase();
+                const cabin = (c.cabinName || '').toUpperCase();
+                if (cid.includes('SGP') || cid.includes('/PH/') || cabin.includes('PREMIER')) {
+                  locName = 'Premier House';
+                  locId = 3;
+                } else if (cid.includes('CGA') || cid.includes('AGARWAL') || cid.includes('AGC') || cabin.includes('AGARWAL')) {
+                  locName = 'Agarwal Complex';
+                  locId = 1;
+                } else {
+                  locName = 'Mercado';
+                  locId = 2;
+                }
+              }
+
+              let displayCabin = c.cabinName;
+              if (isVO) {
+                displayCabin = 'Virtual Office';
+              } else if (Array.isArray(c.products) && c.products.length > 0) {
+                const nonParking = c.products.filter((p: any) => !(p.cabinName || '').toLowerCase().includes('parking'));
+                if (nonParking.length > 0) {
+                  displayCabin = nonParking.map((p: any) => p.cabinName).filter(Boolean).join(', ');
+                } else {
+                  displayCabin = c.products.map((p: any) => p.cabinName).filter(Boolean).join(', ');
+                }
+              } else if (c.cabinName) {
+                const parts = c.cabinName.split(',').map((s: string) => s.trim());
+                const nonParking = parts.filter((s: string) => !s.toLowerCase().includes('parking'));
+                if (nonParking.length > 0) {
+                  displayCabin = nonParking.join(', ');
+                }
+              }
+
+              return {
+                id: c.id,
+                companyName: c.companyName,
+                clientId: c.clientId,
+                cabinName: displayCabin || 'Dedicated Space',
+                noOfSeats: isVO ? 0 : clientSeats,
+                parkingSlots: clientParking,
+                monthlyAmount: clientVal,
+                sdrAmount: Number(c.sorAmount || c.sdrAmount || 0),
+                clientStatus: c.clientStatus || 'Active',
+                clientType: c.clientType || 'DEFAULT',
+                centreName: locName,
+                centreId: locId,
+                agreementStartDate: c.agreementStartDate || c.createdAt,
+                agreementEndDate: c.agreementEndDate || null,
+                agreementPdfUrl: c.agreementPdfUrl || null,
+                agreementPdfName: c.agreementPdfName || null,
+                lockInPeriod: c.lockInPeriodMonths || c.lockInPeriod || 11,
+                noticePeriodMonths: c.noticePeriodMonths || 1,
+              };
+            });
+            setInternalClients(mapped);
+          }
+        })
+        .catch(console.error)
+        .finally(() => setLoadingClients(false));
+    }
+  }, [isOpen, clients]);
+
+  const effectiveClients = useMemo(() => {
+    return (internalClients && internalClients.length > 0) ? internalClients : clients;
+  }, [internalClients, clients]);
 
   useEffect(() => {
     if (isOpen) {
@@ -113,13 +228,13 @@ export function CorporateClientsModal({
   // Centre stats computation
   const centreStats = useMemo(() => {
     const map: Record<string, { name: string; count: number; seats: number; parking: number; value: number }> = {
-      ALL: { name: "All Centres", count: clients.length, seats: 0, parking: 0, value: 0 },
+      ALL: { name: "All Centres", count: effectiveClients.length, seats: 0, parking: 0, value: 0 },
       "Agarwal Complex": { name: "Agarwal Complex", count: 0, seats: 0, parking: 0, value: 0 },
       "Mercado": { name: "Mercado Location", count: 0, seats: 0, parking: 0, value: 0 },
       "Premier House": { name: "Premier House", count: 0, seats: 0, parking: 0, value: 0 },
     };
 
-    clients.forEach((c) => {
+    effectiveClients.forEach((c) => {
       const seats = Number(c.noOfSeats || 0);
       const parking = Number(c.parkingSlots || 0);
       const val = Number(c.monthlyAmount || 0);
@@ -138,11 +253,11 @@ export function CorporateClientsModal({
     });
 
     return map;
-  }, [clients]);
+  }, [effectiveClients]);
 
   // Filtered & Sorted Clients
   const filteredClients = useMemo(() => {
-    let list = [...clients];
+    let list = [...effectiveClients];
 
     // Status Tab Filter
     if (statusTab === "ACTIVE") {
@@ -289,7 +404,7 @@ export function CorporateClientsModal({
                   </div>
                   <p className="text-xs text-neutral-300 font-light mt-0.5 flex items-center gap-2 flex-wrap">
                     <span>
-                      Total: <strong className="text-white font-bold">{clients.length} Companies</strong>
+                      Total: <strong className="text-white font-bold">{effectiveClients.length} Companies</strong>
                     </span>
                     <span>•</span>
                     <span>
@@ -356,7 +471,7 @@ export function CorporateClientsModal({
                   1. All Clients
                 </div>
                 <div className="text-lg font-black text-neutral-900 font-display mt-0.5">
-                  {clients.length} Companies
+                  {effectiveClients.length} Companies
                 </div>
                 <div className="text-[10px] text-neutral-500 font-medium mt-0.5">
                   {centreStats.ALL.seats} Workstation Seats{centreStats.ALL.parking > 0 ? ` • 🚗 ${centreStats.ALL.parking} Parking` : ""}
@@ -481,7 +596,7 @@ export function CorporateClientsModal({
               {/* Metrics */}
               <div className="flex items-center gap-2 self-end md:self-auto text-xs">
                 <span className="text-neutral-500 font-medium">
-                  Showing <strong className="text-neutral-900 font-bold">{filteredClients.length}</strong> of {clients.length}
+                  Showing <strong className="text-neutral-900 font-bold">{filteredClients.length}</strong> of {effectiveClients.length}
                 </span>
                 <span className="font-bold text-teal-800 bg-teal-50 px-2.5 py-1 border border-teal-200 font-mono text-xs flex items-center gap-1.5 flex-wrap">
                   <span>{totalFilteredSeats} Workstation Seats</span>

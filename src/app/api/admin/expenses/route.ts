@@ -99,7 +99,15 @@ export async function GET(req: NextRequest) {
       roleName === 'super_admin' ||
       roleName === 'super-admin' ||
       roleName === 'super admin';
-    const isAccountant = (dbUser.email || '').toLowerCase() === 'ssinfrazone21@gmail.com' || (dbUser.name || '').toLowerCase() === 'accounts';
+    const isAccountant =
+      (dbUser.email || '').toLowerCase() === 'ssinfrazone21@gmail.com' ||
+      (dbUser.name || '').toLowerCase() === 'accounts' ||
+      roleName === 'accounts' ||
+      roleName === 'accountant';
+    const isHr =
+      (dbUser.email || '').toLowerCase() === 'hr.ssinfrazone@gmail.com' ||
+      (dbUser.name || '').toLowerCase() === 'human resource' ||
+      roleName === 'hr';
 
     let accessibleLocations: any[] = [];
 
@@ -119,8 +127,8 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    if (isSuperAdmin || isAccountant) {
-      // Super Admin and Accountant can access all active location centers
+    if (isSuperAdmin || isAccountant || isHr) {
+      // Super Admin, Accountant, and HR can access all active location centers
       accessibleLocations = allLocations;
     } else {
       // Community Manager: check assigned locations first
