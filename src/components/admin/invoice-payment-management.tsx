@@ -36,6 +36,7 @@ import {
   ChevronUp,
   SlidersHorizontal,
   Sparkles,
+  BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -43,6 +44,7 @@ import { OldInvoicesArchive } from '@/components/admin/old-invoices-archive';
 import { ManagePaymentModal, type DailyFmsCheckItem } from '@/components/admin/manage-payment-modal';
 import { BankRulesModal } from '@/components/admin/bank-rules-modal';
 import { BankStatementModal } from '@/components/admin/bank-statement-modal';
+import { InvoicePaymentReportModal } from '@/components/admin/invoice-payment-report-modal';
 import { SdrReceiveManagement } from '@/components/admin/sdr-receive-management';
 import type { BankRulesState } from '@/app/api/admin/bank-rules/route';
 
@@ -192,6 +194,7 @@ export function InvoicePaymentManagement({
   // 3 Accounts & Bank Rules / Statement Modals
   const [isBankRulesModalOpen, setIsBankRulesModalOpen] = useState<boolean>(false);
   const [isBankStatementModalOpen, setIsBankStatementModalOpen] = useState<boolean>(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
   const [bankRules, setBankRules] = useState<BankRulesState | null>(null);
 
   const fetchBankRules = useCallback(async () => {
@@ -1463,6 +1466,20 @@ export function InvoicePaymentManagement({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* 7-Day Collections & Payment Reports Button (Positioned left side of Live Approved) */}
+            <button
+              type="button"
+              onClick={() => setIsReportModalOpen(true)}
+              className="px-3.5 py-1.5 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-xs border border-[#004d40] cursor-pointer transition-all hover:shadow-sm"
+              title="7-Day Collections Report: View client payment receipts from last 7 days centre-wise"
+            >
+              <BarChart3 size={13} className="text-amber-300" />
+              <span>Reports</span>
+              <span className="px-1.5 py-0.2 bg-white/20 text-white text-[9.5px] font-mono rounded">
+                7 Days
+              </span>
+            </button>
+
             {/* View Mode Toggle: Live Approved vs Old Archive */}
             <div className="flex items-center bg-white border border-[var(--outline-variant)] shadow-xs p-0.5">
               <button
@@ -4051,6 +4068,14 @@ export function InvoicePaymentManagement({
         onClose={() => setIsBankStatementModalOpen(false)}
         isAdmin={isSuperAdmin}
         isAccountant={isAccountant}
+      />
+
+      {/* ── 7-Day Collections & Payment Report Modal ── */}
+      <InvoicePaymentReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        invoices={invoices}
+        initialLocation={selectedLocation}
       />
     </div>
   );
