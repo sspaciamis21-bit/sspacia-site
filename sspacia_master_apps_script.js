@@ -868,9 +868,11 @@ function removeDaily1AMTrigger() {
 function setupInvoiceWorkflowHeaders() {
   var sheet = getInvProcessSheet();
 
-  // ── 1. Data Set (Cols A to C) ──────────────────────────────────────────
-  try { sheet.getRange("A1:C4").breakApart(); } catch (e) {}
-  sheet.getRange("A1:C4").merge()
+  // ── Safely Break Apart Any Previous Merges in Rows 1 to 6 ───────────────
+  try { sheet.getRange(1, 1, 6, 26).breakApart(); } catch (e) {}
+
+  // ── 1. Data Set (Cols A to D, Rows 2-5) ──────────────────────────────────
+  sheet.getRange("A2:D5").merge()
        .setValue("Data Set")
        .setFontFamily("Roboto")
        .setFontSize(14)
@@ -878,92 +880,103 @@ function setupInvoiceWorkflowHeaders() {
        .setHorizontalAlignment("center")
        .setVerticalAlignment("middle");
 
-  sheet.getRange(5, 1).setValue("Doer Centre");
-  sheet.getRange(5, 2).setValue("Invoice Month");
-  sheet.getRange(5, 3).setValue("Company Name");
+  // ── 2. Step 1: Review Invoice entries & Send to Accountant (Cols E to H, Rows 2-5) ──
+  sheet.getRange("E2:H2").merge().setValue("Review Invoice entries & Send to Accountant to attach tally pdf").setFontWeight("bold");
+  sheet.getRange("E3:H3").merge().setValue("Community Managers");
+  sheet.getRange("E4:H4").merge().setValue("sspacia site - when invoice entry arrive in invoice section");
+  sheet.getRange("E5:H5").merge().setValue("8");
 
-  // ── 2. Step 1: Review Invoices & Send to Accountant (Cols D to G) ────────
-  try { sheet.getRange("D1:G1").breakApart(); } catch (e) {}
-  try { sheet.getRange("D2:G2").breakApart(); } catch (e) {}
-  try { sheet.getRange("D3:G3").breakApart(); } catch (e) {}
-  try { sheet.getRange("D4:G4").breakApart(); } catch (e) {}
+  // ── 3. Step 2: Attach Tally Invoice PDF and send back to CM (Cols I to L, Rows 2-5) ──
+  sheet.getRange("I2:L2").merge().setValue("Attach Tally Invoice PDF and send back to CM").setFontWeight("bold");
+  sheet.getRange("I3:L3").merge().setValue("Dipendra");
+  sheet.getRange("I4:L4").merge().setValue("sspacia site - when CM sent to accountant");
+  sheet.getRange("I5:L5").merge().setValue("8");
 
-  sheet.getRange("D1:G1").merge().setValue("Review Invoices & Send to Accountant to attach tally pdf").setFontWeight("bold");
-  sheet.getRange("D2:G2").merge().setValue("Community Managers");
-  sheet.getRange("D3:G3").merge().setValue("sspacia site");
-  sheet.getRange("D4:G4").merge().setValue("when invoice entry arrive in invoice section");
+  // ── 4. Step 3: approve or reject accountant attached invoice pdf (Cols M to P, Rows 2-5) ──
+  sheet.getRange("M2:P2").merge().setValue("approve or reject accountant attached invoice pdf").setFontWeight("bold");
+  sheet.getRange("M3:P3").merge().setValue("Community Managers");
+  sheet.getRange("M4:P4").merge().setValue("sspacia site - when accountant send back with attached inv pdf");
+  sheet.getRange("M5:P5").merge().setValue("8");
 
-  // ── 3. Step 2: Attach Tally Invoice PDF and send back to CM (Cols H to K) ─
-  try { sheet.getRange("H1:K1").breakApart(); } catch (e) {}
-  try { sheet.getRange("H2:K2").breakApart(); } catch (e) {}
-  try { sheet.getRange("H3:K3").breakApart(); } catch (e) {}
-  try { sheet.getRange("H4:K4").breakApart(); } catch (e) {}
+  // ── 5. Step 4: Website Auto send Email to Client with Attached Invoice (Col Q, Rows 2-5) ──
+  sheet.getRange("Q2:Q5").merge()
+       .setValue("Website Auto send Email to Client with Attached Invoice")
+       .setFontWeight("bold")
+       .setWrap(true);
 
-  sheet.getRange("H1:K1").merge().setValue("Attach Tally Invoice PDF and send back to CM").setFontWeight("bold");
-  sheet.getRange("H2:K2").merge().setValue("from sspacia site");
-  sheet.getRange("H3:K3").merge().setValue("dipendra");
-  sheet.getRange("H4:K4").merge().setValue("when CM sent to accountant");
-
-  // ── 4. Step 3: Approve and send Inv to client (Cols L to O) ──────────────
-  try { sheet.getRange("L1:O1").breakApart(); } catch (e) {}
-  try { sheet.getRange("L2:O2").breakApart(); } catch (e) {}
-  try { sheet.getRange("L3:O3").breakApart(); } catch (e) {}
-  try { sheet.getRange("L4:O4").breakApart(); } catch (e) {}
-
-  sheet.getRange("L1:O1").merge().setValue("Approve and send Inv to client").setFontWeight("bold");
-  sheet.getRange("L2:O2").merge().setValue("Community Managers");
-  sheet.getRange("L3:O3").merge().setValue("sspacia site");
-  sheet.getRange("L4:O4").merge().setValue("after reviewing and approve attached tally inv pdf");
-
-  // ── Subheaders (Row 5) ────────────────────────────────────────────────────
-  var subHeaders = ["Planned", "Actual", "Status", "TimeDelay"];
-  for (var s = 0; s < 3; s++) {
-    var startCol = 4 + s * 4; // Col 4 (D), Col 8 (H), Col 12 (L)
-    for (var h = 0; h < 4; h++) {
-      sheet.getRange(5, startCol + h).setValue(subHeaders[h]);
-    }
+  // ── 6. Subheaders (Row 6: Cols A to Q) ──────────────────────────────────
+  var subHeaders = [
+    "Doer Centre",    // Col 1 (A)
+    "Invoice Month",  // Col 2 (B)
+    "Company Name",   // Col 3 (C)
+    "Log Timestamp",  // Col 4 (D)
+    "Planned",        // Col 5 (E)
+    "Actual",         // Col 6 (F)
+    "Status",         // Col 7 (G)
+    "TimeDelay",      // Col 8 (H)
+    "Planned",        // Col 9 (I)
+    "Actual",         // Col 10 (J)
+    "Status",         // Col 11 (K)
+    "TimeDelay",      // Col 12 (L)
+    "Planned",        // Col 13 (M)
+    "Actual",         // Col 14 (N)
+    "Status",         // Col 15 (O)
+    "TimeDelay",      // Col 16 (P)
+    "Status"          // Col 17 (Q)
+  ];
+  for (var h = 0; h < subHeaders.length; h++) {
+    sheet.getRange(6, h + 1).setValue(subHeaders[h]);
   }
 
-  // Format Header Block (A1:O5)
-  sheet.getRange("A1:O5")
+  // Format Header Block (A2:Q6)
+  sheet.getRange("A2:Q6")
        .setFontFamily("Roboto")
        .setFontSize(10)
        .setHorizontalAlignment("center")
        .setVerticalAlignment("middle")
        .setBackground(null)
        .setFontColor(null);
-  sheet.getRange("A1:C4").setFontSize(14);
-  sheet.getRange("A5:O5").setFontWeight("bold");
-  sheet.getRange("A1:O5").setBorder(true, true, true, true, true, true, "#000000", SpreadsheetApp.BorderStyle.SOLID);
+  sheet.getRange("A2:D5").setFontSize(14);
+  sheet.getRange("A6:Q6").setFontWeight("bold");
+  sheet.getRange("A2:Q6").setBorder(true, true, true, true, true, true, "#000000", SpreadsheetApp.BorderStyle.SOLID);
 
   // Column Widths
-  sheet.setColumnWidth(1, 140); // Doer Centre
-  sheet.setColumnWidth(2, 130); // Invoice Month
-  sheet.setColumnWidth(3, 240); // Company Name
-  for (var c = 4; c <= 15; c++) {
-    var mod = (c - 4) % 4;
-    if (mod === 0 || mod === 1) sheet.setColumnWidth(c, 160); // Planned, Actual
-    else sheet.setColumnWidth(c, 90);                         // Status, TimeDelay
-  }
+  sheet.setColumnWidth(1, 130);  // Doer Centre
+  sheet.setColumnWidth(2, 120);  // Invoice Month
+  sheet.setColumnWidth(3, 260);  // Company Name
+  sheet.setColumnWidth(4, 160);  // Log Timestamp
+  sheet.setColumnWidth(5, 160);  // Step 1 Planned
+  sheet.setColumnWidth(6, 160);  // Step 1 Actual
+  sheet.setColumnWidth(7, 90);   // Step 1 Status
+  sheet.setColumnWidth(8, 90);   // Step 1 TimeDelay
+  sheet.setColumnWidth(9, 160);  // Step 2 Planned
+  sheet.setColumnWidth(10, 160); // Step 2 Actual
+  sheet.setColumnWidth(11, 90);  // Step 2 Status
+  sheet.setColumnWidth(12, 90);  // Step 2 TimeDelay
+  sheet.setColumnWidth(13, 160); // Step 3 Planned
+  sheet.setColumnWidth(14, 160); // Step 3 Actual
+  sheet.setColumnWidth(15, 90);  // Step 3 Status
+  sheet.setColumnWidth(16, 90);  // Step 3 TimeDelay
+  sheet.setColumnWidth(17, 120); // Step 4 Email Status
 
-  sheet.setRowHeight(1, 24);
-  sheet.setRowHeight(2, 22);
+  sheet.setRowHeight(2, 24);
   sheet.setRowHeight(3, 22);
-  sheet.setRowHeight(4, 24);
-  sheet.setRowHeight(5, 28);
-  sheet.setFrozenRows(5);
+  sheet.setRowHeight(4, 22);
+  sheet.setRowHeight(5, 22);
+  sheet.setRowHeight(6, 28);
+  sheet.setFrozenRows(6);
 
-  return { status: "success", message: "INV PROCESS FMS headers successfully configured on tab 'INV PROCESS FMS' (Cols A:O)" };
+  return { status: "success", message: "INV PROCESS FMS headers successfully configured on tab 'INV PROCESS FMS' (Cols A:Q, Data Row 7+)" };
 }
 
 function findInvoiceRowInInvProcess(sheet, centerName, invoiceMonth, companyName) {
   var lastRow = sheet.getLastRow();
-  if (lastRow < 6) return -1;
+  if (lastRow < 7) return -1;
   var normCenter = normFmsText(centerName);
   var normMonth = normFmsText(invoiceMonth);
   var normCompany = normFmsText(companyName);
 
-  var values = sheet.getRange(6, 1, lastRow - 5, 3).getDisplayValues();
+  var values = sheet.getRange(7, 1, lastRow - 6, 3).getDisplayValues();
   for (var i = 0; i < values.length; i++) {
     var rCenter = normFmsText(values[i][0]);
     var rMonth = normFmsText(values[i][1]);
@@ -973,7 +986,7 @@ function findInvoiceRowInInvProcess(sheet, centerName, invoiceMonth, companyName
     var compMatch = (rCompany === normCompany || rCompany.indexOf(normCompany) !== -1 || normCompany.indexOf(rCompany) !== -1);
 
     if (compMatch && monthMatch) {
-      return 6 + i;
+      return 7 + i;
     }
   }
   return -1;
@@ -983,10 +996,11 @@ function getOrCreateInvoiceRowInInvProcess(sheet, centerName, invoiceMonth, comp
   var targetRow = findInvoiceRowInInvProcess(sheet, centerName, invoiceMonth, companyName);
   if (targetRow !== -1) return targetRow;
 
-  var lastRow = Math.max(sheet.getLastRow(), 5);
-  for (var r = 6; r <= lastRow + 1; r++) {
+  var lastRow = Math.max(sheet.getLastRow(), 6);
+  for (var r = 7; r <= lastRow + 1; r++) {
     var aVal = String(sheet.getRange(r, 1).getValue() || "").trim();
-    if (!aVal) {
+    var cVal = String(sheet.getRange(r, 3).getValue() || "").trim();
+    if (!aVal && !cVal) {
       targetRow = r;
       break;
     }
@@ -996,7 +1010,7 @@ function getOrCreateInvoiceRowInInvProcess(sheet, centerName, invoiceMonth, comp
   sheet.getRange(targetRow, 1).setValue(centerName).setFontWeight("bold").setHorizontalAlignment("center");
   sheet.getRange(targetRow, 2).setValue(invoiceMonth).setHorizontalAlignment("center");
   sheet.getRange(targetRow, 3).setValue(companyName).setFontWeight("bold");
-  sheet.getRange(targetRow, 1, 1, 15).setFontFamily("Roboto").setFontSize(10).setVerticalAlignment("middle");
+  sheet.getRange(targetRow, 1, 1, 17).setFontFamily("Roboto").setFontSize(10).setVerticalAlignment("middle");
 
   return targetRow;
 }
@@ -1016,61 +1030,71 @@ function handleInvoiceWorkflowFms(payload) {
     return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // ── STEP 1 ARRIVAL: Invoice entry arrives in invoice section ──────────────
   if (action === "invoice_fms_arrival") {
-    var plannedTimestamp = payload.planned || timestamp;
+    var logTime = payload.logTimestamp || payload.createdAt || payload.planned || timestamp;
     var row = getOrCreateInvoiceRowInInvProcess(sheet, centerName, invoiceMonth, companyName);
-    setDateValue(sheet.getRange(row, 4), plannedTimestamp);
-    setPlainStatus(sheet.getRange(row, 6), "Pending");
-    sheet.getRange(row, 5).clearContent();
-    sheet.getRange(row, 8).clearContent();
-    sheet.getRange(row, 9).clearContent();
+    // Col D (4): Log Timestamp (exact timestamp where invoice entry got generated)
+    setDateValue(sheet.getRange(row, 4), parseTimestampToDate(logTime));
+    // Clear actuals in Col F (6), Col J (10), Col N (14)
+    sheet.getRange(row, 6).clearContent();
     sheet.getRange(row, 10).clearContent();
-    sheet.getRange(row, 12).clearContent();
-    sheet.getRange(row, 13).clearContent();
     sheet.getRange(row, 14).clearContent();
+    // Col Q (17): Email status -> Pending
+    sheet.getRange(row, 17).setValue("Pending").setHorizontalAlignment("center").setFontWeight("bold");
+    // Preserve formula columns: E, G, H, I, K, L, M, O, P untouched!
     return ContentService.createTextOutput(JSON.stringify({
-      status: "success", message: "Step 1 Planned logged for " + companyName + " in row " + row, row: row,
-      planned: getNowTimestampString(parseTimestampToDate(plannedTimestamp))
+      status: "success", message: "Invoice Logged for " + companyName + " in row " + row, row: row,
+      logTimestamp: getNowTimestampString(parseTimestampToDate(logTime))
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // ── STEP 1 ACTUAL: CM sends to accountant ─────────────────────────────────
   else if (action === "invoice_fms_sent_accountant") {
     var row = getOrCreateInvoiceRowInInvProcess(sheet, centerName, invoiceMonth, companyName);
     var actualTime = payload.actual || timestamp;
-    setDateValue(sheet.getRange(row, 5), actualTime);
-    setPlainStatus(sheet.getRange(row, 6), "Done");
-    setDateValue(sheet.getRange(row, 8), actualTime);
-    setPlainStatus(sheet.getRange(row, 10), "Pending");
-    sheet.getRange(row, 12).clearContent();
-    sheet.getRange(row, 13).clearContent();
-    sheet.getRange(row, 14).clearContent();
+    // Col F (6): Actual (when CM sent to accountant)
+    setDateValue(sheet.getRange(row, 6), parseTimestampToDate(actualTime));
+    // User formula in Col G, H, I calculates Status, TimeDelay, Step 2 Planned automatically
     return ContentService.createTextOutput(JSON.stringify({
-      status: "success", message: "Step 1 Sent to Accountant logged & Step 2 Planned set in row " + row, row: row,
+      status: "success", message: "Step 1 Sent to Accountant logged in row " + row, row: row,
       sentAt: getNowTimestampString(parseTimestampToDate(actualTime))
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // ── STEP 2 ACTUAL: Accountant attaches Tally PDF & sends back to CM ────────
   else if (action === "invoice_fms_pdf_attached") {
     var row = getOrCreateInvoiceRowInInvProcess(sheet, centerName, invoiceMonth, companyName);
     var actualTime = payload.actual || timestamp;
-    setDateValue(sheet.getRange(row, 9), actualTime);
-    setPlainStatus(sheet.getRange(row, 10), "Done");
-    setDateValue(sheet.getRange(row, 12), actualTime);
-    setPlainStatus(sheet.getRange(row, 14), "Pending");
+    // Col J (10): Actual (when accountant attached PDF)
+    setDateValue(sheet.getRange(row, 10), parseTimestampToDate(actualTime));
+    // User formula in Col K, L, M calculates Status, TimeDelay, Step 3 Planned automatically
     return ContentService.createTextOutput(JSON.stringify({
-      status: "success", message: "Step 2 Tally PDF Attached logged & Step 3 Planned set in row " + row, row: row,
+      status: "success", message: "Step 2 Tally PDF Attached logged in row " + row, row: row,
       attachedAt: getNowTimestampString(parseTimestampToDate(actualTime))
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // ── STEP 3 ACTUAL: CM approves or rejects tally PDF ────────────────────────
   else if (action === "invoice_fms_approved_client") {
     var row = getOrCreateInvoiceRowInInvProcess(sheet, centerName, invoiceMonth, companyName);
     var actualTime = payload.actual || timestamp;
-    setDateValue(sheet.getRange(row, 13), actualTime);
-    setPlainStatus(sheet.getRange(row, 14), "Done");
+    // Col N (14): Actual (when CM approved or rejected tally PDF)
+    setDateValue(sheet.getRange(row, 14), parseTimestampToDate(actualTime));
     return ContentService.createTextOutput(JSON.stringify({
-      status: "success", message: "Step 3 Approved and Sent to Client logged in row " + row, row: row,
+      status: "success", message: "Step 3 CM Approval logged in row " + row, row: row,
       approvedAt: getNowTimestampString(parseTimestampToDate(actualTime))
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // ── STEP 4: Website Auto send Email to Client with Attached Invoice ────────
+  else if (action === "invoice_fms_email_sent") {
+    var row = getOrCreateInvoiceRowInInvProcess(sheet, centerName, invoiceMonth, companyName);
+    var emailStatus = payload.status || "Sent";
+    // Col Q (17): Status -> Sent or Pending
+    sheet.getRange(row, 17).setValue(emailStatus).setHorizontalAlignment("center").setFontWeight("bold");
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success", message: "Client Email Status set to '" + emailStatus + "' in row " + row, row: row
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -1079,14 +1103,17 @@ function handleInvoiceWorkflowFms(payload) {
     return ContentService.createTextOutput(JSON.stringify(sortRes)).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // ── BOOTSTRAP FAST SYNC: Populate All Invoices into INV PROCESS FMS ────────
   else if (action === "invoice_fms_bootstrap_sync") {
-    setupInvoiceWorkflowHeaders();
+    if (payload.setupHeaders || sheet.getLastRow() < 6) {
+      setupInvoiceWorkflowHeaders();
+    }
     var items = payload.items || [];
     if (items.length === 0) {
       return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "No items to sync" })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Chronologically sort items by invoiceMonth (e.g. August 2026 -> September 2026 -> October 2026)
+    // Chronologically sort items by invoiceMonth (August 2026 -> September 2026 -> October 2026)
     items.sort(function(a, b) {
       var keyA = parseInvoiceMonthSortKey(a.invoiceMonth || "");
       var keyB = parseInvoiceMonthSortKey(b.invoiceMonth || "");
@@ -1095,63 +1122,89 @@ function handleInvoiceWorkflowFms(payload) {
     });
 
     var lastExistingRow = sheet.getLastRow();
-    if (lastExistingRow >= 6) {
-      sheet.getRange(6, 1, lastExistingRow - 5, 15).clearContent();
+    if (lastExistingRow >= 7) {
+      var clearCount = lastExistingRow - 6;
+      // Clear ONLY script-managed columns: Cols A-D, Col F, Col J, Col N, Col Q
+      // Leaving user formula columns E, G, H, I, K, L, M, O, P 100% UNTOUCHED!
+      sheet.getRange(7, 1, clearCount, 4).clearContent();  // A to D
+      sheet.getRange(7, 6, clearCount, 1).clearContent();  // F
+      sheet.getRange(7, 10, clearCount, 1).clearContent(); // J
+      sheet.getRange(7, 14, clearCount, 1).clearContent(); // N
+      sheet.getRange(7, 17, clearCount, 1).clearContent(); // Q
     }
 
-    var rows = [];
+    var dataSetRows = [];
+    var step1Actuals = [];
+    var step2Actuals = [];
+    var step3Actuals = [];
+    var emailStatuses = [];
+
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
-      var isOld4Step = Boolean(it.step4Planned || it.step4Actual);
-      var s1Planned = it.step1Planned ? parseTimestampToDate(it.step1Planned) : "";
-      var s1Actual = "";
-      if (isOld4Step) {
-        s1Actual = it.step2Actual ? parseTimestampToDate(it.step2Actual) : (it.step1Actual ? parseTimestampToDate(it.step1Actual) : "");
-      } else {
-        s1Actual = it.step1Actual ? parseTimestampToDate(it.step1Actual) : "";
-      }
-      var s1Status = s1Actual ? "Done" : (s1Planned ? "Pending" : "");
-      var s2Planned = s1Actual ? s1Actual : "";
-      var s2Actual = "";
-      if (s1Actual) {
-        if (isOld4Step) { s2Actual = it.step3Actual ? parseTimestampToDate(it.step3Actual) : ""; }
-        else { s2Actual = it.step2Actual ? parseTimestampToDate(it.step2Actual) : ""; }
-      }
-      var s2Status = s2Actual ? "Done" : (s2Planned ? "Pending" : "");
-      var s3Planned = s2Actual ? s2Actual : "";
-      var s3Actual = "";
-      if (s2Actual) {
-        if (isOld4Step) { s3Actual = it.step4Actual ? parseTimestampToDate(it.step4Actual) : ""; }
-        else { s3Actual = it.step3Actual ? parseTimestampToDate(it.step3Actual) : ""; }
-      }
-      var s3Status = s3Actual ? "Done" : (s3Planned ? "Pending" : "");
+      var center = it.centerName || "Mercado";
+      var month = it.invoiceMonth || "";
+      var company = it.companyName || "";
 
-      rows.push([
-        it.centerName || "Mercado", it.invoiceMonth || "", it.companyName || "",
-        s1Planned, s1Actual, s1Status, "",
-        s2Planned, s2Actual, s2Status, "",
-        s3Planned, s3Actual, s3Status, ""
-      ]);
+      // Log Timestamp: exact timestamp invoice entry arrived / created
+      var logTs = it.logTimestamp || it.createdAt || it.step1Planned || "";
+      var logDate = logTs ? parseTimestampToDate(logTs) : "";
+
+      // Step 1 Actual: when CM sent to accountant
+      var s1Act = it.step1Actual ? parseTimestampToDate(it.step1Actual) : "";
+
+      // Step 2 Actual: when accountant attached PDF
+      var s2Act = it.step2Actual ? parseTimestampToDate(it.step2Actual) : "";
+
+      // Step 3 Actual: when CM approved or rejected PDF
+      var s3Act = it.step3Actual ? parseTimestampToDate(it.step3Actual) : "";
+
+      // Col Q: Website Auto send Email to Client ("Sent" or "Pending")
+      var emailSt = (it.emailStatus === "Sent" || it.clientEmailSentAt) ? "Sent" : "Pending";
+
+      dataSetRows.push([center, month, company, logDate]);
+      step1Actuals.push([s1Act]);
+      step2Actuals.push([s2Act]);
+      step3Actuals.push([s3Act]);
+      emailStatuses.push([emailSt]);
     }
 
-    sheet.getRange(6, 1, rows.length, 15).setValues(rows);
-    sheet.getRange(6, 1, rows.length, 15)
+    var totalRows = items.length;
+
+    // Completely clear all columns A to Q for any phantom rows beyond active items (e.g. rows 164+)
+    if (lastExistingRow > 6 + totalRows) {
+      sheet.getRange(7 + totalRows, 1, lastExistingRow - (6 + totalRows), 17).clearContent();
+    }
+
+    // 1. Write Data Set (Cols A to D)
+    sheet.getRange(7, 1, totalRows, 4).setValues(dataSetRows);
+    sheet.getRange(7, 1, totalRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
+    sheet.getRange(7, 2, totalRows, 1).setHorizontalAlignment("center");
+    sheet.getRange(7, 3, totalRows, 1).setFontWeight("bold");
+    sheet.getRange(7, 4, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+
+    // 2. Write Step 1 Actual (Col F: Col 6)
+    sheet.getRange(7, 6, totalRows, 1).setValues(step1Actuals);
+    sheet.getRange(7, 6, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+
+    // 3. Write Step 2 Actual (Col J: Col 10)
+    sheet.getRange(7, 10, totalRows, 1).setValues(step2Actuals);
+    sheet.getRange(7, 10, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+
+    // 4. Write Step 3 Actual (Col N: Col 14)
+    sheet.getRange(7, 14, totalRows, 1).setValues(step3Actuals);
+    sheet.getRange(7, 14, totalRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+
+    // 5. Write Website Auto Send Email Status (Col Q: Col 17)
+    sheet.getRange(7, 17, totalRows, 1).setValues(emailStatuses);
+    sheet.getRange(7, 17, totalRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
+
+    // Formatting
+    sheet.getRange(7, 1, totalRows, 17)
          .setFontFamily("Roboto").setFontSize(10).setVerticalAlignment("middle")
          .setBackground(null).setFontColor(null);
-    sheet.getRange(6, 1, rows.length, 1).setHorizontalAlignment("center").setFontWeight("bold");
-    sheet.getRange(6, 2, rows.length, 1).setHorizontalAlignment("center");
-    sheet.getRange(6, 3, rows.length, 1).setFontWeight("bold");
-    var dateCols = [4, 5, 8, 9, 12, 13];
-    for (var dc = 0; dc < dateCols.length; dc++) {
-      sheet.getRange(6, dateCols[dc], rows.length, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
-    }
-    var statusCols = [6, 10, 14];
-    for (var sc = 0; sc < statusCols.length; sc++) {
-      sheet.getRange(6, statusCols[sc], rows.length, 1).setHorizontalAlignment("center").setFontWeight("bold");
-    }
 
     return ContentService.createTextOutput(JSON.stringify({
-      status: "success", message: "Populated " + items.length + " invoice workflow records successfully!", count: items.length
+      status: "success", message: "Populated " + totalRows + " invoice workflow records into INV PROCESS FMS (Rows 7 to " + (6 + totalRows) + ")", count: totalRows
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -1206,20 +1259,18 @@ function parseInvoiceMonthSortKey(monthStr) {
 }
 
 /**
- * 🔄 Sort Existing INV PROCESS FMS Tab Chronologically by Month (Cols A:O)
- * Sorts all rows from Row 6 downwards by Invoice Month (Col B) in chronological order:
- * August 2026 -> September 2026 -> October 2026 ...
+ * 🔄 Sort Existing INV PROCESS FMS Tab Chronologically by Month (Rows 7+)
  */
 function sortExistingInvProcessSheet() {
   var sheet = getInvProcessSheet();
   var lastRow = sheet.getLastRow();
-  if (lastRow < 6) {
+  if (lastRow < 7) {
     Logger.log("No data rows to sort in INV PROCESS FMS.");
     return { status: "notice", message: "No data rows to sort" };
   }
 
-  var numRows = lastRow - 5;
-  var range = sheet.getRange(6, 1, numRows, 15);
+  var numRows = lastRow - 6;
+  var range = sheet.getRange(7, 1, numRows, 17);
   var values = range.getValues();
 
   values.sort(function(rowA, rowB) {
@@ -1233,17 +1284,14 @@ function sortExistingInvProcessSheet() {
 
   range.setValues(values);
 
-  var dateCols = [4, 5, 8, 9, 12, 13];
+  var dateCols = [4, 6, 10, 14];
   for (var dc = 0; dc < dateCols.length; dc++) {
-    sheet.getRange(6, dateCols[dc], numRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
+    sheet.getRange(7, dateCols[dc], numRows, 1).setNumberFormat("dd/MM/yyyy HH:mm:ss").setHorizontalAlignment("center");
   }
-  var statusCols = [6, 10, 14];
-  for (var sc = 0; sc < statusCols.length; sc++) {
-    sheet.getRange(6, statusCols[sc], numRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
-  }
-  sheet.getRange(6, 1, numRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
-  sheet.getRange(6, 2, numRows, 1).setHorizontalAlignment("center");
-  sheet.getRange(6, 3, numRows, 1).setFontWeight("bold");
+  sheet.getRange(7, 1, numRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
+  sheet.getRange(7, 2, numRows, 1).setHorizontalAlignment("center");
+  sheet.getRange(7, 3, numRows, 1).setFontWeight("bold");
+  sheet.getRange(7, 17, numRows, 1).setHorizontalAlignment("center").setFontWeight("bold");
 
   Logger.log("✅ INV PROCESS FMS sorted successfully (" + numRows + " rows)!");
   return { status: "success", message: "Sorted " + numRows + " rows chronologically by month" };

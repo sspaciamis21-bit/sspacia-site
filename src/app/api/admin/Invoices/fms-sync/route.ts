@@ -109,7 +109,7 @@ async function fetchAugSepItems() {
     const signedTime = inv.signedAt ? formatFmsTimestamp(inv.signedAt) : updatedTime;
 
     // Step 1: Review Invoices & Send to Accountant to attach tally pdf
-    const isSentToAccountant = ['SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED'].includes(status);
+    const isSentToAccountant = ['SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS', 'INVOICE_ATTACHED', 'APPROVED'].includes(status);
     const step1Planned = getInvoiceStep1PlannedTimestamp(inv);
     const sentTime = inv.sentAt
       ? formatFmsTimestamp(inv.sentAt)
@@ -118,16 +118,20 @@ async function fetchAugSepItems() {
     const step1Status = isSentToAccountant ? 'Done' : 'Pending';
 
     // Step 2: Attach Tally Invoice PDF and send back to CM
-    const isAttached = ['INVOICE_ATTACHED', 'APPROVED'].includes(status) && Boolean(inv.attachedInvoice?.createdAt);
+    const isAttached = ['INVOICE_ATTACHED', 'APPROVED'].includes(status) && Boolean(inv.attachedInvoice?.fileUrl || inv.attachedInvoice?.createdAt);
     const step2Planned = isSentToAccountant ? step1Actual : '';
     const step2Actual = isAttached ? attachedTime : '';
     const step2Status = isAttached ? 'Done' : (isSentToAccountant ? 'Pending' : '');
 
-    // Step 3: Approve and send Inv to client
+    // Step 3: Approve or reject accountant attached invoice pdf
     const isApproved = status === 'APPROVED';
+    const isRejected = status === 'REJECTED_WITH_REMARKS';
     const step3Planned = isAttached ? step2Actual : '';
-    const step3Actual = isApproved ? signedTime : '';
-    const step3Status = isApproved ? 'Done' : (isAttached ? 'Pending' : '');
+    const step3Actual = isApproved ? (inv.signedAt ? formatFmsTimestamp(inv.signedAt) : updatedTime) : (isRejected ? updatedTime : '');
+    const step3Status = (isApproved || isRejected) ? 'Done' : (isAttached ? 'Pending' : '');
+
+    const logTimestamp = formatFmsTimestamp(inv.createdAt);
+    const emailStatus = inv.clientEmailSentAt ? 'Sent' : 'Pending';
 
     return {
       id: inv.id,
@@ -135,6 +139,7 @@ async function fetchAugSepItems() {
       invoiceMonth,
       companyName,
       status,
+      logTimestamp,
       step1Planned,
       step1Actual,
       step1Status,
@@ -144,6 +149,8 @@ async function fetchAugSepItems() {
       step3Planned,
       step3Actual,
       step3Status,
+      clientEmailSentAt: inv.clientEmailSentAt ? formatFmsTimestamp(inv.clientEmailSentAt) : null,
+      emailStatus,
     };
   });
 }

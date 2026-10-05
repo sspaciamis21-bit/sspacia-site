@@ -139,6 +139,7 @@ export async function syncInvoiceWorkflowArrival(invoiceRecordId: number, custom
     const details = await getInvoiceFmsDetails(invoiceRecordId);
     if (!details) return;
 
+    const logTimestamp = formatFmsTimestamp(details.invoice?.createdAt ? new Date(details.invoice.createdAt) : (customTimestamp || new Date()));
     const plannedTime = customTimestamp
       ? formatFmsTimestamp(customTimestamp)
       : getInvoiceStep1PlannedTimestamp(details.invoice);
@@ -148,8 +149,9 @@ export async function syncInvoiceWorkflowArrival(invoiceRecordId: number, custom
       centerName: details.centerName,
       invoiceMonth: details.invoiceMonth,
       companyName: details.companyName,
+      logTimestamp: logTimestamp,
       planned: plannedTime,
-      timestamp: plannedTime,
+      timestamp: logTimestamp,
     });
   } catch (err) {
     console.warn('[syncInvoiceWorkflowArrival notice]:', err);
@@ -252,6 +254,27 @@ export async function syncInvoiceWorkflowApprovedClient(invoiceRecordId: number,
 }
 
 /**
+ * STEP 4: Website Auto Send Email to Client with Attached Invoice
+ * Called when Tax Invoice email is dispatched to client
+ */
+export async function syncInvoiceWorkflowEmailSent(invoiceRecordId: number) {
+  try {
+    const details = await getInvoiceFmsDetails(invoiceRecordId);
+    if (!details) return;
+
+    return await sendToFmsWebhook({
+      action: 'invoice_fms_email_sent',
+      centerName: details.centerName,
+      invoiceMonth: details.invoiceMonth,
+      companyName: details.companyName,
+      status: 'Sent',
+    });
+  } catch (err) {
+    console.warn('[syncInvoiceWorkflowEmailSent notice]:', err);
+  }
+}
+
+/**
  * Master Setup Headers: Initializes the exact headers in 'expense fms' (Cols F:T)
  * and 'Accounts' (Cols U:X)
  */
@@ -260,3 +283,4 @@ export async function setupInvoiceWorkflowFmsHeaders() {
     action: 'invoice_fms_setup_headers',
   });
 }
+

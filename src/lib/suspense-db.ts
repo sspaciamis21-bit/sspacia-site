@@ -55,6 +55,15 @@ export async function ensureSuspenseTablesExist() {
   if (tablesChecked) return;
 
   try {
+    // Quick test if tables already exist to avoid slow/locking DDL
+    await prisma.$queryRawUnsafe('SELECT 1 FROM `SuspensePayment` LIMIT 1');
+    tablesChecked = true;
+    return;
+  } catch (checkErr) {
+    // Tables don't exist yet, proceed with creation
+  }
+
+  try {
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS \`SuspensePayment\` (
         \`id\` INT AUTO_INCREMENT PRIMARY KEY,

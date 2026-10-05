@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import prisma from '@/lib/prisma';
+import { syncInvoiceWorkflowEmailSent } from '@/lib/invoiceWorkflowFmsSync';
 
 /**
  * Creates Nodemailer SMTP transport for Zoho Mail (cm@sspacia.com)
@@ -502,6 +503,10 @@ Website: https://sspacia.com | Email: cm@sspacia.com | WhatsApp: +91 76003 93779
               clientEmailSentTo: recipientEmail,
               clientEmailSentCc: (finalCcList || []).join(', '),
             },
+          });
+          // Live sync Step 4 (Website Auto Send Email Status) to INV PROCESS FMS
+          syncInvoiceWorkflowEmailSent(invoiceRecordId).catch((fmsErr) => {
+            console.warn('[Invoice Email] Live FMS sync email status notice:', fmsErr);
           });
         } catch (dbErr) {
           console.warn(`[Invoice Email] Could not update clientEmailSentAt on Invoice #${invoiceRecordId}:`, dbErr);
