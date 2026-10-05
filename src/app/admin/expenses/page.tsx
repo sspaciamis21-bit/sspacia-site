@@ -282,7 +282,7 @@ export default function SuperAdminExpensesPage() {
       {/* ── VIEW MODE 1: NEW FORMAT (CLIENT MASTER STYLE) ── */}
       {viewMode === "REGISTER" && (
         <ExpenseRegister
-          initialLocationId={activeLocationId}
+          initialLocationId={isHrRole ? undefined : activeLocationId}
           isAccountant={isAccountantRole}
           isAdmin={isSuperAdmin}
           isHr={isHrRole}

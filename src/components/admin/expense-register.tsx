@@ -51,6 +51,8 @@ import {
   EyeOff,
   SlidersHorizontal,
   MessageSquare,
+  Copy,
+  Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
@@ -555,25 +557,27 @@ export function ExpenseRegister({
 
   // Role View State: CM View vs Accountant Billing View
   // CM can ONLY view CM View; Accountant can ONLY view Accountant View; Super Admin can view/switch both.
-  const isCMUser = !isAccountant && !isAdmin;
+  // HR is a cross-center auditor (not a single-center CM), with read-only access to all centers and full audit columns.
+  const isCMUser = !isAccountant && !isAdmin && !isHr;
   const isCMOnly = isCMUser;
   const isAccountantUser = Boolean(isAccountant) && !isAdmin;
   const isSuperAdminUser = Boolean(isAdmin);
 
   const [activeViewMode, setActiveViewMode] = useState<"CM" | "ACCOUNTANT">(() => {
     if (isAccountantUser) return "ACCOUNTANT";
+    if (isHr) return "ACCOUNTANT";
     if (isCMUser) return "CM";
     return "ACCOUNTANT";
   });
 
   // Strict role view locking
   useEffect(() => {
-    if (isAccountantUser && activeViewMode !== "ACCOUNTANT") {
+    if ((isAccountantUser || isHr) && activeViewMode !== "ACCOUNTANT") {
       setActiveViewMode("ACCOUNTANT");
     } else if (isCMUser && activeViewMode !== "CM") {
       setActiveViewMode("CM");
     }
-  }, [isAccountantUser, isCMUser, activeViewMode]);
+  }, [isAccountantUser, isHr, isCMUser, activeViewMode]);
 
   // ── SPREADSHEET CONTROLS: COLUMN WIDTHS, FREEZING, HIDING & FILTERS ──
   const activeColumns = useMemo(() => {
@@ -3418,6 +3422,12 @@ export function ExpenseRegister({
                 </button>
               );
             })}
+
+            {isHr && (
+              <span className="ml-auto text-[10px] font-bold text-[#006064] bg-cyan-50 border border-cyan-200 px-2.5 py-0.5 uppercase tracking-wider hidden sm:inline-flex items-center gap-1 shrink-0">
+                <Eye className="w-3 h-3 text-[#006064]" /> HR Audit View • All Centers Unlocked
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -4300,8 +4310,21 @@ export function ExpenseRegister({
                           const s = getColStyle("index");
                           if (!s) return null;
                           return (
-                            <td style={s.style} className={`py-3 px-2 text-center font-mono text-[11px] text-gray-400 ${s.className}`}>
-                              {index + 1}
+                            <td style={s.style} className={`py-3 px-1.5 text-center font-mono text-[11px] text-gray-400 ${s.className}`}>
+                              <div className="flex items-center justify-center gap-1">
+                                <span>{index + 1}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setViewingPaymentRecord(rec);
+                                    setIsViewPaymentModalOpen(true);
+                                  }}
+                                  className="p-0.5 text-gray-400 hover:text-[#006064] hover:bg-cyan-50 rounded transition-colors cursor-pointer"
+                                  title="View full expense entry details & audit trail"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-[#006064]" />
+                                </button>
+                              </div>
                             </td>
                           );
                         })()}
@@ -4549,7 +4572,18 @@ export function ExpenseRegister({
                                   <span>Edit</span>
                                 </button>
                               ) : (
-                                <span className="text-[10px] text-gray-300 font-mono">-</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setViewingPaymentRecord(rec);
+                                    setIsViewPaymentModalOpen(true);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase bg-[#006064] hover:bg-[#004d40] text-white rounded-xs shadow-2xs transition-all cursor-pointer"
+                                  title="View complete expense entry details & audit trail"
+                                >
+                                  <Eye className="w-3 h-3 text-cyan-200" />
+                                  <span>View</span>
+                                </button>
                               )}
                             </td>
                           );
@@ -4747,8 +4781,21 @@ export function ExpenseRegister({
                         const s = getColStyle("index");
                         if (!s) return null;
                         return (
-                          <td style={s.style} className={`py-3 px-2 text-center font-mono text-[11px] text-gray-400 ${s.className}`}>
-                            {index + 1}
+                          <td style={s.style} className={`py-3 px-1.5 text-center font-mono text-[11px] text-gray-400 ${s.className}`}>
+                            <div className="flex items-center justify-center gap-1">
+                              <span>{index + 1}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setViewingPaymentRecord(rec);
+                                  setIsViewPaymentModalOpen(true);
+                                }}
+                                className="p-0.5 text-gray-400 hover:text-[#006064] hover:bg-cyan-50 rounded transition-colors cursor-pointer"
+                                title="View full expense entry details & audit trail"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-[#006064]" />
+                              </button>
+                            </div>
                           </td>
                         );
                       })()}
@@ -5050,7 +5097,18 @@ export function ExpenseRegister({
                                 </button>
                               )}
                               {(isViewOnly || (!canEdit && !isCMEntry)) && (
-                                <span className="text-[10px] text-gray-300 font-mono">-</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setViewingPaymentRecord(rec);
+                                    setIsViewPaymentModalOpen(true);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase bg-[#006064] hover:bg-[#004d40] text-white rounded-xs shadow-2xs transition-all cursor-pointer"
+                                  title="View complete expense entry details & audit trail"
+                                >
+                                  <Eye className="w-3 h-3 text-cyan-200" />
+                                  <span>View</span>
+                                </button>
                               )}
                             </div>
                           </td>
@@ -5530,6 +5588,20 @@ export function ExpenseRegister({
                         return (
                           <td style={s.style} className={`py-2 px-3 text-center whitespace-nowrap bg-emerald-50/10 ${s.className}`}>
                             <div className="inline-flex items-center justify-center gap-1.5 flex-wrap">
+                              {/* Dedicated View Entry Button for HR Audit & All Roles */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setViewingPaymentRecord(rec);
+                                  setIsViewPaymentModalOpen(true);
+                                }}
+                                className="px-2 py-1 text-[9.5px] font-bold uppercase bg-white hover:bg-cyan-50 text-[#006064] border border-[#006064]/50 hover:border-[#006064] rounded-xs transition-all cursor-pointer shadow-2xs flex items-center gap-1 font-sans"
+                                title="View Complete Expense Entry Details & Attached Documents"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>View Entry</span>
+                              </button>
+
                               {/* Dedicated Button 1: Enter Vendor & Billing Breakdown Against Expense */}
                               <button
                                 type="button"
@@ -8833,260 +8905,472 @@ export function ExpenseRegister({
       )
       }
 
-      {/* ── MODAL 6: CM VIEW PAYMENT DETAILS MODAL ── */}
+      {/* ── MODAL 6: DETAILED EXPENSE AUDIT & ENTRY VIEWER (HR AUDIT / CM / SA / ACC) ── */}
       {
         mounted && typeof document !== "undefined" && isViewPaymentModalOpen && viewingPaymentRecord && createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
-            <div className="bg-white border border-gray-300 w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
-              {/* Header */}
-              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#006064] text-white sticky top-0 z-10">
-                <div className="flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-cyan-200" />
-                  <div>
-                    <h3 className="text-sm font-display font-black uppercase tracking-wide">
-                      Expense & Payment Settlement Details #{viewingPaymentRecord.id}
-                    </h3>
-                    <p className="text-[11px] text-cyan-100">
-                      Full billing, approval & disbursal status for Community Manager
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setIsViewPaymentModalOpen(false)}
-                  className="p-1 text-white/80 hover:text-white cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+          (() => {
+            const rec = viewingPaymentRecord;
+            const matchedVendor = vendors.find(
+              (v) => (rec.vendorId && v.id === rec.vendorId) ||
+                     (rec.vendorName && v.vendorName && v.vendorName.trim().toLowerCase() === rec.vendorName.trim().toLowerCase())
+            );
+            const dueDateBadge = getExpenseDueDateBadge(rec);
+            const isPaid = rec.paymentStatus === "PAID" || Boolean(rec.utrNumber);
 
-              <div className="p-5 space-y-4 text-xs">
-                {/* Center & Expense Summary */}
-                <div className="bg-cyan-50/50 p-3.5 border border-cyan-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-gray-500 font-bold">
-                      Center Expense Bill
-                    </span>
-                    <span className="text-xs font-bold px-2 py-0.5 bg-white text-[#006064] border border-cyan-300">
-                      {viewingPaymentRecord.locationName || "Center"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11.5px]">
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Category:</span>
-                      <strong className="text-gray-900">{viewingPaymentRecord.category || "GENERAL"}</strong>
+            return (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-3 sm:p-5 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-150">
+                <div className="bg-white border border-gray-300 w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl rounded-sm overflow-hidden my-auto">
+                  {/* Header */}
+                  <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#006064] text-white shrink-0">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-white/10 rounded-sm">
+                        <Eye className="w-5 h-5 text-cyan-200" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm sm:text-base font-display font-black uppercase tracking-wide">
+                            Expense Entry Audit #{rec.id}
+                          </h3>
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-white text-[#006064] uppercase tracking-wider rounded-2xs">
+                            {rec.locationName || "Center"}
+                          </span>
+                          {isPaid ? (
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500 text-white uppercase tracking-wider rounded-2xs">
+                              Paid ✓
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-500 text-white uppercase tracking-wider rounded-2xs">
+                              Pending Disbursal
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-cyan-100 mt-0.5">
+                          Complete Expense Requisition, Vendor Banking, Multi-Stage Approval & Disbursal Audit Trail
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Date:</span>
-                      <strong className="text-gray-900">
-                        {viewingPaymentRecord.expenseDateStr ||
-                          (viewingPaymentRecord.expenseDate
-                            ? new Date(viewingPaymentRecord.expenseDate).toLocaleDateString("en-GB")
-                            : "-")}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Total Amount:</span>
-                      <strong className="text-sm font-display font-black text-[#006064]">
-                        {formatCurrency(viewingPaymentRecord.amount)}
-                      </strong>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded cursor-pointer transition-colors"
+                        title="Print Expense Details"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsViewPaymentModalOpen(false)}
+                        className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded cursor-pointer transition-colors"
+                        title="Close"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
                     </div>
                   </div>
 
-                  <div className="text-[11.5px] text-gray-700 pt-1 border-t border-cyan-100">
-                    <span className="font-bold text-gray-900">Description:</span> {viewingPaymentRecord.description}
-                  </div>
-                  <div className="pt-1">
-                    {renderEnteredByBadge(viewingPaymentRecord)}
-                  </div>
+                  {/* Body Content */}
+                  <div className="p-5 space-y-4 overflow-y-auto text-xs flex-1">
+                    {/* Top KPI Banner */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 border border-slate-200 rounded-sm">
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500 block">Total Amount</span>
+                        <span className="text-lg font-display font-black text-[#006064]">
+                          {formatCurrency(rec.amount)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500 block">Expense Date</span>
+                        <span className="text-xs font-bold text-gray-900 font-mono">
+                          {rec.expenseDateStr || (rec.expenseDate ? new Date(rec.expenseDate).toLocaleDateString("en-GB") : "-")}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500 block">Payment Due Date</span>
+                        <div className="mt-0.5">
+                          <span className="text-xs font-bold text-gray-900 font-mono block">
+                            {rec.dueDateStr || (rec.dueDate ? formatExpenseDueDateDisplay(rec.dueDate) : "-")}
+                          </span>
+                          {dueDateBadge && (
+                            <span className={`inline-block text-[8px] font-bold px-1.5 py-0.2 border uppercase mt-0.5 rounded-2xs ${dueDateBadge.className}`}>
+                              {dueDateBadge.text}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500 block">Settlement Status</span>
+                        <span className={`text-xs font-bold font-mono block mt-0.5 ${isPaid ? "text-emerald-700" : "text-amber-800"}`}>
+                          {isPaid ? "Disbursed with UTR ✓" : "Pending Disbursal"}
+                        </span>
+                      </div>
+                    </div>
 
-                  {/* CM Documents */}
-                  {((viewingPaymentRecord.attachmentUrl && !viewingPaymentRecord.attachmentUrl.includes("undefined")) ||
-                    (viewingPaymentRecord.invoiceUrl && !viewingPaymentRecord.invoiceUrl.includes("undefined"))) && (
-                      <div className="pt-1.5 flex flex-wrap items-center gap-2">
-                        {viewingPaymentRecord.attachmentUrl && !viewingPaymentRecord.attachmentUrl.includes("undefined") && (
+                    {/* Section 1: Basic Expense Information */}
+                    <div className="border border-cyan-200 bg-cyan-50/30 p-3.5 rounded-sm space-y-2.5">
+                      <div className="flex items-center justify-between border-b border-cyan-200/60 pb-1.5">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[#006064] flex items-center gap-1.5 font-mono">
+                          <FileText className="w-3.5 h-3.5 text-[#006064]" />
+                          <span>1. Expense Requisition & Proof</span>
+                        </span>
+                        <span className="text-[10px] text-gray-500">
+                          Center: <strong className="text-gray-800">{rec.locationName || "HQ"}</strong>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11.5px]">
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Category:</span>
+                          <strong className="text-gray-900 uppercase font-mono">{rec.category || "GENERAL EXPENSE"}</strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Payment Mode Requested:</span>
+                          <span className="font-semibold text-gray-900">{rec.paymentMode || "-"}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Bill / Receipt / Ref #:</span>
+                          <span className="font-mono font-bold text-gray-900">{rec.receiptNo || "-"}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-[11.5px] text-gray-800 bg-white p-2.5 border border-cyan-200/80 rounded-sm">
+                        <span className="font-bold text-gray-900 block text-[10.5px] uppercase tracking-wide mb-0.5">Description:</span>
+                        <p className="whitespace-pre-wrap leading-relaxed">{rec.description || "No description provided."}</p>
+                      </div>
+
+                      {rec.remarks && (
+                        <div className="text-[11px] text-gray-700 bg-amber-50/60 p-2 border border-amber-200 rounded-sm">
+                          <span className="font-bold text-amber-900 block text-[10px] uppercase">Remarks / Notes:</span>
+                          <span>{rec.remarks}</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-cyan-100">
+                        <div>
+                          {renderEnteredByBadge(rec)}
+                          {rec.createdAt && (
+                            <span className="text-[9.5px] text-gray-400 font-mono ml-2">
+                              Created: {formatTimestamp(rec.createdAt)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Documents */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {rec.attachmentUrl && !rec.attachmentUrl.includes("undefined") && (
+                            <a
+                              href={rec.attachmentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-amber-900 hover:text-amber-950 font-bold text-[11px] bg-white hover:bg-amber-50 px-2.5 py-1 border border-amber-300 rounded shadow-2xs transition-colors"
+                            >
+                              <Receipt className="w-3.5 h-3.5 text-amber-700" />
+                              <span>View Receipt Slip</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-gray-400" />
+                            </a>
+                          )}
+                          {rec.invoiceUrl && !rec.invoiceUrl.includes("undefined") && (
+                            <a
+                              href={rec.invoiceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-[#006064] hover:text-[#004d40] font-bold text-[11px] bg-white hover:bg-cyan-50 px-2.5 py-1 border border-cyan-300 rounded shadow-2xs transition-colors"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-[#006064]" />
+                              <span>View Vendor Bill PDF</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-gray-400" />
+                            </a>
+                          )}
+                          {rec.vendorInvoiceUrl && !rec.vendorInvoiceUrl.includes("undefined") && (
+                            <a
+                              href={rec.vendorInvoiceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-purple-900 hover:text-purple-950 font-bold text-[11px] bg-white hover:bg-purple-50 px-2.5 py-1 border border-purple-300 rounded shadow-2xs transition-colors"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5 text-purple-700" />
+                              <span>Official Tax Invoice</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-gray-400" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Vendor & Billing Breakdown */}
+                    <div className="border border-gray-200 bg-white p-3.5 rounded-sm space-y-2.5 shadow-2xs">
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-800 flex items-center gap-1.5 font-mono">
+                          <Building2 className="w-3.5 h-3.5 text-[#006064]" />
+                          <span>2. Vendor Directory & Billing Breakdown</span>
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 border rounded-2xs ${
+                          rec.uploadedInBankPortal
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : "bg-slate-100 text-slate-600 border-slate-300"
+                        }`}>
+                          {rec.uploadedInBankPortal ? "Uploaded in Bank Portal ✓" : "Bank Portal: Pending"}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11.5px]">
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Vendor / Supplier:</span>
+                          <strong className="text-gray-900">{rec.vendorName || matchedVendor?.vendorName || "Unassigned"}</strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Bank Account No:</span>
+                          <span className="font-mono font-bold text-gray-900 select-all">
+                            {rec.accountNo || matchedVendor?.accountNo || "-"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Bank Name:</span>
+                          <span className="text-gray-900">{matchedVendor?.bankName || "-"}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">IFSC Code:</span>
+                          <span className="font-mono font-bold text-gray-900 select-all">{matchedVendor?.ifscCode || "-"}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11.5px] pt-1 border-t border-gray-100">
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Quantity & Unit:</span>
+                          <span className="text-gray-900 font-medium">
+                            {rec.quantity || 1} {rec.unit || "Nos"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Rate:</span>
+                          <span className="text-gray-900 font-medium">
+                            {rec.rate ? `₹${rec.rate}` : "-"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Calculated Amount:</span>
+                          <span className="text-gray-900 font-bold font-mono">
+                            {formatCurrency(rec.amount)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Vendor Contact:</span>
+                          <span className="text-gray-700 text-[10.5px]">
+                            {matchedVendor?.mobileNo || matchedVendor?.email || "-"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 3: 3-Step Approval Workflow Audit */}
+                    <div className="border border-purple-200 bg-purple-50/20 p-3.5 rounded-sm space-y-2.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-purple-900 flex items-center gap-1.5 font-mono border-b border-purple-200/60 pb-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
+                        <span>3. Approval Workflow Audit Trail</span>
+                      </span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Step 1: Accountant Check */}
+                        <div className="bg-white p-2.5 border border-purple-200 rounded-sm space-y-1 text-[11px]">
+                          <div className="flex items-center justify-between">
+                            <strong className="text-gray-700 font-mono text-[10px] uppercase">Step 1: Acc Check</strong>
+                            {rec.accountantApprovalStatus === "APPROVED" ? (
+                              <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-900 text-[9px] font-bold rounded">Verified ✓</span>
+                            ) : rec.approvalStatus === "REJECTED_BY_ACCOUNTANT" || rec.accountantApprovalStatus === "REJECTED" ? (
+                              <span className="px-1.5 py-0.2 bg-rose-100 text-rose-900 text-[9px] font-bold rounded">Rejected</span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 text-[9px] font-bold rounded">Pending</span>
+                            )}
+                          </div>
+                          <div className="text-gray-600 text-[10.5px]">
+                            <span>By: </span>
+                            <strong className="text-gray-900">{rec.accountantApprovedByName || (rec.accountantApprovalStatus === "APPROVED" ? "Accountant" : "-")}</strong>
+                          </div>
+                          {rec.accountantApprovedAt && (
+                            <div className="text-[9.5px] text-gray-500 font-mono">
+                              {formatTimestamp(rec.accountantApprovedAt)}
+                            </div>
+                          )}
+                          {rec.accountantRemarks && (
+                            <div className="text-[10px] text-gray-700 bg-gray-50 p-1 border border-gray-200 rounded mt-1">
+                              <span className="font-semibold block text-[9px] text-gray-500">Remarks:</span>
+                              {rec.accountantRemarks}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Step 2: Super Admin Approval */}
+                        <div className="bg-white p-2.5 border border-purple-200 rounded-sm space-y-1 text-[11px]">
+                          <div className="flex items-center justify-between">
+                            <strong className="text-gray-700 font-mono text-[10px] uppercase">Step 2: SA Approval</strong>
+                            {rec.approvalStatus === "APPROVED" || (!onOffSAApproval && isAccountantExpense(rec)) ? (
+                              <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-900 text-[9px] font-bold rounded">Approved ✓</span>
+                            ) : rec.approvalStatus === "REJECTED_BY_SUPER_ADMIN" ? (
+                              <span className="px-1.5 py-0.2 bg-rose-100 text-rose-900 text-[9px] font-bold rounded">Rejected</span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 bg-purple-100 text-purple-900 text-[9px] font-bold rounded">Pending SA</span>
+                            )}
+                          </div>
+                          <div className="text-gray-600 text-[10.5px]">
+                            <span>By: </span>
+                            <strong className="text-gray-900">{rec.superAdminApprovedByName || (rec.approvalStatus === "APPROVED" ? "Super Admin" : "-")}</strong>
+                          </div>
+                          {(rec.superAdminApprovedAt || rec.approvedAt) && (
+                            <div className="text-[9.5px] text-gray-500 font-mono">
+                              {formatTimestamp(rec.superAdminApprovedAt || rec.approvedAt)}
+                            </div>
+                          )}
+                          {(rec.superAdminRemarks || rec.rejectionRemarks) && (
+                            <div className="text-[10px] text-gray-700 bg-gray-50 p-1 border border-gray-200 rounded mt-1">
+                              <span className="font-semibold block text-[9px] text-gray-500">Remarks:</span>
+                              {rec.superAdminRemarks || rec.rejectionRemarks}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Step 3: Sir Pay */}
+                        <div className="bg-white p-2.5 border border-purple-200 rounded-sm space-y-1 text-[11px]">
+                          <div className="flex items-center justify-between">
+                            <strong className="text-gray-700 font-mono text-[10px] uppercase">Step 3: Sir Pay</strong>
+                            {rec.paymentApprovalStatus === "APPROVED" || isPaid ? (
+                              <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-900 text-[9px] font-bold rounded">Authorized ✓</span>
+                            ) : rec.paymentApprovalStatus === "REJECTED" ? (
+                              <span className="px-1.5 py-0.2 bg-rose-100 text-rose-900 text-[9px] font-bold rounded">Rejected</span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 text-[9px] font-bold rounded">Pending Sir</span>
+                            )}
+                          </div>
+                          <div className="text-gray-600 text-[10.5px]">
+                            <span>By: </span>
+                            <strong className="text-gray-900">{rec.paymentApprovedByName || (rec.paymentApprovalStatus === "APPROVED" ? "Super Admin" : "-")}</strong>
+                          </div>
+                          {rec.paymentApprovedAt && (
+                            <div className="text-[9.5px] text-gray-500 font-mono">
+                              {formatTimestamp(rec.paymentApprovedAt)}
+                            </div>
+                          )}
+                          {rec.paymentApprovalRemarks && (
+                            <div className="text-[10px] text-gray-700 bg-gray-50 p-1 border border-gray-200 rounded mt-1">
+                              <span className="font-semibold block text-[9px] text-gray-500">Remarks:</span>
+                              {rec.paymentApprovalRemarks}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 4: Payment Disbursal & Bank Settlement */}
+                    <div className="border border-emerald-300 bg-emerald-50/30 p-3.5 rounded-sm space-y-2.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-1.5 font-mono border-b border-emerald-200 pb-1.5">
+                        <CreditCard className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>4. Payment Disbursal & Bank Settlement Details</span>
+                      </span>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-[11.5px]">
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Payment Status:</span>
+                          <strong className={isPaid ? "text-emerald-800" : "text-amber-800"}>
+                            {isPaid ? "Paid & Disbursed ✓" : "Pending Disbursal"}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Payment Date:</span>
+                          <span className="font-mono font-bold text-gray-900">
+                            {rec.payReceiveDate || rec.utrDate || "-"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Disbursal Mode:</span>
+                          <span className="text-gray-900 font-semibold">
+                            {rec.accPaymentMode || rec.paymentMode || "Bank Transfer"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10.5px]">Vendor Alert Email:</span>
+                          <span className={rec.alertEmailSent ? "text-emerald-700 font-bold" : "text-gray-500"}>
+                            {rec.alertEmailSent ? "Dispatched to Vendor ✓" : "Pending"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 border border-emerald-200 rounded-sm flex items-center justify-between flex-wrap gap-2 text-[11.5px]">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500 font-mono text-[10.5px]">UTR / Reference Number:</span>
+                          <span className="font-mono font-black text-emerald-950 bg-emerald-50 px-2 py-0.5 border border-emerald-200 rounded select-all text-xs">
+                            {rec.utrNumber || "Locked until disbursal"}
+                          </span>
+                          {rec.utrNumber && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(rec.utrNumber || "");
+                                toast.success("UTR number copied to clipboard!");
+                              }}
+                              className="p-1 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded cursor-pointer transition-colors"
+                              title="Copy UTR Number"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* UTR Proof Doc */}
+                        {(rec.paymentProofUrl || rec.utrFileUrl) && (
                           <a
-                            href={viewingPaymentRecord.attachmentUrl}
+                            href={rec.paymentProofUrl || rec.utrFileUrl || "#"}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-amber-900 hover:underline font-bold text-[11px] bg-white px-2.5 py-1 border border-amber-300"
+                            className="inline-flex items-center gap-1.5 text-emerald-800 hover:text-emerald-950 font-bold text-[11px] bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 border border-emerald-300 rounded shadow-2xs transition-colors"
                           >
-                            <Receipt className="w-3.5 h-3.5 text-amber-700" />
-                            <span>Receipt Slip</span>
-                          </a>
-                        )}
-                        {viewingPaymentRecord.invoiceUrl && !viewingPaymentRecord.invoiceUrl.includes("undefined") && (
-                          <a
-                            href={viewingPaymentRecord.invoiceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-[#006064] hover:underline font-bold text-[11px] bg-white px-2.5 py-1 border border-cyan-300"
-                          >
-                            <FileText className="w-3.5 h-3.5 text-[#006064]" />
-                            <span>Vendor Bill PDF</span>
+                            <Check className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>View Payment Proof Doc / UTR Screenshot</span>
+                            <ExternalLink className="w-2.5 h-2.5 text-gray-400" />
                           </a>
                         )}
                       </div>
-                    )}
-                </div>
-
-                {/* Vendor & Bill Breakdown */}
-                <div className="border border-gray-200 p-3.5 space-y-2 bg-white">
-                  <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-gray-700 border-b border-gray-100 pb-1">
-                    Vendor & Billing Breakdown (Entered by Accountant)
-                  </h4>
-
-                  <div className="grid grid-cols-2 gap-2 text-[11.5px]">
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Vendor / Supplier:</span>
-                      <strong className="text-gray-900">
-                        {viewingPaymentRecord.vendorName || "Accounts to Assign"}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Vendor Bank A/C:</span>
-                      <span className="font-mono text-gray-900">
-                        {viewingPaymentRecord.accountNo || "-"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Invoice / Bill No:</span>
-                      <span className="font-mono text-gray-900">
-                        {viewingPaymentRecord.receiptNo || "-"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Quantity & Unit:</span>
-                      <span className="text-gray-900">
-                        {viewingPaymentRecord.quantity || 1} {viewingPaymentRecord.unit || "Nos"}
-                        {viewingPaymentRecord.rate ? ` (Rate: ₹${viewingPaymentRecord.rate})` : ""}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Bank Portal Upload:</span>
-                      <span
-                        className={`font-bold ${viewingPaymentRecord.uploadedInBankPortal
-                          ? "text-emerald-700"
-                          : "text-gray-500"
-                          }`}
-                      >
-                        {viewingPaymentRecord.uploadedInBankPortal ? "Uploaded in Bank Portal ✓" : "Pending Upload"}
-                      </span>
                     </div>
                   </div>
-                </div>
 
-                {/* Approval & Disbursal Status */}
-                <div className="border border-gray-200 p-3.5 space-y-2 bg-white">
-                  <h4 className="font-mono font-bold text-[11px] uppercase tracking-wider text-gray-700 border-b border-gray-100 pb-1">
-                    Super Admin Approval & Disbursal Status
-                  </h4>
-
-                  <div className="grid grid-cols-2 gap-2 text-[11.5px]">
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Approval Status:</span>
-                      {viewingPaymentRecord.approvalStatus === "APPROVED" || viewingPaymentRecord.paymentStatus === "PAID" ? (
-                        <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Approved by Super Admin
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 font-bold text-amber-700">
-                          <Clock className="w-3.5 h-3.5" /> Awaiting Super Admin Approval
-                        </span>
+                  {/* Footer */}
+                  <div className="p-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between shrink-0">
+                    <div className="text-[10.5px] text-gray-500 font-mono">
+                      SSP-EXP-{rec.id} • Audit Record
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-200 bg-white border border-gray-300 cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-gray-600" />
+                        <span>Print</span>
+                      </button>
+                      {(isAccountant || isAdmin) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsViewPaymentModalOpen(false);
+                            openSettleModal(rec);
+                          }}
+                          className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Edit Breakdown</span>
+                        </button>
                       )}
-                    </div>
-
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Payment Status:</span>
-                      <span
-                        className={`font-bold ${viewingPaymentRecord.paymentStatus === "PAID"
-                          ? "text-emerald-700"
-                          : "text-amber-700"
-                          }`}
+                      <button
+                        type="button"
+                        onClick={() => setIsViewPaymentModalOpen(false)}
+                        className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-white bg-[#006064] hover:bg-[#004d40] border border-[#004d40] cursor-pointer shadow-2xs transition-colors"
                       >
-                        {viewingPaymentRecord.paymentStatus === "PAID"
-                          ? "Paid & Disbursed ✓"
-                          : "Pending Payment"}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">UTR / Reference No:</span>
-                      <span className="font-mono font-bold text-[#006064]">
-                        {viewingPaymentRecord.utrNumber || "Locked until approval & disbursement"}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Payment Date:</span>
-                      <span className="text-gray-900">
-                        {viewingPaymentRecord.utrDate || viewingPaymentRecord.payReceiveDate || "-"}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Payment Mode:</span>
-                      <span className="text-gray-900">
-                        {viewingPaymentRecord.accPaymentMode || viewingPaymentRecord.paymentMode || "-"}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-gray-500 block text-[10.5px]">Vendor Alert Email:</span>
-                      <span
-                        className={`font-bold ${viewingPaymentRecord.alertEmailSent
-                          ? "text-emerald-700"
-                          : "text-gray-400"
-                          }`}
-                      >
-                        {viewingPaymentRecord.alertEmailSent
-                          ? "Dispatched to Vendor ✓"
-                          : "Pending Disbursal"}
-                      </span>
+                        Close
+                      </button>
                     </div>
                   </div>
-
-                  {viewingPaymentRecord.paymentProofUrl && (
-                    <div className="pt-2 border-t border-gray-100">
-                      <a
-                        href={viewingPaymentRecord.paymentProofUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-emerald-800 hover:underline font-bold text-[11px] bg-emerald-50 px-2.5 py-1 border border-emerald-300"
-                      >
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>View Payment Proof Doc / UTR Screenshot</span>
-                      </a>
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="pt-2 flex items-center justify-end gap-2">
-                  {(isAccountant || isAdmin) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsViewPaymentModalOpen(false);
-                        openSettleModal(viewingPaymentRecord);
-                      }}
-                      className="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                      <span>Edit Payment Details</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setIsViewPaymentModalOpen(false)}
-                    className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-100 border border-gray-300 cursor-pointer"
-                  >
-                    Close
-                  </button>
                 </div>
               </div>
-            </div>
-          </div>,
+            );
+          })(),
           document.body
         )
       }
