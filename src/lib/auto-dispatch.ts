@@ -126,9 +126,9 @@ export async function autoDispatchIfLastDay(): Promise<{ dispatched: boolean; co
             billedTo: cm.invoiceToBeRaised || 'CLIENT',
             isExtendedHours: false,
             sendType: 'AUTOMATIC_MONTH_END',
-            sentAt: null,
+            sentAt: new Date(),
             status: 'PENDING_CM_REVIEW',
-            createdById: cm.createdById,
+            createdById: cm.createdById || 1,
           },
         })
       );

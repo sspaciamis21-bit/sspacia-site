@@ -187,10 +187,10 @@ export async function POST(request: Request) {
             billedTo: cm.invoiceToBeRaised || 'CLIENT',
             isExtendedHours: false,
             sendType: sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC_MONTH_END' : 'MANUAL',
-            sentAt: null,
+            sentAt: new Date(),
             status: 'PENDING_CM_REVIEW',
             isDigitalSignRequired: Boolean(cm.isDigitalSignRequired),
-            createdById: cm.createdById,
+            createdById: cm.createdById || userId,
           },
         })
       );
