@@ -98,6 +98,7 @@ interface InvoiceSplitGroup {
   activeDays?: number;
   totalMonthDays?: number;
   baseMonthlyAmount?: number;
+  customSubtotal?: string | number | null;
   prorateFormula?: string;
   attachedInvoice?: {
     fileName: string;
@@ -882,6 +883,8 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
       } catch { }
     }
 
+    const monthInfo = getBillingMonthInfo(inv.billingMonth, inv.dueDate ? new Date(inv.dueDate) : undefined);
+
     // Default initialization: If >= 2 items, create 2 initial groups, else 1 group
     if (items.length >= 2) {
       const half = Math.ceil(items.length / 2);
@@ -891,11 +894,11 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
       const calcGroup = (id: string, name: string, indices: number[]): InvoiceSplitGroup => {
         const selectedItems = indices.map(i => items[i]).filter(Boolean);
         const seats = selectedItems.reduce((s, it) => s + (Number(it.noOfSeats) || 0), 0);
-        const amt = selectedItems.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+        const amt = selectedItems.reduce((s, it) => s + (Number(it.baseMonthlyAmount || it.amount) || 0), 0);
         const tot = selectedItems.reduce((s, it) => s + (Number(it.totalAmount) || 0), 0);
         const firstDue = selectedItems[0]?.paymentDueDay || inv.paymentDueDay || 5;
-        const start = selectedItems[0]?.startDate || selectedItems[0]?.agreementStartDate || '';
-        const end = selectedItems[0]?.endDate || selectedItems[0]?.agreementEndDate || '';
+        const start = monthInfo.firstDateStr;
+        const end = monthInfo.lastDateStr;
         return {
           id,
           name,
@@ -909,6 +912,9 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
           paymentDueDay: firstDue,
           dueDate: inv.dueDate ? new Date(inv.dueDate).toISOString().split('T')[0] : '',
           attachedInvoice: null,
+          baseMonthlyAmount: amt,
+          totalMonthDays: monthInfo.totalDays,
+          activeDays: monthInfo.totalDays,
         };
       };
 
@@ -917,20 +923,25 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
         calcGroup('split_2', 'Sub-Invoice #2 (Additional)', group2Indices),
       ]);
     } else {
+      const baseAmt = Number(items[0]?.baseMonthlyAmount || items[0]?.amount || inv.amount || 0);
+      const totAmt = Number(items[0]?.totalAmount || inv.totalAmount || 0);
       setSplitGroups([
         {
           id: 'split_1',
           name: 'Sub-Invoice #1 (Full)',
           productIndices: [0],
           noOfSeats: Number(items[0]?.noOfSeats || inv.noOfSeats || 0),
-          amount: Number(items[0]?.amount || inv.amount || 0),
-          gstAmount: Math.max(0, (Number(items[0]?.totalAmount || inv.totalAmount || 0) - Number(items[0]?.amount || inv.amount || 0))),
-          totalAmount: Number(items[0]?.totalAmount || inv.totalAmount || 0),
-          startDate: items[0]?.startDate || items[0]?.agreementStartDate || '',
-          endDate: items[0]?.endDate || items[0]?.agreementEndDate || '',
+          amount: baseAmt,
+          gstAmount: Math.max(0, totAmt - baseAmt),
+          totalAmount: totAmt,
+          startDate: monthInfo.firstDateStr,
+          endDate: monthInfo.lastDateStr,
           paymentDueDay: items[0]?.paymentDueDay || inv.paymentDueDay || 5,
           dueDate: inv.dueDate ? new Date(inv.dueDate).toISOString().split('T')[0] : '',
           attachedInvoice: null,
+          baseMonthlyAmount: baseAmt,
+          totalMonthDays: monthInfo.totalDays,
+          activeDays: monthInfo.totalDays,
         }
       ]);
     }
@@ -971,6 +982,9 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
   const handleAddSplitGroup = () => {
     const newId = `split_${Date.now()}`;
     const newGroupNumber = splitGroups.length + 1;
+    const monthInfo = splitModalInvoice
+      ? getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined)
+      : { firstDateStr: '', lastDateStr: '', totalDays: 30 };
     setSplitGroups([
       ...splitGroups,
       {
@@ -981,11 +995,14 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
         amount: 0,
         gstAmount: 0,
         totalAmount: 0,
-        startDate: '',
-        endDate: '',
+        startDate: monthInfo.firstDateStr,
+        endDate: monthInfo.lastDateStr,
         dueDate: splitModalInvoice?.dueDate ? new Date(splitModalInvoice.dueDate).toISOString().split('T')[0] : '',
         paymentDueDay: splitModalInvoice?.paymentDueDay || 5,
         attachedInvoice: null,
+        baseMonthlyAmount: 0,
+        totalMonthDays: monthInfo.totalDays,
+        activeDays: monthInfo.totalDays,
       }
     ]);
   };
@@ -1019,6 +1036,129 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
 
   const handleUpdateSplitGroupField = (groupId: string, field: 'name' | 'startDate' | 'endDate' | 'dueDate' | 'paymentDueDay', value: any) => {
     setSplitGroups(splitGroups.map(g => g.id === groupId ? { ...g, [field]: value } : g));
+  };
+
+  const handleSplitGroupDateChange = (groupId: string, startDate: string, endDate: string) => {
+    if (!splitModalInvoice) return;
+    const monthInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
+    const targetGroup = splitGroups.find(g => g.id === groupId);
+    if (!targetGroup) return;
+
+    const days = calculateInclusiveDays(startDate, endDate);
+    const validDays = days > 0 ? Math.min(monthInfo.totalDays, days) : monthInfo.totalDays;
+    const baseAmt = Number(targetGroup.baseMonthlyAmount || targetGroup.amount || 0);
+
+    const isProrated = validDays < monthInfo.totalDays;
+    const calc = calculateProratedBilling({
+      monthlyAmount: baseAmt,
+      totalMonthDays: monthInfo.totalDays,
+      activeDays: validDays,
+      startDateStr: startDate,
+      endDateStr: endDate,
+    });
+
+    setSplitGroups(splitGroups.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        startDate,
+        endDate,
+        baseMonthlyAmount: baseAmt,
+        amount: isProrated ? calc.proratedSubtotal : baseAmt,
+        gstAmount: isProrated ? calc.gstAmount : Math.round(baseAmt * 0.18),
+        totalAmount: isProrated ? calc.totalAmount : Math.round(baseAmt * 1.18),
+        isProrated,
+        activeDays: validDays,
+        totalMonthDays: monthInfo.totalDays,
+        prorateFormula: isProrated ? calc.formulaText : undefined,
+        customSubtotal: undefined,
+      };
+    }));
+  };
+
+  const handleSplitGroupDaysChange = (groupId: string, days: number) => {
+    if (!splitModalInvoice) return;
+    const monthInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
+    const targetGroup = splitGroups.find(g => g.id === groupId);
+    if (!targetGroup) return;
+
+    const validDays = Math.max(1, Math.min(monthInfo.totalDays, days));
+    const startStr = targetGroup.startDate || monthInfo.firstDateStr;
+    let endStr = targetGroup.endDate || monthInfo.lastDateStr;
+
+    if (startStr) {
+      const start = new Date(startStr);
+      if (!isNaN(start.getTime())) {
+        const end = new Date(start);
+        end.setDate(start.getDate() + (validDays - 1));
+        const y = end.getFullYear();
+        const m = String(end.getMonth() + 1).padStart(2, '0');
+        const d = String(end.getDate()).padStart(2, '0');
+        endStr = `${y}-${m}-${d}`;
+      }
+    }
+
+    const baseAmt = Number(targetGroup.baseMonthlyAmount || targetGroup.amount || 0);
+    const isProrated = validDays < monthInfo.totalDays;
+    const calc = calculateProratedBilling({
+      monthlyAmount: baseAmt,
+      totalMonthDays: monthInfo.totalDays,
+      activeDays: validDays,
+      startDateStr: startStr,
+      endDateStr: endStr,
+    });
+
+    setSplitGroups(splitGroups.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        startDate: startStr,
+        endDate: endStr,
+        baseMonthlyAmount: baseAmt,
+        amount: isProrated ? calc.proratedSubtotal : baseAmt,
+        gstAmount: isProrated ? calc.gstAmount : Math.round(baseAmt * 0.18),
+        totalAmount: isProrated ? calc.totalAmount : Math.round(baseAmt * 1.18),
+        isProrated,
+        activeDays: validDays,
+        totalMonthDays: monthInfo.totalDays,
+        prorateFormula: isProrated ? calc.formulaText : undefined,
+        customSubtotal: undefined,
+      };
+    }));
+  };
+
+  const handleSplitGroupCustomSubtotalChange = (groupId: string, customSubtotalVal: string) => {
+    if (!splitModalInvoice) return;
+    const monthInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
+    const targetGroup = splitGroups.find(g => g.id === groupId);
+    if (!targetGroup) return;
+
+    const baseAmt = Number(targetGroup.baseMonthlyAmount || targetGroup.amount || 0);
+    const num = customSubtotalVal ? parseFloat(customSubtotalVal) : null;
+    const activeDays = targetGroup.activeDays || monthInfo.totalDays;
+
+    const calc = calculateProratedBilling({
+      monthlyAmount: baseAmt,
+      totalMonthDays: monthInfo.totalDays,
+      activeDays,
+      startDateStr: targetGroup.startDate || monthInfo.firstDateStr,
+      endDateStr: targetGroup.endDate || monthInfo.lastDateStr,
+      customSubtotal: num,
+    });
+
+    setSplitGroups(splitGroups.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        baseMonthlyAmount: baseAmt,
+        amount: calc.proratedSubtotal,
+        gstAmount: calc.gstAmount,
+        totalAmount: calc.totalAmount,
+        isProrated: true,
+        customSubtotal: customSubtotalVal,
+        prorateFormula: calc.formulaText,
+      };
+    }));
   };
 
   const handleProrateSplitGroup = (groupId: string) => {
@@ -1060,9 +1200,11 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
   };
 
   const handleResetSplitGroupProrate = (groupId: string) => {
+    if (!splitModalInvoice) return;
+    const monthInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
     const targetGroup = splitGroups.find(g => g.id === groupId);
     if (!targetGroup) return;
-    const baseAmt = targetGroup.baseMonthlyAmount || targetGroup.amount || 0;
+    const baseAmt = Number(targetGroup.baseMonthlyAmount || targetGroup.amount || 0);
     const gstAmt = Math.round(baseAmt * 0.18);
     const totAmt = baseAmt + gstAmt;
 
@@ -1070,16 +1212,19 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
       if (g.id !== groupId) return g;
       return {
         ...g,
+        startDate: monthInfo.firstDateStr,
+        endDate: monthInfo.lastDateStr,
         amount: baseAmt,
         gstAmount: gstAmt,
         totalAmount: totAmt,
         isProrated: false,
-        activeDays: undefined,
-        totalMonthDays: undefined,
+        activeDays: monthInfo.totalDays,
+        totalMonthDays: monthInfo.totalDays,
         prorateFormula: undefined,
+        customSubtotal: undefined,
       };
     }));
-    toast.success(`${targetGroup.name} reset to full month billing`);
+    toast.success(`${targetGroup.name} reset to full month (${monthInfo.totalDays} Days)`);
   };
 
   const handleSaveSplitInvoice = async () => {
@@ -5944,7 +6089,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-3xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
+                      className="bg-white border border-[var(--outline-variant)] p-6 w-full max-w-4xl space-y-4 shadow-2xl text-xs my-auto max-h-[90vh] flex flex-col"
                     >
                       {/* Header */}
                       <div className="flex items-center justify-between border-b border-neutral-200 pb-3 shrink-0">
@@ -5993,147 +6138,229 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                             </button>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {splitGroups.map((group, gIdx) => (
-                              <div key={group.id} className="p-3.5 bg-purple-50/50 border border-purple-200 rounded-sm space-y-2.5 shadow-2xs">
-                                <div className="flex items-center justify-between gap-2">
-                                  <input
-                                    type="text"
-                                    value={group.name}
-                                    onChange={(e) => handleUpdateSplitGroupField(group.id, 'name', e.target.value)}
-                                    className="font-extrabold text-xs text-purple-950 bg-white border border-purple-300 px-2 py-1 rounded w-full focus:outline-none focus:border-purple-600 shadow-2xs"
-                                    placeholder={`Sub-Invoice #${gIdx + 1}`}
-                                  />
-                                  {splitGroups.length > 1 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveSplitGroup(group.id)}
-                                      className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
-                                      title="Remove group"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  )}
-                                </div>
+                          <div className="grid grid-cols-1 gap-3.5">
+                            {splitGroups.map((group, gIdx) => {
+                              const mInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
+                              const curActiveDays = group.activeDays || (
+                                (group.startDate && group.endDate)
+                                  ? calculateInclusiveDays(group.startDate, group.endDate)
+                                  : mInfo.totalDays
+                              );
+                              const baseAmt = Number(group.baseMonthlyAmount || group.amount || 0);
+                              const calc = calculateProratedBilling({
+                                monthlyAmount: baseAmt,
+                                totalMonthDays: mInfo.totalDays,
+                                activeDays: curActiveDays,
+                                startDateStr: group.startDate,
+                                endDateStr: group.endDate,
+                                customSubtotal: group.customSubtotal ? parseFloat(String(group.customSubtotal)) : null,
+                              });
 
-                                {/* INVOICE BILLING PERIOD & DUE DATE INPUTS */}
-                                <div className="grid grid-cols-3 gap-2 bg-white p-2.5 border border-purple-100 rounded text-[10px]">
-                                  <div>
-                                    <label className="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">
-                                      Invoice Start
-                                    </label>
+                              return (
+                                <div key={group.id} className="p-3.5 bg-purple-50/50 border border-purple-200 rounded-sm space-y-3 shadow-2xs">
+                                  <div className="flex items-center justify-between gap-2">
                                     <input
-                                      type="date"
-                                      value={group.startDate || ''}
-                                      onChange={(e) => handleUpdateSplitGroupField(group.id, 'startDate', e.target.value)}
-                                      className="w-full bg-neutral-50 border border-gray-200 px-1.5 py-1 text-[10px] font-mono rounded focus:bg-white focus:border-purple-600"
+                                      type="text"
+                                      value={group.name}
+                                      onChange={(e) => handleUpdateSplitGroupField(group.id, 'name', e.target.value)}
+                                      className="font-extrabold text-xs text-purple-950 bg-white border border-purple-300 px-2 py-1 rounded w-full focus:outline-none focus:border-purple-600 shadow-2xs"
+                                      placeholder={`Sub-Invoice #${gIdx + 1}`}
                                     />
+                                    {splitGroups.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveSplitGroup(group.id)}
+                                        className="text-red-500 hover:text-red-700 p-1 cursor-pointer shrink-0"
+                                        title="Remove group"
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    )}
                                   </div>
 
-                                  <div>
-                                    <label className="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">
-                                      Invoice End
-                                    </label>
-                                    <input
-                                      type="date"
-                                      value={group.endDate || ''}
-                                      onChange={(e) => handleUpdateSplitGroupField(group.id, 'endDate', e.target.value)}
-                                      className="w-full bg-neutral-50 border border-gray-200 px-1.5 py-1 text-[10px] font-mono rounded focus:bg-white focus:border-purple-600"
-                                    />
-                                  </div>
+                                  {/* Step 1: Active Usage Dates, Active Days Count & Payment Due Date */}
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-white p-2.5 border border-purple-100 rounded text-[10px]">
+                                    <div>
+                                      <label className="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">
+                                        Usage Start Date
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={group.startDate || ''}
+                                        onChange={(e) => handleSplitGroupDateChange(group.id, e.target.value, group.endDate || '')}
+                                        className="w-full bg-neutral-50 border border-gray-200 px-1.5 py-1 text-[10px] font-mono rounded focus:bg-white focus:border-purple-600 focus:outline-none"
+                                      />
+                                    </div>
 
-                                  <div>
-                                    <label className="block text-[9px] font-bold uppercase text-red-600 mb-0.5">
-                                      Payment Due Date
-                                    </label>
-                                    <input
-                                      type="date"
-                                      value={group.dueDate || ''}
-                                      onChange={(e) => handleUpdateSplitGroupField(group.id, 'dueDate', e.target.value)}
-                                      className="w-full bg-neutral-50 border border-red-200 px-1.5 py-1 text-[10px] font-mono font-bold text-red-700 rounded focus:bg-white focus:border-red-600"
-                                      title="Last date for client to pay this sub-invoice"
-                                    />
-                                  </div>
-                                </div>
+                                    <div>
+                                      <label className="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">
+                                        Usage End Date
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={group.endDate || ''}
+                                        onChange={(e) => handleSplitGroupDateChange(group.id, group.startDate || '', e.target.value)}
+                                        className="w-full bg-neutral-50 border border-gray-200 px-1.5 py-1 text-[10px] font-mono rounded focus:bg-white focus:border-purple-600 focus:outline-none"
+                                      />
+                                    </div>
 
-                                {/* Sub-Invoice Prorate Days Control & Summary */}
-                                {(() => {
-                                  const mInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
-                                  const incDays = (group.startDate && group.endDate)
-                                    ? calculateInclusiveDays(group.startDate, group.endDate)
-                                    : mInfo.totalDays;
-                                  const isFewerDays = incDays > 0 && incDays < mInfo.totalDays;
-
-                                  return (
-                                    <div className="bg-white p-2 border border-purple-100 rounded text-[10px] space-y-1.5">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-gray-500 font-medium">
-                                          Duration: <strong className="text-purple-950 font-bold">{incDays} Days</strong> ({incDays} of {mInfo.totalDays})
-                                        </span>
-                                        {group.isProrated ? (
-                                          <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded font-bold text-[9px] flex items-center gap-1">
-                                            <CalendarDays size={9} className="text-amber-700" /> Prorated ({group.activeDays}d)
-                                          </span>
-                                        ) : null}
+                                    <div>
+                                      <label className="block text-[9px] font-bold uppercase text-amber-700 mb-0.5">
+                                        Active Days Count
+                                      </label>
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          max={mInfo.totalDays}
+                                          value={curActiveDays}
+                                          onChange={(e) => handleSplitGroupDaysChange(group.id, parseInt(e.target.value, 10) || 1)}
+                                          className="w-full bg-amber-50/60 border border-amber-300 px-1.5 py-1 text-[10px] font-mono font-bold text-amber-900 rounded focus:bg-white focus:border-amber-600 focus:outline-none text-center"
+                                        />
+                                        <span className="text-[9px] font-bold text-neutral-500 shrink-0">/ {mInfo.totalDays}d</span>
                                       </div>
+                                    </div>
 
-                                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-dashed border-purple-100">
-                                        {group.isProrated ? (
+                                    <div>
+                                      <label className="block text-[9px] font-bold uppercase text-red-600 mb-0.5">
+                                        Payment Due Date
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={group.dueDate || ''}
+                                        onChange={(e) => handleUpdateSplitGroupField(group.id, 'dueDate', e.target.value)}
+                                        className="w-full bg-neutral-50 border border-red-200 px-1.5 py-1 text-[10px] font-mono font-bold text-red-700 rounded focus:bg-white focus:border-red-600 focus:outline-none"
+                                        title="Last date for client to pay this sub-invoice"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Quick Presets */}
+                                  <div className="flex flex-wrap items-center gap-1.5 bg-white p-2 border border-purple-100 rounded text-[9.5px]">
+                                    <span className="text-[9px] text-neutral-500 font-bold uppercase mr-1">Presets:</span>
+                                    {[
+                                      { label: `Full Month (${mInfo.totalDays}d)`, days: mInfo.totalDays },
+                                      { label: '11 Days (e.g. Harsha Daulani)', days: 11 },
+                                      { label: '15 Days (Half Month)', days: Math.round(mInfo.totalDays / 2) },
+                                      { label: '10 Days', days: 10 },
+                                      { label: '7 Days (1 Week)', days: 7 },
+                                    ].map((p, idx) => (
+                                      <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => handleSplitGroupDaysChange(group.id, p.days)}
+                                        className={`px-2 py-0.5 text-[9px] font-bold rounded border cursor-pointer transition-colors ${curActiveDays === p.days
+                                          ? 'bg-amber-600 text-white border-amber-600'
+                                          : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                                        }`}
+                                      >
+                                        {p.label}
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {/* Prorated Billing Calculation Breakdown */}
+                                  <div className="p-3 bg-amber-50/60 border border-amber-300 rounded space-y-2.5 text-[10px]">
+                                    <div className="flex items-center justify-between">
+                                      <div className="font-bold text-[10px] uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                                        <Calculator size={12} className="text-amber-700" /> Prorated Billing Calculation
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[9.5px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded">
+                                          {calc.activeDays} of {calc.totalMonthDays} Days Billed
+                                        </span>
+                                        {group.isProrated && (
                                           <button
                                             type="button"
                                             onClick={() => handleResetSplitGroupProrate(group.id)}
-                                            className="text-[9.5px] text-purple-700 hover:text-purple-900 underline font-semibold flex items-center gap-1 cursor-pointer"
+                                            className="text-[9px] text-purple-700 hover:text-purple-900 underline font-semibold flex items-center gap-0.5 cursor-pointer"
                                           >
-                                            <RotateCcw size={10} /> Reset to Full Month
-                                          </button>
-                                        ) : isFewerDays ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleProrateSplitGroup(group.id)}
-                                            className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                                            title={`Calculate prorated amount for ${incDays} days out of ${mInfo.totalDays} days`}
-                                          >
-                                            <CalendarDays size={10} /> ⚡ Prorate ({incDays} Days)
-                                          </button>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleProrateSplitGroup(group.id)}
-                                            className="text-[9.5px] text-amber-800 hover:text-amber-950 font-bold flex items-center gap-1 cursor-pointer"
-                                            title="Prorate this sub-invoice for the dates entered above"
-                                          >
-                                            <CalendarDays size={10} /> Prorate Days
+                                            <RotateCcw size={9} /> Reset to Full Month
                                           </button>
                                         )}
+                                      </div>
+                                    </div>
 
-                                        <div className="text-right">
-                                          <span className="text-[9px] text-gray-500 block">Sub-Invoice Total:</span>
-                                          <span className="font-mono font-bold text-teal-800 text-xs">
-                                            ₹{Number(group.totalAmount || 0).toLocaleString('en-IN')}
-                                          </span>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-2.5 border border-amber-200 rounded text-[10px]">
+                                      <div>
+                                        <div className="text-[8.5px] uppercase font-bold text-gray-500">Daily Base Rate</div>
+                                        <div className="font-mono font-bold text-neutral-800 mt-0.5">
+                                          ₹{calc.dailyRate.toLocaleString('en-IN')}/day
+                                        </div>
+                                        <div className="text-[8px] text-gray-400 mt-0.5">₹{baseAmt.toLocaleString('en-IN')} ÷ {calc.totalMonthDays}d</div>
+                                      </div>
+
+                                      <div>
+                                        <div className="text-[8.5px] uppercase font-bold text-gray-500">Prorated Subtotal</div>
+                                        <div className="font-mono font-bold text-amber-900 mt-0.5">
+                                          ₹{calc.proratedSubtotal.toLocaleString('en-IN')}
+                                        </div>
+                                        <div className="text-[8px] text-gray-400 mt-0.5">{calc.activeDays}d × ₹{calc.dailyRate.toFixed(2)}</div>
+                                      </div>
+
+                                      <div>
+                                        <div className="text-[8.5px] uppercase font-bold text-gray-500">18% GST (9%+9%)</div>
+                                        <div className="font-mono font-bold text-neutral-800 mt-0.5">
+                                          ₹{calc.gstAmount.toLocaleString('en-IN')}
+                                        </div>
+                                        <div className="text-[8px] text-gray-400 mt-0.5">CGST ₹{Math.round(calc.gstAmount / 2).toLocaleString('en-IN')} + SGST ₹{Math.round(calc.gstAmount / 2).toLocaleString('en-IN')}</div>
+                                      </div>
+
+                                      <div>
+                                        <div className="text-[8.5px] uppercase font-bold text-teal-800">Total Payable</div>
+                                        <div className="font-mono font-black text-xs text-teal-900 mt-0.5">
+                                          ₹{calc.totalAmount.toLocaleString('en-IN')}
+                                        </div>
+                                        <div className="text-[8px] text-teal-700 font-medium mt-0.5">Subtotal + GST</div>
+                                      </div>
+                                    </div>
+
+                                    {/* Formula Applied Box */}
+                                    <div className="bg-amber-100/70 border border-amber-300 p-2 rounded text-[9.5px] text-amber-950 flex items-start gap-1.5">
+                                      <FileCheck size={12} className="text-amber-800 shrink-0 mt-0.5" />
+                                      <div>
+                                        <div className="font-bold">Formula Applied:</div>
+                                        <div className="font-mono text-[9.5px] mt-0.5 font-bold">
+                                          ₹{baseAmt.toLocaleString('en-IN')} ÷ {calc.totalMonthDays} days × {calc.activeDays} days = ₹{calc.proratedSubtotal.toLocaleString('en-IN')} Base + ₹{calc.gstAmount.toLocaleString('en-IN')} (18% GST) = <span className="text-teal-900 underline">₹{calc.totalAmount.toLocaleString('en-IN')} Total</span>
+                                        </div>
+                                        <div className="text-[9px] text-amber-800 mt-0.5">
+                                          {calc.periodLabel}
                                         </div>
                                       </div>
-                                      {group.prorateFormula && (
-                                        <div className="text-[9px] text-neutral-500 italic bg-neutral-50 px-1.5 py-0.5 border border-neutral-200 rounded font-mono">
-                                          {group.prorateFormula}
-                                        </div>
-                                      )}
                                     </div>
-                                  );
-                                })()}
 
-                                <div className="flex items-center justify-between bg-white p-2 border border-purple-100 rounded text-[11px]">
-                                  <div>
-                                    <span className="text-neutral-500">Seats:</span> <strong className="text-neutral-800">{group.noOfSeats}</strong>
-                                    <span className="mx-1.5 text-neutral-300">|</span>
-                                    <span className="text-neutral-500">Items:</span> <strong className="text-neutral-800">{group.productIndices.length}</strong>
+                                    {/* Custom Subtotal adjustment */}
+                                    <div className="pt-1.5 border-t border-amber-200/80 flex items-center justify-between text-[9.5px]">
+                                      <span className="text-gray-600">
+                                        Custom Subtotal adjustment (optional fine-tuning):
+                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        <span className="font-mono font-bold">₹</span>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          placeholder={String(calc.proratedSubtotal)}
+                                          value={group.customSubtotal !== undefined && group.customSubtotal !== null ? String(group.customSubtotal) : ''}
+                                          onChange={(e) => handleSplitGroupCustomSubtotalChange(group.id, e.target.value)}
+                                          className="w-24 bg-white border border-amber-300 px-1.5 py-0.5 text-[9.5px] font-mono text-right rounded focus:outline-none focus:border-amber-600"
+                                        />
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="font-mono font-bold text-teal-800">
-                                    Total: ₹{Number(group.totalAmount || 0).toLocaleString('en-IN')}
+
+                                  <div className="flex items-center justify-between bg-white p-2 border border-purple-100 rounded text-[11px]">
+                                    <div>
+                                      <span className="text-neutral-500">Seats:</span> <strong className="text-neutral-800">{group.noOfSeats}</strong>
+                                      <span className="mx-1.5 text-neutral-300">|</span>
+                                      <span className="text-neutral-500">Items:</span> <strong className="text-neutral-800">{group.productIndices.length}</strong>
+                                    </div>
+                                    <div className="font-mono font-bold text-teal-800">
+                                      Sub-Invoice Total: ₹{Number(calc.totalAmount || group.totalAmount || 0).toLocaleString('en-IN')}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
 
