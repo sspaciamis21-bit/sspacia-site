@@ -137,6 +137,7 @@ export async function GET(request: Request) {
     lastSeenMsAgo: lastSeen ? now - lastSeen : null,
     pendingJobsCount: pendingCount,
     testInvoice: state.testInvoice,
+    gateway: state.gateway,
   });
 }
 

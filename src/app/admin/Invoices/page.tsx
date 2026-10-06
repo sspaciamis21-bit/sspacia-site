@@ -296,14 +296,16 @@ export default function AdminInvoicesWorkflowPage() {
         const data = await res.json();
         if (isMounted && data.success) {
           const isOnline = Boolean(
-            data.gateway &&
-            data.gateway.status === 'ONLINE' &&
-            Date.now() - (data.gateway.lastSeen || 0) < 12000
+            data.isOnline ?? (
+              data.gateway &&
+              data.gateway.status === 'ONLINE' &&
+              Date.now() - (data.gateway.lastSeen || 0) < 12000
+            )
           );
           setDscStatus({
             isOnline,
-            tokenLabel: data.gateway?.tokenLabel || null,
-            lastSeen: data.gateway?.lastSeen || 0,
+            tokenLabel: data.tokenLabel || data.gateway?.tokenLabel || null,
+            lastSeen: data.gateway?.lastSeen || (data.lastSeenMsAgo ? Date.now() - data.lastSeenMsAgo : Date.now()),
           });
         }
       } catch {
