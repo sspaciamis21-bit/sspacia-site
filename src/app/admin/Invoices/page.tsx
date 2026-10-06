@@ -3632,6 +3632,19 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                     </button>
                                   )}
 
+                                  {/* Visible Manage Invoice Button for CM */}
+                                  {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditModal(invoice)}
+                                      className="px-2.5 py-1.5 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 w-full justify-center shadow-xs transition-colors rounded cursor-pointer border border-teal-800"
+                                      title="Manage invoice entry: Edit products, Prorate Days, Adjust Sub-Invoices & Complimentary Usage"
+                                    >
+                                      <Edit2 size={11} className="text-amber-300 shrink-0" />
+                                      <span>Manage Invoice</span>
+                                    </button>
+                                  )}
+
                                   {/* Prorate Days Action for CM */}
                                   {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
                                     <button
@@ -5422,6 +5435,308 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                       </div>
 
                       <form onSubmit={handleSaveEditInvoice} className="p-6 space-y-5 overflow-y-auto flex-1">
+                        {/* CM PRE-DISPATCH INVOICE MANAGEMENT & REVIEW HUB */}
+                        <div className="bg-gradient-to-r from-neutral-900 to-[#004d40] text-white p-4 rounded-lg shadow-sm border border-neutral-700">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-2.5 border-b border-white/15">
+                            <div>
+                              <div className="text-xs font-black uppercase tracking-wider text-amber-300 flex items-center gap-2">
+                                <Sparkles size={14} />
+                                <span>Pre-Dispatch Review &amp; Management Hub</span>
+                              </div>
+                              <p className="text-[11px] text-white/80 font-normal mt-0.5">
+                                Configure billing adjustments, proration, product splits &amp; complimentary usage before sending to Accountant:
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] font-mono bg-white/10 px-2 py-0.5 rounded text-white/90">
+                                Status: {entryToEditInvoice.status.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            {/* 1. PRORATE DAYS FEATURE */}
+                            <div className={`p-3 rounded-md border transition-all ${
+                              editItems.some(it => it.isProrated || it.billingType === 'PRORATED') || showEditProratePanel
+                                ? 'bg-amber-950/40 border-amber-400/80 ring-1 ring-amber-400/30'
+                                : 'bg-white/5 border-white/15 hover:bg-white/10'
+                            }`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 bg-amber-500/20 text-amber-300 rounded border border-amber-500/30">
+                                    <CalendarDays size={16} />
+                                  </div>
+                                  <div>
+                                    <div className="text-[11px] font-bold text-white uppercase tracking-wider">
+                                      ⚡ Prorate Days
+                                    </div>
+                                    <div className="text-[10px] text-amber-200/90 font-medium">
+                                      {editItems.some(it => it.isProrated || it.billingType === 'PRORATED')
+                                        ? `Prorated: ${editProrateActiveDays} of ${editProrateTotalMonthDays}d`
+                                        : `Full Month (${editProrateTotalMonthDays}d Billed)`}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-neutral-300 mt-2 line-clamp-2">
+                                Adjust active occupancy days, start/end dates, or choose 11d, 15d, 7d presets.
+                              </p>
+                              <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEditProratePanel(!showEditProratePanel)}
+                                  className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors cursor-pointer ${
+                                    showEditProratePanel
+                                      ? 'bg-amber-400 text-amber-950 hover:bg-amber-300 font-extrabold'
+                                      : 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 border border-amber-400/40'
+                                  }`}
+                                >
+                                  <CalendarDays size={11} />
+                                  <span>{showEditProratePanel ? 'Hide Controls' : 'Configure Proration'}</span>
+                                </button>
+                                {editItems.some(it => it.isProrated || it.billingType === 'PRORATED') && (
+                                  <button
+                                    type="button"
+                                    onClick={handleResetEditProration}
+                                    className="text-[9.5px] text-amber-300 hover:text-white underline cursor-pointer"
+                                    title="Reset proration back to full month"
+                                  >
+                                    Reset
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* 2. ADJUST SUB-INVOICES FEATURE */}
+                            <div className={`p-3 rounded-md border transition-all ${
+                              (() => {
+                                try {
+                                  const s = JSON.parse(entryToEditInvoice.splitsJson || '[]');
+                                  return Array.isArray(s) && s.length > 1;
+                                } catch { return false; }
+                              })()
+                                ? 'bg-purple-950/40 border-purple-400/80 ring-1 ring-purple-400/30'
+                                : 'bg-white/5 border-white/15 hover:bg-white/10'
+                            }`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 bg-purple-500/20 text-purple-300 rounded border border-purple-500/30">
+                                    <Scissors size={16} />
+                                  </div>
+                                  <div>
+                                    <div className="text-[11px] font-bold text-white uppercase tracking-wider">
+                                      ✂️ Adjust Sub-Invoices
+                                    </div>
+                                    <div className="text-[10px] text-purple-200/90 font-medium">
+                                      {(() => {
+                                        try {
+                                          const s = JSON.parse(entryToEditInvoice.splitsJson || '[]');
+                                          if (Array.isArray(s) && s.length > 1) {
+                                            return `Split Active (${s.length} Sub-Invoices)`;
+                                          }
+                                        } catch {}
+                                        return 'Single Master Invoice';
+                                      })()}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-neutral-300 mt-2 line-clamp-2">
+                                Split products into separate sub-invoices (e.g. cabin vs parking) with distinct Tally PDFs.
+                              </p>
+                              <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updatedInvoice: InvoiceRecord = {
+                                      ...entryToEditInvoice,
+                                      companyName: editCompanyName,
+                                      gstNo: editGstNo,
+                                      billingMonth: editBillingMonth,
+                                      cabinName: editCabinName,
+                                      itemsJson: JSON.stringify(editItems),
+                                      amount: editAmount === '' ? null : Number(editAmount),
+                                      totalAmount: editTotalAmount === '' ? null : Number(editTotalAmount),
+                                    };
+                                    setEntryToEditInvoice(null);
+                                    handleOpenSplitModal(updatedInvoice);
+                                  }}
+                                  className="px-2.5 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-400/40 text-[10px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Open Split / Sub-Invoices Configurator"
+                                >
+                                  <Scissors size={11} />
+                                  <span>{entryToEditInvoice.splitsJson ? 'Adjust Sub-Invoices' : 'Split Invoice'}</span>
+                                </button>
+                                {(() => {
+                                  try {
+                                    const s = JSON.parse(entryToEditInvoice.splitsJson || '[]');
+                                    if (Array.isArray(s) && s.length > 1) {
+                                      return (
+                                        <span className="text-[9.5px] font-mono text-purple-300">
+                                          {s.length} parts
+                                        </span>
+                                      );
+                                    }
+                                  } catch {}
+                                  return null;
+                                })()}
+                              </div>
+                            </div>
+
+                            {/* 3. COMPLIMENTARY USAGE FEATURE */}
+                            <div className={`p-3 rounded-md border transition-all ${
+                              hasComplimentaryOverusage(entryToEditInvoice)
+                                ? 'bg-teal-950/40 border-teal-400/80 ring-1 ring-teal-400/30'
+                                : 'bg-white/5 border-white/15 hover:bg-white/10'
+                            }`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 bg-teal-500/20 text-teal-300 rounded border border-teal-500/30">
+                                    <Gift size={16} />
+                                  </div>
+                                  <div>
+                                    <div className="text-[11px] font-bold text-white uppercase tracking-wider">
+                                      🎁 Complimentary
+                                    </div>
+                                    <div className="text-[10px] text-teal-200/90 font-medium">
+                                      {hasComplimentaryOverusage(entryToEditInvoice)
+                                        ? '✓ Over-Usage Logged'
+                                        : 'Free Quota (Meeting / Print)'}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-neutral-300 mt-2 line-clamp-2">
+                                Review monthly complimentary meeting hours &amp; printer quota; bill excess usage.
+                              </p>
+                              <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between">
+                                {entryToEditInvoice.paymentDuration !== 'ONE_TIME' &&
+                                entryToEditInvoice.productGroupKey !== 'ONE_TIME_SESSION' &&
+                                entryToEditInvoice.clientMaster?.clientType !== 'ONE_TIME' &&
+                                entryToEditInvoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updatedInvoice: InvoiceRecord = {
+                                        ...entryToEditInvoice,
+                                        companyName: editCompanyName,
+                                        gstNo: editGstNo,
+                                        billingMonth: editBillingMonth,
+                                        cabinName: editCabinName,
+                                        itemsJson: JSON.stringify(editItems),
+                                        amount: editAmount === '' ? null : Number(editAmount),
+                                        totalAmount: editTotalAmount === '' ? null : Number(editTotalAmount),
+                                      };
+                                      setEntryToEditInvoice(null);
+                                      handleOpenComplimentaryModal(updatedInvoice);
+                                    }}
+                                    className="px-2.5 py-1 bg-teal-500/20 hover:bg-teal-500/30 text-teal-200 border border-teal-400/40 text-[10px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="Review complimentary quotas &amp; add over-usage line items"
+                                  >
+                                    <Gift size={11} />
+                                    <span>{hasComplimentaryOverusage(entryToEditInvoice) ? 'Adjust Usage' : 'Check Quota'}</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[9.5px] text-neutral-400 italic">
+                                    N/A (One-Time / Virtual)
+                                  </span>
+                                )}
+                                {hasComplimentaryOverusage(entryToEditInvoice) && (
+                                  <span className="text-[9.5px] text-teal-300 font-bold">
+                                    Billed
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Existing Sub-Invoices Details Card if Active */}
+                        {(() => {
+                          try {
+                            const splits = JSON.parse(entryToEditInvoice.splitsJson || '[]');
+                            if (Array.isArray(splits) && splits.length > 1) {
+                              return (
+                                <div className="p-3 bg-purple-50 border border-purple-200 rounded text-xs space-y-1.5">
+                                  <div className="font-bold text-purple-950 flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5">
+                                      <Scissors size={13} className="text-purple-700" />
+                                      <span>Active Sub-Invoices Configuration ({splits.length} Sub-Invoices)</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updatedInvoice: InvoiceRecord = {
+                                          ...entryToEditInvoice,
+                                          companyName: editCompanyName,
+                                          gstNo: editGstNo,
+                                          billingMonth: editBillingMonth,
+                                          cabinName: editCabinName,
+                                          itemsJson: JSON.stringify(editItems),
+                                          amount: editAmount === '' ? null : Number(editAmount),
+                                          totalAmount: editTotalAmount === '' ? null : Number(editTotalAmount),
+                                        };
+                                        setEntryToEditInvoice(null);
+                                        handleOpenSplitModal(updatedInvoice);
+                                      }}
+                                      className="text-[10px] text-purple-800 hover:text-purple-950 font-bold underline cursor-pointer"
+                                    >
+                                      Adjust Sub-Invoices →
+                                    </button>
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {splits.map((s: any, idx: number) => (
+                                      <div key={idx} className="bg-white p-2 rounded border border-purple-100 flex items-center justify-between">
+                                        <div>
+                                          <div className="font-bold text-neutral-800">{s.name}</div>
+                                          <div className="text-[10px] text-neutral-500">{s.items?.length || 0} product(s)</div>
+                                        </div>
+                                        <div className="font-mono font-bold text-purple-900 text-[11px]">
+                                          ₹{Number(s.totalAmount || 0).toLocaleString('en-IN')}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            }
+                          } catch {}
+                          return null;
+                        })()}
+
+                        {/* Existing Complimentary Over-usage Details Card if Active */}
+                        {hasComplimentaryOverusage(entryToEditInvoice) && (
+                          <div className="p-3 bg-teal-50 border border-teal-200 rounded text-xs flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Gift size={14} className="text-teal-700 shrink-0" />
+                              <div>
+                                <span className="font-bold text-teal-950">Complimentary Over-Usage Active: </span>
+                                <span className="text-teal-800 text-[11px]">Extra meeting room hours or printer pages are logged and added to this invoice total.</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedInvoice: InvoiceRecord = {
+                                  ...entryToEditInvoice,
+                                  companyName: editCompanyName,
+                                  gstNo: editGstNo,
+                                  billingMonth: editBillingMonth,
+                                  cabinName: editCabinName,
+                                  itemsJson: JSON.stringify(editItems),
+                                  amount: editAmount === '' ? null : Number(editAmount),
+                                  totalAmount: editTotalAmount === '' ? null : Number(editTotalAmount),
+                                };
+                                setEntryToEditInvoice(null);
+                                handleOpenComplimentaryModal(updatedInvoice);
+                              }}
+                              className="text-[10px] text-teal-800 hover:text-teal-950 font-bold underline cursor-pointer shrink-0"
+                            >
+                              Edit Over-Usage →
+                            </button>
+                          </div>
+                        )}
+
                         {/* Basic Invoice Parameters */}
                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-neutral-50 p-3.5 border border-neutral-200 rounded">
                           <div className="sm:col-span-2">
@@ -5662,6 +5977,20 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                       ₹{calc.totalAmount.toLocaleString('en-IN')}
                                     </div>
                                     <div className="text-[8.5px] text-teal-700 font-medium">Subtotal + GST</div>
+                                  </div>
+                                </div>
+
+                                {/* Formula Applied Breakdown */}
+                                <div className="bg-amber-100/70 border border-amber-300 p-2.5 rounded text-[10px] text-amber-950 flex items-start gap-2">
+                                  <FileCheck size={14} className="text-amber-800 shrink-0 mt-0.5" />
+                                  <div>
+                                    <div className="font-bold">Formula Applied:</div>
+                                    <div className="font-mono text-[10.5px] mt-0.5 font-bold">
+                                      ₹{totalBaseMonthly.toLocaleString('en-IN')} ÷ {calc.totalMonthDays} days × {calc.activeDays} days = ₹{calc.proratedSubtotal.toLocaleString('en-IN')} Base + ₹{calc.gstAmount.toLocaleString('en-IN')} (18% GST) = <span className="text-teal-900 underline">₹{calc.totalAmount.toLocaleString('en-IN')} Total</span>
+                                    </div>
+                                    <div className="text-[9.5px] text-amber-800 mt-0.5">
+                                      {calc.periodLabel}
+                                    </div>
                                   </div>
                                 </div>
 
