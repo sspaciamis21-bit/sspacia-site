@@ -54,6 +54,8 @@ import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import { formatDisplayDate } from '@/lib/date-format';
 import { IndiaGeoMapModal } from '@/components/admin/india-geo-map-modal';
 import { SdrReservesModal } from '@/components/admin/sdr-reserves-modal';
 import { CorporateClientsModal, CorporateClientItem } from '@/components/admin/corporate-clients-modal';
@@ -181,14 +183,26 @@ interface DashboardStats {
     pending: number;
   };
   productsList?: Array<any>;
+  centreScoped?: boolean;
+  isCommunityManager?: boolean;
 }
 
 export default function AdminDashboardPage() {
   const router = useRouter();
+  const { user, isRole } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isGeoMapOpen, setIsGeoMapOpen] = useState(false);
+
+  const isCommunityManager = Boolean(
+    (stats as any)?.centreScoped ||
+    (stats as any)?.isCommunityManager ||
+    isRole('COMMUNITY_MANAGER') ||
+    isRole('MANAGER') ||
+    user?.role?.toUpperCase() === 'COMMUNITY_MANAGER' ||
+    user?.role?.toUpperCase() === 'MANAGER'
+  );
 
   // Location Filter
   const [selectedLocation, setSelectedLocation] = useState<string>('ALL');
@@ -226,6 +240,9 @@ export default function AdminDashboardPage() {
       .then((json) => {
         if (json.data) {
           setStats(json.data);
+          if (json.data.selectedLocationId && json.data.selectedLocationId !== 'ALL') {
+            setSelectedLocation(String(json.data.selectedLocationId));
+          }
         }
       })
       .catch((err) => {
@@ -384,13 +401,17 @@ export default function AdminDashboardPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-neutral-200">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#006064] mb-1">
-              <Sparkles size={14} /> Super Admin Central Intelligence
+              <Sparkles size={14} /> {isCommunityManager ? 'Centre Operations Intelligence' : 'Super Admin Central Intelligence'}
             </div>
             <h1 className="text-2xl sm:text-3xl font-display font-black text-[#1B1C1C] tracking-tight uppercase">
-              Executive Business Overview
+              {isCommunityManager 
+                ? `${(stats?.locations?.find((l) => String(l.id) === selectedLocation)?.name || 'Centre')} Dashboard`
+                : 'Executive Business Overview'}
             </h1>
             <p className="text-gray-500 font-light text-xs mt-0.5">
-              Live operational telemetry across corporate clients, active workspaces, monthly agreement run-rate, and SDR reserves.
+              {isCommunityManager 
+                ? `Live operational telemetry, corporate tenancies, agreement run-rate & billing pipeline for ${stats?.locations?.find((l) => String(l.id) === selectedLocation)?.name || 'your assigned centre'}.`
+                : 'Live operational telemetry across corporate clients, active workspaces, monthly agreement run-rate, and SDR reserves.'}
             </p>
           </div>
 
@@ -406,16 +427,18 @@ export default function AdminDashboardPage() {
             </Link>
 
             {/* Quick Link to Super Admin Executive Expenses (P&L & Record Keeping) */}
-            <Link
-              href="/admin/executive-expenses"
-              className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all hover:scale-102"
-              title="Open Private Super Admin Executive Expenses & Gross Profit %"
-            >
-              <Wallet size={14} />
-              <span>Super Admin Expenses →</span>
-            </Link>
+            {!isCommunityManager && (
+              <Link
+                href="/admin/executive-expenses"
+                className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all hover:scale-102"
+                title="Open Private Super Admin Executive Expenses & Gross Profit %"
+              >
+                <Wallet size={14} />
+                <span>Super Admin Expenses →</span>
+              </Link>
+            )}
 
-            {/* Quick Link to Occupancy Section (Super Admin Exclusive) */}
+            {/* Quick Link to Occupancy Section */}
             <Link
               href="/admin/occupancy"
               className="px-3.5 py-2 bg-[#006064] hover:bg-[#004D40] text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-colors"
@@ -426,13 +449,15 @@ export default function AdminDashboardPage() {
             </Link>
 
             {/* Quick Link to Finance & P&L Section */}
-            <Link
-              href="/admin/financials"
-              className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-colors"
-            >
-              <Landmark size={14} />
-              <span>Finance &amp; P&amp;L Section →</span>
-            </Link>
+            {!isCommunityManager && (
+              <Link
+                href="/admin/financials"
+                className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-colors"
+              >
+                <Landmark size={14} />
+                <span>Finance &amp; P&amp;L Section →</span>
+              </Link>
+            )}
 
             <button
               onClick={() => setIsGeoMapOpen(true)}
@@ -460,13 +485,18 @@ export default function AdminDashboardPage() {
               <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">Centre:</span>
               <select
                 value={selectedLocation}
+                disabled={isCommunityManager && Boolean(stats?.centreScoped || (stats as any)?.selectedLocationId)}
                 onChange={(e) => {
                   setSelectedLocation(e.target.value);
                   fetchDashboardData(e.target.value);
                 }}
-                className="bg-neutral-50 border border-neutral-300 px-2.5 py-1 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#006064] cursor-pointer"
+                className={`bg-neutral-50 border border-neutral-300 px-2.5 py-1 text-xs font-semibold text-gray-800 focus:outline-none focus:border-[#006064] ${
+                  isCommunityManager && Boolean(stats?.centreScoped || (stats as any)?.selectedLocationId)
+                    ? 'cursor-not-allowed bg-neutral-100 text-[#006064] font-bold'
+                    : 'cursor-pointer'
+                }`}
               >
-                <option value="ALL">All Centres (Global)</option>
+                {!isCommunityManager && <option value="ALL">All Centres (Global)</option>}
                 {((stats?.locations && stats.locations.length > 0)
                   ? stats.locations
                   : [
@@ -478,10 +508,15 @@ export default function AdminDashboardPage() {
                   .filter((loc) => (loc as any).slug !== 'common' && loc.name?.toLowerCase() !== 'common')
                   .map((loc) => (
                     <option key={loc.id} value={String(loc.id)}>
-                      {loc.name}
+                      {loc.name} {isCommunityManager ? '(Assigned Centre)' : ''}
                     </option>
                   ))}
               </select>
+              {isCommunityManager && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-50 border border-teal-200 text-[#006064] text-[10px] font-bold uppercase tracking-wider rounded-xs">
+                  🔒 Centre Scoped
+                </span>
+              )}
             </div>
           </div>
 

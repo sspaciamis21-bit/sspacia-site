@@ -34,11 +34,48 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
 };
 
 // GET /api/admin/stats — 100% Real Database Analytics for Super Admin (Owner) Executive Dashboard
-export const GET = withPermission('reports', 'read', async (req: NextRequest) => {
+export const GET = withPermission('reports', 'read', async (req: NextRequest, { payload }: any) => {
   try {
     const { searchParams } = new URL(req.url);
     const billingMonthParam = searchParams.get('billingMonth');
-    const locationIdParam = searchParams.get('locationId');
+    let locationIdParam = searchParams.get('locationId');
+
+    const userId = Number(payload?.id);
+    let userRole = String(payload?.role || '').toUpperCase();
+    let isSuperAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+
+    let userAssignedLocationIds: number[] = [];
+    let userAssignedLocations: any[] = [];
+    if (userId) {
+      const u = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          role: true,
+          assignedLocations: { include: { location: { select: { id: true, name: true, slug: true } } } },
+        },
+      });
+      if (u?.role?.name) {
+        userRole = u.role.name.toUpperCase();
+        isSuperAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+      }
+      userAssignedLocations = (u?.assignedLocations || []).map((al: any) => al.location).filter(Boolean);
+      userAssignedLocationIds = userAssignedLocations.map((loc: any) => loc.id);
+    }
+
+    const isCommunityManager = userRole === 'COMMUNITY_MANAGER' || userRole === 'MANAGER' || (!isSuperAdmin && userAssignedLocationIds.length > 0);
+
+    // If CM, strictly lock to their assigned location(s)
+    let enforcedLocationId: number | null = null;
+    if (isCommunityManager && userAssignedLocationIds.length > 0) {
+      if (locationIdParam && locationIdParam !== 'ALL' && userAssignedLocationIds.includes(parseInt(locationIdParam, 10))) {
+        enforcedLocationId = parseInt(locationIdParam, 10);
+      } else {
+        enforcedLocationId = userAssignedLocationIds[0];
+      }
+      locationIdParam = String(enforcedLocationId);
+    } else if (locationIdParam && locationIdParam !== 'ALL') {
+      enforcedLocationId = parseInt(locationIdParam, 10);
+    }
 
     const [
       totalLocations,
@@ -51,20 +88,39 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
       totalRoles,
       recentBookings,
     ] = await Promise.all([
-      prisma.location.count({ where: { isActive: true } }),
-      prisma.product.count({ where: { isActive: true } }),
-      prisma.booking.count(),
+      prisma.location.count({
+        where: {
+          isActive: true,
+          ...(isCommunityManager && userAssignedLocationIds.length > 0 ? { id: { in: userAssignedLocationIds } } : {}),
+        },
+      }),
+      prisma.product.count({
+        where: {
+          isActive: true,
+          ...(enforcedLocationId ? { locationId: enforcedLocationId } : {}),
+        },
+      }),
+      prisma.booking.count({
+        where: enforcedLocationId ? { product: { locationId: enforcedLocationId } } : {},
+      }),
       prisma.payment.aggregate({
         _sum: { amount: true },
-        where: { status: { name: 'PAID' } },
+        where: {
+          status: { name: 'PAID' },
+          ...(enforcedLocationId ? { booking: { product: { locationId: enforcedLocationId } } } : {}),
+        },
       }),
       prisma.supportTicket.count({
-        where: { status: { name: { notIn: ['CLOSED', 'RESOLVED'] } } },
+        where: {
+          status: { name: { notIn: ['CLOSED', 'RESOLVED'] } },
+          ...(enforcedLocationId ? { locationId: enforcedLocationId } : {}),
+        },
       }),
       prisma.user.count({ where: { isActive: true } }),
       prisma.amenity.count(),
       prisma.role.count({ where: { isActive: true } }),
       prisma.booking.findMany({
+        where: enforcedLocationId ? { product: { locationId: enforcedLocationId } } : {},
         orderBy: { createdAt: 'desc' },
         take: 5,
         select: {
@@ -83,7 +139,10 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
     let locationsList: any[] = [];
     try {
       locationsList = await prisma.location.findMany({
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          ...(isCommunityManager && userAssignedLocationIds.length > 0 ? { id: { in: userAssignedLocationIds } } : {}),
+        },
         select: {
           id: true,
           name: true,
@@ -395,9 +454,18 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           return db.getTime() - da.getTime();
         });
 
-        // Compute month-wise breakdown for all months
+        // Scope invoices by location first for centre-accurate monthWise breakdown
+        let scopedForLocationInvoices = allInvoices;
+        if (locationIdParam && locationIdParam !== 'ALL') {
+          const locUserIds = await getUserIdsByLocation(parseInt(locationIdParam, 10));
+          if (locUserIds) {
+            scopedForLocationInvoices = allInvoices.filter((i: any) => locUserIds.includes(i.createdById));
+          }
+        }
+
+        // Compute month-wise breakdown for all months (centre-scoped if location selected)
         const monthWiseInvoices: Record<string, any> = {};
-        allInvoices.forEach((inv: any) => {
+        scopedForLocationInvoices.forEach((inv: any) => {
           const m = normalizeBillingMonth(inv.billingMonth) || 'August 2026';
           if (!monthWiseInvoices[m]) {
             monthWiseInvoices[m] = {
@@ -430,14 +498,8 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
         });
         (invoiceStats as any).monthWise = monthWiseInvoices;
 
-        // Apply filters for invoiceStats
-        let filteredInvs = allInvoices;
-        if (locationIdParam && locationIdParam !== 'ALL') {
-          const locUserIds = await getUserIdsByLocation(parseInt(locationIdParam, 10));
-          if (locUserIds) {
-            filteredInvs = filteredInvs.filter((i: any) => locUserIds.includes(i.createdById));
-          }
-        }
+        // Apply billingMonth filter for invoiceStats
+        let filteredInvs = scopedForLocationInvoices;
 
         if (billingMonthParam && billingMonthParam !== 'ALL') {
           const normTarget = normalizeBillingMonth(billingMonthParam);
@@ -872,6 +934,9 @@ export const GET = withPermission('reports', 'read', async (req: NextRequest) =>
           pending: pendingLeadsCount,
         },
         productsList: (productTypeCounts as any).allWorkspaces || [],
+        isCommunityManager,
+        centreScoped: Boolean(isCommunityManager),
+        userAssignedLocations,
       },
     }, {
       headers: {

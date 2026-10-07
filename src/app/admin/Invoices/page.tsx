@@ -65,6 +65,7 @@ import {
   type BillingMonthInfo,
   type ProrateCalculationResult,
 } from '@/lib/invoice-proration-utils';
+import { formatDisplayDate } from '@/lib/date-format';
 
 
 
@@ -184,7 +185,7 @@ interface InvoiceRecord {
     noticePeriodMonths?: number | null;
     noticePeriodApplicable?: string | null;
     escalationPercent?: number | null;
-    escalationApplicable?: number | null;
+    escalationApplicable?: string | number | null;
     willDeductTds?: boolean;
     tanNo?: string | null;
     clientId?: string | null;
@@ -341,6 +342,72 @@ export default function AdminInvoicesWorkflowPage() {
   const [accountantArrivalFilter, setAccountantArrivalFilter] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'TWO_DAYS_AGO' | 'PENDING_ATTACH'>('ALL');
   const [showArrivalBanner, setShowArrivalBanner] = useState(false);
   const [hasShownArrivalBanner, setHasShownArrivalBanner] = useState(false);
+
+  // Excel-Style Frozen Header Column Filters
+  const [excelFilters, setExcelFilters] = useState<{
+    company: string[];
+    cycle: string[];
+    node: string[];
+    month: string[];
+    status: string[];
+  }>({
+    company: [],
+    cycle: [],
+    node: [],
+    month: [],
+    status: [],
+  });
+  const [activeExcelFilterCol, setActiveExcelFilterCol] = useState<'company' | 'cycle' | 'node' | 'month' | 'status' | null>(null);
+  const [excelFilterSearch, setExcelFilterSearch] = useState<string>('');
+
+  const toggleExcelFilter = (colKey: 'company' | 'cycle' | 'node' | 'month' | 'status', value: string) => {
+    setExcelFilters((prev) => {
+      const current = prev[colKey];
+      const next = current.includes(value) ? current.filter((x) => x !== value) : [...current, value];
+      return { ...prev, [colKey]: next };
+    });
+  };
+
+  const selectAllExcelFilter = (colKey: 'company' | 'cycle' | 'node' | 'month' | 'status', allValues: string[]) => {
+    setExcelFilters((prev) => ({ ...prev, [colKey]: allValues }));
+  };
+
+  const clearExcelFilter = (colKey: 'company' | 'cycle' | 'node' | 'month' | 'status') => {
+    setExcelFilters((prev) => ({ ...prev, [colKey]: [] }));
+  };
+
+  const clearAllExcelFilters = () => {
+    setExcelFilters({
+      company: [],
+      cycle: [],
+      node: [],
+      month: [],
+      status: [],
+    });
+  };
+
+  const totalActiveExcelFiltersCount = useMemo(() => {
+    return (
+      (excelFilters.company.length > 0 ? 1 : 0) +
+      (excelFilters.cycle.length > 0 ? 1 : 0) +
+      (excelFilters.node.length > 0 ? 1 : 0) +
+      (excelFilters.month.length > 0 ? 1 : 0) +
+      (excelFilters.status.length > 0 ? 1 : 0)
+    );
+  }, [excelFilters]);
+
+  // Click outside to close active Excel filter popover
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.excel-filter-popover') || target.closest('.excel-filter-trigger')) return;
+      setActiveExcelFilterCol(null);
+    };
+    if (activeExcelFilterCol) {
+      document.addEventListener('click', handleOutsideClick);
+      return () => document.removeEventListener('click', handleOutsideClick);
+    }
+  }, [activeExcelFilterCol]);
 
   const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
     { id: 1, name: 'Agarwal Complex' },
@@ -2831,24 +2898,12 @@ export default function AdminInvoicesWorkflowPage() {
       try {
         const items = JSON.parse(inv.itemsJson);
         if (items[0]?.sessionDate) {
-          const d = new Date(items[0].sessionDate);
-          if (!isNaN(d.getTime())) {
-            const day = d.getDate();
-            const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
-            const year = d.getFullYear();
-            sessionDateStr = `${day} ${monthShort} ${year}`;
-          }
+          sessionDateStr = formatDisplayDate(items[0].sessionDate);
         }
       } catch { }
     }
     if (!sessionDateStr && inv.dueDate) {
-      const d = new Date(inv.dueDate);
-      if (!isNaN(d.getTime())) {
-        const day = d.getDate();
-        const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
-        const year = d.getFullYear();
-        sessionDateStr = `${day} ${monthShort} ${year}`;
-      }
+      sessionDateStr = formatDisplayDate(inv.dueDate);
     }
     if (!sessionDateStr) {
       sessionDateStr = normalizeBillingMonth(inv.billingMonth) || 'Session';
@@ -2856,35 +2911,9 @@ export default function AdminInvoicesWorkflowPage() {
     return `One-Time: ${sessionDateStr}`;
   };
 
-  // Safe date formatter for YYYY-MM-DD, ISO, or Date objects without timezone drift
-  const formatDisplayDateSafe = (d?: string | Date | null): string => {
-    if (!d) return '';
-    if (typeof d === 'string') {
-      const trimmed = d.trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-        const [y, m, day] = trimmed.split('-');
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const mIdx = parseInt(m, 10) - 1;
-        return `${day.padStart(2, '0')} ${months[mIdx] || m} ${y}`;
-      }
-      const parsed = new Date(trimmed);
-      if (!isNaN(parsed.getTime())) {
-        const day = String(parsed.getDate()).padStart(2, '0');
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const monthShort = months[parsed.getMonth()] || parsed.toLocaleDateString('en-US', { month: 'short' });
-        const year = parsed.getFullYear();
-        return `${day} ${monthShort} ${year}`;
-      }
-      return trimmed;
-    }
-    if (d instanceof Date && !isNaN(d.getTime())) {
-      const day = String(d.getDate()).padStart(2, '0');
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const monthShort = months[d.getMonth()] || d.toLocaleDateString('en-US', { month: 'short' });
-      const year = d.getFullYear();
-      return `${day} ${monthShort} ${year}`;
-    }
-    return '';
+  // Safe date formatter standardized to D MMM YYYY (e.g. 17 Aug 2026, 5 Aug 2026, 3 Aug 2027)
+  const formatDisplayDateSafe = (d?: string | Date | number | null): string => {
+    return formatDisplayDate(d);
   };
 
   const billingMonthOptions = useMemo(() => {
@@ -2975,6 +3004,50 @@ export default function AdminInvoicesWorkflowPage() {
     }
   }, [userRoleView, invoices, hasShownArrivalBanner, accountantArrivalCounts.pendingAttachCount]);
 
+  // Distinct options for Excel frozen header filters
+  const excelFilterOptions = useMemo(() => {
+    const companies = new Map<string, number>();
+    const cycles = new Map<string, number>();
+    const nodes = new Map<string, number>();
+    const months = new Map<string, number>();
+    const statuses = new Map<string, number>();
+
+    invoices.forEach((inv) => {
+      const c = inv.companyName?.trim();
+      if (c) companies.set(c, (companies.get(c) || 0) + 1);
+
+      const cy = inv.paymentDuration === 'TWO_YEARS' || inv.paymentDuration === '2_YEARS'
+        ? '2 YEARS'
+        : (inv.paymentDuration ? String(inv.paymentDuration).replace('_', ' ') : 'MONTHLY');
+      cycles.set(cy, (cycles.get(cy) || 0) + 1);
+
+      const nodeNames = inv.createdBy?.assignedLocations?.map((al) => al.location.name) || ['No Node'];
+      nodeNames.forEach((n) => nodes.set(n, (nodes.get(n) || 0) + 1));
+
+      const m = normalizeBillingMonth(inv.billingMonth);
+      if (m) months.set(m, (months.get(m) || 0) + 1);
+
+      const s = inv.status;
+      statuses.set(s, (statuses.get(s) || 0) + 1);
+    });
+
+    return {
+      company: Array.from(companies.entries()).map(([val, count]) => ({ val, label: val, count })).sort((a, b) => a.label.localeCompare(b.label)),
+      cycle: Array.from(cycles.entries()).map(([val, count]) => ({ val, label: val, count })).sort((a, b) => a.label.localeCompare(b.label)),
+      node: Array.from(nodes.entries()).map(([val, count]) => ({ val, label: val, count })).sort((a, b) => a.label.localeCompare(b.label)),
+      month: Array.from(months.entries()).map(([val, count]) => ({ val, label: val, count })),
+      status: Array.from(statuses.entries()).map(([val, count]) => {
+        let label: string = val;
+        if (val === 'PENDING_CM_REVIEW') label = 'Pending CM Review';
+        else if (val === 'SENT_TO_ACCOUNTANT') label = 'Sent to Accountant';
+        else if (val === 'INVOICE_ATTACHED') label = 'Invoice Attached';
+        else if (val === 'APPROVED') label = 'Approved';
+        else if (val === 'REJECTED_WITH_REMARKS') label = 'Revision Requested';
+        return { val, label, count };
+      }),
+    };
+  }, [invoices]);
+
   // Filtered entries for CM View vs Accountant View
   const filteredInvoices = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -3031,9 +3104,35 @@ export default function AdminInvoicesWorkflowPage() {
         selectedBillingMonthFilter === 'ALL' ||
         normalizeBillingMonth(e.billingMonth) === normalizeBillingMonth(selectedBillingMonthFilter);
 
-      return matchesSearch && matchesRoleFilter && matchesArrivalFilter && matchesStatus && matchesCompany && matchesCycle && matchesDueDay && matchesBillingMonth;
+      if (!matchesSearch || !matchesRoleFilter || !matchesArrivalFilter || !matchesStatus || !matchesCompany || !matchesCycle || !matchesDueDay || !matchesBillingMonth) {
+        return false;
+      }
+
+      // Excel Column Filters
+      if (excelFilters.company.length > 0 && !excelFilters.company.includes(e.companyName.trim())) {
+        return false;
+      }
+      if (excelFilters.cycle.length > 0) {
+        const cKey = e.paymentDuration === 'TWO_YEARS' || e.paymentDuration === '2_YEARS'
+          ? '2 YEARS'
+          : (e.paymentDuration ? String(e.paymentDuration).replace('_', ' ') : 'MONTHLY');
+        if (!excelFilters.cycle.includes(cKey)) return false;
+      }
+      if (excelFilters.node.length > 0) {
+        const nodeNames = e.createdBy?.assignedLocations?.map((al) => al.location.name) || ['No Node'];
+        if (!nodeNames.some((n) => excelFilters.node.includes(n))) return false;
+      }
+      if (excelFilters.month.length > 0) {
+        const bMonth = normalizeBillingMonth(e.billingMonth);
+        if (!excelFilters.month.includes(bMonth)) return false;
+      }
+      if (excelFilters.status.length > 0 && !excelFilters.status.includes(e.status)) {
+        return false;
+      }
+
+      return true;
     });
-  }, [invoices, searchTerm, userRoleView, accountantArrivalFilter, selectedStatusFilter, selectedCompanyFilter, selectedCycleFilter, selectedDueDayFilter, selectedBillingMonthFilter]);
+  }, [invoices, searchTerm, userRoleView, accountantArrivalFilter, selectedStatusFilter, selectedCompanyFilter, selectedCycleFilter, selectedDueDayFilter, selectedBillingMonthFilter, excelFilters]);
 
   // Count of invoices requiring Remote DSC across all centres and current filtered view
   const totalAllCentersPendingDscCount = useMemo(() => {
@@ -3125,6 +3224,119 @@ export default function AdminInvoicesWorkflowPage() {
       default:
         return null;
     }
+  };
+
+  const renderExcelFilterPopover = (
+    colKey: 'company' | 'cycle' | 'node' | 'month' | 'status',
+    title: string
+  ) => {
+    if (activeExcelFilterCol !== colKey) return null;
+
+    const allOptions = excelFilterOptions[colKey] || [];
+    const searchLower = excelFilterSearch.trim().toLowerCase();
+    const filteredOpts = searchLower
+      ? allOptions.filter((opt) => opt.label.toLowerCase().includes(searchLower))
+      : allOptions;
+
+    return (
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="excel-filter-popover absolute left-0 top-full mt-1.5 z-50 bg-white text-[#1B1C1C] border border-neutral-300 shadow-2xl rounded-sm p-3 min-w-[250px] max-w-[290px] font-normal normal-case text-xs tracking-normal"
+      >
+        <div className="flex items-center justify-between pb-2 border-b border-neutral-200">
+          <div className="font-bold text-[11px] uppercase tracking-wider text-[#006064] flex items-center gap-1.5">
+            <Filter size={12} />
+            <span>Filter: {title}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveExcelFilterCol(null)}
+            className="p-1 text-neutral-400 hover:text-black rounded cursor-pointer"
+          >
+            <X size={13} />
+          </button>
+        </div>
+
+        {/* Search inside filter */}
+        <div className="mt-2 relative">
+          <Search size={12} className="absolute left-2.5 top-2.5 text-neutral-400" />
+          <input
+            type="text"
+            placeholder={`Search ${title}...`}
+            value={excelFilterSearch}
+            onChange={(e) => setExcelFilterSearch(e.target.value)}
+            className="w-full bg-neutral-50 border border-neutral-300 pl-7 pr-2.5 py-1 text-xs rounded-xs focus:outline-none focus:border-[#006064]"
+            autoFocus
+          />
+        </div>
+
+        {/* Quick Actions: Select All & Clear */}
+        <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-dashed border-neutral-200 text-[10.5px] font-bold">
+          <button
+            type="button"
+            onClick={() => selectAllExcelFilter(colKey, allOptions.map((o) => o.val))}
+            className="text-[#006064] hover:underline cursor-pointer"
+          >
+            Select All ({allOptions.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => clearExcelFilter(colKey)}
+            className="text-neutral-500 hover:text-red-600 hover:underline cursor-pointer"
+          >
+            Clear Filter
+          </button>
+        </div>
+
+        {/* Checkbox options list */}
+        <div className="mt-2 max-h-48 overflow-y-auto space-y-0.5 border border-neutral-200 p-1.5 rounded-xs bg-neutral-50/50">
+          {filteredOpts.length === 0 ? (
+            <div className="py-4 text-center text-neutral-400 text-[11px]">
+              No matching options
+            </div>
+          ) : (
+            filteredOpts.map((opt) => {
+              const checked = excelFilters[colKey].includes(opt.val);
+              return (
+                <label
+                  key={opt.val}
+                  className="flex items-center gap-2 px-2 py-1 hover:bg-white rounded cursor-pointer text-xs select-none group"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleExcelFilter(colKey, opt.val)}
+                    className="w-3.5 h-3.5 accent-[#006064] cursor-pointer"
+                  />
+                  <span className="truncate flex-1 font-medium group-hover:text-black">
+                    {opt.label}
+                  </span>
+                  <span className="text-[10px] text-neutral-400 font-mono">
+                    ({opt.count})
+                  </span>
+                </label>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-2.5 pt-2 border-t border-neutral-200 flex items-center justify-between text-[10.5px]">
+          <span className="text-neutral-500 font-medium">
+            {excelFilters[colKey].length > 0
+              ? `${excelFilters[colKey].length} of ${allOptions.length} selected`
+              : 'All visible'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setActiveExcelFilterCol(null)}
+            className="px-3 py-1 bg-[#006064] text-white font-bold rounded-xs hover:bg-[#004d40] text-xs cursor-pointer shadow-xs"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -3679,55 +3891,264 @@ export default function AdminInvoicesWorkflowPage() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto space-y-4">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-[#006064] text-white uppercase tracking-wider text-[10px] font-bold">
-                        <th className="p-3 w-12 text-center">SR.No</th>
-                        <th className="p-3">Company Name</th>
-                        <th className="p-3">Payment Cycle & Duration</th>
-                        <th className="p-3">Node & Person</th>
-                        <th className="p-3">Cabin & Seats / Items</th>
-                        <th className="p-3">Arrival Date & Dispatch Type</th>
-                        <th className="p-3">Billing Month</th>
-                        <th className="p-3 text-right">Total Amt (₹)</th>
-                        <th className="p-3">Workflow Status</th>
-                        <th className="p-3 text-center w-40">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100 font-medium">
-                      {filteredInvoices.map((invoice, index) => (
-                        <tr key={invoice.id} className="hover:bg-neutral-50/60 transition-colors">
-                          <td className="p-3 text-center font-mono font-bold text-neutral-600 bg-neutral-50/50">
-                            #{index + 1}
-                          </td>
+                <div className="space-y-2">
+                  {/* Excel Column Filters Active Indicator Bar */}
+                  {totalActiveExcelFiltersCount > 0 && (
+                    <div className="px-3.5 py-2 bg-amber-50 border border-amber-300 text-amber-950 text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold flex items-center gap-1.5 text-[#006064]">
+                          <Filter size={13} className="text-amber-700" />
+                          <span>Active Excel Column Filters ({totalActiveExcelFiltersCount}):</span>
+                        </span>
+                        {excelFilters.company.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
+                            Company: {excelFilters.company.length} selected
+                          </span>
+                        )}
+                        {excelFilters.cycle.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
+                            Cycle: {excelFilters.cycle.length} selected
+                          </span>
+                        )}
+                        {excelFilters.node.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
+                            Node: {excelFilters.node.length} selected
+                          </span>
+                        )}
+                        {excelFilters.month.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
+                            Month: {excelFilters.month.length} selected
+                          </span>
+                        )}
+                        {excelFilters.status.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
+                            Status: {excelFilters.status.length} selected
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearAllExcelFilters}
+                        className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 text-[10.5px] font-bold uppercase tracking-wider rounded-xs cursor-pointer shadow-2xs transition-colors shrink-0"
+                      >
+                        Reset All Column Filters
+                      </button>
+                    </div>
+                  )}
 
-                          <td className="p-3">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-[#1B1C1C] text-sm">{invoice.companyName}</span>
-                              {invoice.isExtendedHours && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap">
-                                  ⚡ Extended Hours
-                                </span>
-                              )}
-                              {invoice.bookingId && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap font-mono" title={`Booking Reference ID: ${invoice.bookingId}`}>
-                                  <Tag size={9} /> ID: {invoice.bookingId}
-                                </span>
-                              )}
-                              {invoice.billedTo === 'BROKER' && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded-xs whitespace-nowrap">
-                                  🏢 Billed to Broker: {invoice.brokerName || 'Broker'} {invoice.brokerCommissionPercent ? `(${invoice.brokerCommissionPercent}%)` : ''}
-                                </span>
-                              )}
-                              {invoice.billedTo === 'CLIENT' && invoice.brokerName && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 text-[9px] font-bold uppercase tracking-wider rounded-xs whitespace-nowrap">
-                                  👤 Direct Client Invoice
-                                </span>
-                              )}
+                  {/* Frozen Header Excel-style Table Container */}
+                  <div className="border border-neutral-300 rounded-sm shadow-xs overflow-x-auto max-h-[calc(100vh-270px)] overflow-y-auto bg-white relative">
+                    <table className="w-full text-left text-xs border-collapse divide-y divide-neutral-200">
+                      <thead className="sticky top-0 z-30 bg-[#006064] text-white shadow-sm select-none">
+                        <tr className="bg-[#006064] text-white uppercase tracking-wider text-[10px] font-bold divide-x divide-teal-800">
+                          <th className="sticky top-0 bg-[#006064] p-3 w-12 text-center z-20 border-b-2 border-teal-800">SR.No</th>
+
+                          {/* 1. Company Name (with Excel Filter) */}
+                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[300px] relative">
+                            <div className="flex items-center justify-between gap-1">
+                              <span>Company Name</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExcelFilterSearch('');
+                                  setActiveExcelFilterCol(activeExcelFilterCol === 'company' ? null : 'company');
+                                }}
+                                className={`excel-filter-trigger px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
+                                  excelFilters.company.length > 0
+                                    ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
+                                    : 'hover:bg-white/20 text-white/80 hover:text-white'
+                                }`}
+                                title="Filter by Company (Excel Search & Select All)"
+                              >
+                                <Filter size={11} className={excelFilters.company.length > 0 ? 'fill-neutral-900' : ''} />
+                                {excelFilters.company.length > 0 && (
+                                  <span className="text-[9px] font-mono">({excelFilters.company.length})</span>
+                                )}
+                              </button>
                             </div>
-                            {invoice.gstNo && <div className="text-[10px] font-mono text-neutral-500">GST: {invoice.gstNo}</div>}
-                          </td>
+                            {renderExcelFilterPopover('company', 'Company Name')}
+                          </th>
+
+                          {/* 2. Payment Cycle & Duration (with Excel Filter) */}
+                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[190px] relative">
+                            <div className="flex items-center justify-between gap-1">
+                              <span>Cycle &amp; Duration</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExcelFilterSearch('');
+                                  setActiveExcelFilterCol(activeExcelFilterCol === 'cycle' ? null : 'cycle');
+                                }}
+                                className={`excel-filter-trigger px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
+                                  excelFilters.cycle.length > 0
+                                    ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
+                                    : 'hover:bg-white/20 text-white/80 hover:text-white'
+                                }`}
+                                title="Filter by Payment Cycle (Excel Search & Select All)"
+                              >
+                                <Filter size={11} className={excelFilters.cycle.length > 0 ? 'fill-neutral-900' : ''} />
+                                {excelFilters.cycle.length > 0 && (
+                                  <span className="text-[9px] font-mono">({excelFilters.cycle.length})</span>
+                                )}
+                              </button>
+                            </div>
+                            {renderExcelFilterPopover('cycle', 'Cycle & Duration')}
+                          </th>
+
+                          {/* 3. Node & Person (with Excel Filter) */}
+                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[170px] relative">
+                            <div className="flex items-center justify-between gap-1">
+                              <span>Node &amp; Person</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExcelFilterSearch('');
+                                  setActiveExcelFilterCol(activeExcelFilterCol === 'node' ? null : 'node');
+                                }}
+                                className={`excel-filter-trigger px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
+                                  excelFilters.node.length > 0
+                                    ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
+                                    : 'hover:bg-white/20 text-white/80 hover:text-white'
+                                }`}
+                                title="Filter by Node Centre (Excel Search & Select All)"
+                              >
+                                <Filter size={11} className={excelFilters.node.length > 0 ? 'fill-neutral-900' : ''} />
+                                {excelFilters.node.length > 0 && (
+                                  <span className="text-[9px] font-mono">({excelFilters.node.length})</span>
+                                )}
+                              </button>
+                            </div>
+                            {renderExcelFilterPopover('node', 'Node Centre')}
+                          </th>
+
+                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[170px]">Cabin &amp; Seats / Items</th>
+                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[170px]">Arrival Date &amp; Dispatch Type</th>
+
+                          {/* 4. Billing Month (with Excel Filter) */}
+                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[170px] relative">
+                            <div className="flex items-center justify-between gap-1">
+                              <span>Billing Month</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExcelFilterSearch('');
+                                  setActiveExcelFilterCol(activeExcelFilterCol === 'month' ? null : 'month');
+                                }}
+                                className={`excel-filter-trigger px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
+                                  excelFilters.month.length > 0
+                                    ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
+                                    : 'hover:bg-white/20 text-white/80 hover:text-white'
+                                }`}
+                                title="Filter by Billing Month (Excel Search & Select All)"
+                              >
+                                <Filter size={11} className={excelFilters.month.length > 0 ? 'fill-neutral-900' : ''} />
+                                {excelFilters.month.length > 0 && (
+                                  <span className="text-[9px] font-mono">({excelFilters.month.length})</span>
+                                )}
+                              </button>
+                            </div>
+                            {renderExcelFilterPopover('month', 'Billing Month')}
+                          </th>
+
+                          <th className="sticky top-0 bg-[#006064] p-3 text-right z-20 border-b-2 border-teal-800 min-w-[140px]">Total Amt (₹)</th>
+
+                          {/* 5. Workflow Status (with Excel Filter) */}
+                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[170px] relative">
+                            <div className="flex items-center justify-between gap-1">
+                              <span>Workflow Status</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExcelFilterSearch('');
+                                  setActiveExcelFilterCol(activeExcelFilterCol === 'status' ? null : 'status');
+                                }}
+                                className={`excel-filter-trigger px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
+                                  excelFilters.status.length > 0
+                                    ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
+                                    : 'hover:bg-white/20 text-white/80 hover:text-white'
+                                }`}
+                                title="Filter by Workflow Status (Excel Search & Select All)"
+                              >
+                                <Filter size={11} className={excelFilters.status.length > 0 ? 'fill-neutral-900' : ''} />
+                                {excelFilters.status.length > 0 && (
+                                  <span className="text-[9px] font-mono">({excelFilters.status.length})</span>
+                                )}
+                              </button>
+                            </div>
+                            {renderExcelFilterPopover('status', 'Workflow Status')}
+                          </th>
+
+                          <th className="sticky top-0 bg-[#006064] p-3 text-center w-40 z-20 border-b-2 border-teal-800">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100 font-medium">
+                        {filteredInvoices.map((invoice, index) => (
+                          <tr key={invoice.id} className="hover:bg-neutral-50/60 transition-colors">
+                            <td className="p-3 text-center font-mono font-bold text-neutral-600 bg-neutral-50/50">
+                              #{index + 1}
+                            </td>
+
+                            <td className="p-3">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-[#1B1C1C] text-sm">{invoice.companyName}</span>
+                                {invoice.isExtendedHours && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap">
+                                    ⚡ Extended Hours
+                                  </span>
+                                )}
+                                {invoice.bookingId && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap font-mono" title={`Booking Reference ID: ${invoice.bookingId}`}>
+                                    <Tag size={9} /> ID: {invoice.bookingId}
+                                  </span>
+                                )}
+                                {invoice.billedTo === 'BROKER' && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded-xs whitespace-nowrap">
+                                    🏢 Billed to Broker: {invoice.brokerName || 'Broker'} {invoice.brokerCommissionPercent ? `(${invoice.brokerCommissionPercent}%)` : ''}
+                                  </span>
+                                )}
+                                {invoice.billedTo === 'CLIENT' && invoice.brokerName && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 text-[9px] font-bold uppercase tracking-wider rounded-xs whitespace-nowrap">
+                                    👤 Direct Client Invoice
+                                  </span>
+                                )}
+                              </div>
+                              {invoice.gstNo && <div className="text-[10px] font-mono text-neutral-500">GST: {invoice.gstNo}</div>}
+
+                              {/* Agreement Terms Capsule (Start Date, End Date, Lock-In, Notice, Escalation) */}
+                              {invoice.clientMaster && (invoice.clientMaster.agreementStartDate || invoice.clientMaster.lockinEndDate || invoice.clientMaster.noticePeriodMonths || invoice.clientMaster.escalationPercent) && (
+                                <div className="mt-2 pt-1.5 border-t border-neutral-100 flex flex-wrap items-center gap-1.5 text-[9.5px]">
+                                  {invoice.clientMaster.agreementStartDate && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-900 border border-emerald-200 font-semibold rounded-xs" title="Agreement Term">
+                                      <Calendar size={10} className="text-emerald-700 shrink-0" />
+                                      <span>Agr: <strong>{formatDisplayDate(invoice.clientMaster.agreementStartDate)}</strong> → <strong>{formatDisplayDate(invoice.clientMaster.agreementEndDate) || 'Ongoing'}</strong></span>
+                                    </span>
+                                  )}
+                                  {invoice.clientMaster.lockinEndDate && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-900 border border-blue-200 font-semibold rounded-xs" title="Lock-In Period End">
+                                      <Lock size={10} className="text-blue-700 shrink-0" />
+                                      <span>Lock-in: <strong>{formatDisplayDate(invoice.clientMaster.lockinEndDate)}</strong></span>
+                                    </span>
+                                  )}
+                                  {Boolean(invoice.clientMaster.noticePeriodMonths) && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-950 border border-amber-200 font-semibold rounded-xs" title="Notice Period">
+                                      <Clock size={10} className="text-amber-700 shrink-0" />
+                                      <span>Notice: <strong>{invoice.clientMaster.noticePeriodMonths} Months ({invoice.clientMaster.noticePeriodApplicable || 'After Lock-in'})</strong></span>
+                                    </span>
+                                  )}
+                                  {Boolean(invoice.clientMaster.escalationPercent) && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-950 border border-purple-200 font-semibold rounded-xs" title="Escalation Rate & Applicable Date">
+                                      <TrendingUp size={10} className="text-purple-700 shrink-0" />
+                                      <span>Esc: <strong>{invoice.clientMaster.escalationPercent}%</strong>{invoice.clientMaster.escalationApplicable ? ` (${formatDisplayDate(invoice.clientMaster.escalationApplicable)})` : ''}</span>
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
 
                           <td className="p-3">
                             <div className="flex flex-col gap-1">
@@ -3829,11 +4250,7 @@ export default function AdminInvoicesWorkflowPage() {
 
                           <td className="p-3">
                             <div className="font-bold text-[#1B1C1C]">
-                              {new Date(invoice.sentAt).toLocaleDateString('en-IN', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric'
-                              })}
+                              {formatDisplayDate(invoice.sentAt) || 'N/A'}
                             </div>
                             <div className="mt-0.5">
                               <span
@@ -4309,7 +4726,8 @@ export default function AdminInvoicesWorkflowPage() {
                     </tbody>
                   </table>
                 </div>
-              )}
+              </div>
+            )}
             </div>
           </FadeUp>
 
@@ -5342,6 +5760,52 @@ export default function AdminInvoicesWorkflowPage() {
                         );
                       })()}
 
+                      {/* Agreement & Escalation Terms Box in Send to Accountant Modal */}
+                      {sendToAccountantInvoice.clientMaster && (
+                        <div className="bg-teal-50/70 border border-teal-200 p-3 rounded-xs space-y-2">
+                          <div className="font-bold text-[10.5px] uppercase tracking-wide text-[#006064] flex items-center gap-1.5">
+                            <Calendar size={13} />
+                            <span>Agreement, Lock-In &amp; Escalation Terms</span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                            <div className="bg-white p-2 border border-teal-100 rounded-xs">
+                              <span className="text-[9px] font-bold uppercase text-neutral-500 block">Agreement Term</span>
+                              <span className="font-bold text-[#1B1C1C] text-[11px] block mt-0.5">
+                                {formatDisplayDate(sendToAccountantInvoice.clientMaster.agreementStartDate) || 'N/A'} → {formatDisplayDate(sendToAccountantInvoice.clientMaster.agreementEndDate) || 'Ongoing'}
+                              </span>
+                            </div>
+                            <div className="bg-white p-2 border border-teal-100 rounded-xs">
+                              <span className="text-[9px] font-bold uppercase text-neutral-500 block">Lock-In End Date</span>
+                              <span className="font-bold text-blue-900 text-[11px] block mt-0.5">
+                                {formatDisplayDate(sendToAccountantInvoice.clientMaster.lockinEndDate) || 'N/A'}
+                              </span>
+                            </div>
+                            <div className="bg-white p-2 border border-teal-100 rounded-xs">
+                              <span className="text-[9px] font-bold uppercase text-neutral-500 block">Notice Period</span>
+                              <span className="font-bold text-amber-950 text-[11px] block mt-0.5">
+                                {sendToAccountantInvoice.clientMaster.noticePeriodMonths
+                                  ? `${sendToAccountantInvoice.clientMaster.noticePeriodMonths} Months (${sendToAccountantInvoice.clientMaster.noticePeriodApplicable || 'After Lock-in'})`
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="bg-white p-2 border border-teal-100 rounded-xs">
+                              <span className="text-[9px] font-bold uppercase text-neutral-500 block">Escalation %</span>
+                              <span className="font-bold text-purple-900 text-[11px] block mt-0.5">
+                                {sendToAccountantInvoice.clientMaster.escalationPercent
+                                  ? `${sendToAccountantInvoice.clientMaster.escalationPercent}%`
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="bg-white p-2 border border-teal-100 rounded-xs col-span-2 sm:col-span-1">
+                              <span className="text-[9px] font-bold uppercase text-neutral-500 block">Escalation Date</span>
+                              <span className="font-bold text-purple-900 text-[11px] block mt-0.5">
+                                {formatDisplayDate(sendToAccountantInvoice.clientMaster.escalationApplicable) || 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Sub-Invoice Splits Summary if Split */}
                       {sendToAccountantInvoice.splitsJson && (() => {
                         let splits: InvoiceSplitGroup[] = [];
@@ -5523,7 +5987,7 @@ export default function AdminInvoicesWorkflowPage() {
                             {entryToViewDetails.companyName}
                           </h3>
                           <p className="text-[#616161] mt-0.5">
-                            Dispatched on {new Date(entryToViewDetails.sentAt).toLocaleDateString('en-IN')} via{' '}
+                            Dispatched on {formatDisplayDate(entryToViewDetails.sentAt) || 'N/A'} via{' '}
                             <span className="font-bold">{entryToViewDetails.sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC MONTH-END' : 'MANUAL DISPATCH'}</span> by{' '}
                             <span className="font-bold text-[#1B1C1C]">{entryToViewDetails.createdBy?.name || 'System'}</span> ({entryToViewDetails.createdBy?.email})
                           </p>
@@ -5855,7 +6319,7 @@ export default function AdminInvoicesWorkflowPage() {
                               <span>Late Payment Surcharge &amp; Overdue Status</span>
                             </div>
                             <span className="text-[10px] font-mono font-bold bg-red-100 text-red-800 px-2 py-0.5 border border-red-300">
-                              Due Date: {entryToViewDetails.dueDate ? new Date(entryToViewDetails.dueDate).toLocaleDateString('en-IN') : `Day ${entryToViewDetails.paymentDueDay || 7} of Month`}
+                              Due Date: {entryToViewDetails.dueDate ? formatDisplayDate(entryToViewDetails.dueDate) : `Day ${entryToViewDetails.paymentDueDay || 7} of Month`}
                             </span>
                           </div>
 
@@ -5902,7 +6366,7 @@ export default function AdminInvoicesWorkflowPage() {
                       {/* SECTION 2: Head Office & GST Details */}
                       <div className="space-y-2">
                         <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
-                          <FileText size={14} /> Head Office Address & GST Status
+                          <FileText size={14} /> Head Office Address &amp; GST Status
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
                           <div>
@@ -5912,7 +6376,7 @@ export default function AdminInvoicesWorkflowPage() {
                             </div>
                           </div>
                           <div>
-                            <div className="font-bold uppercase text-[#616161] text-[9px]">GST Number & Status</div>
+                            <div className="font-bold uppercase text-[#616161] text-[9px]">GST Number &amp; Status</div>
                             <div className="font-mono font-bold text-[#1B1C1C] mt-0.5">
                               {entryToViewDetails.gstNo ? `GST: ${entryToViewDetails.gstNo}` : (entryToViewDetails.clientMaster?.gstStatus || 'UNREGISTERED')}
                             </div>
@@ -5923,14 +6387,14 @@ export default function AdminInvoicesWorkflowPage() {
                       {/* SECTION 3: Agreement Dates, Lock-In & Notice Terms */}
                       <div className="space-y-2">
                         <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
-                          <Calendar size={14} /> Agreement Dates, Lock-In & Notice Terms
+                          <Calendar size={14} /> Agreement Dates, Lock-In &amp; Notice Terms
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
                           <div>
                             <div className="font-bold uppercase text-[#616161] text-[9px]">Agreement Start Date</div>
                             <div className="font-bold text-[#1B1C1C] mt-0.5">
                               {entryToViewDetails.clientMaster?.agreementStartDate
-                                ? new Date(entryToViewDetails.clientMaster.agreementStartDate).toLocaleDateString('en-IN')
+                                ? formatDisplayDate(entryToViewDetails.clientMaster.agreementStartDate)
                                 : 'N/A'}
                             </div>
                           </div>
@@ -5938,7 +6402,7 @@ export default function AdminInvoicesWorkflowPage() {
                             <div className="font-bold uppercase text-[#616161] text-[9px]">Agreement End Date</div>
                             <div className="font-bold text-[#1B1C1C] mt-0.5">
                               {entryToViewDetails.clientMaster?.agreementEndDate
-                                ? new Date(entryToViewDetails.clientMaster.agreementEndDate).toLocaleDateString('en-IN')
+                                ? formatDisplayDate(entryToViewDetails.clientMaster.agreementEndDate)
                                 : 'N/A'}
                             </div>
                           </div>
@@ -5946,7 +6410,7 @@ export default function AdminInvoicesWorkflowPage() {
                             <div className="font-bold uppercase text-[#616161] text-[9px]">Lock-In End Date</div>
                             <div className="font-bold text-[#1B1C1C] mt-0.5">
                               {entryToViewDetails.clientMaster?.lockinEndDate
-                                ? new Date(entryToViewDetails.clientMaster.lockinEndDate).toLocaleDateString('en-IN')
+                                ? formatDisplayDate(entryToViewDetails.clientMaster.lockinEndDate)
                                 : 'N/A'}
                             </div>
                           </div>
@@ -5970,7 +6434,7 @@ export default function AdminInvoicesWorkflowPage() {
                             <div className="font-bold uppercase text-[#616161] text-[9px]">Escalation Applicable Date</div>
                             <div className="font-bold text-[#1B1C1C] mt-0.5">
                               {entryToViewDetails.clientMaster?.escalationApplicable
-                                ? new Date(entryToViewDetails.clientMaster.escalationApplicable).toLocaleDateString('en-IN')
+                                ? formatDisplayDate(entryToViewDetails.clientMaster.escalationApplicable)
                                 : 'N/A'}
                             </div>
                           </div>
@@ -5980,7 +6444,7 @@ export default function AdminInvoicesWorkflowPage() {
                       {/* SECTION 4: TDS & Security Deposit (SDR) */}
                       <div className="space-y-2">
                         <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--primary)] flex items-center gap-1.5">
-                          <Tag size={14} /> TDS Deduction, TAT & Security Deposit (SDR)
+                          <Tag size={14} /> TDS Deduction, TAT &amp; Security Deposit (SDR)
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F8F9FA] p-4 border border-[var(--outline-variant)]/40">
                           <div>
@@ -6009,7 +6473,7 @@ export default function AdminInvoicesWorkflowPage() {
                                 : 'N/A'}
                               {entryToViewDetails.clientMaster?.sorRecdDate && (
                                 <span className="text-[10px] text-neutral-500 font-normal block">
-                                  SDR Recd: {new Date(entryToViewDetails.clientMaster.sorRecdDate).toLocaleDateString('en-IN')}
+                                  SDR Recd: {formatDisplayDate(entryToViewDetails.clientMaster.sorRecdDate)}
                                 </span>
                               )}
                             </div>

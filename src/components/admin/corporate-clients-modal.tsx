@@ -20,6 +20,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
+import { formatDisplayDate } from "@/lib/date-format";
 
 export interface CorporateClientItem {
   id: number;
@@ -212,17 +213,8 @@ export function CorporateClientsModal({
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return "—";
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return "—";
-      return d.toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
-    } catch {
-      return "—";
-    }
+    const res = formatDisplayDate(dateStr);
+    return res || "—";
   };
 
   // Centre stats computation

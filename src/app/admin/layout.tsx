@@ -87,9 +87,15 @@ export default function AdminLayout({
     user?.name?.toLowerCase() === 'human resource';
 
   const isAdmin = isRole('ADMIN') || user?.role?.toUpperCase() === 'ADMIN' || user?.role?.toUpperCase() === 'SUPER_ADMIN';
+  const isCommunityManager =
+    isRole('COMMUNITY_MANAGER') ||
+    isRole('MANAGER') ||
+    user?.role?.toUpperCase() === 'COMMUNITY_MANAGER' ||
+    user?.role?.toUpperCase() === 'MANAGER';
 
   const isAllowedToAdmin =
     isAdmin ||
+    isCommunityManager ||
     isAccountant ||
     (isHr && pathname?.startsWith('/admin/expenses'));
 
@@ -101,12 +107,12 @@ export default function AdminLayout({
         if (!pathname?.startsWith('/admin/expenses')) {
           router.push('/hr');
         }
-      } else if (!isAdmin && !isAccountant) {
+      } else if (!isAdmin && !isAccountant && !isCommunityManager) {
         toast.error('Unauthorized access');
         router.push('/');
       }
     }
-  }, [user, isLoading, router, isAdmin, isAccountant, isHr, pathname]);
+  }, [user, isLoading, router, isAdmin, isAccountant, isCommunityManager, isHr, pathname]);
 
   // Auto-shrink sidebar on data-heavy pages (Client Master, Invoices, Expenses, Vendor Master, Occupancy CAD) to maximize screen width
   useEffect(() => {
