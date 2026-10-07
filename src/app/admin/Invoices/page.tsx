@@ -45,7 +45,11 @@ import {
   CalendarDays,
   Gift,
   Printer,
-  Lock
+  Lock,
+  Zap,
+  TrendingUp,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -91,6 +95,7 @@ interface InvoiceSplitGroup {
   amount: number;
   gstAmount: number;
   totalAmount: number;
+  ratePerSeat?: number;
   startDate?: string;
   endDate?: string;
   paymentDueDay?: number | string;
@@ -375,6 +380,12 @@ export default function AdminInvoicesWorkflowPage() {
   const [splitModalInvoice, setSplitModalInvoice] = useState<InvoiceRecord | null>(null);
   const [splitGroups, setSplitGroups] = useState<InvoiceSplitGroup[]>([]);
   const [splitUploadingGroupIndex, setSplitUploadingGroupIndex] = useState<number | null>(null);
+  const [isRateEscalationOpen, setIsRateEscalationOpen] = useState<boolean>(false);
+  const [rateEscalationEffectiveDate, setRateEscalationEffectiveDate] = useState<string>('');
+  const [rateEscalationOldRate, setRateEscalationOldRate] = useState<number>(0);
+  const [rateEscalationNewRate, setRateEscalationNewRate] = useState<number>(0);
+  const [syncNewRateToClientMaster, setSyncNewRateToClientMaster] = useState<boolean>(true);
+  const [escalationNewRateForMaster, setEscalationNewRateForMaster] = useState<number | null>(null);
 
   // Standalone Prorate & Billing Days Adjustment Modal State
   const [prorateModalInvoice, setProrateModalInvoice] = useState<InvoiceRecord | null>(null);
@@ -919,17 +930,40 @@ export default function AdminInvoicesWorkflowPage() {
       }];
     }
 
+    const monthInfo = getBillingMonthInfo(inv.billingMonth, inv.dueDate ? new Date(inv.dueDate) : undefined);
+    const initialOldRate = Number(
+      inv.ratePerAgreement ||
+      (inv.noOfSeats && inv.amount ? Math.round(Number(inv.amount) / Number(inv.noOfSeats)) : inv.amount) ||
+      0
+    );
+    setRateEscalationOldRate(initialOldRate);
+    setRateEscalationNewRate(initialOldRate > 0 ? initialOldRate + 500 : 0);
+    setEscalationNewRateForMaster(null);
+    setSyncNewRateToClientMaster(true);
+    setIsRateEscalationOpen(false);
+
+    if (monthInfo.firstDateStr) {
+      const parts = monthInfo.firstDateStr.split('-');
+      if (parts.length === 3) {
+        setRateEscalationEffectiveDate(`${parts[0]}-${parts[1]}-12`);
+      } else {
+        setRateEscalationEffectiveDate(monthInfo.firstDateStr);
+      }
+    }
+
     if (inv.splitsJson) {
       try {
         const existingSplits = JSON.parse(inv.splitsJson);
         if (Array.isArray(existingSplits) && existingSplits.length > 0) {
           setSplitGroups(existingSplits);
+          const lastGroup = existingSplits[existingSplits.length - 1];
+          if (lastGroup?.ratePerSeat && lastGroup.ratePerSeat !== initialOldRate) {
+            setEscalationNewRateForMaster(lastGroup.ratePerSeat);
+          }
           return;
         }
       } catch { }
     }
-
-    const monthInfo = getBillingMonthInfo(inv.billingMonth, inv.dueDate ? new Date(inv.dueDate) : undefined);
 
     // Default initialization: If >= 2 items, create 2 initial groups, else 1 group
     if (items.length >= 2) {
@@ -943,6 +977,7 @@ export default function AdminInvoicesWorkflowPage() {
         const amt = selectedItems.reduce((s, it) => s + (Number(it.baseMonthlyAmount || it.amount) || 0), 0);
         const tot = selectedItems.reduce((s, it) => s + (Number(it.totalAmount) || 0), 0);
         const firstDue = selectedItems[0]?.paymentDueDay || inv.paymentDueDay || 5;
+        const ratePerSeat = Number(selectedItems[0]?.ratePerAgreement || inv.ratePerAgreement || (seats > 0 ? Math.round(amt / seats) : amt));
         const start = monthInfo.firstDateStr;
         const end = monthInfo.lastDateStr;
         return {
@@ -950,6 +985,7 @@ export default function AdminInvoicesWorkflowPage() {
           name,
           productIndices: indices,
           noOfSeats: seats,
+          ratePerSeat,
           amount: amt,
           gstAmount: Math.max(0, tot - amt),
           totalAmount: tot,
@@ -971,12 +1007,15 @@ export default function AdminInvoicesWorkflowPage() {
     } else {
       const baseAmt = Number(items[0]?.baseMonthlyAmount || items[0]?.amount || inv.amount || 0);
       const totAmt = Number(items[0]?.totalAmount || inv.totalAmount || 0);
+      const seats = Number(items[0]?.noOfSeats || inv.noOfSeats || 1);
+      const ratePerSeat = Number(items[0]?.ratePerAgreement || inv.ratePerAgreement || (seats > 0 ? Math.round(baseAmt / seats) : baseAmt));
       setSplitGroups([
         {
           id: 'split_1',
           name: 'Sub-Invoice #1',
           productIndices: [0],
-          noOfSeats: Number(items[0]?.noOfSeats || inv.noOfSeats || 0),
+          noOfSeats: seats,
+          ratePerSeat,
           amount: baseAmt,
           gstAmount: Math.max(0, totAmt - baseAmt),
           totalAmount: totAmt,
@@ -1287,6 +1326,166 @@ export default function AdminInvoicesWorkflowPage() {
     toast.success(`${targetGroup.name} reset to full month (${monthInfo.totalDays} Days)`);
   };
 
+  const handleSplitGroupBaseAmountChange = (groupId: string, newBaseAmt: number, newRatePerSeat?: number) => {
+    if (!splitModalInvoice) return;
+    const monthInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
+    const targetGroup = splitGroups.find(g => g.id === groupId);
+    if (!targetGroup) return;
+
+    const seats = targetGroup.noOfSeats || splitModalInvoice.noOfSeats || 1;
+    const rate = newRatePerSeat !== undefined ? newRatePerSeat : (seats > 0 ? Math.round(newBaseAmt / seats) : newBaseAmt);
+    const validDays = targetGroup.activeDays || (
+      (targetGroup.startDate && targetGroup.endDate)
+        ? calculateInclusiveDays(targetGroup.startDate, targetGroup.endDate)
+        : monthInfo.totalDays
+    );
+    const isProrated = validDays < monthInfo.totalDays;
+
+    const calc = calculateProratedBilling({
+      monthlyAmount: newBaseAmt,
+      totalMonthDays: monthInfo.totalDays,
+      activeDays: validDays,
+      startDateStr: targetGroup.startDate || monthInfo.firstDateStr,
+      endDateStr: targetGroup.endDate || monthInfo.lastDateStr,
+    });
+
+    setSplitGroups(splitGroups.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        baseMonthlyAmount: newBaseAmt,
+        ratePerSeat: rate,
+        amount: isProrated ? calc.proratedSubtotal : newBaseAmt,
+        gstAmount: isProrated ? calc.gstAmount : Math.round(newBaseAmt * 0.18),
+        totalAmount: isProrated ? calc.totalAmount : Math.round(newBaseAmt * 1.18),
+        isProrated,
+        activeDays: validDays,
+        totalMonthDays: monthInfo.totalDays,
+        prorateFormula: isProrated ? calc.formulaText : undefined,
+      };
+    }));
+
+    if (rate > 0) {
+      setEscalationNewRateForMaster(rate);
+    }
+  };
+
+  const handleSplitGroupSeatsChange = (groupId: string, seats: number, currentRate: number) => {
+    const validSeats = Math.max(1, seats);
+    const newBase = currentRate * validSeats;
+    handleSplitGroupBaseAmountChange(groupId, newBase, currentRate);
+    setSplitGroups(prev => prev.map(g => g.id === groupId ? { ...g, noOfSeats: validSeats } : g));
+  };
+
+  const handleApplyRateEscalationSplit = () => {
+    if (!splitModalInvoice) return;
+    if (!rateEscalationEffectiveDate) {
+      toast.error('Please select an effective date for the new rate.');
+      return;
+    }
+    const monthInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
+    const effDate = new Date(rateEscalationEffectiveDate);
+    const monthStart = new Date(monthInfo.firstDateStr);
+    const monthEnd = new Date(monthInfo.lastDateStr);
+
+    if (isNaN(effDate.getTime()) || effDate < monthStart || effDate > monthEnd) {
+      toast.error(`Effective date must be within ${monthInfo.firstDateStr} and ${monthInfo.lastDateStr}`);
+      return;
+    }
+
+    const effDay = effDate.getDate();
+    if (effDay <= 1) {
+      toast.error('For a split rate change, the effective date should be after day 1 (e.g. 12th).');
+      return;
+    }
+
+    const period1EndDate = new Date(effDate);
+    period1EndDate.setDate(period1EndDate.getDate() - 1);
+    const y1 = period1EndDate.getFullYear();
+    const m1 = String(period1EndDate.getMonth() + 1).padStart(2, '0');
+    const d1 = String(period1EndDate.getDate()).padStart(2, '0');
+    const period1EndStr = `${y1}-${m1}-${d1}`;
+
+    const period1StartStr = monthInfo.firstDateStr;
+    const period2StartStr = rateEscalationEffectiveDate;
+    const period2EndStr = monthInfo.lastDateStr;
+
+    const days1 = calculateInclusiveDays(period1StartStr, period1EndStr);
+    const days2 = calculateInclusiveDays(period2StartStr, period2EndStr);
+
+    const seats = Number(splitModalInvoice.noOfSeats || 1);
+    const oldMonthlyBase = (rateEscalationOldRate || 0) * seats;
+    const newMonthlyBase = (rateEscalationNewRate || 0) * seats;
+
+    const calc1 = calculateProratedBilling({
+      monthlyAmount: oldMonthlyBase,
+      totalMonthDays: monthInfo.totalDays,
+      activeDays: days1,
+      startDateStr: period1StartStr,
+      endDateStr: period1EndStr,
+    });
+
+    const calc2 = calculateProratedBilling({
+      monthlyAmount: newMonthlyBase,
+      totalMonthDays: monthInfo.totalDays,
+      activeDays: days2,
+      startDateStr: period2StartStr,
+      endDateStr: period2EndStr,
+    });
+
+    const group1: InvoiceSplitGroup = {
+      id: 'split_rate_1',
+      name: `Sub-Invoice #1 (${calc1.activeDays}d @ ₹${rateEscalationOldRate?.toLocaleString('en-IN')})`,
+      productIndices: [0],
+      noOfSeats: seats,
+      ratePerSeat: rateEscalationOldRate,
+      baseMonthlyAmount: oldMonthlyBase,
+      amount: calc1.proratedSubtotal,
+      gstAmount: calc1.gstAmount,
+      totalAmount: calc1.totalAmount,
+      startDate: period1StartStr,
+      endDate: period1EndStr,
+      dueDate: splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate).toISOString().split('T')[0] : '',
+      paymentDueDay: splitModalInvoice.paymentDueDay || 5,
+      isProrated: true,
+      activeDays: calc1.activeDays,
+      totalMonthDays: monthInfo.totalDays,
+      prorateFormula: calc1.formulaText,
+      attachedInvoice: null,
+    };
+
+    const group2: InvoiceSplitGroup = {
+      id: 'split_rate_2',
+      name: `Sub-Invoice #2 (${calc2.activeDays}d @ ₹${rateEscalationNewRate?.toLocaleString('en-IN')})`,
+      productIndices: [0],
+      noOfSeats: seats,
+      ratePerSeat: rateEscalationNewRate,
+      baseMonthlyAmount: newMonthlyBase,
+      amount: calc2.proratedSubtotal,
+      gstAmount: calc2.gstAmount,
+      totalAmount: calc2.totalAmount,
+      startDate: period2StartStr,
+      endDate: period2EndStr,
+      dueDate: splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate).toISOString().split('T')[0] : '',
+      paymentDueDay: splitModalInvoice.paymentDueDay || 5,
+      isProrated: true,
+      activeDays: calc2.activeDays,
+      totalMonthDays: monthInfo.totalDays,
+      prorateFormula: calc2.formulaText,
+      attachedInvoice: null,
+    };
+
+    setSplitGroups([group1, group2]);
+    setEscalationNewRateForMaster(rateEscalationNewRate);
+    setSyncNewRateToClientMaster(true);
+    setIsRateEscalationOpen(false);
+
+    const totalCombined = calc1.totalAmount + calc2.totalAmount;
+    toast.success(
+      `⚡ Rate escalation split applied! Sub #1: ₹${calc1.totalAmount.toLocaleString('en-IN')} (${calc1.activeDays}d @ ₹${rateEscalationOldRate}) + Sub #2: ₹${calc2.totalAmount.toLocaleString('en-IN')} (${calc2.activeDays}d @ ₹${rateEscalationNewRate}) = Total: ₹${totalCombined.toLocaleString('en-IN')}`
+    );
+  };
+
   const handleSaveSplitInvoice = async () => {
     if (!splitModalInvoice) return;
     let items: any[] = [];
@@ -1318,6 +1517,10 @@ export default function AdminInvoicesWorkflowPage() {
     const sumBaseAmount = validGroups.reduce((acc, g) => acc + (Number(g.amount) || 0), 0);
     const sumTotalAmount = validGroups.reduce((acc, g) => acc + (Number(g.totalAmount) || 0), 0);
 
+    const rateToSync = syncNewRateToClientMaster && escalationNewRateForMaster && escalationNewRateForMaster > 0
+      ? escalationNewRateForMaster
+      : undefined;
+
     setActionLoading(true);
     try {
       const res = await fetch(`/api/admin/Invoices/${splitModalInvoice.id}`, {
@@ -1327,10 +1530,14 @@ export default function AdminInvoicesWorkflowPage() {
           splitsJson: validGroups.length > 1 ? JSON.stringify(validGroups) : null,
           amount: sumBaseAmount,
           totalAmount: sumTotalAmount,
+          updateClientMasterRate: rateToSync,
         }),
       });
       const json = await res.json();
       if (json.success) {
+        if (rateToSync) {
+          toast.success(`Client Master updated to ₹${rateToSync.toLocaleString('en-IN')}/seat for future billing months!`);
+        }
         if (validGroups.length > 1) {
           toast.success(`Invoice split into ${validGroups.length} Sub-Invoices successfully! Total: ₹${sumTotalAmount.toLocaleString('en-IN')}`);
         } else {
@@ -5438,7 +5645,11 @@ export default function AdminInvoicesWorkflowPage() {
                                     </div>
 
                                     {/* Breakdown */}
-                                    <div className="grid grid-cols-3 gap-2 text-[10.5px] bg-neutral-50 p-2 border border-neutral-200 rounded">
+                                    <div className="grid grid-cols-4 gap-2 text-[10.5px] bg-neutral-50 p-2 border border-neutral-200 rounded">
+                                      <div>
+                                        <span className="text-neutral-500 text-[9.5px] block font-semibold">Rate/Seat</span>
+                                        <span className="font-bold font-mono text-purple-950">₹{(grp.ratePerSeat || (grp.baseMonthlyAmount && grp.noOfSeats ? Math.round(grp.baseMonthlyAmount / grp.noOfSeats) : grp.baseMonthlyAmount) || 0).toLocaleString('en-IN')}/mo</span>
+                                      </div>
                                       <div>
                                         <span className="text-neutral-500 text-[9.5px] block font-semibold">Seats</span>
                                         <span className="font-bold text-neutral-900">{grp.noOfSeats || 1}</span>
@@ -6942,6 +7153,131 @@ export default function AdminInvoicesWorkflowPage() {
 
                       {/* Split Groups List & Allocation */}
                       <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+                        {/* ⚡ Mid-Month Rate Change / Price Escalation Split Wizard */}
+                        <div className="bg-gradient-to-r from-purple-50/90 via-amber-50/60 to-purple-50/90 border border-purple-300 rounded-sm overflow-hidden shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => setIsRateEscalationOpen(!isRateEscalationOpen)}
+                            className="w-full p-3 flex items-center justify-between text-left cursor-pointer hover:bg-purple-100/40 transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-1.5 bg-purple-700 text-white rounded-xs">
+                                <Zap size={14} />
+                              </div>
+                              <div>
+                                <div className="font-extrabold text-xs text-purple-950 flex items-center gap-1.5">
+                                  <span>Mid-Month Rate Change / Price Escalation Split</span>
+                                  <span className="px-1.5 py-0.2 bg-amber-200 text-amber-950 text-[9px] rounded font-bold uppercase tracking-wider">
+                                    ⚡ 1-Click Wizard
+                                  </span>
+                                </div>
+                                <div className="text-[10.5px] text-purple-800 mt-0.5">
+                                  Seat price changed mid-month? (e.g. ₹5,500 till 11th, ₹6,000 from 12th). Auto-generate 2 prorated sub-invoices with exact daily math &amp; prepare Client Master sync.
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-purple-700 p-1">
+                              {isRateEscalationOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </div>
+                          </button>
+
+                          {isRateEscalationOpen && (
+                            <div className="p-3.5 border-t border-purple-200 bg-white/90 space-y-3 text-[11px]">
+                              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <div>
+                                  <label className="block text-[9.5px] font-bold uppercase text-purple-950 mb-1">
+                                    New Rate Effective Date
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={rateEscalationEffectiveDate}
+                                    onChange={(e) => setRateEscalationEffectiveDate(e.target.value)}
+                                    className="w-full bg-neutral-50 border border-purple-300 px-2 py-1.5 text-xs font-mono font-bold text-purple-950 rounded focus:bg-white focus:border-purple-600 focus:outline-none"
+                                  />
+                                  <span className="text-[9px] text-neutral-500 block mt-0.5">e.g. 2026-10-12 (starts on 12th)</span>
+                                </div>
+
+                                <div>
+                                  <label className="block text-[9.5px] font-bold uppercase text-neutral-700 mb-1">
+                                    Old Rate (₹/Seat/Month)
+                                  </label>
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-mono font-bold text-neutral-700">₹</span>
+                                    <input
+                                      type="number"
+                                      value={rateEscalationOldRate || ''}
+                                      onChange={(e) => setRateEscalationOldRate(parseFloat(e.target.value) || 0)}
+                                      placeholder="5500"
+                                      className="w-full bg-neutral-50 border border-neutral-300 px-2 py-1.5 text-xs font-mono font-bold text-neutral-800 rounded focus:bg-white focus:border-purple-600 focus:outline-none"
+                                    />
+                                  </div>
+                                  <span className="text-[9px] text-neutral-500 block mt-0.5">Applied till day before effective</span>
+                                </div>
+
+                                <div>
+                                  <label className="block text-[9.5px] font-bold uppercase text-amber-900 mb-1">
+                                    New Rate (₹/Seat/Month)
+                                  </label>
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-mono font-bold text-amber-900">₹</span>
+                                    <input
+                                      type="number"
+                                      value={rateEscalationNewRate || ''}
+                                      onChange={(e) => setRateEscalationNewRate(parseFloat(e.target.value) || 0)}
+                                      placeholder="6000"
+                                      className="w-full bg-amber-50/70 border border-amber-300 px-2 py-1.5 text-xs font-mono font-bold text-amber-950 rounded focus:bg-white focus:border-amber-600 focus:outline-none"
+                                    />
+                                  </div>
+                                  <span className="text-[9px] text-amber-800 block mt-0.5">Applied from effective date onwards</span>
+                                </div>
+
+                                <div className="flex flex-col justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={handleApplyRateEscalationSplit}
+                                    className="w-full py-2 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-extrabold text-[11px] uppercase tracking-wider rounded flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                                  >
+                                    <Zap size={13} />
+                                    <span>Apply Escalation Split</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Live Math Preview */}
+                              {(() => {
+                                const mInfo = getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined);
+                                if (!rateEscalationEffectiveDate) return null;
+                                const eff = new Date(rateEscalationEffectiveDate);
+                                if (isNaN(eff.getTime())) return null;
+                                const p1Days = eff.getDate() - 1;
+                                const p2Days = mInfo.totalDays - p1Days;
+                                if (p1Days <= 0 || p2Days <= 0) return null;
+                                const seats = Number(splitModalInvoice.noOfSeats || 1);
+                                const p1Base = (rateEscalationOldRate || 0) * seats;
+                                const p2Base = (rateEscalationNewRate || 0) * seats;
+                                const c1 = calculateProratedBilling({ monthlyAmount: p1Base, totalMonthDays: mInfo.totalDays, activeDays: p1Days });
+                                const c2 = calculateProratedBilling({ monthlyAmount: p2Base, totalMonthDays: mInfo.totalDays, activeDays: p2Days });
+                                const combTotal = c1.totalAmount + c2.totalAmount;
+
+                                return (
+                                  <div className="bg-purple-50/80 p-2.5 border border-purple-200 rounded text-[10px] space-y-1 font-mono">
+                                    <div className="font-sans font-bold text-purple-950 flex items-center justify-between">
+                                      <span>⚡ Live Math Preview ({mInfo.totalDays} Total Days in {splitModalInvoice.billingMonth}):</span>
+                                      <span className="text-teal-900 font-black text-xs font-mono">Combined: ₹{combTotal.toLocaleString('en-IN')}</span>
+                                    </div>
+                                    <div className="text-purple-900">
+                                      &bull; <strong>Sub-Invoice #1:</strong> 1st to {p1Days}th ({p1Days} days @ ₹{rateEscalationOldRate?.toLocaleString('en-IN')}/mo) = Base ₹{c1.proratedSubtotal.toLocaleString('en-IN')} + GST ₹{c1.gstAmount.toLocaleString('en-IN')} = <strong className="text-teal-800">₹{c1.totalAmount.toLocaleString('en-IN')}</strong>
+                                    </div>
+                                    <div className="text-purple-900">
+                                      &bull; <strong>Sub-Invoice #2:</strong> {eff.getDate()}th to {mInfo.totalDays}th ({p2Days} days @ ₹{rateEscalationNewRate?.toLocaleString('en-IN')}/mo) = Base ₹{c2.proratedSubtotal.toLocaleString('en-IN')} + GST ₹{c2.gstAmount.toLocaleString('en-IN')} = <strong className="text-teal-800">₹{c2.totalAmount.toLocaleString('en-IN')}</strong>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+
                         {/* Sub-Invoice Groups Configuration */}
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
@@ -7051,6 +7387,59 @@ export default function AdminInvoicesWorkflowPage() {
                                         className="w-full bg-neutral-50 border border-red-200 px-1.5 py-1 text-[10px] font-mono font-bold text-red-700 rounded focus:bg-white focus:border-red-600 focus:outline-none"
                                         title="Last date for client to pay this sub-invoice"
                                       />
+                                    </div>
+                                  </div>
+
+                                  {/* Step 1.5: Seat Count & Monthly Base Rate Configuration */}
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 bg-white p-2.5 border border-purple-100 rounded text-[10px]">
+                                    <div>
+                                      <label className="block text-[9px] font-bold uppercase text-purple-900 mb-0.5">
+                                        Seats Count
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        value={group.noOfSeats || 1}
+                                        onChange={(e) => {
+                                          const seats = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                          const curRate = group.ratePerSeat || (group.baseMonthlyAmount ? Math.round(group.baseMonthlyAmount / (group.noOfSeats || 1)) : 0);
+                                          handleSplitGroupSeatsChange(group.id, seats, curRate);
+                                        }}
+                                        className="w-full bg-neutral-50 border border-purple-200 px-1.5 py-1 text-[10px] font-mono font-bold rounded focus:bg-white focus:border-purple-600 focus:outline-none text-center"
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-[9px] font-bold uppercase text-purple-900 mb-0.5">
+                                        Monthly Rate (₹/Seat)
+                                      </label>
+                                      <div className="flex items-center gap-1">
+                                        <span className="font-mono text-purple-900 font-bold">₹</span>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          value={group.ratePerSeat !== undefined ? group.ratePerSeat : (group.baseMonthlyAmount && group.noOfSeats ? Math.round(group.baseMonthlyAmount / group.noOfSeats) : (group.baseMonthlyAmount || ''))}
+                                          onChange={(e) => {
+                                            const newRate = parseFloat(e.target.value) || 0;
+                                            const seats = group.noOfSeats || 1;
+                                            handleSplitGroupBaseAmountChange(group.id, newRate * seats, newRate);
+                                          }}
+                                          placeholder="e.g. 5500 or 6000"
+                                          className="w-full bg-neutral-50 border border-purple-300 px-1.5 py-1 text-[10px] font-mono font-bold text-purple-950 rounded focus:bg-white focus:border-purple-600 focus:outline-none"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-[9px] font-bold uppercase text-neutral-500 mb-0.5">
+                                        Full Monthly Base (₹)
+                                      </label>
+                                      <div className="font-mono font-bold text-neutral-800 py-1 text-[10.5px]">
+                                        ₹{Number(group.baseMonthlyAmount || group.amount || 0).toLocaleString('en-IN')}
+                                        <span className="text-[8.5px] text-neutral-400 font-normal ml-1">
+                                          ({group.noOfSeats || 1} seat{(group.noOfSeats || 1) > 1 ? 's' : ''})
+                                        </span>
+                                      </div>
                                     </div>
                                   </div>
 
@@ -7265,8 +7654,8 @@ export default function AdminInvoicesWorkflowPage() {
                       </div>
 
                       {/* Footer Actions */}
-                      <div className="flex items-center justify-between pt-3 border-t border-neutral-200 shrink-0">
-                        <div>
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-neutral-200 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2.5">
                           {splitModalInvoice.splitsJson && (
                             <button
                               type="button"
@@ -7276,6 +7665,19 @@ export default function AdminInvoicesWorkflowPage() {
                             >
                               <RotateCcw size={12} /> Reset to Single Invoice
                             </button>
+                          )}
+                          {escalationNewRateForMaster && escalationNewRateForMaster > 0 && (
+                            <label className="flex items-center gap-2 cursor-pointer bg-purple-50 hover:bg-purple-100/70 border border-purple-200 px-3 py-1.5 rounded text-[11px] text-purple-950 transition-colors select-none">
+                              <input
+                                type="checkbox"
+                                checked={syncNewRateToClientMaster}
+                                onChange={(e) => setSyncNewRateToClientMaster(e.target.checked)}
+                                className="rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
+                              />
+                              <span>
+                                Auto-update <strong>Client Master</strong> rate to <strong>₹{escalationNewRateForMaster.toLocaleString('en-IN')}/seat</strong> for future billing cycles (Nov onwards)
+                              </span>
+                            </label>
                           )}
                         </div>
 

@@ -81,6 +81,7 @@ export async function PUT(
       signedByName,
       isDigitalSignRequired,
       complimentaryUsageJson,
+      updateClientMasterRate,
     } = body;
 
     const updateData: any = {};
@@ -125,6 +126,52 @@ export async function PUT(
         splitsJson ? (typeof splitsJson === 'string' ? splitsJson : JSON.stringify(splitsJson)) : null,
         id
       );
+    }
+
+    if (updateClientMasterRate !== undefined && Number(updateClientMasterRate) > 0) {
+      const invRec = await (prisma as any).invoiceRecord.findUnique({
+        where: { id },
+        select: { clientMasterId: true, noOfSeats: true, gstPercent: true },
+      });
+      if (invRec?.clientMasterId) {
+        const newRate = Number(updateClientMasterRate);
+        const cm = await (prisma as any).clientMaster.findUnique({
+          where: { id: invRec.clientMasterId },
+          select: { id: true, noOfSeats: true, gstPercent: true },
+        });
+        if (cm) {
+          const seats = Number(cm.noOfSeats || invRec.noOfSeats || 1);
+          const gstP = Number(cm.gstPercent ?? invRec.gstPercent ?? 18);
+          const newAmount = newRate * seats;
+          const newTotal = Math.round(newAmount * (1 + gstP / 100));
+          await (prisma as any).clientMaster.update({
+            where: { id: cm.id },
+            data: {
+              ratePerAgreement: newRate,
+              amount: newAmount,
+              totalAmount: newTotal,
+            },
+          });
+
+          const prods = await (prisma as any).clientMasterProduct.findMany({
+            where: { clientMasterId: cm.id },
+          });
+          for (const prod of prods) {
+            const pSeats = Number(prod.noOfSeats || 1);
+            const pGst = Number(prod.gstPercent ?? gstP);
+            const pAmt = newRate * pSeats;
+            const pTotal = Math.round(pAmt * (1 + pGst / 100));
+            await (prisma as any).clientMasterProduct.update({
+              where: { id: prod.id },
+              data: {
+                ratePerAgreement: newRate,
+                amount: pAmt,
+                totalAmount: pTotal,
+              },
+            });
+          }
+        }
+      }
     }
 
     if (waivedLateDays !== undefined || waivedLateFee !== undefined) {
