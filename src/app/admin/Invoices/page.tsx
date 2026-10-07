@@ -1031,22 +1031,36 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
     const monthInfo = splitModalInvoice
       ? getBillingMonthInfo(splitModalInvoice.billingMonth, splitModalInvoice.dueDate ? new Date(splitModalInvoice.dueDate) : undefined)
       : { firstDateStr: '', lastDateStr: '', totalDays: 30 };
+
+    const parentBaseAmt = Number(
+      (splitModalInvoice as any)?.baseMonthlyAmount ||
+      splitModalInvoice?.amount ||
+      (splitGroups[0]?.baseMonthlyAmount) ||
+      (splitGroups[0]?.amount) ||
+      0
+    );
+    const parentSeats = Number(
+      splitModalInvoice?.noOfSeats ||
+      (splitGroups[0]?.noOfSeats) ||
+      1
+    );
+
     setSplitGroups([
       ...splitGroups,
       {
         id: newId,
         name: `Sub-Invoice #${newGroupNumber}`,
         productIndices: [],
-        noOfSeats: 0,
-        amount: 0,
-        gstAmount: 0,
-        totalAmount: 0,
+        noOfSeats: parentSeats,
+        amount: parentBaseAmt,
+        gstAmount: Math.round(parentBaseAmt * 0.18),
+        totalAmount: Math.round(parentBaseAmt * 1.18),
         startDate: monthInfo.firstDateStr,
         endDate: monthInfo.lastDateStr,
         dueDate: splitModalInvoice?.dueDate ? new Date(splitModalInvoice.dueDate).toISOString().split('T')[0] : '',
         paymentDueDay: splitModalInvoice?.paymentDueDay || 5,
         attachedInvoice: null,
-        baseMonthlyAmount: 0,
+        baseMonthlyAmount: parentBaseAmt,
         totalMonthDays: monthInfo.totalDays,
         activeDays: monthInfo.totalDays,
       }
@@ -1280,15 +1294,24 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
       items = JSON.parse(splitModalInvoice.itemsJson || '[]');
     } catch { }
 
-    const assignedIndices = new Set(splitGroups.flatMap(g => g.productIndices));
-    if (items.length > 0 && assignedIndices.size < items.length) {
-      toast.error(`Please assign all ${items.length} products to a Sub-Invoice group before saving.`);
-      return;
+    // If multiple distinct products exist and not a date-based split, ensure all products are assigned
+    if (items.length > 1 && !splitGroups.some(g => g.isProrated)) {
+      const assignedIndices = new Set(splitGroups.flatMap(g => g.productIndices));
+      if (assignedIndices.size < items.length) {
+        toast.error(`Please assign all ${items.length} products to a Sub-Invoice group before saving.`);
+        return;
+      }
     }
 
-    const validGroups = splitGroups.filter(g => g.productIndices.length > 0);
+    // A sub-invoice group is valid if it has assigned products, an amount > 0, or defined usage dates
+    const validGroups = splitGroups.filter(g =>
+      g.productIndices.length > 0 ||
+      Number(g.totalAmount || g.amount || 0) > 0 ||
+      Boolean(g.startDate && g.endDate)
+    );
+
     if (validGroups.length === 0) {
-      toast.error('At least one group must have assigned products.');
+      toast.error('At least one group must have assigned products or a valid billing period.');
       return;
     }
 
@@ -2325,7 +2348,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
 
   const handleConfirmSendToAccountant = async (digitalRequiredParam?: boolean) => {
     if (!sendToAccountantInvoice) return;
-    const finalDigitalRequired = digitalRequiredParam !== undefined ? digitalRequiredParam : digitalSignChoice;
+    const finalDigitalRequired = digitalRequiredParam !== undefined ? digitalRequiredParam : Boolean(sendToAccountantInvoice.isDigitalSignRequired);
     setActionLoading(true);
 
     const invAmt = Number(sendToAccountantInvoice.amount || 0);
@@ -4094,15 +4117,15 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                             </div>
                           )}
 
-                          {/* Digital Signature Warning */}
+                          {/* Automated Digital Signature Notice */}
                           {entryToAttachInvoice.isDigitalSignRequired && (
-                            <div className="p-3 bg-amber-50 border border-amber-300 rounded text-amber-950 space-y-1 shadow-2xs">
-                              <div className="font-extrabold text-xs uppercase tracking-wide flex items-center gap-2 text-amber-950">
-                                <AlertTriangle size={16} className="text-amber-700 shrink-0" />
-                                <span>⚠️ ATTENTION ACCOUNTANT: DIGITALLY SIGNED INVOICE REQUIRED</span>
+                            <div className="p-3 bg-cyan-50/80 border border-cyan-300 rounded text-cyan-950 space-y-1 shadow-2xs">
+                              <div className="font-extrabold text-xs uppercase tracking-wide flex items-center gap-2 text-[#006064]">
+                                <PenTool size={15} className="text-[#006064] shrink-0" />
+                                <span>⚡ AUTOMATED DIGITAL SIGNATURE (DSC) ENABLED</span>
                               </div>
-                              <div className="text-[11.5px] font-medium text-amber-900 leading-relaxed pl-6">
-                                Community Manager marked that this invoice <strong>requires an official digital signature (DSC)</strong>. Please ensure you apply your official DSC token in Tally before attaching the PDF.
+                              <div className="text-[11.5px] font-medium text-cyan-950 leading-relaxed pl-6">
+                                This client requires a digitally signed invoice. Simply attach your standard Tally PDF below—the system will <strong>automatically apply the Mercado USB Digital Signature in the background</strong>.
                               </div>
                             </div>
                           )}
@@ -4960,63 +4983,33 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                         </div>
                       )}
 
-                      {/* KEY QUESTION: Is Digital Signature Required? */}
-                      <div className="space-y-2 pt-1">
-                        <label className="block font-black text-xs uppercase tracking-wider text-[#1B1C1C] flex items-center gap-1.5">
-                          <PenTool size={14} className="text-[#006064]" />
-                          <span>Is Digital Signature Required for this Invoice? *</span>
-                        </label>
-                        <p className="text-[11px] text-neutral-600 leading-normal">
-                          Select whether the Accountant must apply their official digital signature in Tally before attaching this invoice PDF:
-                        </p>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                          {/* OPTION 1: YES */}
-                          <button
-                            type="button"
-                            onClick={() => setDigitalSignChoice(true)}
-                            className={`p-3.5 border-2 rounded-xs text-left transition-all cursor-pointer ${
-                              digitalSignChoice === true
-                                ? 'border-amber-500 bg-amber-50/80 ring-2 ring-amber-400'
-                                : 'border-neutral-200 bg-white hover:border-amber-300 hover:bg-amber-50/30'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-black text-xs uppercase tracking-wide text-amber-950 flex items-center gap-1.5">
-                                <span>✍️</span> Yes, Required
+                      {/* Automated Digital Signature Status (Inherited from Client Master) */}
+                      <div className="p-3.5 bg-neutral-50 border border-neutral-200 rounded-xs flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`p-2 rounded-full shrink-0 ${sendToAccountantInvoice.isDigitalSignRequired ? 'bg-amber-100 text-amber-800' : 'bg-neutral-200 text-neutral-700'}`}>
+                            <PenTool size={15} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-extrabold text-xs text-neutral-900 flex items-center gap-1.5">
+                              <span>Digital Signature (DSC):</span>
+                              <span className={sendToAccountantInvoice.isDigitalSignRequired ? 'text-amber-800 font-black' : 'text-neutral-600 font-bold'}>
+                                {sendToAccountantInvoice.isDigitalSignRequired ? 'Mandatory (Automated)' : 'Standard (Optional)'}
                               </span>
-                              {digitalSignChoice === true && (
-                                <CheckCircle2 size={16} className="text-amber-600 shrink-0" />
-                              )}
                             </div>
-                            <p className="text-[10px] text-amber-900/90 leading-relaxed font-medium">
-                              Accountant will see a prominent notice to attach a <strong>digitally signed Tally invoice</strong>.
+                            <p className="text-[10.5px] text-neutral-500 mt-0.5 leading-snug">
+                              {sendToAccountantInvoice.isDigitalSignRequired
+                                ? 'Client Master setting requires DSC. The system will automatically sign the invoice via Mercado USB Token when accountant attaches PDF.'
+                                : 'Standard invoice. Accountant will attach regular Tally PDF without mandatory digital signature.'}
                             </p>
-                          </button>
-
-                          {/* OPTION 2: NO */}
-                          <button
-                            type="button"
-                            onClick={() => setDigitalSignChoice(false)}
-                            className={`p-3.5 border-2 rounded-xs text-left transition-all cursor-pointer ${
-                              digitalSignChoice === false
-                                ? 'border-neutral-800 bg-neutral-100 ring-2 ring-neutral-700'
-                                : 'border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-black text-xs uppercase tracking-wide text-neutral-900 flex items-center gap-1.5">
-                                <span>📄</span> No, Standard
-                              </span>
-                              {digitalSignChoice === false && (
-                                <CheckCircle2 size={16} className="text-neutral-800 shrink-0" />
-                              )}
-                            </div>
-                            <p className="text-[10px] text-neutral-600 leading-relaxed font-medium">
-                              Accountant attaches regular Tally invoice PDF without digital signature.
-                            </p>
-                          </button>
+                          </div>
                         </div>
+                        <span className={`px-2.5 py-1 text-[10px] font-black rounded uppercase tracking-wider shrink-0 ${
+                          sendToAccountantInvoice.isDigitalSignRequired
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : 'bg-neutral-200 text-neutral-700 border border-neutral-300'
+                        }`}>
+                          {sendToAccountantInvoice.isDigitalSignRequired ? 'DSC REQUIRED' : 'STANDARD'}
+                        </span>
                       </div>
 
                       {/* If Virtual Office or Broker Client: Select Recipient */}

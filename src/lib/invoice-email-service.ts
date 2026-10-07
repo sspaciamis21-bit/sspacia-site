@@ -301,7 +301,7 @@ Ahmedabad, Gujarat, India
 Website: https://sspacia.com | Email: cm@sspacia.com | WhatsApp: +91 76003 93779
     `.trim();
 
-    // 9. Premium HTML Template (Authentic, Minimal, Zero Fake Content)
+    // 9. Premium HTML Template (100% Inline Styles for Outlook, Gmail, Apple Mail)
     const html = `
 <!DOCTYPE html>
 <html lang="en">
@@ -309,173 +309,88 @@ Website: https://sspacia.com | Email: cm@sspacia.com | WhatsApp: +91 76003 93779
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${subject}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background-color: #f8fafc;
-      margin: 0;
-      padding: 24px 12px;
-      color: #0f172a;
-      -webkit-font-smoothing: antialiased;
-    }
-    .wrapper {
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
-    }
-    .brand-header {
-      background-color: #006064;
-      padding: 24px 30px;
-      color: #ffffff;
-    }
-    .brand-title {
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: 1.5px;
-      margin: 0 0 6px 0;
-      text-transform: uppercase;
-    }
-    .brand-badge {
-      display: inline-block;
-      background-color: rgba(255, 255, 255, 0.15);
-      color: #e0f2f1;
-      padding: 3px 10px;
-      font-size: 11px;
-      font-weight: 600;
-      border-radius: 4px;
-      letter-spacing: 0.5px;
-    }
-    .email-body {
-      padding: 32px 30px;
-      font-size: 15px;
-      line-height: 1.6;
-      color: #1e293b;
-    }
-    .salutation {
-      font-size: 16px;
-      font-weight: 700;
-      color: #0f172a;
-      margin-bottom: 16px;
-    }
-    .action-container {
-      margin: 28px 0;
-      text-align: left;
-    }
-    .btn-download {
-      display: inline-block;
-      background-color: #006064;
-      color: #ffffff !important;
-      text-decoration: none;
-      padding: 12px 26px;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      border-radius: 4px;
-      box-shadow: 0 2px 4px rgba(0, 96, 100, 0.2);
-    }
-    .signoff {
-      margin-top: 30px;
-      padding-top: 20px;
-      border-top: 1px solid #f1f5f9;
-      font-size: 14px;
-      color: #334155;
-    }
-    .footer-section {
-      background-color: #f8fafc;
-      border-top: 1px solid #e2e8f0;
-      padding: 24px 30px;
-      text-align: center;
-      font-size: 12px;
-      color: #64748b;
-    }
-    .social-links {
-      margin: 12px 0 16px 0;
-    }
-    .social-link {
-      display: inline-block;
-      color: #006064;
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 11px;
-      margin: 0 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-  </style>
 </head>
-<body>
-  <div class="wrapper">
-    <!-- Header -->
-    <div class="brand-header">
-      <div class="brand-title">SSPACIA COWORKING</div>
-      <div class="brand-badge">Approved &amp; Issued by Community Manager</div>
-    </div>
-
-    <!-- Content -->
-    <div class="email-body">
-      <div class="salutation">Dear ${primaryName} Ji,</div>
-      
-      <p style="margin-top: 0; margin-bottom: 14px;">
-        Please find your tax invoice for the month attached with this email.
-      </p>
-
-      <p style="margin-top: 0; margin-bottom: 22px;">
-        The due date for payment is <strong>${dueDayStr}</strong> of this month.
-      </p>
-
-      <!-- Download Button -->
-      <div class="action-container">
-        <a href="${primaryDownloadUrl}" target="_blank" class="btn-download">
-          📥 Download Tax Invoice
-        </a>
-      </div>
-
-      <p style="color: #64748b; font-size: 13px; margin-bottom: 24px;">
-        For any clarification, please feel free to reach us anytime.
-      </p>
-
-      <!-- Regard -->
-      <div class="signoff">
-        Best Regards,<br>
-        <strong style="color: #0f172a;">${centreName}'s Community Manager</strong>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer-section">
-      <div style="font-weight: 800; color: #0f172a; font-size: 12px; letter-spacing: 1px; margin-bottom: 6px;">
-        SSPACIA INDIA PVT LTD
-      </div>
-      <div class="social-links">
-        <a href="https://wa.me/917600393779" class="social-link" target="_blank">WhatsApp</a> &bull;
-        <a href="https://www.instagram.com/sspacia?igsh=aWR3Z2F4MG0yMXRt" class="social-link" target="_blank">Instagram</a> &bull;
-        <a href="https://www.linkedin.com/company/sspacia/" class="social-link" target="_blank">LinkedIn</a> &bull;
-        <a href="https://www.facebook.com/sspacia" class="social-link" target="_blank">Facebook</a> &bull;
-        <a href="https://www.youtube.com/@sspacia_" class="social-link" target="_blank">YouTube</a>
-      </div>
-      <div>Ahmedabad, Gujarat, India &bull; <a href="mailto:cm@sspacia.com" style="color: #006064; text-decoration: none;">cm@sspacia.com</a></div>
-    </div>
-  </div>
+<body style="margin: 0; padding: 20px 10px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #0f172a;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f1f5f9;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #006064; padding: 24px 30px; color: #ffffff;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td>
+                    <div style="font-size: 20px; font-weight: 800; letter-spacing: 1.5px; margin: 0 0 6px 0; text-transform: uppercase; color: #ffffff;">SSPACIA COWORKING</div>
+                    <span style="display: inline-block; background-color: rgba(255, 255, 255, 0.18); color: #e0f2f1; padding: 4px 12px; font-size: 11px; font-weight: 600; border-radius: 4px; letter-spacing: 0.5px;">Approved &amp; Issued by Community Manager</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Content -->
+          <tr>
+            <td style="padding: 32px 30px; font-size: 15px; line-height: 1.6; color: #1e293b; background-color: #ffffff;">
+              <div style="font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 16px;">Dear ${primaryName} Ji,</div>
+              <p style="margin: 0 0 14px 0; color: #334155; font-size: 14.5px; line-height: 1.5;">
+                Please find your tax invoice for the month attached with this email.
+              </p>
+              <p style="margin: 0 0 22px 0; color: #334155; font-size: 14.5px; line-height: 1.5;">
+                The due date for payment is <strong style="color: #0f172a; font-weight: 700;">${dueDayStr}</strong> of this month.
+              </p>
+              <!-- Download Button -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 26px 0;">
+                <tr>
+                  <td align="center" style="border-radius: 4px; background-color: #006064;">
+                    <a href="${primaryDownloadUrl}" target="_blank" style="display: inline-block; background-color: #006064; color: #ffffff !important; text-decoration: none; padding: 13px 28px; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; border-radius: 4px; border: 1px solid #006064;">
+                      📥 Download Tax Invoice
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="color: #64748b; font-size: 13px; margin: 0 0 24px 0;">
+                For any clarification, please feel free to reach us anytime.
+              </p>
+              <!-- Signoff -->
+              <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #334155;">
+                Best Regards,<br>
+                <strong style="color: #0f172a; font-size: 14px;">${centreName}'s Community Manager</strong>
+              </div>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 24px 30px; text-align: center; font-size: 12px; color: #64748b;">
+              <div style="font-weight: 800; color: #0f172a; font-size: 12px; letter-spacing: 1px; margin-bottom: 8px;">
+                SSPACIA INDIA PVT LTD
+              </div>
+              <div style="margin: 10px 0 14px 0;">
+                <a href="https://wa.me/917600393779" style="color: #006064; text-decoration: none; font-weight: 600; font-size: 11px; margin: 0 6px; text-transform: uppercase;">WhatsApp</a> &bull;
+                <a href="https://www.instagram.com/sspacia?igsh=aWR3Z2F4MG0yMXRt" style="color: #006064; text-decoration: none; font-weight: 600; font-size: 11px; margin: 0 6px; text-transform: uppercase;">Instagram</a> &bull;
+                <a href="https://www.linkedin.com/company/sspacia/" style="color: #006064; text-decoration: none; font-weight: 600; font-size: 11px; margin: 0 6px; text-transform: uppercase;">LinkedIn</a> &bull;
+                <a href="https://www.facebook.com/sspacia" style="color: #006064; text-decoration: none; font-weight: 600; font-size: 11px; margin: 0 6px; text-transform: uppercase;">Facebook</a> &bull;
+                <a href="https://www.youtube.com/@sspacia_" style="color: #006064; text-decoration: none; font-weight: 600; font-size: 11px; margin: 0 6px; text-transform: uppercase;">YouTube</a>
+              </div>
+              <div style="color: #94a3b8; font-size: 11.5px;">
+                Ahmedabad, Gujarat, India &bull; <a href="mailto:cm@sspacia.com" style="color: #006064; text-decoration: none; font-weight: 600;">cm@sspacia.com</a>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
     `.trim();
 
-    // 10. Dispatch Email via Google Workspace SMTP with Anti-Spam Optimization
+    // 10. Dispatch Email via Google Workspace SMTP
     const { hostCandidates, port, user, pass } = createSmtpTransport();
     let messageId: string | undefined;
     let lastError: any = null;
 
     const emailHeaders = {
-      'Message-ID': `<inv-${invoiceRecordId}-${Date.now()}@sspacia.com>`,
-      'X-Mailer': 'SSPACIA Billing Portal 2.0 (Google Workspace)',
       'X-Entity-Ref-ID': `INV-${invoiceRecordId}`,
-      'Auto-Submitted': 'auto-generated',
-      'X-Auto-Response-Suppress': 'All',
-      'List-Unsubscribe': '<mailto:cm@sspacia.com?subject=unsubscribe>',
     };
 
     // Candidate configs for Google Workspace (465 SSL, 587 STARTTLS)
