@@ -28,13 +28,13 @@ export async function POST(request: Request) {
     const subject = (body.subject || 'test').trim();
     const content = (body.body || 'hey it was just a test').trim();
 
-    // Custom SMTP options or defaults (Zoho Mail with App Password)
-    const customHost = (body.smtpHost || process.env.SMTP_HOST || 'smtppro.zoho.in').trim();
+    // Custom SMTP options or defaults (Google Workspace with App Password)
+    const customHost = (body.smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com').trim();
     const customPort = Number(body.smtpPort || process.env.SMTP_PORT || 465);
     const smtpUser = (body.smtpUser || process.env.SMTP_USER || sender).trim();
     
-    // Clean spaces from App Password if provided with spaces (e.g. VXQx VpCn BDZg -> VXQxVpCnBDZg)
-    const rawPass = (body.smtpPass || process.env.SMTP_PASS || 'VXQxVpCnBDZg').trim();
+    // Clean spaces from App Password if provided with spaces (e.g. mkpm zwrt bncm uzcr -> mkpmzwrtbncmuzcr)
+    const rawPass = (body.smtpPass || process.env.SMTP_PASS || 'mkpmzwrtbncmuzcr').trim();
     const smtpPass = rawPass.replace(/\s+/g, '');
 
     if (!receiver) {
@@ -79,12 +79,9 @@ export async function POST(request: Request) {
     // Candidate configurations (Hosts and Ports)
     const configsToTry = [
       { host: customHost, port: customPort },
-      { host: 'smtppro.zoho.in', port: 465 },
-      { host: 'smtp.zoho.in', port: 465 },
-      { host: 'smtp.zoho.in', port: 587 },
-      { host: 'smtppro.zoho.com', port: 465 },
-      { host: 'smtp.zoho.com', port: 465 },
-      { host: 'smtp.zoho.com', port: 587 },
+      { host: 'smtp.gmail.com', port: 465 },
+      { host: 'smtp.gmail.com', port: 587 },
+      { host: 'smtp-relay.gmail.com', port: 587 },
     ];
 
     let lastError: any = new Error('No SMTP configurations responded');

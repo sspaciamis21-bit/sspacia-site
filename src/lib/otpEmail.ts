@@ -9,14 +9,13 @@ export interface SendPasswordOtpEmailOptions {
 
 function createSmtpTransport() {
   const hostCandidates = [
-    process.env.SMTP_HOST || 'smtppro.zoho.in',
-    'smtp.zoho.in',
-    'smtppro.zoho.com',
-    'smtp.zoho.com',
+    process.env.SMTP_HOST || 'smtp.gmail.com',
+    'smtp.gmail.com',
+    'smtp-relay.gmail.com',
   ];
   const port = Number(process.env.SMTP_PORT || 465);
   const user = (process.env.SMTP_USER || 'cm@sspacia.com').trim();
-  const rawPass = (process.env.SMTP_PASS || 'VXQxVpCnBDZg').trim();
+  const rawPass = (process.env.SMTP_PASS || 'mkpmzwrtbncmuzcr').trim();
   const pass = rawPass.replace(/\s+/g, '');
 
   return { hostCandidates, port, user, pass };

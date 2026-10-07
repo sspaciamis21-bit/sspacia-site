@@ -31,6 +31,27 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid status provided' }, { status: 400 });
     }
 
+    // Strict Backend DSC Protection: Cannot approve an invoice requiring DSC without signature
+    if (status === 'APPROVED') {
+      const existing = await (prisma as any).invoiceRecord.findUnique({
+        where: { id: invoiceRecordId },
+        select: {
+          isDigitalSignRequired: true,
+          digitallySignedPdfUrl: true,
+          companyName: true,
+        },
+      });
+
+      if (existing?.isDigitalSignRequired && !existing?.digitallySignedPdfUrl) {
+        return NextResponse.json(
+          {
+            error: `Digital Signature (DSC) is mandatory for ${existing.companyName || 'this client'}. Please apply the digital signature using the USB Token before approving.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const updated = await (prisma as any).invoiceRecord.update({
       where: { id: invoiceRecordId },
       data: {

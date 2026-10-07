@@ -28,10 +28,10 @@ export function TestEmailModal({ isOpen, onClose }: TestEmailModalProps) {
 
   // SMTP Configuration (Defaults to Zoho Mail with App Password)
   const [showSmtpSettings, setShowSmtpSettings] = useState(false);
-  const [smtpHost, setSmtpHost] = useState('smtppro.zoho.in');
+  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
   const [smtpPort, setSmtpPort] = useState('465');
   const [smtpUser, setSmtpUser] = useState('cm@sspacia.com');
-  const [smtpPass, setSmtpPass] = useState('VXQxVpCnBDZg');
+  const [smtpPass, setSmtpPass] = useState('mkpmzwrtbncmuzcr');
 
   const [isSending, setIsSending] = useState(false);
   const [responseLog, setResponseLog] = useState<{ success: boolean; message: string; details?: any } | null>(null);
