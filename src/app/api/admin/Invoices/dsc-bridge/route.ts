@@ -142,6 +142,110 @@ export async function GET(request: Request) {
 }
 
 /**
+ * Programmatic helper to queue an attached invoice for background USB DSC signing
+ */
+export async function queueInvoiceForDsc(invoiceId: number): Promise<{ success: boolean; jobId?: string; message?: string; error?: string }> {
+  const state = loadSharedState();
+  const now = Date.now();
+  const lastSeen = state.gateway?.lastSeen || 0;
+  const isOnline = Boolean(
+    state.gateway &&
+    state.gateway.status === 'ONLINE' &&
+    now - lastSeen < 12000
+  );
+
+  if (!isOnline) {
+    console.warn(`[Auto-DSC] USB Token Gateway is offline. Invoice #${invoiceId} not queued automatically.`);
+    return {
+      success: false,
+      error: 'Please ask the CM of Mercado to insert the USB key, then try again.',
+    };
+  }
+
+  // Fetch invoice record and attached PDF
+  const invoice = await (prisma as any).invoiceRecord.findUnique({
+    where: { id: Number(invoiceId) },
+    include: { attachedInvoice: true },
+  });
+
+  if (!invoice) {
+    return { success: false, error: 'Invoice record not found' };
+  }
+
+  // Already signed
+  if (invoice.digitallySignedPdfUrl) {
+    return { success: true, message: 'Invoice is already digitally signed.' };
+  }
+
+  const pdfUrl = invoice.attachedInvoice?.fileUrl;
+  if (!pdfUrl) {
+    return { success: false, error: 'No accountant invoice PDF attached for this record.' };
+  }
+
+  // Check if already in queue
+  const existingJob = state.jobs.find(
+    (j) => j.invoiceId === Number(invoiceId) && (j.status === 'PENDING' || j.status === 'IN_PROGRESS')
+  );
+  if (existingJob) {
+    return { success: true, jobId: existingJob.jobId, message: 'Invoice already in DSC signing queue.' };
+  }
+
+  // Load PDF Buffer (from DB storedDocument, HTTP URL, or local disk)
+  let pdfBuffer: Buffer | null = null;
+  if (pdfUrl.includes('/api/admin/stored-documents/')) {
+    const match = pdfUrl.match(/\/api\/admin\/stored-documents\/(\d+)/);
+    if (match && match[1]) {
+      const doc = await (prisma as any).storedDocument.findUnique({
+        where: { id: Number(match[1]) },
+        select: { fileData: true },
+      });
+      if (doc?.fileData) pdfBuffer = Buffer.from(doc.fileData);
+    }
+  }
+
+  if (!pdfBuffer) {
+    if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) {
+      const res = await fetch(pdfUrl).catch(() => null);
+      if (res && res.ok) pdfBuffer = Buffer.from(await res.arrayBuffer());
+    } else {
+      const localPath = path.join(process.cwd(), 'public', pdfUrl.startsWith('/') ? pdfUrl.slice(1) : pdfUrl);
+      if (fs.existsSync(localPath)) {
+        pdfBuffer = fs.readFileSync(localPath);
+      } else {
+        const doc = await (prisma as any).storedDocument.findFirst({
+          where: { fileName: invoice.attachedInvoice?.fileName || '' },
+          select: { fileData: true },
+        });
+        if (doc?.fileData) pdfBuffer = Buffer.from(doc.fileData);
+      }
+    }
+  }
+
+  if (!pdfBuffer) {
+    return { success: false, error: `Could not load invoice PDF to sign: ${pdfUrl}` };
+  }
+
+  const jobId = `inv_${invoice.id}_${Date.now()}`;
+  state.jobs.push({
+    jobId,
+    invoiceId: invoice.id,
+    companyName: invoice.companyName,
+    isTest: false,
+    pdfBase64: pdfBuffer.toString('base64'),
+    status: 'PENDING',
+    createdAt: Date.now(),
+  });
+
+  saveSharedState(state);
+  console.log(`[Auto-DSC] ⚡ Invoice #${invoice.id} (${invoice.companyName}) queued for background USB DSC signing!`);
+  return {
+    success: true,
+    message: `Invoice for ${invoice.companyName} queued for USB DSC signing!`,
+    jobId,
+  };
+}
+
+/**
  * POST /api/admin/Invoices/dsc-bridge
  * Handles Gateway heartbeats, job polling, job completion, and client queueing
  */
@@ -306,93 +410,11 @@ export async function POST(request: Request) {
       if (!invoiceId) {
         return NextResponse.json({ error: 'Missing invoiceId' }, { status: 400 });
       }
-
-      const now = Date.now();
-      const lastSeen = state.gateway?.lastSeen || 0;
-      const isOnline = Boolean(
-        state.gateway &&
-        state.gateway.status === 'ONLINE' &&
-        now - lastSeen < 12000
-      );
-
-      if (!isOnline) {
-        return NextResponse.json(
-          {
-            error: 'Please ask the CM of Mercado to insert the USB key, then try again.',
-            gatewayStatus: state.gateway?.status || 'OFFLINE',
-          },
-          { status: 400 }
-        );
+      const qRes = await queueInvoiceForDsc(Number(invoiceId));
+      if (!qRes.success) {
+        return NextResponse.json({ error: qRes.error }, { status: 400 });
       }
-
-      // Fetch invoice record and attached PDF
-      const invoice = await (prisma as any).invoiceRecord.findUnique({
-        where: { id: Number(invoiceId) },
-        include: { attachedInvoice: true },
-      });
-
-      if (!invoice) {
-        return NextResponse.json({ error: 'Invoice record not found' }, { status: 404 });
-      }
-
-      const pdfUrl = invoice.attachedInvoice?.fileUrl;
-      if (!pdfUrl) {
-        return NextResponse.json({ error: 'No accountant invoice PDF attached for this record.' }, { status: 400 });
-      }
-
-      // Load PDF Buffer (from DB storedDocument, HTTP URL, or local disk)
-      let pdfBuffer: Buffer | null = null;
-      if (pdfUrl.includes('/api/admin/stored-documents/')) {
-        const match = pdfUrl.match(/\/api\/admin\/stored-documents\/(\d+)/);
-        if (match && match[1]) {
-          const doc = await (prisma as any).storedDocument.findUnique({
-            where: { id: Number(match[1]) },
-            select: { fileData: true },
-          });
-          if (doc?.fileData) pdfBuffer = Buffer.from(doc.fileData);
-        }
-      }
-
-      if (!pdfBuffer) {
-        if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) {
-          const res = await fetch(pdfUrl);
-          if (res.ok) pdfBuffer = Buffer.from(await res.arrayBuffer());
-        } else {
-          const localPath = path.join(process.cwd(), 'public', pdfUrl.startsWith('/') ? pdfUrl.slice(1) : pdfUrl);
-          if (fs.existsSync(localPath)) {
-            pdfBuffer = fs.readFileSync(localPath);
-          } else {
-            const doc = await (prisma as any).storedDocument.findFirst({
-              where: { fileName: invoice.attachedInvoice?.fileName || '' },
-              select: { fileData: true },
-            });
-            if (doc?.fileData) pdfBuffer = Buffer.from(doc.fileData);
-          }
-        }
-      }
-
-      if (!pdfBuffer) {
-        return NextResponse.json({ error: `Could not load invoice PDF to sign: ${pdfUrl}` }, { status: 404 });
-      }
-
-      const jobId = `inv_${invoice.id}_${Date.now()}`;
-      state.jobs.push({
-        jobId,
-        invoiceId: invoice.id,
-        companyName: invoice.companyName,
-        isTest: false,
-        pdfBase64: pdfBuffer.toString('base64'),
-        status: 'PENDING',
-        createdAt: Date.now(),
-      });
-
-      saveSharedState(state);
-
-      return NextResponse.json({
-        success: true,
-        message: `Invoice for ${invoice.companyName} queued for USB DSC signing!`,
-        jobId,
-      });
+      return NextResponse.json(qRes);
     }
 
     // ── 4. WEB CLIENT QUEUES TEST INVOICE FOR SIGNING ──────────────────────

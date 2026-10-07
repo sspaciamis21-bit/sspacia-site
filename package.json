@@ -82,7 +82,9 @@
     "nodemailer": "$nodemailer",
     "deepmerge-ts": "^8.0.2",
     "ip-address": "^10.7.2",
-    "geoip-lite": "$geoip-lite"
+    "geoip-lite": "$geoip-lite",
+    "sharp": "^0.35.5",
+    "source-map-js": "^1.2.2"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -44,7 +44,8 @@ import {
   Scissors,
   CalendarDays,
   Gift,
-  Printer
+  Printer,
+  Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -781,7 +782,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
         toast.error('⚠️ DSC Gateway is Offline! Please ask Mercado Community Manager to insert the USB DSC token into the PC and ensure the gateway is Online before approving.');
         return;
       }
-      toast.error(`⚠️ Digital Signature is REQUIRED for ${entry.companyName}! USB Token is online. Please click "Apply Digital Signature" to sign this invoice before approving.`);
+      toast.error(`⚠️ Digital Signature is REQUIRED for ${entry.companyName}! Auto-signing is in progress with the USB Token. Please wait a few moments for signing to complete before approving.`);
       return;
     }
     await handleUpdateStatus(entry.id, 'APPROVED');
@@ -2254,6 +2255,26 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Live auto-refresh active review invoice when background DSC signing completes
+  useEffect(() => {
+    if (!entryToReviewInvoice || entryToReviewInvoice.digitallySignedPdfUrl) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/admin/Invoices?id=${entryToReviewInvoice.id}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const updated = json.data.find((inv: any) => inv.id === entryToReviewInvoice.id);
+          if (updated?.digitallySignedPdfUrl) {
+            setEntryToReviewInvoice(updated);
+            fetchData();
+          }
+        }
+      } catch {}
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [entryToReviewInvoice, fetchData]);
 
   // Update Status (Send to Accountant, Approve, Reject)
   const handleUpdateStatus = async (id: number, status: string, remarks?: string) => {
@@ -4711,10 +4732,30 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                         <button
                           type="button"
                           onClick={() => handleApproveFromReviewModal(entryToReviewInvoice)}
-                          disabled={actionLoading || signingInvoiceId === entryToReviewInvoice.id}
-                          className="px-6 py-2.5 bg-emerald-600 text-white font-bold uppercase tracking-wider hover:bg-emerald-700 flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                          disabled={actionLoading || Boolean(entryToReviewInvoice.isDigitalSignRequired && !entryToReviewInvoice.digitallySignedPdfUrl)}
+                          className={`px-6 py-2.5 font-bold uppercase tracking-wider flex items-center gap-2 shadow-xs transition-all ${
+                            entryToReviewInvoice.isDigitalSignRequired && !entryToReviewInvoice.digitallySignedPdfUrl
+                              ? 'bg-neutral-200 text-neutral-500 cursor-not-allowed border border-neutral-300'
+                              : 'bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer'
+                          }`}
+                          title={
+                            entryToReviewInvoice.isDigitalSignRequired && !entryToReviewInvoice.digitallySignedPdfUrl
+                              ? 'Digital signature is strictly mandatory for this client before approval'
+                              : 'Approve invoice and send to client'
+                          }
                         >
-                          {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Approve Invoice ✅
+                          {actionLoading ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : entryToReviewInvoice.isDigitalSignRequired && !entryToReviewInvoice.digitallySignedPdfUrl ? (
+                            <Lock size={14} />
+                          ) : (
+                            <CheckCircle2 size={14} />
+                          )}
+                          <span>
+                            {entryToReviewInvoice.isDigitalSignRequired && !entryToReviewInvoice.digitallySignedPdfUrl
+                              ? 'Awaiting Digital Signature 🔒'
+                              : 'Approve Invoice ✅'}
+                          </span>
                         </button>
                       </div>
                     </motion.div>

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { syncInvoiceWorkflowPdfAttached } from '@/lib/invoiceWorkflowFmsSync';
+import { queueInvoiceForDsc } from '@/app/api/admin/Invoices/dsc-bridge/route';
 
 export async function POST(request: Request) {
   try {
@@ -73,6 +74,11 @@ export async function POST(request: Request) {
       data: {
         status: 'INVOICE_ATTACHED',
       },
+    });
+
+    // ⚡ Auto-Trigger Background DSC Signing for ALL attached invoices
+    queueInvoiceForDsc(numInvoiceRecordId).catch((dscErr) => {
+      console.warn('[Attach Invoice] Auto-DSC queue notice:', dscErr);
     });
 
     // ── Synchronize Step 3 & 4 to Invoice Workflow FMS (Accountant Attaches PDF) ──
