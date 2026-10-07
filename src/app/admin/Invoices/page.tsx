@@ -267,7 +267,7 @@ export default function AdminInvoicesWorkflowPage() {
           setPendingSuspenseCount(data.summary.pendingCount);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [activeSection]);
 
   // Ensure Payment Receive Management and SDR Receive Management are strictly NOT accessible for CM
@@ -337,11 +337,11 @@ export default function AdminInvoicesWorkflowPage() {
   const [showArrivalBanner, setShowArrivalBanner] = useState(false);
   const [hasShownArrivalBanner, setHasShownArrivalBanner] = useState(false);
 
-const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
-  { id: 1, name: 'Agarwal Complex' },
-  { id: 2, name: 'Mercado' },
-  { id: 3, name: 'Premier House' },
-];
+  const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
+    { id: 1, name: 'Agarwal Complex' },
+    { id: 2, name: 'Mercado' },
+    { id: 3, name: 'Premier House' },
+  ];
 
   // Node/Location Filter for Admin & Accountant
   const [locations, setLocations] = useState<LocationOption[]>(DEFAULT_OPERATING_LOCATIONS);
@@ -663,10 +663,10 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                     signedAt: new Date().toISOString(),
                     attachedInvoice: prev.attachedInvoice
                       ? {
-                          ...prev.attachedInvoice,
-                          fileUrl: stData.signedPdfUrl,
-                          fileName: stData.signedPdfName || prev.attachedInvoice.fileName,
-                        }
+                        ...prev.attachedInvoice,
+                        fileUrl: stData.signedPdfUrl,
+                        fileName: stData.signedPdfName || prev.attachedInvoice.fileName,
+                      }
                       : prev.attachedInvoice,
                   };
                 }
@@ -711,8 +711,8 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
     const pendingInvoices = targetInvoices.length > 0
       ? targetInvoices
       : invoices.filter(
-          (inv) => inv.isDigitalSignRequired && inv.status === 'INVOICE_ATTACHED' && !inv.digitallySignedPdfUrl
-        );
+        (inv) => inv.isDigitalSignRequired && inv.status === 'INVOICE_ATTACHED' && !inv.digitallySignedPdfUrl
+      );
 
     if (pendingInvoices.length === 0) {
       toast.info('No pending invoices requiring DSC found.');
@@ -974,7 +974,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
       setSplitGroups([
         {
           id: 'split_1',
-          name: 'Sub-Invoice #1 (Full)',
+          name: 'Sub-Invoice #1',
           productIndices: [0],
           noOfSeats: Number(items[0]?.noOfSeats || inv.noOfSeats || 0),
           amount: baseAmt,
@@ -1643,7 +1643,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
         if (Number(u.totalExtraSubtotal || 0) > 0 || Number(u.meetingRoom?.extraUsed || 0) > 0 || Number(u.printerPages?.extraUsed || 0) > 0) {
           return true;
         }
-      } catch {}
+      } catch { }
     }
     if (inv.itemsJson) {
       try {
@@ -1651,7 +1651,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
         if (Array.isArray(items) && items.some((it: any) => it.isComplimentaryOverusage)) {
           return true;
         }
-      } catch {}
+      } catch { }
     }
     return false;
   };
@@ -1694,7 +1694,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
             printEnabled = prt.isEnabled !== false;
           }
         }
-      } catch {}
+      } catch { }
     }
 
     setCompMeetingRoomFreeQuota(mtgQuota);
@@ -1710,13 +1710,13 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
         setCompMeetingRoomHours(usage.meetingRoom?.actualUsed !== undefined ? usage.meetingRoom.actualUsed : '');
         setCompPrinterPages(usage.printerPages?.actualUsed !== undefined ? usage.printerPages.actualUsed : '');
         return;
-      } catch {}
+      } catch { }
     }
 
     let items: any[] = [];
     try {
       if (inv.itemsJson) items = JSON.parse(inv.itemsJson);
-    } catch {}
+    } catch { }
 
     const mtgItem = items.find((it: any) => it.isComplimentaryOverusage && it.complimentaryType === 'MEETING_ROOM');
     const prtItem = items.find((it: any) => it.isComplimentaryOverusage && it.complimentaryType === 'PRINTER_PAGES');
@@ -1752,7 +1752,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
         try {
           const raw = JSON.parse(complimentaryModalInvoice.itemsJson);
           if (Array.isArray(raw)) items = raw;
-        } catch {}
+        } catch { }
       }
 
       if (items.length === 0) {
@@ -1869,7 +1869,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
         try {
           const raw = JSON.parse(complimentaryModalInvoice.itemsJson);
           if (Array.isArray(raw)) items = raw;
-        } catch {}
+        } catch { }
       }
 
       const baseItems = items.filter((it: any) => !it.isComplimentaryOverusage);
@@ -2294,7 +2294,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
             fetchData();
           }
         }
-      } catch {}
+      } catch { }
     }, 3500);
     return () => clearInterval(interval);
   }, [entryToReviewInvoice, fetchData]);
@@ -2649,6 +2649,37 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
     return `One-Time: ${sessionDateStr}`;
   };
 
+  // Safe date formatter for YYYY-MM-DD, ISO, or Date objects without timezone drift
+  const formatDisplayDateSafe = (d?: string | Date | null): string => {
+    if (!d) return '';
+    if (typeof d === 'string') {
+      const trimmed = d.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        const [y, m, day] = trimmed.split('-');
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const mIdx = parseInt(m, 10) - 1;
+        return `${day.padStart(2, '0')} ${months[mIdx] || m} ${y}`;
+      }
+      const parsed = new Date(trimmed);
+      if (!isNaN(parsed.getTime())) {
+        const day = String(parsed.getDate()).padStart(2, '0');
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthShort = months[parsed.getMonth()] || parsed.toLocaleDateString('en-US', { month: 'short' });
+        const year = parsed.getFullYear();
+        return `${day} ${monthShort} ${year}`;
+      }
+      return trimmed;
+    }
+    if (d instanceof Date && !isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthShort = months[d.getMonth()] || d.toLocaleDateString('en-US', { month: 'short' });
+      const year = d.getFullYear();
+      return `${day} ${monthShort} ${year}`;
+    }
+    return '';
+  };
+
   const billingMonthOptions = useMemo(() => {
     const set = new Set<string>();
     invoices.forEach((inv) => {
@@ -2956,25 +2987,24 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
               )}
             </button>
 
-              {/* Live Mercado USB DSC Gateway Status Pill */}
-              <div
-                className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 border rounded-xs ${
-                  dscStatus.isOnline
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : 'bg-neutral-100 text-neutral-600 border-neutral-300'
+            {/* Live Mercado USB DSC Gateway Status Pill */}
+            <div
+              className={`px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1.5 border rounded-xs ${dscStatus.isOnline
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-neutral-100 text-neutral-600 border-neutral-300'
                 }`}
-                title={
-                  dscStatus.isOnline
-                    ? `Mercado DSC Gateway Online (${dscStatus.tokenLabel || 'USB Token Ready'})`
-                    : 'Mercado DSC Gateway Offline (Token unplugged or PC sleeping)'
-                }
-              >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${dscStatus.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'}`} />
-                <span className="text-[10px] uppercase tracking-wider font-extrabold">
-                  DSC: {dscStatus.isOnline ? 'Connected' : 'Offline'}
-                </span>
-              </div>
+              title={
+                dscStatus.isOnline
+                  ? `Mercado DSC Gateway Online (${dscStatus.tokenLabel || 'USB Token Ready'})`
+                  : 'Mercado DSC Gateway Offline (Token unplugged or PC sleeping)'
+              }
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${dscStatus.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'}`} />
+              <span className="text-[10px] uppercase tracking-wider font-extrabold">
+                DSC: {dscStatus.isOnline ? 'Connected' : 'Offline'}
+              </span>
             </div>
+          </div>
 
           {canAccessCM && canAccessAccountant && (
             <div className="flex items-center bg-[#F8F9FA] border border-[var(--outline-variant)] p-1 text-xs font-bold">
@@ -3572,22 +3602,22 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                               invoice.clientMaster?.clientType !== 'ONE_TIME' &&
                               invoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' &&
                               (() => {
-                              try {
-                                const usage = JSON.parse(invoice.complimentaryUsageJson);
-                                const parts = [];
-                                if (usage.meetingRoom?.extraUsed > 0) parts.push(`+${usage.meetingRoom.extraUsed}h Mtg (₹${usage.meetingRoom.charge})`);
-                                if (usage.printerPages?.extraUsed > 0) parts.push(`+${usage.printerPages.extraUsed}p Print (₹${usage.printerPages.charge})`);
-                                if (parts.length > 0) {
-                                  return (
-                                    <div className="mt-1 flex items-center gap-1 text-[9px] font-bold text-teal-800 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded w-fit" title="Complimentary Over-Usage included">
-                                      <Gift size={9} className="text-teal-700 shrink-0" />
-                                      <span>{parts.join(' | ')}</span>
-                                    </div>
-                                  );
-                                }
-                              } catch {}
-                              return null;
-                            })()}
+                                try {
+                                  const usage = JSON.parse(invoice.complimentaryUsageJson);
+                                  const parts = [];
+                                  if (usage.meetingRoom?.extraUsed > 0) parts.push(`+${usage.meetingRoom.extraUsed}h Mtg (₹${usage.meetingRoom.charge})`);
+                                  if (usage.printerPages?.extraUsed > 0) parts.push(`+${usage.printerPages.extraUsed}p Print (₹${usage.printerPages.charge})`);
+                                  if (parts.length > 0) {
+                                    return (
+                                      <div className="mt-1 flex items-center gap-1 text-[9px] font-bold text-teal-800 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded w-fit" title="Complimentary Over-Usage included">
+                                        <Gift size={9} className="text-teal-700 shrink-0" />
+                                        <span>{parts.join(' | ')}</span>
+                                      </div>
+                                    );
+                                  }
+                                } catch { }
+                                return null;
+                              })()}
                           </td>
 
                           <td className="p-3">
@@ -3623,7 +3653,35 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                 </div>
                               </div>
                             ) : (
-                              <span>{invoice.billingMonth || 'N/A'}</span>
+                              <div>
+                                <span className="text-[#1B1C1C] font-extrabold">{invoice.billingMonth || 'N/A'}</span>
+                                {invoice.splitsJson && (() => {
+                                  let splits: InvoiceSplitGroup[] = [];
+                                  try { splits = JSON.parse(invoice.splitsJson || '[]'); } catch { }
+                                  if (splits.length > 1) {
+                                    return (
+                                      <div className="mt-1.5 space-y-1">
+                                        {splits.map((s, idx) => (
+                                          <div key={s.id || idx} className="text-[9.5px] bg-purple-50/90 text-purple-950 border border-purple-200 px-2 py-1 rounded font-normal leading-snug">
+                                            <div className="font-extrabold text-[9.5px] text-purple-900 flex items-center justify-between gap-1">
+                                              <span>#{idx + 1} {s.name}</span>
+                                              <span className="font-mono text-teal-800 font-bold">₹{Number(s.totalAmount || 0).toLocaleString('en-IN')}</span>
+                                            </div>
+                                            <div className="text-[9px] text-purple-900 font-semibold flex items-center gap-1 mt-0.5">
+                                              <span>📅</span>
+                                              <span className="underline decoration-purple-300 font-bold">
+                                                {formatDisplayDateSafe(s.startDate) || 'Month Start'} → {formatDisplayDateSafe(s.endDate) || 'Month End'}
+                                              </span>
+                                              {s.activeDays ? <span className="text-purple-700 font-extrabold">({s.activeDays}d)</span> : null}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
                             )}
                           </td>
 
@@ -3631,6 +3689,21 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                             <div className="font-black text-sm text-[var(--primary)]">
                               ₹{Number(invoice.totalAmount || 0).toLocaleString('en-IN')}
                             </div>
+                            {invoice.splitsJson && (() => {
+                              let splits: InvoiceSplitGroup[] = [];
+                              try { splits = JSON.parse(invoice.splitsJson || '[]'); } catch { }
+                              if (splits.length > 1) {
+                                return (
+                                  <div className="mt-0.5 text-[9px] text-purple-800 font-mono font-bold flex flex-col items-end">
+                                    <span>✂ {splits.length} Sub-Invoices</span>
+                                    <span className="text-neutral-500 font-normal">
+                                      {splits.map(s => `₹${Number(s.totalAmount || 0).toLocaleString('en-IN')}`).join(' + ')}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                             {invoice.brokerCommissionPercent !== null && invoice.brokerCommissionPercent !== undefined && Number(invoice.brokerCommissionPercent) > 0 && (
                               <div className="mt-1 flex flex-col items-end">
                                 <span
@@ -3773,19 +3846,19 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                     invoice.productGroupKey !== 'ONE_TIME_SESSION' &&
                                     invoice.clientMaster?.clientType !== 'ONE_TIME' &&
                                     invoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenComplimentaryModal(invoice)}
-                                      className={`px-2.5 py-1 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors rounded ${hasComplimentaryOverusage(invoice)
-                                        ? 'bg-teal-100 text-teal-900 border border-teal-300 hover:bg-teal-200'
-                                        : 'bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100'
-                                        }`}
-                                      title="Review complimentary meeting room & printer usage, bill extra usage"
-                                    >
-                                      <Gift size={10} className="text-teal-700" />
-                                      <span>{hasComplimentaryOverusage(invoice) ? '✓ Over-Usage Logged' : '🎁 Complimentary Usage'}</span>
-                                    </button>
-                                  )}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenComplimentaryModal(invoice)}
+                                        className={`px-2.5 py-1 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors rounded ${hasComplimentaryOverusage(invoice)
+                                          ? 'bg-teal-100 text-teal-900 border border-teal-300 hover:bg-teal-200'
+                                          : 'bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100'
+                                          }`}
+                                        title="Review complimentary meeting room & printer usage, bill extra usage"
+                                      >
+                                        <Gift size={10} className="text-teal-700" />
+                                        <span>{hasComplimentaryOverusage(invoice) ? '✓ Over-Usage Logged' : '🎁 Complimentary Usage'}</span>
+                                      </button>
+                                    )}
 
                                   {invoice.status === 'INVOICE_ATTACHED' && (invoice.attachedInvoice || invoice.splitsJson) && (
                                     <button
@@ -3952,11 +4025,29 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                         <Paperclip size={11} />
                                         {invoice.attachedInvoice ? 'Replace Tally PDF' : 'Attach Tally PDF'}
                                       </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => setEntryToViewDetails(invoice)}
+                                        className="w-full mt-1 px-2 py-1 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-[#006064] text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-colors"
+                                        title="View complete invoice entry and sub-invoice splits"
+                                      >
+                                        <Eye size={11} /> View Invoice Entry
+                                      </button>
                                     </>
                                   ) : (
-                                    <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
-                                      <CheckCircle2 size={12} /> Finalized
-                                    </span>
+                                    <div className="space-y-1 w-full">
+                                      <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
+                                        <CheckCircle2 size={12} /> Finalized
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEntryToViewDetails(invoice)}
+                                        className="w-full px-2 py-0.5 text-neutral-600 hover:text-neutral-900 border border-neutral-200 text-[9.5px] font-bold rounded flex items-center justify-center gap-1"
+                                      >
+                                        <Eye size={10} /> View Entry
+                                      </button>
+                                    </div>
                                   )}
                                 </>
                               )}
@@ -4167,12 +4258,78 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                             </div>
 
                             {(() => {
+                              // If invoice is split, show Sub-Invoices breakdown with usage dates and amounts
+                              if (isSplit && entryToAttachInvoice.splitsJson) {
+                                let splits: InvoiceSplitGroup[] = [];
+                                try { splits = JSON.parse(entryToAttachInvoice.splitsJson || '[]'); } catch { }
+                                if (splits.length > 1) {
+                                  return (
+                                    <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                                      <table className="w-full text-left text-[11px] border-collapse">
+                                        <thead>
+                                          <tr className="border-b border-purple-200 text-purple-900 text-[10px] uppercase font-bold bg-purple-50/50">
+                                            <th className="py-1.5 pl-2">Sub-Invoice &amp; Billing Period</th>
+                                            <th className="py-1.5 text-center">Seats</th>
+                                            <th className="py-1.5 text-center">Payment Due</th>
+                                            <th className="py-1.5 text-right">Subtotal</th>
+                                            <th className="py-1.5 text-right">GST (18%)</th>
+                                            <th className="py-1.5 text-right pr-2 font-bold">Total</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-purple-100">
+                                          {splits.map((grp, idx) => (
+                                            <tr key={grp.id} className="hover:bg-purple-50/40 transition-colors">
+                                              <td className="py-2 pl-2">
+                                                <div className="font-extrabold text-[#1B1C1C] flex items-center gap-1.5">
+                                                  <span className="px-1.5 py-0.2 bg-purple-700 text-white text-[9.5px] rounded">#{idx + 1}</span>
+                                                  <span>{grp.name}</span>
+                                                </div>
+                                                <div className="text-[10px] text-purple-950 font-bold flex flex-wrap items-center gap-1 mt-0.5">
+                                                  <span>📅 Usage:</span>
+                                                  <span className="underline decoration-purple-400 font-extrabold">
+                                                    {formatDisplayDateSafe(grp.startDate) || 'Month Start'}
+                                                    {' → '}
+                                                    {formatDisplayDateSafe(grp.endDate) || 'Month End'}
+                                                  </span>
+                                                  {grp.activeDays && (
+                                                    <span className="px-1.5 py-0.2 bg-purple-100 text-purple-900 rounded font-bold text-[9px]">
+                                                      ({grp.activeDays} Days)
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </td>
+                                              <td className="py-2 text-center font-mono">{grp.noOfSeats || 1}</td>
+                                              <td className="py-2 text-center">
+                                                <span className="text-[9.5px] font-bold text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+                                                  {grp.dueDate ? formatDisplayDateSafe(grp.dueDate) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}
+                                                </span>
+                                              </td>
+                                              <td className="py-2 text-right font-mono">₹{Number(grp.amount || 0).toLocaleString('en-IN')}</td>
+                                              <td className="py-2 text-right font-mono text-neutral-500">₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}</td>
+                                              <td className="py-2 text-right pr-2 font-mono font-bold text-[#006064]">₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                        <tfoot>
+                                          <tr className="border-t-2 border-purple-300 font-extrabold text-[11px] bg-purple-50/30">
+                                            <td colSpan={3} className="py-2 pl-2 uppercase">Combined Grand Total (for Tally)</td>
+                                            <td className="py-2 text-right font-mono">₹{Number(entryToAttachInvoice.amount || 0).toLocaleString('en-IN')}</td>
+                                            <td className="py-2 text-right font-mono text-neutral-500">₹{(Number(entryToAttachInvoice.totalAmount || 0) - Number(entryToAttachInvoice.amount || 0)).toLocaleString('en-IN')}</td>
+                                            <td className="py-2 text-right pr-2 font-mono text-teal-900 text-xs">₹{Number(entryToAttachInvoice.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                          </tr>
+                                        </tfoot>
+                                      </table>
+                                    </div>
+                                  );
+                                }
+                              }
+
                               let items: any[] = [];
                               if (entryToAttachInvoice.itemsJson) {
                                 try {
                                   const parsed = JSON.parse(entryToAttachInvoice.itemsJson);
                                   if (Array.isArray(parsed) && parsed.length > 0) items = parsed;
-                                } catch {}
+                                } catch { }
                               }
                               if (items.length === 0) {
                                 items = [{
@@ -4244,15 +4401,46 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                   {splits.map((grp, idx) => (
                                     <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm space-y-2">
                                       <div className="flex items-center justify-between">
-                                        <span className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1">
-                                          <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span> {grp.name}
+                                        <span className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1.5">
+                                          <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span>
+                                          <span>{grp.name}</span>
                                         </span>
                                         <span className="font-mono font-bold text-teal-800 text-xs">
                                           ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
                                         </span>
                                       </div>
-                                      <div className="text-[10px] text-neutral-500">
-                                        {grp.noOfSeats} seats | Subtotal: ₹{Number(grp.amount || 0).toLocaleString('en-IN')} + GST: ₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}
+
+                                      {/* Usage Period & Due Date Banner */}
+                                      <div className="flex flex-wrap items-center gap-2 text-[10px] bg-purple-50/80 p-2 border border-purple-200 rounded">
+                                        <span className="text-purple-950 font-bold flex items-center gap-1">
+                                          📅 <strong>Usage Period:</strong>{' '}
+                                          <span className="underline decoration-purple-400 font-extrabold">
+                                            {formatDisplayDateSafe(grp.startDate) || 'Month Start'}
+                                            {' → '}
+                                            {formatDisplayDateSafe(grp.endDate) || 'Month End'}
+                                          </span>
+                                          {grp.activeDays && <span className="ml-1 px-1.5 py-0.2 bg-purple-700 text-white text-[9px] rounded font-bold">({grp.activeDays} Days)</span>}
+                                        </span>
+                                        <span>•</span>
+                                        <span className="text-red-700 font-bold flex items-center gap-1">
+                                          ⏰ <strong>Due:</strong>{' '}
+                                          {grp.dueDate ? formatDisplayDateSafe(grp.dueDate) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}
+                                        </span>
+                                      </div>
+
+                                      <div className="text-[10px] text-neutral-600 flex flex-wrap items-center justify-between">
+                                        <div>
+                                          <span>{grp.noOfSeats || 1} seats</span>
+                                          <span className="mx-1.5 text-neutral-300">|</span>
+                                          <span>Subtotal: <strong className="font-mono">₹{Number(grp.amount || 0).toLocaleString('en-IN')}</strong></span>
+                                          <span className="mx-1 text-neutral-300">+</span>
+                                          <span>GST: <strong className="font-mono">₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}</strong></span>
+                                        </div>
+                                        {grp.prorateFormula && (
+                                          <span className="text-[9px] text-amber-900 bg-amber-50 px-1.5 py-0.5 border border-amber-200 rounded font-mono">
+                                            {grp.prorateFormula}
+                                          </span>
+                                        )}
                                       </div>
                                       {grp.attachedInvoice?.fileUrl ? (
                                         <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 p-2 rounded text-emerald-900">
@@ -4343,13 +4531,12 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                       }
                                     }
                                   }}
-                                  className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
-                                    isDraggingPdf
+                                  className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${isDraggingPdf
                                       ? 'border-[#006064] bg-cyan-50 scale-[1.01]'
                                       : isReplacing
-                                      ? 'border-red-300 bg-red-50/40 hover:bg-red-50/80 hover:border-red-500'
-                                      : 'border-cyan-300 bg-cyan-50/30 hover:bg-cyan-50 hover:border-cyan-600'
-                                  }`}
+                                        ? 'border-red-300 bg-red-50/40 hover:bg-red-50/80 hover:border-red-500'
+                                        : 'border-cyan-300 bg-cyan-50/30 hover:bg-cyan-50 hover:border-cyan-600'
+                                    }`}
                                 >
                                   <input
                                     type="file"
@@ -4361,9 +4548,8 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                       }
                                     }}
                                   />
-                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2.5 shadow-2xs ${
-                                    isReplacing ? 'bg-red-100 text-red-700' : 'bg-cyan-100 text-cyan-800'
-                                  }`}>
+                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2.5 shadow-2xs ${isReplacing ? 'bg-red-100 text-red-700' : 'bg-cyan-100 text-cyan-800'
+                                    }`}>
                                     <Upload size={22} />
                                   </div>
                                   <div className="font-extrabold text-sm text-neutral-900">
@@ -4451,13 +4637,12 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                 type="button"
                                 onClick={handleUploadInvoicePdf}
                                 disabled={uploadingPdf || !selectedInvoiceFile}
-                                className={`px-6 py-2.5 font-bold uppercase tracking-wider text-white text-xs rounded shadow-xs flex items-center gap-2 transition-all ${
-                                  uploadingPdf || !selectedInvoiceFile
+                                className={`px-6 py-2.5 font-bold uppercase tracking-wider text-white text-xs rounded shadow-xs flex items-center gap-2 transition-all ${uploadingPdf || !selectedInvoiceFile
                                     ? 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
                                     : isReplacing
-                                    ? 'bg-red-600 hover:bg-red-700 cursor-pointer'
-                                    : 'bg-[var(--primary)] hover:opacity-90 cursor-pointer'
-                                }`}
+                                      ? 'bg-red-600 hover:bg-red-700 cursor-pointer'
+                                      : 'bg-[var(--primary)] hover:opacity-90 cursor-pointer'
+                                  }`}
                               >
                                 {uploadingPdf ? (
                                   <>
@@ -4666,9 +4851,9 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                           {grp.name}
                                         </div>
                                         <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-purple-900 mt-1">
-                                          <span>📅 <strong>Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} → {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
+                                          <span>📅 <strong>Period:</strong> {formatDisplayDateSafe(grp.startDate) || 'Month Start'} → {formatDisplayDateSafe(grp.endDate) || 'Month End'}</span>
                                           <span>•</span>
-                                          <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
+                                          <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? formatDisplayDateSafe(grp.dueDate) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
                                         </div>
                                         <div className="text-[10px] text-neutral-500 mt-0.5">
                                           {grp.noOfSeats} seats | Total: <strong className="text-teal-900 font-mono">₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}</strong>
@@ -4756,11 +4941,10 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                           type="button"
                           onClick={() => handleApproveFromReviewModal(entryToReviewInvoice)}
                           disabled={actionLoading || Boolean(entryToReviewInvoice.isDigitalSignRequired && !entryToReviewInvoice.digitallySignedPdfUrl)}
-                          className={`px-6 py-2.5 font-bold uppercase tracking-wider flex items-center gap-2 shadow-xs transition-all ${
-                            entryToReviewInvoice.isDigitalSignRequired && !entryToReviewInvoice.digitallySignedPdfUrl
+                          className={`px-6 py-2.5 font-bold uppercase tracking-wider flex items-center gap-2 shadow-xs transition-all ${entryToReviewInvoice.isDigitalSignRequired && !entryToReviewInvoice.digitallySignedPdfUrl
                               ? 'bg-neutral-200 text-neutral-500 cursor-not-allowed border border-neutral-300'
                               : 'bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer'
-                          }`}
+                            }`}
                           title={
                             entryToReviewInvoice.isDigitalSignRequired && !entryToReviewInvoice.digitallySignedPdfUrl
                               ? 'Digital signature is strictly mandatory for this client before approval'
@@ -4951,37 +5135,72 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                         );
                       })()}
 
+                      {/* Sub-Invoice Splits Summary if Split */}
+                      {sendToAccountantInvoice.splitsJson && (() => {
+                        let splits: InvoiceSplitGroup[] = [];
+                        try { splits = JSON.parse(sendToAccountantInvoice.splitsJson || '[]'); } catch { }
+                        if (splits.length > 1) {
+                          return (
+                            <div className="p-3 bg-purple-50 border border-purple-200 text-purple-900 rounded-xs space-y-2">
+                              <div className="font-bold text-[11px] flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                  <Scissors size={13} className="text-purple-700" />
+                                  <span>Split Active: {splits.length} Sub-Invoices will be sent to the accountant</span>
+                                </span>
+                                <span className="font-mono text-teal-800 font-extrabold text-xs">
+                                  Total: ₹{Number(sendToAccountantInvoice.totalAmount || 0).toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10.5px]">
+                                {splits.map((s, idx) => (
+                                  <div key={idx} className="bg-white p-2 border border-purple-100 rounded shadow-2xs space-y-1">
+                                    <div className="flex items-center justify-between font-bold">
+                                      <span>#{idx + 1} {s.name}</span>
+                                      <span className="font-mono text-teal-800">₹{Number(s.totalAmount || 0).toLocaleString('en-IN')}</span>
+                                    </div>
+                                    <div className="text-[9.5px] text-purple-800 font-medium">
+                                      📅 {formatDisplayDateSafe(s.startDate) || 'Start'} → {formatDisplayDateSafe(s.endDate) || 'End'} {s.activeDays ? `(${s.activeDays}d)` : ''}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
                       {/* Complimentary Over-Usage Notice & Quick Link (Full-Time Clients Only) */}
                       {sendToAccountantInvoice.paymentDuration !== 'ONE_TIME' &&
                         sendToAccountantInvoice.productGroupKey !== 'ONE_TIME_SESSION' &&
                         sendToAccountantInvoice.clientMaster?.clientType !== 'ONE_TIME' &&
                         sendToAccountantInvoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' && (
-                        <div className="p-2.5 bg-teal-50 border border-teal-200 rounded-xs flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-[11px] text-teal-950">
-                            <Gift size={13} className="text-teal-700 shrink-0" />
-                            {hasComplimentaryOverusage(sendToAccountantInvoice) ? (
-                              <span>
-                                <strong>Over-Usage Billed:</strong> Extra Meeting Room/Printer charges included in total.
-                              </span>
-                            ) : (
-                              <span>
-                                <strong>Complimentary Quota:</strong> 2h Meeting Room &amp; 100 pages Print free.
-                              </span>
-                            )}
+                          <div className="p-2.5 bg-teal-50 border border-teal-200 rounded-xs flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-[11px] text-teal-950">
+                              <Gift size={13} className="text-teal-700 shrink-0" />
+                              {hasComplimentaryOverusage(sendToAccountantInvoice) ? (
+                                <span>
+                                  <strong>Over-Usage Billed:</strong> Extra Meeting Room/Printer charges included in total.
+                                </span>
+                              ) : (
+                                <span>
+                                  <strong>Complimentary Quota:</strong> 2h Meeting Room &amp; 100 pages Print free.
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const inv = sendToAccountantInvoice;
+                                setSendToAccountantInvoice(null);
+                                handleOpenComplimentaryModal(inv);
+                              }}
+                              className="text-[10px] font-bold uppercase tracking-wider text-teal-800 hover:text-teal-950 underline cursor-pointer"
+                            >
+                              {hasComplimentaryOverusage(sendToAccountantInvoice) ? 'Edit Over-Usage' : 'Log Over-Usage'}
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const inv = sendToAccountantInvoice;
-                              setSendToAccountantInvoice(null);
-                              handleOpenComplimentaryModal(inv);
-                            }}
-                            className="text-[10px] font-bold uppercase tracking-wider text-teal-800 hover:text-teal-950 underline cursor-pointer"
-                          >
-                            {hasComplimentaryOverusage(sendToAccountantInvoice) ? 'Edit Over-Usage' : 'Log Over-Usage'}
-                          </button>
-                        </div>
-                      )}
+                        )}
 
                       {/* Automated Digital Signature Status (Inherited from Client Master) */}
                       <div className="p-3.5 bg-neutral-50 border border-neutral-200 rounded-xs flex items-center justify-between gap-3">
@@ -5003,11 +5222,10 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                             </p>
                           </div>
                         </div>
-                        <span className={`px-2.5 py-1 text-[10px] font-black rounded uppercase tracking-wider shrink-0 ${
-                          sendToAccountantInvoice.isDigitalSignRequired
+                        <span className={`px-2.5 py-1 text-[10px] font-black rounded uppercase tracking-wider shrink-0 ${sendToAccountantInvoice.isDigitalSignRequired
                             ? 'bg-amber-100 text-amber-900 border border-amber-300'
                             : 'bg-neutral-200 text-neutral-700 border border-neutral-300'
-                        }`}>
+                          }`}>
                           {sendToAccountantInvoice.isDigitalSignRequired ? 'DSC REQUIRED' : 'STANDARD'}
                         </span>
                       </div>
@@ -5015,36 +5233,34 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                       {/* If Virtual Office or Broker Client: Select Recipient */}
                       {(sendToAccountantInvoice.clientMaster?.clientType === 'VIRTUAL_OFFICE' ||
                         Boolean(sendToAccountantInvoice.brokerName || sendToAccountantInvoice.clientMaster?.hasBrokerCommission || sendToAccountantInvoice.bookingId)) && (
-                        <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xs space-y-2">
-                          <label className="block font-bold text-[11px] uppercase tracking-wider text-purple-950">
-                            Select Invoice Recipient (Billed To):
-                          </label>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setSendRecipientChoice('CLIENT')}
-                              className={`p-2 border rounded-xs text-xs font-bold transition-all cursor-pointer ${
-                                sendRecipientChoice === 'CLIENT'
-                                  ? 'bg-[#006064] text-white border-[#006064]'
-                                  : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
-                              }`}
-                            >
-                              👤 Client Invoice
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSendRecipientChoice('BROKER')}
-                              className={`p-2 border rounded-xs text-xs font-bold transition-all cursor-pointer ${
-                                sendRecipientChoice === 'BROKER'
-                                  ? 'bg-purple-700 text-white border-purple-700'
-                                  : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
-                              }`}
-                            >
-                              🏢 Broker Invoice
-                            </button>
+                          <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xs space-y-2">
+                            <label className="block font-bold text-[11px] uppercase tracking-wider text-purple-950">
+                              Select Invoice Recipient (Billed To):
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setSendRecipientChoice('CLIENT')}
+                                className={`p-2 border rounded-xs text-xs font-bold transition-all cursor-pointer ${sendRecipientChoice === 'CLIENT'
+                                    ? 'bg-[#006064] text-white border-[#006064]'
+                                    : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
+                                  }`}
+                              >
+                                👤 Client Invoice
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSendRecipientChoice('BROKER')}
+                                className={`p-2 border rounded-xs text-xs font-bold transition-all cursor-pointer ${sendRecipientChoice === 'BROKER'
+                                    ? 'bg-purple-700 text-white border-purple-700'
+                                    : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
+                                  }`}
+                              >
+                                🏢 Broker Invoice
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
                       {/* Modal Actions */}
                       <div className="flex items-center justify-between pt-3 border-t border-neutral-200">
@@ -5158,6 +5374,121 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                           </div>
                         </div>
                       )}
+
+                      {/* Sub-Invoice Splits Breakdown (Prominent Top Card if Split) */}
+                      {entryToViewDetails.splitsJson && (() => {
+                        let splits: InvoiceSplitGroup[] = [];
+                        try { splits = JSON.parse(entryToViewDetails.splitsJson || '[]'); } catch { }
+                        if (splits.length > 1) {
+                          return (
+                            <div className="p-4 bg-purple-50/80 border-2 border-purple-300 space-y-3 rounded-xs">
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-200 pb-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 bg-purple-700 text-white rounded-xs">
+                                    <Scissors size={14} />
+                                  </div>
+                                  <div>
+                                    <div className="font-extrabold uppercase text-xs tracking-wider text-purple-950">
+                                      Split Invoice Active ({splits.length} Sub-Invoices)
+                                    </div>
+                                    <div className="text-[10.5px] text-purple-800">
+                                      Divided into {splits.length} separate Tally voucher entries with distinct usage periods and due dates.
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="font-mono font-black text-xs text-purple-950 bg-white px-3 py-1 border border-purple-300 rounded shadow-2xs">
+                                  Combined Total: ₹{Number(entryToViewDetails.totalAmount || 0).toLocaleString('en-IN')}
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {splits.map((grp, gIdx) => (
+                                  <div key={grp.id || gIdx} className="bg-white p-3.5 border border-purple-200 rounded shadow-2xs space-y-2">
+                                    <div className="flex items-center justify-between border-b border-purple-100 pb-2">
+                                      <span className="font-extrabold text-xs text-[#1B1C1C] flex items-center gap-1.5">
+                                        <span className="px-2 py-0.5 bg-purple-700 text-white text-[10px] rounded font-black">#{gIdx + 1}</span>
+                                        <span>{grp.name}</span>
+                                      </span>
+                                      <span className="font-mono font-black text-teal-800 text-sm">
+                                        ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
+                                      </span>
+                                    </div>
+
+                                    {/* Usage Period & Due Date */}
+                                    <div className="bg-purple-50/90 p-2.5 border border-purple-200 rounded space-y-1 text-[11px]">
+                                      <div className="text-purple-950 font-bold flex items-center gap-1.5">
+                                        <Calendar size={13} className="text-purple-700 shrink-0" />
+                                        <span>Usage:</span>
+                                        <span className="font-extrabold underline decoration-purple-400 bg-white px-1.5 py-0.2 rounded border border-purple-200">
+                                          {formatDisplayDateSafe(grp.startDate) || 'Month Start'} → {formatDisplayDateSafe(grp.endDate) || 'Month End'}
+                                        </span>
+                                        {grp.activeDays && (
+                                          <span className="px-1.5 py-0.2 bg-purple-700 text-white text-[9.5px] rounded font-bold">
+                                            ({grp.activeDays} Days)
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-red-700 font-bold flex items-center gap-1.5 pt-0.5">
+                                        <Clock size={12} className="text-red-600 shrink-0" />
+                                        <span>Due:</span>
+                                        <span className="bg-white px-1.5 py-0.2 rounded border border-red-200 font-mono text-red-950">
+                                          {grp.dueDate ? formatDisplayDateSafe(grp.dueDate) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Breakdown */}
+                                    <div className="grid grid-cols-3 gap-2 text-[10.5px] bg-neutral-50 p-2 border border-neutral-200 rounded">
+                                      <div>
+                                        <span className="text-neutral-500 text-[9.5px] block font-semibold">Seats</span>
+                                        <span className="font-bold text-neutral-900">{grp.noOfSeats || 1}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-neutral-500 text-[9.5px] block font-semibold">Subtotal</span>
+                                        <span className="font-bold font-mono text-neutral-900">₹{Number(grp.amount || 0).toLocaleString('en-IN')}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-neutral-500 text-[9.5px] block font-semibold">GST (18%)</span>
+                                        <span className="font-bold font-mono text-neutral-900">₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}</span>
+                                      </div>
+                                    </div>
+
+                                    {grp.prorateFormula && (
+                                      <div className="text-[10px] text-amber-900 bg-amber-50 p-1.5 border border-amber-200 rounded font-mono font-medium">
+                                        {grp.prorateFormula}
+                                      </div>
+                                    )}
+
+                                    {/* Attached Tally PDF */}
+                                    {grp.attachedInvoice?.fileName ? (
+                                      <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[10px]">
+                                        <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                          <FileCheck size={12} /> {grp.attachedInvoice.fileName}
+                                        </span>
+                                        {grp.attachedInvoice?.fileUrl && (
+                                          <a
+                                            href={grp.attachedInvoice.fileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-2 py-0.5 bg-purple-700 text-white font-bold rounded text-[9.5px] hover:bg-purple-800"
+                                          >
+                                            View Tally PDF
+                                          </a>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="text-[10px] text-amber-800 font-medium italic pt-1 border-t border-neutral-100">
+                                        ⚠️ Tally PDF pending upload by accountant
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
 
                       {/* SECTION 1: Cabin, Seating & Line-Item Products Breakdown */}
                       <div className="space-y-3">
@@ -5356,72 +5687,6 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                           </div>
                         </div>
                       )}
-
-                      {/* SECTION 1.8: Sub-Invoice Splits Breakdown (if split) */}
-                      {entryToViewDetails.splitsJson && (() => {
-                        let splits: InvoiceSplitGroup[] = [];
-                        try { splits = JSON.parse(entryToViewDetails.splitsJson || '[]'); } catch { }
-                        if (splits.length > 1) {
-                          return (
-                            <div className="p-4 bg-purple-50/60 border border-purple-200 space-y-3 rounded-xs">
-                              <div className="text-[11px] font-bold uppercase tracking-wider text-purple-900 flex items-center justify-between">
-                                <div className="flex items-center gap-1.5">
-                                  <Scissors size={14} className="text-purple-700" />
-                                  <span>Sub-Invoice Splits Breakdown ({splits.length} Groups)</span>
-                                </div>
-                                <span className="text-[10px] font-mono font-bold bg-purple-100 text-purple-800 px-2 py-0.5 border border-purple-300">
-                                  Product-Wise Split Active
-                                </span>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {splits.map((grp, gIdx) => (
-                                  <div key={grp.id} className="bg-white p-3 border border-purple-200 rounded-sm space-y-2">
-                                    <div className="flex items-center justify-between border-b border-purple-100 pb-1.5">
-                                      <span className="font-extrabold text-xs text-[#1B1C1C] flex items-center gap-1">
-                                        <span className="px-1.5 py-0.2 bg-purple-700 text-white text-[9px] rounded">#{gIdx + 1}</span> {grp.name}
-                                      </span>
-                                      <span className="font-mono font-bold text-teal-800 text-xs">
-                                        ₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}
-                                      </span>
-                                    </div>
-
-                                    <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-purple-900 bg-purple-50 p-1.5 border border-purple-100 rounded">
-                                      <span>📅 <strong>Period:</strong> {grp.startDate ? new Date(grp.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month Start'} → {grp.endDate ? new Date(grp.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Month End'}</span>
-                                      <span>•</span>
-                                      <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? new Date(grp.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
-                                    </div>
-
-                                    <div className="grid grid-cols-3 gap-1 text-[10px] text-neutral-600">
-                                      <div><span className="text-neutral-400 block">Seats:</span> <strong>{grp.noOfSeats}</strong></div>
-                                      <div><span className="text-neutral-400 block">Subtotal:</span> <strong>₹{Number(grp.amount || 0).toLocaleString('en-IN')}</strong></div>
-                                      <div><span className="text-neutral-400 block">GST:</span> <strong>₹{Number(grp.gstAmount || 0).toLocaleString('en-IN')}</strong></div>
-                                    </div>
-                                    {grp.attachedInvoice?.fileName && (
-                                      <div className="pt-1 border-t border-neutral-100 flex items-center justify-between text-[9px]">
-                                        <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                          <FileCheck size={10} /> {grp.attachedInvoice.fileName}
-                                        </span>
-                                        {grp.attachedInvoice?.fileUrl && (
-                                          <a
-                                            href={grp.attachedInvoice.fileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-purple-800 font-bold underline"
-                                          >
-                                            View PDF
-                                          </a>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
 
                       {/* SECTION 2: Head Office & GST Details */}
                       <div className="space-y-2">
@@ -5685,11 +5950,10 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
 
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             {/* 1. PRORATE DAYS FEATURE */}
-                            <div className={`p-3 rounded-md border transition-all ${
-                              editItems.some(it => it.isProrated || it.billingType === 'PRORATED') || showEditProratePanel
+                            <div className={`p-3 rounded-md border transition-all ${editItems.some(it => it.isProrated || it.billingType === 'PRORATED') || showEditProratePanel
                                 ? 'bg-amber-950/40 border-amber-400/80 ring-1 ring-amber-400/30'
                                 : 'bg-white/5 border-white/15 hover:bg-white/10'
-                            }`}>
+                              }`}>
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2">
                                   <div className="p-1.5 bg-amber-500/20 text-amber-300 rounded border border-amber-500/30">
@@ -5714,11 +5978,10 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                 <button
                                   type="button"
                                   onClick={() => setShowEditProratePanel(!showEditProratePanel)}
-                                  className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors cursor-pointer ${
-                                    showEditProratePanel
+                                  className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded flex items-center gap-1 transition-colors cursor-pointer ${showEditProratePanel
                                       ? 'bg-amber-400 text-amber-950 hover:bg-amber-300 font-extrabold'
                                       : 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 border border-amber-400/40'
-                                  }`}
+                                    }`}
                                 >
                                   <CalendarDays size={11} />
                                   <span>{showEditProratePanel ? 'Hide Controls' : 'Configure Proration'}</span>
@@ -5737,8 +6000,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                             </div>
 
                             {/* 2. ADJUST SUB-INVOICES FEATURE */}
-                            <div className={`p-3 rounded-md border transition-all ${
-                              (() => {
+                            <div className={`p-3 rounded-md border transition-all ${(() => {
                                 try {
                                   const s = JSON.parse(entryToEditInvoice.splitsJson || '[]');
                                   return Array.isArray(s) && s.length > 1;
@@ -5746,7 +6008,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                               })()
                                 ? 'bg-purple-950/40 border-purple-400/80 ring-1 ring-purple-400/30'
                                 : 'bg-white/5 border-white/15 hover:bg-white/10'
-                            }`}>
+                              }`}>
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2">
                                   <div className="p-1.5 bg-purple-500/20 text-purple-300 rounded border border-purple-500/30">
@@ -5763,7 +6025,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                           if (Array.isArray(s) && s.length > 1) {
                                             return `Split Active (${s.length} Sub-Invoices)`;
                                           }
-                                        } catch {}
+                                        } catch { }
                                         return 'Single Master Invoice';
                                       })()}
                                     </div>
@@ -5806,18 +6068,17 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                         </span>
                                       );
                                     }
-                                  } catch {}
+                                  } catch { }
                                   return null;
                                 })()}
                               </div>
                             </div>
 
                             {/* 3. COMPLIMENTARY USAGE FEATURE */}
-                            <div className={`p-3 rounded-md border transition-all ${
-                              hasComplimentaryOverusage(entryToEditInvoice)
+                            <div className={`p-3 rounded-md border transition-all ${hasComplimentaryOverusage(entryToEditInvoice)
                                 ? 'bg-teal-950/40 border-teal-400/80 ring-1 ring-teal-400/30'
                                 : 'bg-white/5 border-white/15 hover:bg-white/10'
-                            }`}>
+                              }`}>
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2">
                                   <div className="p-1.5 bg-teal-500/20 text-teal-300 rounded border border-teal-500/30">
@@ -5840,9 +6101,9 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                               </p>
                               <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between">
                                 {entryToEditInvoice.paymentDuration !== 'ONE_TIME' &&
-                                entryToEditInvoice.productGroupKey !== 'ONE_TIME_SESSION' &&
-                                entryToEditInvoice.clientMaster?.clientType !== 'ONE_TIME' &&
-                                entryToEditInvoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' ? (
+                                  entryToEditInvoice.productGroupKey !== 'ONE_TIME_SESSION' &&
+                                  entryToEditInvoice.clientMaster?.clientType !== 'ONE_TIME' &&
+                                  entryToEditInvoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' ? (
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -5929,7 +6190,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                 </div>
                               );
                             }
-                          } catch {}
+                          } catch { }
                           return null;
                         })()}
 
@@ -6810,7 +7071,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                         className={`px-2 py-0.5 text-[9px] font-bold rounded border cursor-pointer transition-colors ${curActiveDays === p.days
                                           ? 'bg-amber-600 text-white border-amber-600'
                                           : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100'
-                                        }`}
+                                          }`}
                                       >
                                         {p.label}
                                       </button>
@@ -7353,9 +7614,8 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                       <div className="overflow-y-auto flex-1 pr-1 space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {/* Meeting Room Card */}
-                          <div className={`p-4 border rounded transition-all ${
-                            compMeetingRoomEnabled ? 'bg-white border-teal-400 shadow-xs' : 'bg-neutral-50 border-neutral-200 opacity-60'
-                          }`}>
+                          <div className={`p-4 border rounded transition-all ${compMeetingRoomEnabled ? 'bg-white border-teal-400 shadow-xs' : 'bg-neutral-50 border-neutral-200 opacity-60'
+                            }`}>
                             <div className="flex items-center justify-between pb-2 border-b border-neutral-100 mb-3">
                               <div className="flex items-center gap-2 font-bold text-sm text-[#1B1C1C]">
                                 <Clock size={16} className="text-[#006064]" />
@@ -7393,11 +7653,10 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                 const extraMtgCharge = roundCurrency(extraMtgHours * compMeetingRoomExtraRate);
 
                                 return (
-                                  <div className={`p-2.5 rounded border text-[11px] space-y-1 ${
-                                    extraMtgHours > 0
+                                  <div className={`p-2.5 rounded border text-[11px] space-y-1 ${extraMtgHours > 0
                                       ? 'bg-amber-50 border-amber-300 text-amber-950'
                                       : 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                                  }`}>
+                                    }`}>
                                     <div className="flex items-center justify-between">
                                       <span>Free Quota:</span>
                                       <strong className="font-mono">{compMeetingRoomFreeQuota} hrs</strong>
@@ -7419,9 +7678,8 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                           </div>
 
                           {/* Printer Paper Copies Card */}
-                          <div className={`p-4 border rounded transition-all ${
-                            compPrinterPagesEnabled ? 'bg-white border-teal-400 shadow-xs' : 'bg-neutral-50 border-neutral-200 opacity-60'
-                          }`}>
+                          <div className={`p-4 border rounded transition-all ${compPrinterPagesEnabled ? 'bg-white border-teal-400 shadow-xs' : 'bg-neutral-50 border-neutral-200 opacity-60'
+                            }`}>
                             <div className="flex items-center justify-between pb-2 border-b border-neutral-100 mb-3">
                               <div className="flex items-center gap-2 font-bold text-sm text-[#1B1C1C]">
                                 <Printer size={16} className="text-[#006064]" />
@@ -7459,11 +7717,10 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                 const extraPrintCharge = roundCurrency(extraPrintPages * compPrinterPagesExtraRate);
 
                                 return (
-                                  <div className={`p-2.5 rounded border text-[11px] space-y-1 ${
-                                    extraPrintPages > 0
+                                  <div className={`p-2.5 rounded border text-[11px] space-y-1 ${extraPrintPages > 0
                                       ? 'bg-amber-50 border-amber-300 text-amber-950'
                                       : 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                                  }`}>
+                                    }`}>
                                     <div className="flex items-center justify-between">
                                       <span>Free Quota:</span>
                                       <strong className="font-mono">{compPrinterPagesFreeQuota} pages</strong>
@@ -7504,7 +7761,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                           let items: any[] = [];
                           try {
                             if (complimentaryModalInvoice.itemsJson) items = JSON.parse(complimentaryModalInvoice.itemsJson);
-                          } catch {}
+                          } catch { }
                           const baseItems = items.filter((it: any) => !it.isComplimentaryOverusage);
                           const baseRent = baseItems.length > 0
                             ? roundCurrency(baseItems.reduce((s, it) => s + (Number(it.amount) || 0), 0))
