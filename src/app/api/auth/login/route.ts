@@ -163,8 +163,23 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Login error:', error)
+    const rawMsg = String(error?.message || error || '')
+    let userMsg = 'Something went wrong. Please try again.'
+
+    if (
+      rawMsg.includes('PANIC') ||
+      rawMsg.includes('timer has gone away') ||
+      rawMsg.includes('PrismaClientRustPanicError') ||
+      rawMsg.includes('Engine is not running') ||
+      rawMsg.includes('Can\'t reach database server')
+    ) {
+      userMsg = 'Database connection temporarily interrupted. Please refresh or try again in a few moments.'
+    } else if (error?.message && !rawMsg.includes('Prisma') && !rawMsg.includes('invocation:')) {
+      userMsg = error.message
+    }
+
     return NextResponse.json(
-      { error: error?.message || 'Something went wrong' },
+      { error: userMsg },
       { status: 500 }
     )
   }

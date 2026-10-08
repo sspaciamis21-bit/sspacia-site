@@ -145,7 +145,14 @@ export default function LoginClient() {
         body: JSON.stringify({ username, password, rememberMe }),
       });
 
-      const data = await response.json();
+      let data: any = {};
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        await response.text();
+        throw new Error('Server temporarily unavailable. Please try again.');
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Login failed');

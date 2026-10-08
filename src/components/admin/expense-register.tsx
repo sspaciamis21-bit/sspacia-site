@@ -2599,7 +2599,15 @@ export function ExpenseRegister({
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        await res.text();
+        throw new Error("Server temporarily unavailable. Please try again.");
+      }
+
       if (!res.ok) throw new Error(data.error || "Failed to save expense");
 
       toast.success(

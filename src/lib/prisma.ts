@@ -22,21 +22,65 @@ function getDatabaseUrl(): string {
     }
   }
 
-  // Ensure connection pool and timeout parameters are present to prevent Tokio runtime panics
-  if (!dbUrl.includes('connection_limit')) {
-    const sep = dbUrl.includes('?') ? '&' : '?';
-    dbUrl = `${dbUrl}${sep}connection_limit=10&pool_timeout=30&connect_timeout=20`;
-  }
+  // Normalize connection pool and timeout parameters for Hostinger MySQL stability
+  const baseUrl = dbUrl.split('?')[0];
+  const queryStr = dbUrl.includes('?') ? dbUrl.split('?')[1] : '';
+  const searchParams = new URLSearchParams(queryStr);
+  searchParams.set('connection_limit', '5');
+  searchParams.set('pool_timeout', '20');
+  searchParams.set('connect_timeout', '15');
+  searchParams.set('socket_timeout', '30');
 
-  return dbUrl;
+  return `${baseUrl}?${searchParams.toString()}`;
+}
+
+let keepAliveTimer: NodeJS.Timeout | null = null;
+let isExiting = false;
+
+function ensureKeepAlive() {
+  if (keepAliveTimer || typeof setInterval !== 'function') return;
+  // Send a lightweight ping every 40s to keep MySQL socket active and prevent Hostinger idle wait_timeout drops
+  keepAliveTimer = setInterval(async () => {
+    try {
+      const client = globalForPrisma.prisma;
+      if (client) {
+        await (client as any).$queryRawUnsafe('SELECT 1');
+      }
+    } catch (err: any) {
+      if (isPrismaPanic(err)) {
+        handleFatalPrismaPanic(err);
+      }
+    }
+  }, 40000);
+
+  if (keepAliveTimer.unref) {
+    keepAliveTimer.unref();
+  }
+}
+
+function handleFatalPrismaPanic(err: any) {
+  console.error('[Prisma Fatal Engine Panic] Non-recoverable Query Engine panic detected:', err);
+  if (isExiting) return;
+  isExiting = true;
+
+  // When the Rust Query Engine panics (e.g. "timer has gone away"), the native N-API binary
+  // in the current Node.js process is fatally corrupted. In production under PM2 or Docker,
+  // exiting immediately triggers a clean sub-second restart, restoring site health instantly.
+  if (process.env.NODE_ENV === 'production' && typeof process.exit === 'function') {
+    setTimeout(() => {
+      process.exit(1);
+    }, 150);
+  }
 }
 
 function createPrismaClient(): PrismaClient {
   const url = getDatabaseUrl();
-  return new PrismaClient({
+  const client = new PrismaClient({
     datasources: { db: { url } },
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
+  ensureKeepAlive();
+  return client;
 }
 
 function isPrismaPanic(err: any): boolean {
@@ -106,7 +150,14 @@ const prisma = new Proxy({} as PrismaClient, {
         } catch (err: any) {
           if (isPrismaPanic(err)) {
             const fresh = resetPrisma();
-            return await (fresh as any)[prop](...args);
+            try {
+              return await (fresh as any)[prop](...args);
+            } catch (retryErr: any) {
+              if (isPrismaPanic(retryErr)) {
+                handleFatalPrismaPanic(retryErr);
+              }
+              throw retryErr;
+            }
           }
           throw err;
         }
@@ -125,7 +176,14 @@ const prisma = new Proxy({} as PrismaClient, {
               } catch (err: any) {
                 if (isPrismaPanic(err)) {
                   const fresh = resetPrisma();
-                  return await ((fresh as any)[prop] as any)[modelProp](...args);
+                  try {
+                    return await ((fresh as any)[prop] as any)[modelProp](...args);
+                  } catch (retryErr: any) {
+                    if (isPrismaPanic(retryErr)) {
+                      handleFatalPrismaPanic(retryErr);
+                    }
+                    throw retryErr;
+                  }
                 }
                 throw err;
               }
