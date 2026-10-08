@@ -2231,11 +2231,92 @@ export default function AdminInvoicesWorkflowPage() {
       const attachJson = await attachRes.json();
       if (attachJson.success) {
         toast.success(`PDF attached for ${splits[groupIndex].name}!`);
-        setEntryToAttachInvoice({
+        const isApproved = entryToAttachInvoice.status === 'APPROVED';
+        const updatedEntry: any = {
           ...entryToAttachInvoice,
           splitsJson: JSON.stringify(splits),
-          status: 'INVOICE_ATTACHED',
-        });
+          status: isApproved ? 'APPROVED' : 'INVOICE_ATTACHED',
+          attachedInvoice: splits[0]?.attachedInvoice ? {
+            ...(entryToAttachInvoice.attachedInvoice || {}),
+            ...splits[0].attachedInvoice,
+          } : entryToAttachInvoice.attachedInvoice,
+        };
+        setEntryToAttachInvoice(updatedEntry);
+        if (entryToViewDetails && entryToViewDetails.id === entryToAttachInvoice.id) {
+          setEntryToViewDetails(updatedEntry);
+        }
+        fetchData();
+      } else {
+        toast.error(attachJson.error || 'Failed to update invoice split attachment');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error uploading split PDF');
+    } finally {
+      setSplitUploadingGroupIndex(null);
+    }
+  };
+
+  const handleUploadSplitPdfDirect = async (targetInvoice: InvoiceRecord, groupIndex: number, file: File) => {
+    let splits: InvoiceSplitGroup[] = [];
+    try {
+      splits = JSON.parse(targetInvoice.splitsJson || '[]');
+    } catch { }
+
+    if (!splits[groupIndex]) return;
+
+    setSplitUploadingGroupIndex(groupIndex);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadRes = await fetch('/api/admin/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+      const uploadJson = await uploadRes.json();
+      if (!uploadJson.success) throw new Error(uploadJson.error || 'PDF upload failed');
+
+      const { fileUrl, fileName, fileSize } = uploadJson.data;
+
+      splits[groupIndex].attachedInvoice = {
+        fileName,
+        fileUrl,
+        fileSize,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      const attachRes = await fetch('/api/admin/attached-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entryId: targetInvoice.id,
+          fileUrl: splits[0]?.attachedInvoice?.fileUrl || fileUrl,
+          fileName: splits[0]?.attachedInvoice?.fileName || fileName,
+          fileSize: splits[0]?.attachedInvoice?.fileSize || fileSize,
+          splitsJson: JSON.stringify(splits),
+        }),
+      });
+      const attachJson = await attachRes.json();
+      if (attachJson.success) {
+        toast.success(`Tally PDF for ${splits[groupIndex].name} updated successfully!`);
+        const isApproved = targetInvoice.status === 'APPROVED';
+        const updatedInvoice: any = {
+          ...targetInvoice,
+          splitsJson: JSON.stringify(splits),
+          attachedInvoice: splits[0]?.attachedInvoice ? {
+            ...(targetInvoice.attachedInvoice || {}),
+            ...splits[0].attachedInvoice,
+          } : targetInvoice.attachedInvoice,
+          status: isApproved ? 'APPROVED' : targetInvoice.status,
+          digitallySignedPdfUrl: null,
+          digitallySignedPdfName: null,
+        };
+        if (entryToViewDetails && entryToViewDetails.id === targetInvoice.id) {
+          setEntryToViewDetails(updatedInvoice);
+        }
+        if (entryToAttachInvoice && entryToAttachInvoice.id === targetInvoice.id) {
+          setEntryToAttachInvoice(updatedInvoice);
+        }
         fetchData();
       } else {
         toast.error(attachJson.error || 'Failed to update invoice split attachment');
@@ -5094,7 +5175,7 @@ export default function AdminInvoicesWorkflowPage() {
                                 </div>
                                 <div className="space-y-3">
                                   {splits.map((grp, idx) => (
-                                    <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm space-y-2">
+                                    <div key={grp.id || `split-${idx}`} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm space-y-2">
                                       <div className="flex items-center justify-between">
                                         <span className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1.5">
                                           <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span>
@@ -6214,24 +6295,77 @@ export default function AdminInvoicesWorkflowPage() {
 
                                     {/* Attached Tally PDF */}
                                     {grp.attachedInvoice?.fileName ? (
-                                      <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[10px]">
-                                        <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                          <FileCheck size={12} /> {grp.attachedInvoice.fileName}
+                                      <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[10px] flex-wrap gap-1.5">
+                                        <span className="text-emerald-700 font-bold flex items-center gap-1 min-w-0">
+                                          <FileCheck size={12} className="shrink-0" />
+                                          <span className="truncate max-w-[150px]">{grp.attachedInvoice.fileName}</span>
                                         </span>
-                                        {grp.attachedInvoice?.fileUrl && (
-                                          <a
-                                            href={grp.attachedInvoice.fileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="px-2 py-0.5 bg-purple-700 text-white font-bold rounded text-[9.5px] hover:bg-purple-800"
-                                          >
-                                            View Tally PDF
-                                          </a>
-                                        )}
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          {grp.attachedInvoice?.fileUrl && (
+                                            <a
+                                              href={grp.attachedInvoice.fileUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="px-2 py-0.5 bg-purple-700 text-white font-bold rounded text-[9.5px] hover:bg-purple-800 transition-colors shadow-2xs"
+                                            >
+                                              View Tally PDF
+                                            </a>
+                                          )}
+                                          {isAdmin && (
+                                            <label className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded text-[9.5px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs" title="Super Admin: Replace Tally PDF for this sub-invoice">
+                                              {splitUploadingGroupIndex === gIdx ? (
+                                                <>
+                                                  <Loader2 size={10} className="animate-spin" /> Uploading...
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Paperclip size={10} /> Change Tally PDF
+                                                </>
+                                              )}
+                                              <input
+                                                type="file"
+                                                accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg"
+                                                className="hidden"
+                                                disabled={splitUploadingGroupIndex !== null}
+                                                onChange={(e) => {
+                                                  if (e.target.files && e.target.files[0]) {
+                                                    handleUploadSplitPdfDirect(entryToViewDetails, gIdx, e.target.files[0]);
+                                                  }
+                                                }}
+                                              />
+                                            </label>
+                                          )}
+                                        </div>
                                       </div>
                                     ) : (
-                                      <div className="text-[10px] text-amber-800 font-medium italic pt-1 border-t border-neutral-100">
-                                        ⚠️ Tally PDF pending upload by accountant
+                                      <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[10px] flex-wrap gap-1.5">
+                                        <span className="text-amber-800 font-medium italic">
+                                          ⚠️ Tally PDF pending upload
+                                        </span>
+                                        {isAdmin && (
+                                          <label className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded text-[9.5px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs" title="Super Admin: Attach Tally PDF for this sub-invoice">
+                                            {splitUploadingGroupIndex === gIdx ? (
+                                              <>
+                                                <Loader2 size={10} className="animate-spin" /> Uploading...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Paperclip size={10} /> Attach Tally PDF
+                                              </>
+                                            )}
+                                            <input
+                                              type="file"
+                                              accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg"
+                                              className="hidden"
+                                              disabled={splitUploadingGroupIndex !== null}
+                                              onChange={(e) => {
+                                                if (e.target.files && e.target.files[0]) {
+                                                  handleUploadSplitPdfDirect(entryToViewDetails, gIdx, e.target.files[0]);
+                                                }
+                                              }}
+                                            />
+                                          </label>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -6592,61 +6726,153 @@ export default function AdminInvoicesWorkflowPage() {
 
                       {/* SECTION 6: Attached Tally PDF Invoice & Digitally Signed PDF */}
                       <div className="space-y-2">
-                        {entryToViewDetails.attachedInvoice ? (
-                          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between flex-wrap gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Paperclip className="text-emerald-700 h-5 w-5 shrink-0" />
-                              <div className="min-w-0">
-                                <span className="font-bold text-emerald-900">Attached Tally Invoice PDF: </span>
-                                <span className="text-emerald-800 break-all">{entryToViewDetails.attachedInvoice.fileName}</span>
+                        {(() => {
+                          let splits: any[] = [];
+                          try {
+                            if (entryToViewDetails.splitsJson) {
+                              splits = JSON.parse(entryToViewDetails.splitsJson);
+                            }
+                          } catch {}
+                          const isSplit = Array.isArray(splits) && splits.length > 1;
+
+                          if (isSplit) {
+                            return (
+                              <div className="p-3.5 bg-purple-50/80 border border-purple-200 text-xs space-y-2.5 rounded">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Scissors className="text-purple-700 h-5 w-5 shrink-0" />
+                                    <div>
+                                      <span className="font-bold text-purple-950">Split Invoice Tally PDFs ({splits.length} Sub-Invoices):</span>
+                                      <span className="text-purple-800 text-[11px] block">
+                                        Each sub-invoice has its own Tally PDF attached.
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {isAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEntryToAttachInvoice(entryToViewDetails);
+                                        setSelectedInvoiceFile(null);
+                                      }}
+                                      className="px-3.5 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 cursor-pointer shadow-xs transition-colors rounded"
+                                      title="Super Admin: Manage and change all sub-invoice PDFs"
+                                    >
+                                      <Paperclip size={12} /> Manage Split PDFs
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                  {splits.map((grp: any, gIdx: number) => (
+                                    <div key={gIdx} className="bg-white p-2.5 border border-purple-200 rounded flex items-center justify-between gap-2 shadow-2xs">
+                                      <div className="min-w-0">
+                                        <div className="font-bold text-[#1B1C1C] truncate text-[11px]">
+                                          #{gIdx + 1} {grp.name}
+                                        </div>
+                                        <div className="text-[10px] text-neutral-600 truncate">
+                                          {grp.attachedInvoice?.fileName || '⚠️ No PDF attached'}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        {grp.attachedInvoice?.fileUrl && (
+                                          <a
+                                            href={grp.attachedInvoice.fileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-2 py-1 bg-purple-700 text-white font-bold text-[9.5px] rounded hover:bg-purple-800 transition-colors"
+                                          >
+                                            View
+                                          </a>
+                                        )}
+                                        {isAdmin && (
+                                          <label className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[9.5px] rounded flex items-center gap-1 cursor-pointer transition-colors shadow-2xs" title="Super Admin: Change Tally PDF for this sub-invoice">
+                                            {splitUploadingGroupIndex === gIdx ? (
+                                              <Loader2 size={10} className="animate-spin" />
+                                            ) : (
+                                              <Paperclip size={10} />
+                                            )}
+                                            Change
+                                            <input
+                                              type="file"
+                                              accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg"
+                                              className="hidden"
+                                              disabled={splitUploadingGroupIndex !== null}
+                                              onChange={(e) => {
+                                                if (e.target.files && e.target.files[0]) {
+                                                  handleUploadSplitPdfDirect(entryToViewDetails, gIdx, e.target.files[0]);
+                                                }
+                                              }}
+                                            />
+                                          </label>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <a
-                                href={entryToViewDetails.attachedInvoice.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3.5 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
-                              >
-                                <Eye size={12} /> View Tally PDF
-                              </a>
-                              {isAdmin && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEntryToAttachInvoice(entryToViewDetails);
-                                    setSelectedInvoiceFile(null);
-                                  }}
-                                  className="px-3.5 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
-                                  title="Super Admin: Replace or update Tally PDF for this invoice"
-                                >
-                                  <Paperclip size={12} /> Change Tally PDF
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ) : isAdmin ? (
-                          <div className="p-3.5 bg-amber-50 border border-amber-200 text-xs flex items-center justify-between flex-wrap gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Paperclip className="text-amber-700 h-5 w-5 shrink-0" />
-                              <div className="min-w-0">
-                                <span className="font-bold text-amber-900">Attached Tally Invoice PDF: </span>
-                                <span className="text-amber-700 italic">No Tally PDF attached yet</span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEntryToAttachInvoice(entryToViewDetails);
-                                setSelectedInvoiceFile(null);
-                              }}
-                              className="px-3.5 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
-                              title="Super Admin: Attach Tally PDF for this invoice"
-                            >
-                              <Paperclip size={12} /> Attach Tally PDF
-                            </button>
-                          </div>
-                        ) : null}
+                            );
+                          }
+
+                          return (
+                            <>
+                              {entryToViewDetails.attachedInvoice ? (
+                                <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between flex-wrap gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <Paperclip className="text-emerald-700 h-5 w-5 shrink-0" />
+                                    <div className="min-w-0">
+                                      <span className="font-bold text-emerald-900">Attached Tally Invoice PDF: </span>
+                                      <span className="text-emerald-800 break-all">{entryToViewDetails.attachedInvoice.fileName}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <a
+                                      href={entryToViewDetails.attachedInvoice.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-3.5 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
+                                    >
+                                      <Eye size={12} /> View Tally PDF
+                                    </a>
+                                    {isAdmin && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEntryToAttachInvoice(entryToViewDetails);
+                                          setSelectedInvoiceFile(null);
+                                        }}
+                                        className="px-3.5 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
+                                        title="Super Admin: Replace or update Tally PDF for this invoice"
+                                      >
+                                        <Paperclip size={12} /> Change Tally PDF
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : isAdmin ? (
+                                <div className="p-3.5 bg-amber-50 border border-amber-200 text-xs flex items-center justify-between flex-wrap gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <Paperclip className="text-amber-700 h-5 w-5 shrink-0" />
+                                    <div className="min-w-0">
+                                      <span className="font-bold text-amber-900">Attached Tally Invoice PDF: </span>
+                                      <span className="text-amber-700 italic">No Tally PDF attached yet</span>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEntryToAttachInvoice(entryToViewDetails);
+                                      setSelectedInvoiceFile(null);
+                                    }}
+                                    className="px-3.5 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
+                                    title="Super Admin: Attach Tally PDF for this invoice"
+                                  >
+                                    <Paperclip size={12} /> Attach Tally PDF
+                                  </button>
+                                </div>
+                              ) : null}
+                            </>
+                          );
+                        })()}
 
                         {entryToViewDetails.digitallySignedPdfUrl && (
                           <div className="p-3.5 bg-teal-50 border border-teal-300 text-xs flex items-center justify-between">
@@ -8870,10 +9096,21 @@ export default function AdminInvoicesWorkflowPage() {
                                 {entryToSendClientEmail.billingMonth}
                               </span>
                             </div>
-                            <div className="text-[11px] text-neutral-600 flex items-center gap-2">
+                            <div className="text-[11px] text-neutral-600 flex items-center gap-2 flex-wrap">
                               <span><strong>Centre:</strong> {clientEmailPreview?.centreName || 'SSPACIA Centre'}</span>
                               <span>&bull;</span>
-                              <span><strong>Attached PDF:</strong> {clientEmailPreview?.attachedPdfName || 'Tally Invoice PDF'}</span>
+                              {clientEmailPreview?.isSplitInvoice && clientEmailPreview.splitPdfs && clientEmailPreview.splitPdfs.length > 1 ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <strong>Attached PDFs ({clientEmailPreview.splitPdfs.length}):</strong>
+                                  {clientEmailPreview.splitPdfs.map((sp: any, sIdx: number) => (
+                                    <span key={sIdx} className="px-1.5 py-0.5 bg-purple-100 text-purple-900 border border-purple-200 rounded font-mono text-[10px] font-bold">
+                                      #{sIdx + 1}: {sp.fileName}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span><strong>Attached PDF:</strong> {clientEmailPreview?.attachedPdfName || 'Tally Invoice PDF'}</span>
+                              )}
                             </div>
                           </div>
 
@@ -8888,11 +9125,16 @@ export default function AdminInvoicesWorkflowPage() {
 
                             {clientEmailPreview?.contactPersons && clientEmailPreview.contactPersons.length > 0 ? (
                               <div className="space-y-2">
-                                {clientEmailPreview.contactPersons.map((contact: any) => {
-                                  const isSelected = selectedPrimaryContactId === contact.id;
+                                {clientEmailPreview.contactPersons.map((contact: any, idx: number) => {
+                                  const isSelected = contact.id
+                                    ? selectedPrimaryContactId === contact.id
+                                    : customPrimaryEmailInput === contact.email;
+                                  const contactKey = contact.id && String(contact.id).trim() !== ''
+                                    ? String(contact.id)
+                                    : `contact-${idx}-${contact.email || ''}`;
                                   return (
                                     <label
-                                      key={contact.id}
+                                      key={contactKey}
                                       onClick={() => handleSelectPrimaryContact(contact)}
                                       className={`flex items-start gap-3 p-2.5 border rounded cursor-pointer transition-all ${isSelected
                                         ? 'bg-teal-50/80 border-[#006064] ring-1 ring-[#006064]'
@@ -9002,10 +9244,20 @@ export default function AdminInvoicesWorkflowPage() {
                                 <p className="m-0">
                                   The due date for payment is <strong>{clientEmailPreview?.dueDay ? `${clientEmailPreview.dueDay}th` : '7th'}</strong> of this month.
                                 </p>
-                                <div className="pt-1">
-                                  <span className="inline-block px-3 py-1.5 bg-[#006064] text-white font-bold text-[11px] rounded">
-                                    📥 Download Tax Invoice ({clientEmailPreview?.attachedPdfName || 'PDF Attached'})
-                                  </span>
+                                <div className="pt-1 space-y-1.5">
+                                  {clientEmailPreview?.isSplitInvoice && clientEmailPreview.splitPdfs && clientEmailPreview.splitPdfs.length > 1 ? (
+                                    clientEmailPreview.splitPdfs.map((sp: any, sIdx: number) => (
+                                      <div key={sIdx}>
+                                        <span className="inline-block px-3 py-1.5 bg-[#006064] text-white font-bold text-[11px] rounded">
+                                          📥 Download {sp.name} ({sp.fileName})
+                                        </span>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <span className="inline-block px-3 py-1.5 bg-[#006064] text-white font-bold text-[11px] rounded">
+                                      📥 Download Tax Invoice ({clientEmailPreview?.attachedPdfName || 'PDF Attached'})
+                                    </span>
+                                  )}
                                 </div>
                                 <p className="m-0 text-neutral-500 text-[11px]">
                                   For any clarification, please feel free to reach us anytime.

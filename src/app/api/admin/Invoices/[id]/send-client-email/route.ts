@@ -63,6 +63,34 @@ export async function GET(
     const rawDueDay = invoice.paymentDueDay || invoice.clientMaster?.paymentDueDay || 7;
     const dueDayNumber = Math.min(31, Math.max(1, Number(rawDueDay) || 7));
 
+    let splits: any[] = [];
+    if (invoice.splitsJson) {
+      try {
+        const parsed = typeof invoice.splitsJson === 'string' ? JSON.parse(invoice.splitsJson) : invoice.splitsJson;
+        if (Array.isArray(parsed) && parsed.length > 1) {
+          splits = parsed;
+        }
+      } catch (err) {
+        console.warn(`[Invoice Email Preview] Error parsing splitsJson for #${invoiceRecordId}:`, err);
+      }
+    }
+
+    const isSplitInvoice = splits.length > 1;
+    const splitPdfs: { name: string; fileName: string; fileUrl?: string; totalAmount?: number }[] = [];
+
+    if (isSplitInvoice) {
+      splits.forEach((sp: any, idx: number) => {
+        const fileUrl = sp.attachedInvoice?.fileUrl || (idx === 0 ? (invoice.digitallySignedPdfUrl || invoice.attachedInvoice?.fileUrl) : null);
+        const fileName = sp.attachedInvoice?.fileName || (idx === 0 && invoice.attachedInvoice?.fileName ? invoice.attachedInvoice.fileName : `Invoice_${(invoice.companyName || 'Part').replace(/[^a-zA-Z0-9]/g, '_')}_Part${idx + 1}.pdf`);
+        splitPdfs.push({
+          name: sp.name || `Sub-Invoice #${idx + 1}`,
+          fileName: fileName,
+          fileUrl: fileUrl,
+          totalAmount: sp.totalAmount,
+        });
+      });
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -73,7 +101,11 @@ export async function GET(
         dueDay: dueDayNumber,
         contactPersons: contacts,
         hasPdfAttached: !!invoice.attachedInvoice?.fileUrl || !!invoice.splitsJson,
-        attachedPdfName: invoice.attachedInvoice?.fileName || 'Attached Invoice PDF',
+        attachedPdfName: isSplitInvoice && splitPdfs.length > 0
+          ? splitPdfs.map((s) => s.fileName).join(', ')
+          : (invoice.attachedInvoice?.fileName || 'Attached Invoice PDF'),
+        isSplitInvoice,
+        splitPdfs,
       },
     });
   } catch (error: any) {

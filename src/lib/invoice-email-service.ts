@@ -238,20 +238,24 @@ export async function sendInvoiceApprovalEmail(
 
     const isSplitInvoice = splits.length > 1;
 
-    // 6. Prepare PDF Attachments & Download URL
+    // 6. Prepare PDF Attachments & Download URLs
     const emailAttachments: { filename: string; content: Buffer; contentType: string }[] = [];
     let primaryDownloadUrl = 'https://sspacia.com';
+    const downloadLinks: { label: string; url: string; fileName: string }[] = [];
 
     if (isSplitInvoice) {
       for (let i = 0; i < splits.length; i++) {
         const sp = splits[i];
         const fileUrl = sp.attachedInvoice?.fileUrl || (i === 0 ? (invoice.digitallySignedPdfUrl || invoice.attachedInvoice?.fileUrl) : null);
         const fileName = sp.attachedInvoice?.fileName || `Invoice_${companyName.replace(/[^a-zA-Z0-9]/g, '_')}_Part${i + 1}.pdf`;
+        const label = sp.name || `Sub-Invoice #${i + 1}`;
 
         if (fileUrl) {
+          const resolvedUrl = fileUrl.startsWith('http') ? fileUrl : `https://sspacia.com${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
           if (i === 0) {
-            primaryDownloadUrl = fileUrl.startsWith('http') ? fileUrl : `https://sspacia.com${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+            primaryDownloadUrl = resolvedUrl;
           }
+          downloadLinks.push({ label, url: resolvedUrl, fileName });
           const buffer = await fetchPdfBuffer(fileUrl);
           if (buffer) {
             emailAttachments.push({
@@ -268,6 +272,7 @@ export async function sendInvoiceApprovalEmail(
         ? `Signed_Tax_Invoice_${companyName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
         : (invoice.attachedInvoice?.fileName || `Tax_Invoice_${companyName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
       primaryDownloadUrl = fileUrl.startsWith('http') ? fileUrl : `https://sspacia.com${fileUrl.startsWith('/') ? '' : '/'}${fileUrl}`;
+      downloadLinks.push({ label: 'Tax Invoice', url: primaryDownloadUrl, fileName });
       const buffer = await fetchPdfBuffer(fileUrl);
       if (buffer) {
         emailAttachments.push({
@@ -281,6 +286,10 @@ export async function sendInvoiceApprovalEmail(
     // 7. Clean Subject: Tax Invoice : {Company Name} - {Month and Year}
     const subject = `Tax Invoice : ${companyName} - ${billingMonth}`;
 
+    const downloadText = downloadLinks.length > 1
+      ? downloadLinks.map((dl) => `Download ${dl.label}: ${dl.url}`).join('\n')
+      : `Download Invoice: ${primaryDownloadUrl}`;
+
     // 8. Plain Text Body (Anti-Spam Fallback)
     const textBody = `
 Dear ${primaryName} Ji,
@@ -289,7 +298,7 @@ Please find your tax invoice for the month attached with this email.
 
 The due date for payment is ${dueDayStr} of this month.
 
-Download Invoice: ${primaryDownloadUrl}
+${downloadText}
 
 For any clarification, please feel free to reach us anytime.
 
@@ -338,15 +347,33 @@ Website: https://sspacia.com | Email: cm@sspacia.com | WhatsApp: +91 76003 93779
               <p style="margin: 0 0 22px 0; color: #334155; font-size: 14.5px; line-height: 1.5;">
                 The due date for payment is <strong style="color: #0f172a; font-weight: 700;">${dueDayStr}</strong> of this month.
               </p>
-              <!-- Download Button -->
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 26px 0;">
-                <tr>
-                  <td align="center" style="border-radius: 4px; background-color: #006064;">
-                    <a href="${primaryDownloadUrl}" target="_blank" style="display: inline-block; background-color: #006064; color: #ffffff !important; text-decoration: none; padding: 13px 28px; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; border-radius: 4px; border: 1px solid #006064;">
-                      📥 Download Tax Invoice
-                    </a>
-                  </td>
-                </tr>
+              <!-- Download Button(s) -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 26px 0; width: 100%;">
+                ${downloadLinks.length > 1 ? `
+                  <tr>
+                    <td align="center">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;">
+                        ${downloadLinks.map((dl) => `
+                          <tr>
+                            <td align="center" style="padding: 5px 0;">
+                              <a href="${dl.url}" target="_blank" style="display: inline-block; background-color: #006064; color: #ffffff !important; text-decoration: none; padding: 12px 26px; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; border-radius: 4px; border: 1px solid #006064; min-width: 250px; text-align: center;">
+                                📥 Download ${dl.label} (${dl.fileName})
+                              </a>
+                            </td>
+                          </tr>
+                        `).join('')}
+                      </table>
+                    </td>
+                  </tr>
+                ` : `
+                  <tr>
+                    <td align="center" style="border-radius: 4px; background-color: #006064;">
+                      <a href="${primaryDownloadUrl}" target="_blank" style="display: inline-block; background-color: #006064; color: #ffffff !important; text-decoration: none; padding: 13px 28px; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; border-radius: 4px; border: 1px solid #006064;">
+                        📥 Download Tax Invoice
+                      </a>
+                    </td>
+                  </tr>
+                `}
               </table>
               <p style="color: #64748b; font-size: 13px; margin: 0 0 24px 0;">
                 For any clarification, please feel free to reach us anytime.
