@@ -2794,10 +2794,20 @@ export default function AdminInvoicesWorkflowPage() {
 
       if (attachJson.success) {
         toast.success(
-          entryToAttachInvoice.attachedInvoice || entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS'
+          entryToAttachInvoice.status === 'APPROVED'
+            ? 'Tally Invoice PDF updated successfully by Super Admin!'
+            : entryToAttachInvoice.attachedInvoice || entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS'
             ? 'Revised Tally Invoice PDF replaced & sent to Community Manager!'
             : 'Tally Invoice PDF attached & sent to Community Manager!'
         );
+        if (entryToViewDetails && entryToViewDetails.id === entryToAttachInvoice.id) {
+          setEntryToViewDetails({
+            ...entryToViewDetails,
+            attachedInvoice: attachJson.data,
+            digitallySignedPdfUrl: null,
+            digitallySignedPdfName: null,
+          });
+        }
         setEntryToAttachInvoice(null);
         setSelectedInvoiceFile(null);
         fetchData();
@@ -4551,6 +4561,19 @@ export default function AdminInvoicesWorkflowPage() {
                                           <div className="text-[9px] text-emerald-700 font-medium text-center">
                                             ✓ DSC Applied (USB Token)
                                           </div>
+                                          {isAdmin && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setEntryToAttachInvoice(invoice);
+                                                setSelectedInvoiceFile(null);
+                                              }}
+                                              className="w-full mt-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[9.5px] font-bold rounded flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                                              title="Super Admin: Change or replace Tally PDF for this approved invoice"
+                                            >
+                                              <Paperclip size={10} /> Change Tally PDF
+                                            </button>
+                                          )}
                                         </div>
                                       ) : invoice.status === 'INVOICE_ATTACHED' ? (
                                         <button
@@ -4601,6 +4624,19 @@ export default function AdminInvoicesWorkflowPage() {
                                           <div className="text-[9px] text-emerald-700 font-medium text-center">
                                             ✓ DSC Applied (Optional Security)
                                           </div>
+                                          {isAdmin && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setEntryToAttachInvoice(invoice);
+                                                setSelectedInvoiceFile(null);
+                                              }}
+                                              className="w-full mt-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[9.5px] font-bold rounded flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                                              title="Super Admin: Change or replace Tally PDF for this approved invoice"
+                                            >
+                                              <Paperclip size={10} /> Change Tally PDF
+                                            </button>
+                                          )}
                                         </div>
                                       ) : invoice.status === 'INVOICE_ATTACHED' ? (
                                         <button
@@ -4671,6 +4707,19 @@ export default function AdminInvoicesWorkflowPage() {
                                       >
                                         <Eye size={10} /> View Entry
                                       </button>
+                                      {isAdmin && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEntryToAttachInvoice(invoice);
+                                            setSelectedInvoiceFile(null);
+                                          }}
+                                          className="w-full px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[9.5px] font-bold rounded flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                                          title="Super Admin: Change or replace Tally PDF for this approved invoice"
+                                        >
+                                          <Paperclip size={10} /> Change Tally PDF
+                                        </button>
+                                      )}
                                     </div>
                                   )}
                                 </>
@@ -4684,6 +4733,19 @@ export default function AdminInvoicesWorkflowPage() {
                                 >
                                   <Eye size={12} />
                                 </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEntryToAttachInvoice(invoice);
+                                      setSelectedInvoiceFile(null);
+                                    }}
+                                    className="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-50 rounded"
+                                    title="Super Admin: Change / Replace Tally PDF"
+                                  >
+                                    <Paperclip size={12} />
+                                  </button>
+                                )}
                                 {(canAccessCM || isAdmin) && invoice.status === 'APPROVED' && (
                                   <button
                                     onClick={() => handleOpenSendClientEmailModal(invoice)}
@@ -4737,10 +4799,12 @@ export default function AdminInvoicesWorkflowPage() {
               {/* MODAL 1: Accountant Attach Tally Invoice PDF */}
               <AnimatePresence>
                 {entryToAttachInvoice && (() => {
+                  const isApprovedOverride = entryToAttachInvoice.status === 'APPROVED';
                   const isReplacing = Boolean(
                     entryToAttachInvoice.attachedInvoice ||
                     entryToAttachInvoice.status === 'REJECTED_WITH_REMARKS' ||
-                    entryToAttachInvoice.status === 'INVOICE_ATTACHED'
+                    entryToAttachInvoice.status === 'INVOICE_ATTACHED' ||
+                    isApprovedOverride
                   );
                   const isSplit = Boolean(
                     entryToAttachInvoice.splitsJson && (() => {
@@ -4749,7 +4813,7 @@ export default function AdminInvoicesWorkflowPage() {
                   );
 
                   return (
-                    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
+                    <div className="fixed inset-0 z-[1000000] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xs overflow-y-auto font-sans">
                       <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -4757,24 +4821,30 @@ export default function AdminInvoicesWorkflowPage() {
                         className="bg-white border border-neutral-300 w-full max-w-2xl shadow-2xl text-xs my-auto max-h-[92vh] flex flex-col rounded-lg overflow-hidden"
                       >
                         {/* 1. FIXED HEADER */}
-                        <div className={`p-4 border-b flex items-center justify-between shrink-0 ${isReplacing ? 'bg-red-50/90 border-red-200' : 'bg-neutral-50 border-neutral-200'}`}>
+                        <div className={`p-4 border-b flex items-center justify-between shrink-0 ${isApprovedOverride ? 'bg-amber-50/90 border-amber-200' : isReplacing ? 'bg-red-50/90 border-red-200' : 'bg-neutral-50 border-neutral-200'}`}>
                           <div className="flex items-center gap-2.5">
-                            <div className={`p-2 rounded-full shrink-0 ${isReplacing ? 'bg-red-100 text-red-700' : 'bg-teal-100 text-teal-800'}`}>
-                              {isReplacing ? <RotateCcw size={18} /> : <Paperclip size={18} />}
+                            <div className={`p-2 rounded-full shrink-0 ${isApprovedOverride ? 'bg-amber-100 text-amber-800' : isReplacing ? 'bg-red-100 text-red-700' : 'bg-teal-100 text-teal-800'}`}>
+                              {isApprovedOverride ? <Paperclip size={18} /> : isReplacing ? <RotateCcw size={18} /> : <Paperclip size={18} />}
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <h3 className={`text-base font-bold ${isReplacing ? 'text-red-950' : 'text-[#1B1C1C]'}`}>
-                                  {isReplacing ? 'Replace Tally PDF Invoice' : 'Attach Tally PDF Invoice'}
+                                <h3 className={`text-base font-bold ${isApprovedOverride ? 'text-amber-950' : isReplacing ? 'text-red-950' : 'text-[#1B1C1C]'}`}>
+                                  {isApprovedOverride ? 'Super Admin: Change Tally Invoice PDF' : isReplacing ? 'Replace Tally PDF Invoice' : 'Attach Tally PDF Invoice'}
                                 </h3>
-                                {isReplacing && (
+                                {isApprovedOverride ? (
+                                  <span className="px-2 py-0.5 bg-amber-600 text-white font-extrabold text-[9px] uppercase tracking-wider rounded">
+                                    APPROVED INVOICE OVERRIDE
+                                  </span>
+                                ) : isReplacing ? (
                                   <span className="px-2 py-0.5 bg-red-600 text-white font-extrabold text-[9px] uppercase tracking-wider rounded">
                                     REVISION / REPLACEMENT
                                   </span>
-                                )}
+                                ) : null}
                               </div>
                               <p className="text-[11px] text-neutral-500">
-                                {isReplacing
+                                {isApprovedOverride
+                                  ? 'Super Admin override: Upload revised Tally PDF for this approved invoice. Invoice status remains Approved.'
+                                  : isReplacing
                                   ? 'Upload revised PDF generated from Tally to replace the previously attached invoice'
                                   : 'Attach official Tally PDF invoice to send to Community Manager'}
                               </p>
@@ -5240,6 +5310,8 @@ export default function AdminInvoicesWorkflowPage() {
                               <span className="text-emerald-700 font-bold flex items-center gap-1">
                                 <Check size={13} className="shrink-0" /> Ready: {selectedInvoiceFile.name}
                               </span>
+                            ) : isApprovedOverride ? (
+                              <span className="text-amber-700 font-bold">Select new Tally PDF above to update</span>
                             ) : isReplacing ? (
                               <span className="text-red-700 font-bold">Select replacement PDF above to enable button</span>
                             ) : (
@@ -5264,14 +5336,20 @@ export default function AdminInvoicesWorkflowPage() {
                                 disabled={uploadingPdf || !selectedInvoiceFile}
                                 className={`px-6 py-2.5 font-bold uppercase tracking-wider text-white text-xs rounded shadow-xs flex items-center gap-2 transition-all ${uploadingPdf || !selectedInvoiceFile
                                     ? 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
-                                    : isReplacing
-                                      ? 'bg-red-600 hover:bg-red-700 cursor-pointer'
-                                      : 'bg-[var(--primary)] hover:opacity-90 cursor-pointer'
+                                    : isApprovedOverride
+                                      ? 'bg-amber-600 hover:bg-amber-700 cursor-pointer'
+                                      : isReplacing
+                                        ? 'bg-red-600 hover:bg-red-700 cursor-pointer'
+                                        : 'bg-[var(--primary)] hover:opacity-90 cursor-pointer'
                                   }`}
                               >
                                 {uploadingPdf ? (
                                   <>
                                     <Loader2 size={14} className="animate-spin" /> Uploading PDF...
+                                  </>
+                                ) : isApprovedOverride ? (
+                                  <>
+                                    <RotateCcw size={14} /> Update Approved Tally PDF
                                   </>
                                 ) : isReplacing ? (
                                   <>
@@ -6514,25 +6592,61 @@ export default function AdminInvoicesWorkflowPage() {
 
                       {/* SECTION 6: Attached Tally PDF Invoice & Digitally Signed PDF */}
                       <div className="space-y-2">
-                        {entryToViewDetails.attachedInvoice && (
-                          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Paperclip className="text-emerald-700 h-5 w-5" />
-                              <div>
+                        {entryToViewDetails.attachedInvoice ? (
+                          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Paperclip className="text-emerald-700 h-5 w-5 shrink-0" />
+                              <div className="min-w-0">
                                 <span className="font-bold text-emerald-900">Attached Tally Invoice PDF: </span>
-                                <span className="text-emerald-800">{entryToViewDetails.attachedInvoice.fileName}</span>
+                                <span className="text-emerald-800 break-all">{entryToViewDetails.attachedInvoice.fileName}</span>
                               </div>
                             </div>
-                            <a
-                              href={entryToViewDetails.attachedInvoice.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-4 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 cursor-pointer"
-                            >
-                              <Eye size={12} /> View Tally PDF
-                            </a>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <a
+                                href={entryToViewDetails.attachedInvoice.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3.5 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
+                              >
+                                <Eye size={12} /> View Tally PDF
+                              </a>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEntryToAttachInvoice(entryToViewDetails);
+                                    setSelectedInvoiceFile(null);
+                                  }}
+                                  className="px-3.5 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
+                                  title="Super Admin: Replace or update Tally PDF for this invoice"
+                                >
+                                  <Paperclip size={12} /> Change Tally PDF
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        )}
+                        ) : isAdmin ? (
+                          <div className="p-3.5 bg-amber-50 border border-amber-200 text-xs flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Paperclip className="text-amber-700 h-5 w-5 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="font-bold text-amber-900">Attached Tally Invoice PDF: </span>
+                                <span className="text-amber-700 italic">No Tally PDF attached yet</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEntryToAttachInvoice(entryToViewDetails);
+                                setSelectedInvoiceFile(null);
+                              }}
+                              className="px-3.5 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
+                              title="Super Admin: Attach Tally PDF for this invoice"
+                            >
+                              <Paperclip size={12} /> Attach Tally PDF
+                            </button>
+                          </div>
+                        ) : null}
 
                         {entryToViewDetails.digitallySignedPdfUrl && (
                           <div className="p-3.5 bg-teal-50 border border-teal-300 text-xs flex items-center justify-between">

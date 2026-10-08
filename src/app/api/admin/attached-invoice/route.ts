@@ -68,11 +68,15 @@ export async function POST(request: Request) {
       });
     }
 
-    // Update status to INVOICE_ATTACHED
+    const isAlreadyApproved = invoiceRecord.status === 'APPROVED';
+    const newStatus = isAlreadyApproved ? 'APPROVED' : 'INVOICE_ATTACHED';
+
+    // Update status to INVOICE_ATTACHED (or keep APPROVED if it was already approved by Super Admin)
     await (prisma as any).invoiceRecord.update({
       where: { id: numInvoiceRecordId },
       data: {
-        status: 'INVOICE_ATTACHED',
+        status: newStatus,
+        ...(isAlreadyApproved ? { digitallySignedPdfUrl: null, digitallySignedPdfName: null } : {}),
       },
     });
 
