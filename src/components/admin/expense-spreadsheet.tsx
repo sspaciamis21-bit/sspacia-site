@@ -42,6 +42,7 @@ import {
   Users
 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadDocumentToStorage } from "@/lib/client-file-upload";
 
 export interface ColumnConfig {
   id: string;
@@ -1592,25 +1593,8 @@ export function ExpenseSpreadsheet({
     setUploadingCell({ rowId, colId });
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/admin/upload-pdf", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || "Failed to upload document");
-      }
-
-      const data = await res.json();
-      const fileUrl = data.data?.fileUrl || data.fileUrl;
-
-      if (!fileUrl) {
-        throw new Error("No file URL returned from upload");
-      }
+      const result = await uploadDocumentToStorage(file);
+      const fileUrl = result.fileUrl;
 
       const currentRow = rows.find((r) => r.id === rowId);
       const oldVal = currentRow ? currentRow[colId] : "";

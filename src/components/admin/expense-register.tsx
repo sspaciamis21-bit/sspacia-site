@@ -59,6 +59,7 @@ import { formatCurrency } from "@/lib/utils";
 import { BankStatementModal } from "./bank-statement-modal";
 import { VendorMasterModal } from "./vendor-master-modal";
 import { onOffSAApproval } from "@/lib/expense-approval-config";
+import { uploadDocumentToStorage } from "@/lib/client-file-upload";
 
 export interface ExpenseColumnDef {
   id: string;
@@ -1846,21 +1847,8 @@ export function ExpenseRegister({
       else if (type === "invoice" || type === "settleInvoice") setUploadingInvoice(true);
       else setUploadingProof(true);
 
-      const uploadData = new FormData();
-      uploadData.append("file", file);
-
-      const res = await fetch("/api/admin/upload-pdf", {
-        method: "POST",
-        body: uploadData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "File upload failed");
-
-      const fileUrl = data.fileUrl || data.url || data.data?.fileUrl || (data.id ? `/api/admin/stored-documents/${data.id}` : "");
-      if (!fileUrl) {
-        throw new Error("Failed to obtain document URL from upload response");
-      }
+      const result = await uploadDocumentToStorage(file);
+      const fileUrl = result.fileUrl;
       if (type === "receipt") {
         setFormData((prev) => ({
           ...prev,
@@ -6292,6 +6280,7 @@ export function ExpenseRegister({
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleFileUpload(file, "receipt");
+                        e.target.value = "";
                       }}
                     />
                     <div className="space-y-1.5">
@@ -6347,6 +6336,7 @@ export function ExpenseRegister({
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleFileUpload(file, "invoice");
+                        e.target.value = "";
                       }}
                     />
                     <div className="space-y-1.5">
@@ -6604,11 +6594,12 @@ export function ExpenseRegister({
                     <input
                       type="file"
                       ref={proofFileInputRef}
-                      accept=".pdf,.png,.jpg,.jpeg"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) handleFileUpload(file, "proof");
+                        e.target.value = "";
                       }}
                     />
                     <button
@@ -7592,11 +7583,12 @@ export function ExpenseRegister({
                       <input
                         type="file"
                         ref={settleInvoiceFileInputRef}
-                        accept=".pdf,.png,.jpg,.jpeg"
+                        accept=".pdf,.png,.jpg,.jpeg,.webp"
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) handleFileUpload(file, "settleInvoice");
+                          e.target.value = "";
                         }}
                       />
                       <button

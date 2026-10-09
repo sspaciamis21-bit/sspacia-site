@@ -4,43 +4,65 @@ import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { PDFDocument } from 'pdf-lib';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
     if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'No file provided' }, { status: 400 });
     }
 
     if (file.size > 50 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File size cannot exceed 50MB limit' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'File size cannot exceed 50MB limit' }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
-    const token = cookieStore.get('auth-token')?.value;
-    let userId: number | null = null;
+    let token: string | undefined;
+    try {
+      const cookieStore = await cookies();
+      token = cookieStore.get('auth-token')?.value;
+    } catch {
+      const cookieHeader = request.headers.get('cookie') || '';
+      const match = cookieHeader.match(/auth-token=([^;]+)/);
+      token = match ? match[1] : undefined;
+    }
 
+    let userId: number | null = null;
     if (token) {
-      const payload = await verifyToken(token);
-      if (payload?.id) {
-        userId = Number(payload.id);
+      try {
+        const payload = await verifyToken(token);
+        if (payload?.id) {
+          userId = Number(payload.id);
+        }
+      } catch {
+        userId = null;
       }
     }
 
     // Ensure valid user ID exists in DB to prevent foreign key errors
     let validUserId = userId;
     if (validUserId) {
-      const userExists = await prisma.user.findUnique({
-        where: { id: validUserId },
-        select: { id: true },
-      });
-      if (!userExists) validUserId = null;
+      try {
+        const userExists = await prisma.user.findUnique({
+          where: { id: validUserId },
+          select: { id: true },
+        });
+        if (!userExists) validUserId = null;
+      } catch {
+        validUserId = null;
+      }
     }
 
     if (!validUserId) {
-      const firstUser = await prisma.user.findFirst({ select: { id: true } });
-      validUserId = firstUser ? firstUser.id : 1;
+      try {
+        const firstUser = await prisma.user.findFirst({ select: { id: true } });
+        validUserId = firstUser ? firstUser.id : 1;
+      } catch {
+        validUserId = 1;
+      }
     }
 
     const bytes = await file.arrayBuffer();
@@ -131,8 +153,15 @@ export async function POST(request: Request) {
         mimeType: finalMimeType,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('PDF upload error:', error);
-    return NextResponse.json({ error: 'Failed to upload PDF' }, { status: 500 });
+    const msg = error?.message || 'Failed to upload document';
+    const isPacketError = msg.includes('Packet for query is too large') || msg.includes('max_allowed_packet');
+    return NextResponse.json({
+      success: false,
+      error: isPacketError
+        ? 'File is too large for database storage. Please compress the file under 5MB.'
+        : (msg || 'Failed to upload document'),
+    }, { status: 500 });
   }
 }
