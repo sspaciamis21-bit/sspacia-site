@@ -113,6 +113,10 @@ interface InvoiceSplitGroup {
     fileSize?: number | null;
     uploadedAt?: string;
   } | null;
+  digitallySignedPdfUrl?: string | null;
+  digitallySignedPdfName?: string | null;
+  signedByName?: string | null;
+  signedAt?: string | null;
 }
 
 interface LocationOption {
@@ -700,7 +704,7 @@ export default function AdminInvoicesWorkflowPage() {
       const queueRes = await fetch('/api/admin/Invoices/dsc-bridge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'QUEUE_INVOICE', invoiceId }),
+        body: JSON.stringify({ action: 'QUEUE_INVOICE', invoiceId, force: true }),
       });
       const queueData = await queueRes.json();
       if (!queueRes.ok || !queueData.success) {
@@ -714,7 +718,7 @@ export default function AdminInvoicesWorkflowPage() {
       }
 
       const jobId = queueData.jobId;
-      toast.info('Invoice queued for USB DSC Token. Awaiting hardware signature...');
+      toast.info(queueData.message || 'Invoice queued for USB DSC Token. Awaiting hardware signature...');
 
       let attempts = 0;
       const pollTimer = setInterval(async () => {
@@ -723,46 +727,33 @@ export default function AdminInvoicesWorkflowPage() {
           const stRes = await fetch('/api/admin/Invoices/dsc-bridge', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'JOB_STATUS', jobId }),
+            body: JSON.stringify({ action: 'JOB_STATUS', invoiceId, jobId }),
           });
           const stData = await stRes.json();
-          if (stData.status === 'COMPLETED' || stData.signedPdfUrl) {
+          if (stData.status === 'COMPLETED' || (stData.signedPdfUrl && attempts > 1)) {
             clearInterval(pollTimer);
             setSigningInvoiceId(null);
-            toast.success('Invoice digitally signed successfully with USB Token!');
-            if (stData.signedPdfUrl) {
-              setEntryToReviewInvoice((prev) => {
-                if (prev && prev.id === invoiceId) {
-                  return {
-                    ...prev,
-                    digitallySignedPdfUrl: stData.signedPdfUrl,
-                    digitallySignedPdfName: stData.signedPdfName || prev.digitallySignedPdfName || 'Signed_Invoice.pdf',
-                    signedByName: stData.signerName || 'PRAVEEN DILIPKUMAR AGARWAL',
-                    signedAt: new Date().toISOString(),
-                    attachedInvoice: prev.attachedInvoice
-                      ? {
-                        ...prev.attachedInvoice,
-                        fileUrl: stData.signedPdfUrl,
-                        fileName: stData.signedPdfName || prev.attachedInvoice.fileName,
-                      }
-                      : prev.attachedInvoice,
-                  };
-                }
-                return prev;
-              });
-            }
-            fetchData();
+            toast.success('Invoices digitally signed successfully with USB Token!');
+            await fetchData();
+            // Also refresh individual invoice modal state if currently open
+            try {
+              const freshRes = await fetch(`/api/admin/Invoices/${invoiceId}`);
+              const freshData = await freshRes.json();
+              if (freshData?.data) {
+                setEntryToReviewInvoice(freshData.data);
+              }
+            } catch {}
           } else if (stData.status === 'FAILED') {
             clearInterval(pollTimer);
             setSigningInvoiceId(null);
             toast.error(stData.error || 'DSC Signing failed on hardware token.');
-          } else if (attempts > 30) {
+          } else if (attempts > 45) {
             clearInterval(pollTimer);
             setSigningInvoiceId(null);
-            toast.error('Signing timed out. Please verify the USB key on Mercado CM PC.');
+            toast.error('Signing timed out. Please verify the USB key is plugged into the PC.');
           }
         } catch {
-          if (attempts > 30) {
+          if (attempts > 45) {
             clearInterval(pollTimer);
             setSigningInvoiceId(null);
           }
@@ -4640,7 +4631,16 @@ export default function AdminInvoicesWorkflowPage() {
                                             </a>
                                           </div>
                                           <div className="text-[9px] text-emerald-700 font-medium text-center">
-                                            ✓ DSC Applied (USB Token)
+                                            {(() => {
+                                              try {
+                                                const splits = JSON.parse(invoice.splitsJson || "[]");
+                                                if (Array.isArray(splits) && splits.length > 1) {
+                                                  const signedCnt = splits.filter((s) => s.digitallySignedPdfUrl || (s.attachedInvoice && s.attachedInvoice.fileUrl && s.attachedInvoice.fileUrl.includes("signed_dsc"))).length;
+                                                  return "✓ DSC Applied (" + signedCnt + "/" + splits.length + " Sub-Invoices)";
+                                                }
+                                              } catch {}
+                                              return "✓ DSC Applied (USB Token)";
+                                            })()}
                                           </div>
                                           {isAdmin && (
                                             <button
@@ -4703,7 +4703,16 @@ export default function AdminInvoicesWorkflowPage() {
                                             </a>
                                           </div>
                                           <div className="text-[9px] text-emerald-700 font-medium text-center">
-                                            ✓ DSC Applied (Optional Security)
+                                            {(() => {
+                                              try {
+                                                const splits = JSON.parse(invoice.splitsJson || "[]");
+                                                if (Array.isArray(splits) && splits.length > 1) {
+                                                  const signedCnt = splits.filter((s) => s.digitallySignedPdfUrl || (s.attachedInvoice && s.attachedInvoice.fileUrl && s.attachedInvoice.fileUrl.includes("signed_dsc"))).length;
+                                                  return "✓ DSC Applied (" + signedCnt + "/" + splits.length + " Sub-Invoices)";
+                                                }
+                                              } catch {}
+                                              return "✓ DSC Applied (Optional Security)";
+                                            })()}
                                           </div>
                                           {isAdmin && (
                                             <button
@@ -5496,119 +5505,191 @@ export default function AdminInvoicesWorkflowPage() {
                       </div>
 
                       {/* DSC STATUS & DIRECT SIGNING ACTION */}
-                      {entryToReviewInvoice.digitallySignedPdfUrl ? (
-                        <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xs shrink-0 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="p-1 bg-emerald-600 text-white rounded-full">
-                                <CheckCircle2 size={13} />
-                              </span>
-                              <div>
-                                <span className="text-xs font-bold text-emerald-950">✓ Digitally Signed with USB DSC Token</span>
-                                <div className="text-[10px] text-emerald-800">
-                                  Signer: <strong className="font-semibold">{entryToReviewInvoice.signedByName || dscStatus.tokenLabel || 'PRAVEEN DILIPKUMAR AGARWAL'}</strong>
-                                  {entryToReviewInvoice.signedAt && ` • ${new Date(entryToReviewInvoice.signedAt).toLocaleString('en-IN')}`}
+                      {(() => {
+                        let splits: InvoiceSplitGroup[] = [];
+                        try {
+                          splits = JSON.parse(entryToReviewInvoice.splitsJson || '[]');
+                        } catch { }
+                        const isMulti = splits.length > 1;
+                        const signedCount = isMulti
+                          ? splits.filter(
+                            (s) =>
+                              s.digitallySignedPdfUrl ||
+                              (s.attachedInvoice?.fileUrl &&
+                                (s.attachedInvoice.fileUrl.includes('signed_dsc') ||
+                                  s.attachedInvoice.fileName?.startsWith('signed_dsc')))
+                          ).length
+                          : 0;
+                        const isFullySigned = isMulti
+                          ? signedCount === splits.length && splits.length > 0
+                          : Boolean(entryToReviewInvoice.digitallySignedPdfUrl);
+
+                        if (isFullySigned) {
+                          return (
+                            <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xs shrink-0 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="p-1 bg-emerald-600 text-white rounded-full">
+                                    <CheckCircle2 size={13} />
+                                  </span>
+                                  <div>
+                                    <span className="text-xs font-bold text-emerald-950">
+                                      ✓ Digitally Signed with USB DSC Token {isMulti ? `(All ${splits.length} Sub-Invoices Signed)` : ''}
+                                    </span>
+                                    <div className="text-[10px] text-emerald-800">
+                                      Signer: <strong className="font-semibold">{entryToReviewInvoice.signedByName || dscStatus.tokenLabel || 'PRAVEEN DILIPKUMAR AGARWAL'}</strong>
+                                      {entryToReviewInvoice.signedAt && ` • ${new Date(entryToReviewInvoice.signedAt).toLocaleString('en-IN')}`}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  {!isMulti && entryToReviewInvoice.digitallySignedPdfUrl && (
+                                    <a
+                                      href={entryToReviewInvoice.digitallySignedPdfUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-2.5 py-1 bg-emerald-700 text-white hover:bg-emerald-800 text-[10px] font-bold rounded flex items-center gap-1 shadow-2xs"
+                                      title="View Digitally Signed PDF"
+                                    >
+                                      <Eye size={11} /> View Signed PDF
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    disabled={signingInvoiceId === entryToReviewInvoice.id || bulkSigningDsc}
+                                    onClick={() => handleApplySingleDsc(entryToReviewInvoice.id)}
+                                    className="px-2.5 py-1 bg-white border border-emerald-400 text-emerald-800 hover:bg-emerald-100 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                                    title="Re-apply digital signature from USB Token"
+                                  >
+                                    {signingInvoiceId === entryToReviewInvoice.id ? (
+                                      <>
+                                        <Loader2 size={11} className="animate-spin" /> Re-signing...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <RotateCcw size={11} /> Re-Sign All DSC
+                                      </>
+                                    )}
+                                  </button>
                                 </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <a
-                                href={entryToReviewInvoice.digitallySignedPdfUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-2.5 py-1 bg-emerald-700 text-white hover:bg-emerald-800 text-[10px] font-bold rounded flex items-center gap-1 shadow-2xs"
-                                title="View Digitally Signed PDF"
-                              >
-                                <Eye size={11} /> View Signed PDF
-                              </a>
-                              <button
-                                type="button"
-                                disabled={signingInvoiceId === entryToReviewInvoice.id || bulkSigningDsc}
-                                onClick={() => handleApplySingleDsc(entryToReviewInvoice.id)}
-                                className="px-2.5 py-1 bg-white border border-emerald-400 text-emerald-800 hover:bg-emerald-100 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
-                                title="Re-apply digital signature from USB Token"
-                              >
-                                {signingInvoiceId === entryToReviewInvoice.id ? (
-                                  <>
-                                    <Loader2 size={11} className="animate-spin" /> Re-signing...
-                                  </>
-                                ) : (
-                                  <>
-                                    <RotateCcw size={11} /> Re-Sign DSC
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ) : entryToReviewInvoice.isDigitalSignRequired ? (
-                        <div className="p-3 bg-amber-50 border-2 border-amber-400 rounded-xs shrink-0 space-y-2">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-1.5 text-amber-950 font-extrabold text-xs">
-                                <PenTool size={14} className="text-amber-800 shrink-0" />
-                                <span>⚠️ Digital Signature (DSC) is MANDATORY for this Client</span>
-                              </div>
-                              <p className="text-[10.5px] text-amber-900 leading-tight">
-                                Client Master requires this invoice to be legally signed with Mercado CM's USB DSC Token before Community Manager approval.
-                              </p>
-                              {!dscStatus.isOnline && (
-                                <div className="text-[10px] text-red-700 font-bold flex items-center gap-1 pt-0.5">
-                                  <span>🔴 Hardware Gateway is Offline. Please tell Mercado CM to insert USB key and ensure gateway is online.</span>
+                          );
+                        }
+
+                        if (isMulti && signedCount > 0 && signedCount < splits.length) {
+                          return (
+                            <div className="p-3 bg-amber-50 border border-amber-300 rounded-xs shrink-0 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="p-1 bg-amber-600 text-white rounded-full">
+                                    <Loader2 size={13} className="animate-spin" />
+                                  </span>
+                                  <div>
+                                    <span className="text-xs font-bold text-amber-950">
+                                      ⚠️ Partial DSC Signed: {signedCount} of {splits.length} Sub-Invoices Signed
+                                    </span>
+                                    <div className="text-[10px] text-amber-800">
+                                      Remaining sub-invoices awaiting hardware USB signature: <strong>{splits.length - signedCount}</strong>
+                                    </div>
+                                  </div>
                                 </div>
-                              )}
+                                <button
+                                  type="button"
+                                  disabled={signingInvoiceId === entryToReviewInvoice.id || bulkSigningDsc}
+                                  onClick={() => handleApplySingleDsc(entryToReviewInvoice.id)}
+                                  className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                                  title="Sign remaining sub-invoices via USB Token"
+                                >
+                                  {signingInvoiceId === entryToReviewInvoice.id ? (
+                                    <>
+                                      <Loader2 size={11} className="animate-spin" /> Signing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Shield size={11} /> ✍️ Sign Remaining via USB
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (entryToReviewInvoice.isDigitalSignRequired) {
+                          return (
+                            <div className="p-3 bg-amber-50 border-2 border-amber-400 rounded-xs shrink-0 space-y-2">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5 text-amber-950 font-extrabold text-xs">
+                                    <PenTool size={14} className="text-amber-800 shrink-0" />
+                                    <span>⚠️ Digital Signature (DSC) is MANDATORY for this Client</span>
+                                  </div>
+                                  <p className="text-[10.5px] text-amber-900 leading-tight">
+                                    Client Master requires this invoice to be legally signed with USB DSC Token before approval.
+                                    {isMulti && ` (Will automatically sign all ${splits.length} sub-invoices)`}
+                                  </p>
+                                  {!dscStatus.isOnline && (
+                                    <div className="text-[10px] text-red-700 font-bold flex items-center gap-1 pt-0.5">
+                                      <span>🔴 Hardware Gateway is Offline. Please ensure USB key is inserted into PC.</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  disabled={signingInvoiceId === entryToReviewInvoice.id || bulkSigningDsc}
+                                  onClick={() => handleApplySingleDsc(entryToReviewInvoice.id)}
+                                  className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-extrabold text-[11px] uppercase tracking-wider rounded flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer disabled:opacity-50 transition-colors"
+                                >
+                                  {signingInvoiceId === entryToReviewInvoice.id ? (
+                                    <>
+                                      <Loader2 size={13} className="animate-spin" />
+                                      <span>Signing via USB...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Shield size={13} />
+                                      <span>✍️ Apply Digital Signature</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="p-2.5 bg-neutral-50 border border-neutral-300 rounded-xs shrink-0 flex items-center justify-between gap-3">
+                            <div>
+                              <div className="text-neutral-700 text-xs font-semibold flex items-center gap-1.5">
+                                <span>📄 Standard Tally Invoice (Digital Signature Optional)</span>
+                              </div>
+                              <div className="text-[10px] text-neutral-500">
+                                DSC is optional for this client. You can sign anytime with your USB token.
+                              </div>
                             </div>
 
                             <button
                               type="button"
                               disabled={signingInvoiceId === entryToReviewInvoice.id || bulkSigningDsc}
                               onClick={() => handleApplySingleDsc(entryToReviewInvoice.id)}
-                              className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-extrabold text-[11px] uppercase tracking-wider rounded flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer disabled:opacity-50 transition-colors"
+                              className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-900 text-white text-[10.5px] font-bold uppercase tracking-wider rounded flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer disabled:opacity-50 transition-colors"
+                              title="Optionally apply digital signature from USB key"
                             >
                               {signingInvoiceId === entryToReviewInvoice.id ? (
                                 <>
-                                  <Loader2 size={13} className="animate-spin" />
-                                  <span>Signing via USB...</span>
+                                  <Loader2 size={12} className="animate-spin" /> Signing...
                                 </>
                               ) : (
                                 <>
-                                  <Shield size={13} />
-                                  <span>✍️ Apply Digital Signature</span>
+                                  <Shield size={12} className="text-cyan-400" /> ✍️ Apply DSC (Optional)
                                 </>
                               )}
                             </button>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="p-2.5 bg-neutral-50 border border-neutral-300 rounded-xs shrink-0 flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-neutral-700 text-xs font-semibold flex items-center gap-1.5">
-                              <span>📄 Standard Tally Invoice (Digital Signature Optional)</span>
-                            </div>
-                            <div className="text-[10px] text-neutral-500">
-                              DSC is not required for this client, but you can optionally apply it for extra security.
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            disabled={signingInvoiceId === entryToReviewInvoice.id || bulkSigningDsc}
-                            onClick={() => handleApplySingleDsc(entryToReviewInvoice.id)}
-                            className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-900 text-white text-[10.5px] font-bold uppercase tracking-wider rounded flex items-center gap-1.5 shadow-xs shrink-0 cursor-pointer disabled:opacity-50 transition-colors"
-                            title="Optionally apply digital signature from Mercado USB key before approval"
-                          >
-                            {signingInvoiceId === entryToReviewInvoice.id ? (
-                              <>
-                                <Loader2 size={12} className="animate-spin" /> Signing...
-                              </>
-                            ) : (
-                              <>
-                                <Shield size={12} className="text-cyan-400" /> ✍️ Apply DSC (Optional)
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       <div className="overflow-y-auto flex-1 pr-1 space-y-3">
                         {/* IF SPLIT INVOICES EXIST */}
@@ -5627,44 +5708,90 @@ export default function AdminInvoicesWorkflowPage() {
                                 </div>
 
                                 <div className="space-y-2.5">
-                                  {splits.map((grp, idx) => (
-                                    <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm flex items-center justify-between gap-3">
-                                      <div>
-                                        <div className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1.5">
-                                          <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span>
-                                          {grp.name}
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-purple-900 mt-1">
-                                          <span>📅 <strong>Period:</strong> {formatDisplayDateSafe(grp.startDate) || 'Month Start'} → {formatDisplayDateSafe(grp.endDate) || 'Month End'}</span>
-                                          <span>•</span>
-                                          <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? formatDisplayDateSafe(grp.dueDate) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
-                                        </div>
-                                        <div className="text-[10px] text-neutral-500 mt-0.5">
-                                          {grp.noOfSeats} seats | Total: <strong className="text-teal-900 font-mono">₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}</strong>
-                                        </div>
-                                        {grp.attachedInvoice?.fileName && (
-                                          <div className="text-[9.5px] text-emerald-800 font-bold flex items-center gap-1 mt-1">
-                                            <FileCheck size={11} /> {grp.attachedInvoice.fileName}
-                                          </div>
-                                        )}
-                                      </div>
+                                  {splits.map((grp, idx) => {
+                                    const isSplitSigned = Boolean(
+                                      grp.digitallySignedPdfUrl ||
+                                      (grp.attachedInvoice?.fileUrl &&
+                                        (grp.attachedInvoice.fileUrl.includes('signed_dsc') ||
+                                          grp.attachedInvoice.fileName?.startsWith('signed_dsc')))
+                                    );
+                                    const activeSignedUrl = grp.digitallySignedPdfUrl || (isSplitSigned ? grp.attachedInvoice?.fileUrl : null);
+                                    const rawPdfUrl = grp.attachedInvoice?.fileUrl;
 
-                                      {grp.attachedInvoice?.fileUrl ? (
-                                        <a
-                                          href={grp.attachedInvoice.fileUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="px-3 py-1.5 bg-[#1B1C1C] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-neutral-800 flex items-center gap-1 rounded shrink-0"
-                                        >
-                                          <Eye size={12} /> View PDF
-                                        </a>
-                                      ) : (
-                                        <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-1 border border-amber-200 rounded shrink-0">
-                                          Pending PDF
-                                        </span>
-                                      )}
-                                    </div>
-                                  ))}
+                                    return (
+                                      <div key={grp.id} className="p-3 bg-neutral-50 border border-neutral-200 rounded-sm flex items-center justify-between gap-3">
+                                        <div>
+                                          <div className="font-extrabold text-[#1B1C1C] text-xs flex items-center gap-1.5">
+                                            <span className="px-1.5 py-0.5 bg-purple-700 text-white text-[10px] rounded">#{idx + 1}</span>
+                                            {grp.name}
+                                          </div>
+                                          <div className="flex flex-wrap items-center gap-1.5 text-[9.5px] text-purple-900 mt-1">
+                                            <span>📅 <strong>Period:</strong> {formatDisplayDateSafe(grp.startDate) || 'Month Start'} → {formatDisplayDateSafe(grp.endDate) || 'Month End'}</span>
+                                            <span>•</span>
+                                            <span className="text-red-700 font-bold">⏰ <strong>Due:</strong> {grp.dueDate ? formatDisplayDateSafe(grp.dueDate) : (grp.paymentDueDay ? `Day ${grp.paymentDueDay}` : 'Standard')}</span>
+                                          </div>
+                                          <div className="text-[10px] text-neutral-500 mt-0.5">
+                                            {grp.noOfSeats} seats | Total: <strong className="text-teal-900 font-mono">₹{Number(grp.totalAmount || 0).toLocaleString('en-IN')}</strong>
+                                          </div>
+                                          {grp.attachedInvoice?.fileName && (
+                                            <div className="text-[9.5px] text-neutral-600 font-medium flex items-center gap-1 mt-1">
+                                              <Paperclip size={11} className="text-neutral-400" /> Tally File: {grp.attachedInvoice.fileName}
+                                            </div>
+                                          )}
+                                          {isSplitSigned && (
+                                            <div className="text-[9.5px] text-emerald-800 font-bold flex items-center gap-1 mt-0.5">
+                                              <CheckCircle2 size={11} className="text-emerald-600" />
+                                              <span>✓ DSC Signed with USB Token ({grp.signedByName || entryToReviewInvoice.signedByName || 'PRAVEEN DILIPKUMAR AGARWAL'})</span>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          {isSplitSigned && activeSignedUrl ? (
+                                            <>
+                                              <a
+                                                href={activeSignedUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-2.5 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 rounded shadow-2xs"
+                                                title={`View Digitally Signed PDF for ${grp.name}`}
+                                              >
+                                                <Eye size={12} /> View Signed
+                                              </a>
+                                              <a
+                                                href={activeSignedUrl}
+                                                download={grp.digitallySignedPdfName || `Signed_${grp.name.replace(/\s+/g, '_')}.pdf`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-2 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-100 flex items-center gap-1 rounded shadow-2xs"
+                                                title={`Download Signed PDF for ${grp.name}`}
+                                              >
+                                                <Download size={12} /> Download
+                                              </a>
+                                            </>
+                                          ) : rawPdfUrl ? (
+                                            <>
+                                              <a
+                                                href={rawPdfUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="px-2.5 py-1.5 bg-neutral-800 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-neutral-700 flex items-center gap-1 rounded shadow-2xs"
+                                              >
+                                                <Eye size={12} /> View PDF
+                                              </a>
+                                              <span className="text-[9.5px] font-bold text-amber-800 bg-amber-50 px-2 py-1 border border-amber-300 rounded flex items-center gap-1">
+                                                <Loader2 size={10} className="animate-spin text-amber-600" /> DSC Pending
+                                              </span>
+                                            </>
+                                          ) : (
+                                            <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-1 border border-amber-200 rounded">
+                                              Pending PDF
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             );

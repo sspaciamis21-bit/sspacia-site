@@ -38,16 +38,54 @@ DEFAULT_CENTER_NAME = "Mercado"
 DEFAULT_TOKEN_PIN = "PASSWORD"
 BRIDGE_SECRET = "sspacia_dsc_secure_2026"
 
-# Candidate paths for ProxKey / Watchdata DLL
+# Candidate paths for ProxKey / Watchdata / ePass / mToken DLLs
 PKCS11_CANDIDATES = [
     os.path.join(os.path.dirname(__file__), "SignatureP11.dll"),
     os.path.join(os.path.dirname(__file__), "..", "scratch", "SignatureP11.dll"),
     r"C:\Windows\System32\SignatureP11.dll",
     r"C:\Windows\System32\wdpkcs.dll",
     r"C:\Windows\System32\eps2003csp11.dll",
+    r"C:\Windows\System32\eps2003csp11_v2.dll",
+    r"C:\Windows\System32\mtoken_pkcs11.dll",
+    r"C:\Windows\System32\eTPKCS11.dll",
+    r"C:\Windows\System32\acospkcs11.dll",
     r"C:\Windows\SysWOW64\SignatureP11.dll",
     r"C:\Windows\SysWOW64\wdpkcs.dll",
+    r"C:\Windows\SysWOW64\eps2003csp11.dll",
+    r"C:\Windows\SysWOW64\mtoken_pkcs11.dll",
+    r"C:\Windows\SysWOW64\eTPKCS11.dll",
+    r"C:\Program Files\Hypersecu\HyperPKI\pkcs11.dll",
+    r"C:\Program Files (x86)\Hypersecu\HyperPKI\pkcs11.dll",
 ]
+
+LOG_FILE = Path(__file__).resolve().parent / "gateway.log"
+
+
+def log_msg(msg: str):
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted = f"[{ts}] {msg}"
+    print(formatted)
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(formatted + "\n")
+    except Exception:
+        pass
+
+
+def load_token_pin(cli_pin=None):
+    if cli_pin and cli_pin != DEFAULT_TOKEN_PIN:
+        return cli_pin
+    pin_file = Path(__file__).resolve().parent / "dsc_pin.txt"
+    if pin_file.exists():
+        try:
+            content = pin_file.read_text(encoding="utf-8").strip()
+            for line in content.splitlines():
+                clean = line.strip()
+                if clean and not clean.startswith("#"):
+                    return clean
+        except Exception:
+            pass
+    return cli_pin or DEFAULT_TOKEN_PIN
 
 # Signature box in PDF points: (left, bottom, right, top). Page = 612 x 792.
 # Free area inside the "for SSPACIA INDIA PVT LTD" cell above "Authorised Signatory".
@@ -240,25 +278,25 @@ def main():
 
     server_url = args.server.rstrip("/")
     center_name = args.center
-    pin = args.pin
+    pin = load_token_pin(args.pin)
 
-    print("=" * 68)
-    print("      SSPACIA USB DSC REMOTE SIGNING GATEWAY - HOST BRIDGE")
-    print("=" * 68)
-    print(f"[*] Target Server : {server_url}")
-    print(f"[*] Host Centre   : {center_name}")
+    log_msg("=" * 68)
+    log_msg("      SSPACIA USB DSC REMOTE SIGNING GATEWAY - HOST BRIDGE")
+    log_msg("=" * 68)
+    log_msg(f"[*] Target Server : {server_url}")
+    log_msg(f"[*] Host Centre   : {center_name}")
 
     dll_path = find_dll(args.lib)
     if not dll_path:
-        print("[!] ERROR: Could not find SignatureP11.dll!")
-        print("    Please install the ProxKey driver from scratch/digi or place SignatureP11.dll next to this script.")
+        log_msg("[!] ERROR: Could not find PKCS#11 driver DLL (SignatureP11.dll)!")
+        log_msg("    Please place SignatureP11.dll next to this script or install your USB token driver.")
         input("Press Enter to exit...")
         sys.exit(1)
 
-    print(f"[*] PKCS#11 DLL   : {dll_path}")
-    print(f"[*] Polling Loop  : Every {POLL_INTERVAL} seconds")
-    print("=" * 68)
-    print("[*] Starting gateway service... (Press Ctrl+C to stop)\n")
+    log_msg(f"[*] PKCS#11 DLL   : {dll_path}")
+    log_msg(f"[*] Polling Loop  : Every {POLL_INTERVAL} seconds")
+    log_msg("=" * 68)
+    log_msg("[*] Starting gateway service... (Press Ctrl+C to stop)\n")
 
     last_status = None
 
@@ -268,8 +306,12 @@ def main():
             session, err = get_token_session(dll_path, pin)
 
             if not session:
-                if last_status != "TOKEN_UNPLUGGED":
-                    print(f"[{datetime.now().strftime('%H:%M:%S')}] [!] USB Token NOT detected. Please insert the USB DSC token into this PC...")
+                if err and ("PIN" in str(err).upper() or "PASSWORD" in str(err).upper()):
+                    if last_status != "PIN_ERROR":
+                        log_msg(f"[!] USB Token detected, but PIN was REJECTED ({err})! Please check dsc_pin.txt.")
+                        last_status = "PIN_ERROR"
+                elif last_status != "TOKEN_UNPLUGGED":
+                    log_msg("[!] USB Token NOT detected. Please insert the USB DSC token into this PC...")
                     last_status = "TOKEN_UNPLUGGED"
 
                 # Report UNPLUGGED heartbeat
@@ -293,9 +335,9 @@ def main():
                 signer_name = cert_name or "PRAVEEN DILIPKUMAR AGARWAL"
 
                 if last_status != "READY":
-                    print(f"[{datetime.now().strftime('%H:%M:%S')}] [OK] USB Token detected & unlocked!")
-                    print(f"    --> Signer Certificate: {signer_name}")
-                    print(f"    --> Gateway status: ONLINE & READY FOR SIGNING REQUESTS")
+                    log_msg(f"[OK] USB Token detected & unlocked!")
+                    log_msg(f"    --> Signer Certificate: {signer_name}")
+                    log_msg(f"    --> Gateway status: ONLINE & READY FOR SIGNING REQUESTS")
                     last_status = "READY"
 
                 # 3. Send Heartbeat to SSPACIA server
@@ -318,20 +360,20 @@ def main():
                 if job:
                     job_id = job.get("jobId")
                     company = job.get("companyName", "Invoice")
-                    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] [JOB RECEIVED] Signing request for: {company} (Job ID: {job_id})")
+                    log_msg(f"\n[JOB RECEIVED] Signing request for: {company} (Job ID: {job_id})")
 
                     raw_b64 = job.get("pdfBase64", "")
                     if not raw_b64:
-                        print("    [!] Error: No PDF base64 provided in job payload.")
+                        log_msg("    [!] Error: No PDF base64 provided in job payload.")
                     else:
-                        print(f"    --> Decoding PDF ({len(raw_b64)} chars base64)...")
+                        log_msg(f"    --> Decoding PDF ({len(raw_b64)} chars base64)...")
                         pdf_bytes = base64.b64decode(raw_b64)
 
-                        print("    --> Applying cryptographic signature inside 'for SSPACIA INDIA PVT LTD' box...")
+                        log_msg("    --> Applying cryptographic signature inside 'for SSPACIA INDIA PVT LTD' box...")
                         signed_bytes = sign_pdf_buffer(pdf_bytes, cert_label, cert_id, signer_name, session)
 
                         signed_b64 = base64.b64encode(signed_bytes).decode("utf-8")
-                        print(f"    --> Signature complete ({len(signed_bytes)} bytes)! Uploading to {server_url}...")
+                        log_msg(f"    --> Signature complete ({len(signed_bytes)} bytes)! Uploading to {server_url}...")
 
                         comp_res = call_server(server_url, "/api/admin/Invoices/dsc-bridge", {
                             "action": "COMPLETE",
@@ -342,9 +384,9 @@ def main():
                         })
 
                         if comp_res.get("success"):
-                            print(f"    [SUCCESS] Job {job_id} completed and stored on server! URL: {comp_res.get('signedPdfUrl')}\n")
+                            log_msg(f"    [SUCCESS] Job {job_id} completed and stored on server! URL: {comp_res.get('signedPdfUrl')}\n")
                         else:
-                            print(f"    [!] Error completing job: {comp_res.get('error')}\n")
+                            log_msg(f"    [!] Error completing job: {comp_res.get('error')}\n")
 
             finally:
                 try:

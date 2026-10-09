@@ -129,6 +129,7 @@ export async function POST(
         fileData: signedPdfBuffer,
         mimeType: 'application/pdf',
         fileSize: signedPdfBuffer.length,
+        uploadedById: 1,
       },
     });
 

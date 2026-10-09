@@ -1,0 +1,5 @@
+# SSPACIA USB DSC Token PIN Configuration
+# -------------------------------------------------------------
+# Default PIN for most tokens is PASSWORD or 12345678.
+# If your USB token has a different PIN, replace the line below with your PIN:
+PASSWORD

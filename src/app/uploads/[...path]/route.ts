@@ -69,11 +69,22 @@ export async function GET(
       });
     }
 
-    // 3. If the actual file is not on disk and not in StoredDocument, return 404 error
+    // 3. If the actual file is not on disk and not in StoredDocument, return clean 404
+    if (pathSegments.includes('resumes')) {
+      return NextResponse.json(
+        {
+          error: 'Attached resume file not found on server.',
+          message: 'The original resume was delivered as an email attachment to hr.ssinfrazone@gmail.com.',
+          fileName: fileName,
+        },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(
       {
-        error: 'Attached resume file not found on server.',
-        message: 'The original resume was delivered as an email attachment to hr.ssinfrazone@gmail.com.',
+        error: 'File not found on server.',
+        message: `The requested document '${fileName}' is not available.`,
         fileName: fileName,
       },
       { status: 404 }

@@ -52,7 +52,26 @@ async function fetchPdfBuffer(url: string): Promise<Buffer | null> {
       }
     }
 
-    // 2. If it's a remote URL
+    // 2. If it points to an upload URL or filename, check StoredDocument table directly
+    const fileNameMatch = url.match(/([^\/\\]+\.pdf)$/i);
+    if (fileNameMatch && fileNameMatch[1]) {
+      const fileName = fileNameMatch[1];
+      const doc = await (prisma as any).storedDocument.findFirst({
+        where: {
+          OR: [
+            { fileName: fileName },
+            { fileName: { contains: fileName } },
+          ],
+        },
+        select: { fileData: true },
+        orderBy: { id: 'desc' },
+      });
+      if (doc?.fileData) {
+        return Buffer.from(doc.fileData);
+      }
+    }
+
+    // 3. Fallback: remote URL fetch
     const fullUrl = url.startsWith('http') ? url : `https://sspacia.com${url.startsWith('/') ? '' : '/'}${url}`;
     const res = await fetch(fullUrl);
     if (!res.ok) {

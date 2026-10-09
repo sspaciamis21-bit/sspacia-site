@@ -71,17 +71,25 @@ export async function POST(request: Request) {
     const isAlreadyApproved = invoiceRecord.status === 'APPROVED';
     const newStatus = isAlreadyApproved ? 'APPROVED' : 'INVOICE_ATTACHED';
 
+    // If a new PDF is attached or replaced, reset old DSC signature so it freshly auto-signs
+    const shouldResetDsc = Boolean(fileUrl || splitsJson !== undefined);
+
     // Update status to INVOICE_ATTACHED (or keep APPROVED if it was already approved by Super Admin)
     await (prisma as any).invoiceRecord.update({
       where: { id: numInvoiceRecordId },
       data: {
         status: newStatus,
-        ...(isAlreadyApproved ? { digitallySignedPdfUrl: null, digitallySignedPdfName: null } : {}),
+        ...(shouldResetDsc ? {
+          digitallySignedPdfUrl: null,
+          digitallySignedPdfName: null,
+          signedAt: null,
+          signedByName: null,
+        } : {}),
       },
     });
 
-    // ⚡ Auto-Trigger Background DSC Signing for ALL attached invoices
-    queueInvoiceForDsc(numInvoiceRecordId).catch((dscErr) => {
+    // ⚡ Auto-Trigger Background DSC Signing for ALL attached invoices (both single & split sub-invoices)
+    queueInvoiceForDsc(numInvoiceRecordId, { force: true }).catch((dscErr) => {
       console.warn('[Attach Invoice] Auto-DSC queue notice:', dscErr);
     });
 

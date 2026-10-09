@@ -42,13 +42,14 @@ export async function POST(
 
     const fileName = `usb_signed_invoice_${invoiceRecordId}_${Date.now()}.pdf`;
 
-    // Save to database StoredDocument
+    // Save to database StoredDocument (Permanent & Serverless Safe)
     const storedDoc = await (prisma as any).storedDocument.create({
       data: {
         fileName,
         fileData: finalSignedPdf,
         mimeType: 'application/pdf',
         fileSize: finalSignedPdf.length,
+        uploadedById: 1,
       },
     });
 

@@ -14,6 +14,8 @@ const STATE_FILE = path.join(STATE_DIR, 'dsc_bridge_shared_state.json');
 interface DscJob {
   jobId: string;
   invoiceId?: number;
+  splitIndex?: number;
+  splitName?: string;
   companyName: string;
   isTest?: boolean;
   pdfBase64: string;
@@ -84,10 +86,10 @@ function saveSharedState(state: DscBridgeSharedState) {
     if (!fs.existsSync(STATE_DIR)) {
       fs.mkdirSync(STATE_DIR, { recursive: true });
     }
-    // Keep last 15 jobs only
-    if (state.jobs.length > 15) {
-      state.jobs = state.jobs.slice(-15);
-    }
+    // Keep all PENDING & IN_PROGRESS jobs; keep last 30 COMPLETED/FAILED jobs
+    const activeJobs = state.jobs.filter((j) => j.status === 'PENDING' || j.status === 'IN_PROGRESS');
+    const finishedJobs = state.jobs.filter((j) => j.status === 'COMPLETED' || j.status === 'FAILED').slice(-30);
+    state.jobs = [...activeJobs, ...finishedJobs];
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
   } catch (err) {
     console.warn('[DSC Bridge] saveSharedState notice:', err);
@@ -142,9 +144,65 @@ export async function GET(request: Request) {
 }
 
 /**
- * Programmatic helper to queue an attached invoice for background USB DSC signing
+ * Helper to load PDF buffer from StoredDocument ID URL, external HTTP, local disk, or database by filename
  */
-export async function queueInvoiceForDsc(invoiceId: number): Promise<{ success: boolean; jobId?: string; message?: string; error?: string }> {
+async function loadPdfBufferFromUrl(pdfUrl: string, fallbackFileName?: string): Promise<Buffer | null> {
+  if (!pdfUrl) return null;
+
+  // 1. From StoredDocument ID URL: /api/admin/stored-documents/:id
+  if (pdfUrl.includes('/api/admin/stored-documents/')) {
+    const match = pdfUrl.match(/\/api\/admin\/stored-documents\/(\d+)/);
+    if (match && match[1]) {
+      const doc = await (prisma as any).storedDocument.findUnique({
+        where: { id: Number(match[1]) },
+        select: { fileData: true },
+      });
+      if (doc?.fileData) return Buffer.from(doc.fileData);
+    }
+  }
+
+  // 2. Full HTTP/HTTPS URL
+  if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) {
+    const res = await fetch(pdfUrl).catch(() => null);
+    if (res && res.ok) return Buffer.from(await res.arrayBuffer());
+  }
+
+  // 3. Local disk in public/
+  const localPath = path.join(process.cwd(), 'public', pdfUrl.startsWith('/') ? pdfUrl.slice(1) : pdfUrl);
+  if (fs.existsSync(localPath)) {
+    return fs.readFileSync(localPath);
+  }
+
+  // 4. By filename in StoredDocument table
+  const fileNameToSearch = fallbackFileName || path.basename(pdfUrl);
+  if (fileNameToSearch) {
+    const cleanFileName = fileNameToSearch.replace(/^\d+_/, '');
+    const doc = await (prisma as any).storedDocument.findFirst({
+      where: {
+        OR: [
+          { fileName: fileNameToSearch },
+          { fileName: cleanFileName },
+        ],
+      },
+      select: { fileData: true },
+      orderBy: { id: 'desc' },
+    });
+    if (doc?.fileData) return Buffer.from(doc.fileData);
+  }
+
+  return null;
+}
+
+/**
+ * Programmatic helper to queue an attached invoice for background USB DSC signing
+ * Supports silent offline queueing: if the USB token is currently unplugged,
+ * the jobs stay as PENDING and will be signed automatically when the USB token is inserted.
+ * Full multi-split invoice support: queues all attached sub-invoices in splitsJson.
+ */
+export async function queueInvoiceForDsc(
+  invoiceId: number,
+  options?: { force?: boolean }
+): Promise<{ success: boolean; jobId?: string; jobIds?: string[]; message?: string; error?: string; isOnline?: boolean }> {
   const state = loadSharedState();
   const now = Date.now();
   const lastSeen = state.gateway?.lastSeen || 0;
@@ -153,14 +211,6 @@ export async function queueInvoiceForDsc(invoiceId: number): Promise<{ success: 
     state.gateway.status === 'ONLINE' &&
     now - lastSeen < 12000
   );
-
-  if (!isOnline) {
-    console.warn(`[Auto-DSC] USB Token Gateway is offline. Invoice #${invoiceId} not queued automatically.`);
-    return {
-      success: false,
-      error: 'Please ask the CM of Mercado to insert the USB key, then try again.',
-    };
-  }
 
   // Fetch invoice record and attached PDF
   const invoice = await (prisma as any).invoiceRecord.findUnique({
@@ -172,55 +222,108 @@ export async function queueInvoiceForDsc(invoiceId: number): Promise<{ success: 
     return { success: false, error: 'Invoice record not found' };
   }
 
-  // Already signed
-  if (invoice.digitallySignedPdfUrl) {
-    return { success: true, message: 'Invoice is already digitally signed.' };
+  // Check for split sub-invoices in splitsJson
+  let splits: any[] = [];
+  if (invoice.splitsJson) {
+    try {
+      splits = JSON.parse(invoice.splitsJson);
+    } catch {}
   }
 
-  const pdfUrl = invoice.attachedInvoice?.fileUrl;
+  const isMultiSplit = Array.isArray(splits) && splits.length > 1;
+
+  if (isMultiSplit) {
+    const queuedJobIds: string[] = [];
+    let newlyQueued = 0;
+
+    for (let idx = 0; idx < splits.length; idx++) {
+      const grp = splits[idx];
+      const splitPdfUrl = grp.attachedInvoice?.fileUrl;
+      if (!splitPdfUrl) continue; // No PDF attached for this sub-invoice yet
+
+      // If already signed and not forcing, skip
+      if (!options?.force && grp.digitallySignedPdfUrl) {
+        continue;
+      }
+
+      // If force, remove old pending/in-progress jobs for this split
+      if (options?.force) {
+        state.jobs = state.jobs.filter(
+          (j) => !(j.invoiceId === invoice.id && j.splitIndex === idx && (j.status === 'PENDING' || j.status === 'IN_PROGRESS'))
+        );
+      } else {
+        const existingJob = state.jobs.find(
+          (j) => j.invoiceId === invoice.id && j.splitIndex === idx && (j.status === 'PENDING' || j.status === 'IN_PROGRESS')
+        );
+        if (existingJob) {
+          queuedJobIds.push(existingJob.jobId);
+          continue;
+        }
+      }
+
+      const pdfBuffer = await loadPdfBufferFromUrl(splitPdfUrl, grp.attachedInvoice?.fileName);
+      if (!pdfBuffer) {
+        console.warn(`[Auto-DSC] Could not load PDF buffer for ${invoice.companyName} Sub-Invoice #${idx + 1} (${splitPdfUrl})`);
+        continue;
+      }
+
+      const jobId = `inv_${invoice.id}_split_${idx}_${Date.now()}`;
+      state.jobs.push({
+        jobId,
+        invoiceId: invoice.id,
+        splitIndex: idx,
+        splitName: grp.name || `Sub-Invoice #${idx + 1}`,
+        companyName: `${invoice.companyName} (${grp.name || `Sub-Inv #${idx + 1}`})`,
+        isTest: false,
+        pdfBase64: pdfBuffer.toString('base64'),
+        status: 'PENDING',
+        createdAt: Date.now(),
+      });
+      queuedJobIds.push(jobId);
+      newlyQueued++;
+    }
+
+    if (queuedJobIds.length === 0) {
+      return { success: true, message: 'All sub-invoices are already digitally signed.', isOnline };
+    }
+
+    saveSharedState(state);
+    console.log(`[Auto-DSC] ⚡ Queued ${newlyQueued} sub-invoices for #${invoice.id} (${invoice.companyName})! (Gateway: ${isOnline ? 'ONLINE' : 'OFFLINE_PENDING_USB'})`);
+    return {
+      success: true,
+      jobId: queuedJobIds[0],
+      jobIds: queuedJobIds,
+      message: isOnline
+        ? `Queued ${queuedJobIds.length} sub-invoices for USB DSC signing!`
+        : `Queued ${queuedJobIds.length} sub-invoices. Will be signed automatically when USB key is inserted.`,
+      isOnline,
+    };
+  }
+
+  // ── SINGLE INVOICE SIGNING FLOW ──
+  const pdfUrl = invoice.attachedInvoice?.fileUrl || (splits[0]?.attachedInvoice?.fileUrl);
   if (!pdfUrl) {
     return { success: false, error: 'No accountant invoice PDF attached for this record.' };
   }
 
-  // Check if already in queue
-  const existingJob = state.jobs.find(
-    (j) => j.invoiceId === Number(invoiceId) && (j.status === 'PENDING' || j.status === 'IN_PROGRESS')
-  );
-  if (existingJob) {
-    return { success: true, jobId: existingJob.jobId, message: 'Invoice already in DSC signing queue.' };
+  if (!options?.force && invoice.digitallySignedPdfUrl) {
+    return { success: true, message: 'Invoice is already digitally signed.' };
   }
 
-  // Load PDF Buffer (from DB storedDocument, HTTP URL, or local disk)
-  let pdfBuffer: Buffer | null = null;
-  if (pdfUrl.includes('/api/admin/stored-documents/')) {
-    const match = pdfUrl.match(/\/api\/admin\/stored-documents\/(\d+)/);
-    if (match && match[1]) {
-      const doc = await (prisma as any).storedDocument.findUnique({
-        where: { id: Number(match[1]) },
-        select: { fileData: true },
-      });
-      if (doc?.fileData) pdfBuffer = Buffer.from(doc.fileData);
+  if (options?.force) {
+    state.jobs = state.jobs.filter(
+      (j) => !(j.invoiceId === invoice.id && (j.status === 'PENDING' || j.status === 'IN_PROGRESS'))
+    );
+  } else {
+    const existingJob = state.jobs.find(
+      (j) => j.invoiceId === invoice.id && (j.status === 'PENDING' || j.status === 'IN_PROGRESS')
+    );
+    if (existingJob) {
+      return { success: true, jobId: existingJob.jobId, message: 'Invoice already in DSC signing queue.', isOnline };
     }
   }
 
-  if (!pdfBuffer) {
-    if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) {
-      const res = await fetch(pdfUrl).catch(() => null);
-      if (res && res.ok) pdfBuffer = Buffer.from(await res.arrayBuffer());
-    } else {
-      const localPath = path.join(process.cwd(), 'public', pdfUrl.startsWith('/') ? pdfUrl.slice(1) : pdfUrl);
-      if (fs.existsSync(localPath)) {
-        pdfBuffer = fs.readFileSync(localPath);
-      } else {
-        const doc = await (prisma as any).storedDocument.findFirst({
-          where: { fileName: invoice.attachedInvoice?.fileName || '' },
-          select: { fileData: true },
-        });
-        if (doc?.fileData) pdfBuffer = Buffer.from(doc.fileData);
-      }
-    }
-  }
-
+  const pdfBuffer = await loadPdfBufferFromUrl(pdfUrl, invoice.attachedInvoice?.fileName || splits[0]?.attachedInvoice?.fileName);
   if (!pdfBuffer) {
     return { success: false, error: `Could not load invoice PDF to sign: ${pdfUrl}` };
   }
@@ -229,6 +332,7 @@ export async function queueInvoiceForDsc(invoiceId: number): Promise<{ success: 
   state.jobs.push({
     jobId,
     invoiceId: invoice.id,
+    splitIndex: 0,
     companyName: invoice.companyName,
     isTest: false,
     pdfBase64: pdfBuffer.toString('base64'),
@@ -237,11 +341,15 @@ export async function queueInvoiceForDsc(invoiceId: number): Promise<{ success: 
   });
 
   saveSharedState(state);
-  console.log(`[Auto-DSC] ⚡ Invoice #${invoice.id} (${invoice.companyName}) queued for background USB DSC signing!`);
+  console.log(`[Auto-DSC] ⚡ Invoice #${invoice.id} (${invoice.companyName}) queued for USB DSC signing! (Gateway: ${isOnline ? 'ONLINE' : 'PENDING_USB_DETECTION'})`);
   return {
     success: true,
-    message: `Invoice for ${invoice.companyName} queued for USB DSC signing!`,
+    message: isOnline
+      ? `Invoice for ${invoice.companyName} queued for USB DSC signing!`
+      : `Invoice for ${invoice.companyName} queued. Will be signed automatically when USB key is connected.`,
     jobId,
+    jobIds: [jobId],
+    isOnline,
   };
 }
 
@@ -332,7 +440,7 @@ export async function POST(request: Request) {
         console.warn('[DSC Bridge] File write notice:', fsErr);
       }
 
-      // 2. Write to StoredDocument in SQL Database
+      // 2. Write to StoredDocument in SQL Database (Permanent & Serverless Safe)
       let signedUrl = `/uploads/signed-invoices/${fileName}`;
       try {
         const storedDoc = await (prisma as any).storedDocument.create({
@@ -341,6 +449,7 @@ export async function POST(request: Request) {
             fileData: signedBuffer,
             mimeType: 'application/pdf',
             fileSize: signedBuffer.length,
+            uploadedById: 1, // System/Admin ID ensures foreign key constraint passes
           },
         });
         if (storedDoc?.id) {
@@ -372,24 +481,67 @@ export async function POST(request: Request) {
       // 5. Update real invoice record if present
       if (job?.invoiceId) {
         try {
+          const invRecord = await (prisma as any).invoiceRecord.findUnique({
+            where: { id: job.invoiceId },
+            select: { id: true, splitsJson: true },
+          });
+
+          let updatedSplitsJson: string | null = null;
+          let allSplitsSigned = false;
+
+          if (invRecord?.splitsJson) {
+            try {
+              const parsedSplits = JSON.parse(invRecord.splitsJson);
+              if (Array.isArray(parsedSplits) && parsedSplits.length > 0) {
+                const targetIdx = (job.splitIndex !== undefined && job.splitIndex < parsedSplits.length) ? job.splitIndex : 0;
+                if (parsedSplits[targetIdx]) {
+                  parsedSplits[targetIdx].digitallySignedPdfUrl = signedUrl;
+                  parsedSplits[targetIdx].digitallySignedPdfName = fileName;
+                  parsedSplits[targetIdx].signedAt = new Date().toISOString();
+                  parsedSplits[targetIdx].signedByName = signerName || 'PRAVEEN DILIPKUMAR AGARWAL';
+                  if (parsedSplits[targetIdx].attachedInvoice) {
+                    parsedSplits[targetIdx].attachedInvoice.fileUrl = signedUrl;
+                    parsedSplits[targetIdx].attachedInvoice.fileName = fileName;
+                    parsedSplits[targetIdx].attachedInvoice.fileSize = signedBuffer.length;
+                  }
+                }
+
+                // Check if all splits with attached invoices are now signed
+                allSplitsSigned = parsedSplits.every((s: any) => !s.attachedInvoice?.fileUrl || s.digitallySignedPdfUrl);
+                updatedSplitsJson = JSON.stringify(parsedSplits);
+              }
+            } catch {}
+          } else {
+            allSplitsSigned = true;
+          }
+
+          // If single invoice or all splits signed, mark main invoice record signed
+          const shouldUpdateMain = allSplitsSigned || job.splitIndex === undefined || job.splitIndex === 0;
+
           await (prisma as any).invoiceRecord.update({
             where: { id: job.invoiceId },
             data: {
-              digitallySignedPdfUrl: signedUrl,
-              digitallySignedPdfName: fileName,
-              signedAt: new Date(),
-              signedByName: signerName || 'PRAVEEN DILIPKUMAR AGARWAL',
+              ...(shouldUpdateMain ? {
+                digitallySignedPdfUrl: signedUrl,
+                digitallySignedPdfName: fileName,
+                signedAt: new Date(),
+                signedByName: signerName || 'PRAVEEN DILIPKUMAR AGARWAL',
+              } : {}),
+              ...(updatedSplitsJson ? { splitsJson: updatedSplitsJson } : {}),
             },
           });
 
-          // Also replace the attached invoice PDF with the signed PDF
-          await (prisma as any).attachedInvoice.updateMany({
-            where: { invoiceRecordId: job.invoiceId },
-            data: {
-              fileUrl: signedUrl,
-              fileName: fileName,
-            },
-          });
+          // Also replace the attached invoice PDF with the signed PDF for primary/single
+          if (job.splitIndex === undefined || job.splitIndex === 0) {
+            await (prisma as any).attachedInvoice.updateMany({
+              where: { invoiceRecordId: job.invoiceId },
+              data: {
+                fileUrl: signedUrl,
+                fileName: fileName,
+                fileSize: signedBuffer.length,
+              },
+            });
+          }
         } catch (invErr) {
           console.error('[DSC Bridge] Invoice record update error:', invErr);
         }
@@ -406,11 +558,11 @@ export async function POST(request: Request) {
 
     // ── 4. WEB CLIENT QUEUES REAL INVOICE FOR SIGNING ──────────────────────
     if (action === 'QUEUE_INVOICE') {
-      const { invoiceId } = body;
+      const { invoiceId, force } = body;
       if (!invoiceId) {
         return NextResponse.json({ error: 'Missing invoiceId' }, { status: 400 });
       }
-      const qRes = await queueInvoiceForDsc(Number(invoiceId));
+      const qRes = await queueInvoiceForDsc(Number(invoiceId), { force: Boolean(force) });
       if (!qRes.success) {
         return NextResponse.json({ error: qRes.error }, { status: 400 });
       }
@@ -476,9 +628,34 @@ export async function POST(request: Request) {
 
     // ── 5. WEB CLIENT CHECKS STATUS OF A SIGNING JOB ───────────────────────
     if (action === 'JOB_STATUS') {
-      const { jobId } = body;
-      if (!jobId) {
-        return NextResponse.json({ error: 'Missing jobId' }, { status: 400 });
+      const { jobId, invoiceId } = body;
+      if (!jobId && !invoiceId) {
+        return NextResponse.json({ error: 'Missing jobId or invoiceId' }, { status: 400 });
+      }
+
+      if (invoiceId) {
+        const invJobs = state.jobs.filter((j) => j.invoiceId === Number(invoiceId));
+        if (invJobs.length > 0) {
+          const hasPending = invJobs.some((j) => j.status === 'PENDING' || j.status === 'IN_PROGRESS');
+          const hasFailed = invJobs.some((j) => j.status === 'FAILED');
+          const allCompleted = invJobs.every((j) => j.status === 'COMPLETED');
+          if (hasPending) {
+            return NextResponse.json({ success: true, status: 'IN_PROGRESS', jobs: invJobs });
+          }
+          if (allCompleted) {
+            return NextResponse.json({
+              success: true,
+              status: 'COMPLETED',
+              signedPdfUrl: invJobs[0]?.signedPdfUrl,
+              signedPdfName: invJobs[0]?.signedPdfName,
+              signerName: invJobs[0]?.signerName,
+              jobs: invJobs,
+            });
+          }
+          if (hasFailed) {
+            return NextResponse.json({ success: false, status: 'FAILED', error: invJobs.find((j) => j.error)?.error || 'Signing failed' });
+          }
+        }
       }
 
       const job = state.jobs.find((j) => j.jobId === jobId);
