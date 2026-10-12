@@ -26,37 +26,14 @@ function getDatabaseUrl(): string {
   const baseUrl = dbUrl.split('?')[0];
   const queryStr = dbUrl.includes('?') ? dbUrl.split('?')[1] : '';
   const searchParams = new URLSearchParams(queryStr);
-  searchParams.set('connection_limit', '5');
-  searchParams.set('pool_timeout', '20');
-  searchParams.set('connect_timeout', '15');
-  searchParams.set('socket_timeout', '30');
+  searchParams.set('connection_limit', '10');
+  searchParams.set('pool_timeout', '30');
+  searchParams.set('connect_timeout', '20');
 
   return `${baseUrl}?${searchParams.toString()}`;
 }
 
-let keepAliveTimer: NodeJS.Timeout | null = null;
 let isExiting = false;
-
-function ensureKeepAlive() {
-  if (keepAliveTimer || typeof setInterval !== 'function') return;
-  // Send a lightweight ping every 40s to keep MySQL socket active and prevent Hostinger idle wait_timeout drops
-  keepAliveTimer = setInterval(async () => {
-    try {
-      const client = globalForPrisma.prisma;
-      if (client) {
-        await (client as any).$queryRawUnsafe('SELECT 1');
-      }
-    } catch (err: any) {
-      if (isPrismaPanic(err)) {
-        handleFatalPrismaPanic(err);
-      }
-    }
-  }, 40000);
-
-  if (keepAliveTimer.unref) {
-    keepAliveTimer.unref();
-  }
-}
 
 function handleFatalPrismaPanic(err: any) {
   console.error('[Prisma Fatal Engine Panic] Non-recoverable Query Engine panic detected:', err);
@@ -64,12 +41,12 @@ function handleFatalPrismaPanic(err: any) {
   isExiting = true;
 
   // When the Rust Query Engine panics (e.g. "timer has gone away"), the native N-API binary
-  // in the current Node.js process is fatally corrupted. In production under PM2 or Docker,
-  // exiting immediately triggers a clean sub-second restart, restoring site health instantly.
-  if (process.env.NODE_ENV === 'production' && typeof process.exit === 'function') {
+  // in the current Node.js process is fatally corrupted. Exiting immediately signals the process
+  // manager (Passenger / PM2 / systemd) to spin up a clean process with a healthy engine instantly.
+  if (typeof process.exit === 'function') {
     setTimeout(() => {
       process.exit(1);
-    }, 150);
+    }, 100);
   }
 }
 
@@ -79,7 +56,6 @@ function createPrismaClient(): PrismaClient {
     datasources: { db: { url } },
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   });
-  ensureKeepAlive();
   return client;
 }
 
