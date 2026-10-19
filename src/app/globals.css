@@ -417,3 +417,36 @@ body.hide-manager-sidebar main {
   max-width: 100vw !important;
   margin-left: 0 !important;
 }
+
+/* ── EXCEL DARK GRID FOR INVOICE TABLE & ACCOUNTING GRIDS ── */
+.excel-dark-grid {
+  border-collapse: collapse !important;
+  border: 2px solid #1a1a1a !important;
+}
+
+.excel-dark-grid thead tr {
+  border-bottom: 2px solid #001719 !important;
+}
+
+.excel-dark-grid th {
+  border: 1px solid #002629 !important;
+  border-bottom: 2px solid #001719 !important;
+}
+
+.excel-dark-grid td {
+  border: 1px solid #333333 !important;
+}
+
+.excel-dark-grid tbody tr {
+  border-bottom: 1px solid #333333 !important;
+}
+
+.excel-dark-grid tbody tr:hover td {
+  background-color: #f8fafc;
+}
+
+.excel-dark-grid .sub-product-divider > * + * {
+  border-top: 1px solid #333333 !important;
+}
+
+

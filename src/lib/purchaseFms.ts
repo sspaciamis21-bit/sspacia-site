@@ -1,5 +1,5 @@
 /**
- * purchaseFms.ts — Helper to record Purchase Planned & Actual timestamps in the Google Sheet 'sspacia-purchase' tab
+ * purchaseFms.ts — Helper to record Purchase Planned & Actual timestamps in the Google Sheet 'S-PURCHASE FMS' tab
  * Spreadsheet: https://docs.google.com/spreadsheets/d/1a7ajEb9clt8ORnM73rtKem0_bT9Ifl8T5J6mifoonX0/edit#gid=1820096360
  */
 
@@ -41,7 +41,7 @@ export function getISTTimestamp(d: Date = new Date()): string {
 }
 
 /**
- * Sends a 'purchase_planned' record to Google Sheet 'sspacia-purchase' tab when stock hits buffer limit
+ * Sends a 'purchase_planned' record to Google Sheet 'S-PURCHASE FMS' tab when stock hits buffer limit
  */
 export async function trackPurchaseFmsPlanned(payload: PurchaseFmsPlannedPayload) {
   const itemDescription = `${payload.itemName} (${payload.centerName}) - ${payload.reorderQty} units (3x buffer)`;

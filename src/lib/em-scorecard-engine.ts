@@ -245,8 +245,8 @@ export async function fetchDatabaseFmsEvents(): Promise<{
           const ac2 = inv.clientEmailSentAt
             ? new Date(inv.clientEmailSentAt)
             : inv.status === 'APPROVED'
-            ? new Date(inv.signedAt || inv.updatedAt)
-            : null;
+              ? new Date(inv.signedAt || inv.updatedAt)
+              : null;
           task2Events.push({ centre, planned: pl2, actual: ac2 });
         }
       });
@@ -288,8 +288,8 @@ export async function fetchDatabaseFmsEvents(): Promise<{
           a.reviewedAt && a.decision !== 'PENDING'
             ? new Date(a.reviewedAt)
             : a.actualTimestamp
-            ? parseFmsDate(a.actualTimestamp)
-            : null;
+              ? parseFmsDate(a.actualTimestamp)
+              : null;
 
         task3Events.push({ centre, planned: pl3, actual: ac3 });
       });

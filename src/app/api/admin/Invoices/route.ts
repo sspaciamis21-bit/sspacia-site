@@ -4,6 +4,7 @@ import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { getNodeScopedUserIds, getUserIdsByLocation } from '@/lib/auth/getNodeScopedUserIds';
 import { autoDispatchIfLastDay } from '@/lib/auto-dispatch';
+import { getBillingMonthInfo } from '@/lib/invoice-proration-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,12 +59,14 @@ export async function GET(request: Request) {
     }
 
     if (search) {
+      const searchNum = parseInt(search.replace(/^#/, '').trim(), 10);
       where.OR = [
         { companyName: { contains: search } },
         { gstNo: { contains: search } },
         { cabinName: { contains: search } },
         { bookingId: { contains: search } },
         { brokerName: { contains: search } },
+        ...(!isNaN(searchNum) ? [{ srNo: searchNum }] : []),
       ];
     }
 
@@ -121,7 +124,7 @@ export async function GET(request: Request) {
         attachedInvoice: true,
       },
       orderBy: [
-        { paymentDueDay: 'asc' },
+        { srNo: 'asc' },
         { sentAt: 'desc' },
       ],
     });
@@ -133,10 +136,23 @@ export async function GET(request: Request) {
       const ratePerDay = Number(inv.lateFeePerDay || 100);
       const waivedDays = Number(inv.waivedLateDays || 0);
 
-      if (inv.dueDate && inv.status !== 'APPROVED') {
-        const due = new Date(inv.dueDate);
-        if (today > due) {
-          const diffMs = today.getTime() - due.getTime();
+      // Determine effective dueDate & target paymentDueDay
+      let effectiveDueDate: Date | null = inv.dueDate ? new Date(inv.dueDate) : null;
+      const targetDay =
+        Number(inv.paymentDueDay) ||
+        Number(inv.clientMaster?.paymentDueDay) ||
+        Number(inv.clientMaster?.products?.[0]?.paymentDueDay) ||
+        7;
+
+      if (!effectiveDueDate) {
+        const monthInfo = getBillingMonthInfo(inv.billingMonth, inv.sentAt ? new Date(inv.sentAt) : new Date());
+        const validDay = Math.min(Math.max(1, targetDay), monthInfo.totalDays);
+        effectiveDueDate = new Date(monthInfo.year, monthInfo.monthIndex, validDay);
+      }
+
+      if (effectiveDueDate && inv.status !== 'APPROVED') {
+        if (today > effectiveDueDate) {
+          const diffMs = today.getTime() - effectiveDueDate.getTime();
           totalOverdueDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
         }
       }
@@ -147,6 +163,8 @@ export async function GET(request: Request) {
 
       return {
         ...inv,
+        dueDate: inv.dueDate || effectiveDueDate?.toISOString(),
+        paymentDueDay: inv.paymentDueDay || targetDay,
         totalOverdueDays,
         calculatedLateDays: chargeableDays,
         calculatedLateFee,

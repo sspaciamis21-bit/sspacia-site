@@ -232,7 +232,10 @@ def sign_pdf_buffer(pdf_bytes: bytes, cert_label, cert_id, signer_name, session)
 
     writer = IncrementalPdfFileWriter(in_stream, strict=False)
     meta = signers.PdfSignatureMetadata(
-        field_name="SSPACIA_Sign", md_algorithm="sha256"
+        field_name="SSPACIA_Sign",
+        md_algorithm="sha256",
+        reason="Authorised Signatory",
+        location="Surat, India",
     )
     pdf_signer = signers.PdfSigner(
         meta,

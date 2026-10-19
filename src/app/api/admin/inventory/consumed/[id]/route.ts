@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { sendPurchaseOrderEmail } from '@/lib/purchaseEmail';
-import { trackPurchaseFmsPlanned } from '@/lib/purchaseFms';
+import { trackPurchaseFmsPlanned, trackPurchaseFmsActual } from '@/lib/purchaseFms';
 import { findUniqueConsumedItem, updateConsumedItem, deleteConsumedItem } from '@/lib/consumedInventoryDb';
 
 export const dynamic = 'force-dynamic';
@@ -91,6 +91,7 @@ export async function PUT(
 
     let purchaseStatus = existingItem.purchaseStatus;
     let purchasePlannedAt = existingItem.purchasePlannedAt;
+    let purchaseActualAt = existingItem.purchaseActualAt;
     let bufferAlertTriggeredAt = existingItem.bufferAlertTriggeredAt;
 
     if (shouldTriggerPurchase) {
@@ -109,7 +110,7 @@ export async function PUT(
         remarks: remarks !== undefined ? String(remarks).trim() : existingItem.remarks,
       }).catch((err) => console.error('[Consumed Inventory PUT] Email error:', err));
 
-      // 2. Log to Google Sheet 'sspacia-purchase' tab
+      // 2. Log to Google Sheet 'S-PURCHASE FMS' tab (Buffer Limit Exceed TimeStamp)
       trackPurchaseFmsPlanned({
         itemName: newProductName,
         centerName,
@@ -119,9 +120,21 @@ export async function PUT(
         userEmail,
         userName,
       }).catch((err) => console.error('[Consumed Inventory PUT] FMS Sheet error:', err));
-    } else if (!isBufferBreached && isAlertActiveBool) {
-      // Stock replenished above buffer limit
-      purchaseStatus = 'NORMAL';
+    } else if (
+      !isBufferBreached &&
+      (isAlertActiveBool || existingItem.purchaseStatus === 'PENDING_PURCHASE' || Number(existingItem.balanceQty) <= Number(existingItem.bufferLimit))
+    ) {
+      // Stock replenished / increased by Community Manager above buffer limit!
+      // This means purchase executive has purchased & delivered it -> log Actual timestamp into Col E
+      purchaseStatus = 'DELIVERED';
+      purchaseActualAt = new Date();
+
+      trackPurchaseFmsActual({
+        itemName: newProductName,
+        centerName,
+        userEmail,
+        userName,
+      }).catch((err) => console.error('[Consumed Inventory PUT] Actual FMS Sheet error:', err));
     }
 
     const updated = await updateConsumedItem(itemId, {
@@ -137,6 +150,7 @@ export async function PUT(
       bufferAlertTriggeredAt,
       purchaseStatus,
       purchasePlannedAt,
+      purchaseActualAt,
       ...(entryDate ? { createdAt: new Date(entryDate) } : {}),
     });
 

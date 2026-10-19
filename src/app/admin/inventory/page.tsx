@@ -34,6 +34,7 @@ import {
   Minus,
   AlertOctagon,
   Bell,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -125,6 +126,7 @@ export default function InternalInventoryPage() {
 
   const [loading, setLoading] = useState(true);
   const [consumedLoading, setConsumedLoading] = useState(false);
+  const [syncingPurchaseFms, setSyncingPurchaseFms] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocationFilter, setSelectedLocationFilter] = useState<string>('ALL');
 
@@ -721,6 +723,24 @@ export default function InternalInventoryPage() {
       }
     } catch {
       toast.error('Network error deleting item');
+    }
+  };
+
+  const handleSyncToPurchaseFms = async () => {
+    setSyncingPurchaseFms(true);
+    try {
+      const res = await fetch('/api/admin/inventory/consumed/fms-sync', { method: 'POST' });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message || 'Successfully synced with S-PURCHASE FMS in Google Sheets!');
+        fetchConsumedInventory();
+      } else {
+        toast.error(json.error || 'Failed to sync with S-PURCHASE FMS');
+      }
+    } catch {
+      toast.error('Network error during S-PURCHASE FMS sync');
+    } finally {
+      setSyncingPurchaseFms(false);
     }
   };
 
@@ -1789,6 +1809,17 @@ export default function InternalInventoryPage() {
                   title="Refresh Consumables"
                 >
                   <RefreshCw size={13} className={consumedLoading ? 'animate-spin' : ''} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSyncToPurchaseFms}
+                  disabled={syncingPurchaseFms}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#006064] hover:bg-[#004d40] text-white text-xs font-bold shadow-2xs cursor-pointer disabled:opacity-50 transition-colors"
+                  title="Populate and sync buffer stock items directly to Google Sheet S-PURCHASE FMS"
+                >
+                  <FileSpreadsheet size={13} className={syncingPurchaseFms ? 'animate-spin' : ''} />
+                  <span>{syncingPurchaseFms ? 'Syncing...' : 'Sync S-PURCHASE FMS'}</span>
                 </button>
               </div>
             </div>

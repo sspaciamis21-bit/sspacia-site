@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -12,6 +12,7 @@ import {
   Calendar,
   Clock,
   CheckCircle2,
+  MailCheck,
   Loader2,
   X,
   Filter,
@@ -49,7 +50,8 @@ import {
   Zap,
   TrendingUp,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FadeUp } from '@/components/ui/fade-up';
@@ -176,6 +178,7 @@ interface InvoiceRecord {
   createdAt: string;
   createdBy: { id: number; name: string; email: string; assignedLocations?: { location: LocationOption }[] };
   clientMaster?: {
+    srNo?: number | null;
     clientType?: string | null;
     complimentaryJson?: string | null;
     hasBrokerCommission?: boolean;
@@ -183,6 +186,7 @@ interface InvoiceRecord {
     hoAddress?: string | null;
     gstStatus?: string | null;
     gstNo?: string | null;
+    paymentDueDay?: number | null;
     agreementStartDate?: string | null;
     agreementEndDate?: string | null;
     lockinEndDate?: string | null;
@@ -208,6 +212,8 @@ interface InvoiceRecord {
       paymentDueDay?: number | null;
       agreementPdfUrl?: string | null;
       agreementPdfName?: string | null;
+      escalationPercent?: number | null;
+      escalationApplicable?: string | number | null;
     }[];
   };
   attachedInvoice?: AttachedInvoice | null;
@@ -232,6 +238,290 @@ export interface ComplimentaryUsageSummary {
   totalExtraGst: number;
   totalExtraAmount: number;
   updatedAt?: string;
+}
+
+interface ExtractedProduct {
+  name: string;
+  period: string;
+  isProrated?: boolean;
+  activeDays?: number;
+  seats: number;
+  rate: number;
+  amount: number;
+  gstPercent: number;
+  gstAmount: number;
+  totalAmount: number;
+  dueDate: string;
+}
+
+function toIsoDateOnly(d?: string | Date | null): string {
+  if (!d) return '';
+  if (typeof d === 'string') {
+    const trimmed = d.trim();
+    const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    const dmyMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (dmyMatch) {
+      const day = dmyMatch[1].padStart(2, '0');
+      const month = dmyMatch[2].padStart(2, '0');
+      const year = dmyMatch[3];
+      return `${year}-${month}-${day}`;
+    }
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime())) {
+      const year = parsed.getFullYear();
+      const month = String(parsed.getMonth() + 1).padStart(2, '0');
+      const day = String(parsed.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } else if (d instanceof Date && !isNaN(d.getTime())) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return '';
+}
+
+function computeInvoicePeriod(
+  item: {
+    proratedStartDate?: string | null;
+    proratedEndDate?: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    isProrated?: boolean;
+    activeDays?: number;
+  },
+  billingMonthStr?: string | null,
+  clientMaster?: InvoiceRecord['clientMaster']
+): { periodText: string; isProrated: boolean; activeDays?: number } {
+  const explicitStart = item.proratedStartDate || item.startDate;
+  const explicitEnd = item.proratedEndDate || item.endDate;
+  if (explicitStart && explicitEnd) {
+    const sIso = toIsoDateOnly(explicitStart);
+    const eIso = toIsoDateOnly(explicitEnd);
+    if (sIso && eIso) {
+      return {
+        periodText: `${formatDateToIndian(sIso)} to ${formatDateToIndian(eIso)}`,
+        isProrated: true,
+        activeDays: item.activeDays || calculateInclusiveDays(sIso, eIso),
+      };
+    }
+  }
+
+  const info = getBillingMonthInfo(billingMonthStr);
+  let effectiveStart = info.firstDateStr;
+  let effectiveEnd = info.lastDateStr;
+  let isCustom = false;
+
+  if (explicitStart) {
+    const sIso = toIsoDateOnly(explicitStart);
+    if (sIso && sIso >= info.firstDateStr && sIso <= info.lastDateStr) {
+      effectiveStart = sIso;
+      isCustom = true;
+    }
+  } else if (clientMaster?.agreementStartDate) {
+    const agrStartIso = toIsoDateOnly(clientMaster.agreementStartDate);
+    if (agrStartIso && agrStartIso > info.firstDateStr && agrStartIso <= info.lastDateStr) {
+      effectiveStart = agrStartIso;
+      isCustom = true;
+    }
+  }
+
+  if (explicitEnd) {
+    const eIso = toIsoDateOnly(explicitEnd);
+    if (eIso && eIso >= info.firstDateStr && eIso <= info.lastDateStr) {
+      effectiveEnd = eIso;
+      isCustom = true;
+    }
+  } else if (clientMaster?.agreementEndDate) {
+    const agrEndIso = toIsoDateOnly(clientMaster.agreementEndDate);
+    if (agrEndIso && agrEndIso >= info.firstDateStr && agrEndIso < info.lastDateStr) {
+      effectiveEnd = agrEndIso;
+      isCustom = true;
+    }
+  }
+
+  const sText = formatDateToIndian(effectiveStart);
+  const eText = formatDateToIndian(effectiveEnd);
+
+  return {
+    periodText: `${sText} to ${eText}`,
+    isProrated: isCustom || !!item.isProrated,
+    activeDays: isCustom ? calculateInclusiveDays(effectiveStart, effectiveEnd) : undefined,
+  };
+}
+
+function computeInvoiceDueDate(
+  inv: InvoiceRecord,
+  itemDueDate?: string | null,
+  itemDueDay?: number | string | null
+): string {
+  const explicit = itemDueDate || inv.dueDate;
+  if (explicit) {
+    const d = formatDisplayDate(explicit);
+    if (d) return d;
+  }
+
+  const candidateDay =
+    Number(itemDueDay) ||
+    Number(inv.paymentDueDay) ||
+    Number(inv.clientMaster?.paymentDueDay) ||
+    Number(inv.clientMaster?.products?.find((p) => p.paymentDueDay)?.paymentDueDay) ||
+    7;
+
+  const info = getBillingMonthInfo(inv.billingMonth, inv.sentAt ? new Date(inv.sentAt) : new Date());
+  const validDay = Math.min(Math.max(1, candidateDay), info.totalDays);
+  const calculatedDate = new Date(info.year, info.monthIndex, validDay);
+
+  return formatDisplayDate(calculatedDate);
+}
+
+function getProbableEscalationInfo(cm?: InvoiceRecord['clientMaster']): {
+  percent: number;
+  applicableDateStr: string | null;
+  isEstimated: boolean;
+} | null {
+  if (!cm) return null;
+  const percent = Number(
+    cm.escalationPercent ||
+    cm.products?.find((p) => Number(p.escalationPercent) > 0)?.escalationPercent ||
+    0
+  );
+  if (!percent || percent <= 0) return null;
+
+  const explicit =
+    cm.escalationApplicable ||
+    cm.products?.find((p) => (p as any).escalationApplicable)?.escalationApplicable;
+  if (explicit) {
+    return {
+      percent,
+      applicableDateStr: formatDisplayDate(explicit),
+      isEstimated: false,
+    };
+  }
+
+  if (cm.agreementStartDate) {
+    try {
+      const start = new Date(cm.agreementStartDate);
+      if (!isNaN(start.getTime())) {
+        const probable = new Date(start);
+        probable.setFullYear(probable.getFullYear() + 1);
+        return {
+          percent,
+          applicableDateStr: formatDisplayDate(probable),
+          isEstimated: true,
+        };
+      }
+    } catch {}
+  }
+
+  if (cm.lockinEndDate) {
+    return {
+      percent,
+      applicableDateStr: formatDisplayDate(cm.lockinEndDate),
+      isEstimated: true,
+    };
+  }
+
+  return {
+    percent,
+    applicableDateStr: null,
+    isEstimated: false,
+  };
+}
+
+function extractInvoiceProducts(inv: InvoiceRecord): ExtractedProduct[] {
+  let products: ExtractedProduct[] = [];
+
+  if (inv.itemsJson) {
+    try {
+      const raw = JSON.parse(inv.itemsJson);
+      if (Array.isArray(raw) && raw.length > 0) {
+        products = raw.map((it: any) => {
+          const seats = Number(it.noOfSeats) || 0;
+          const rate = Number(it.ratePerAgreement) || (seats > 0 && it.amount ? Math.round(Number(it.amount) / seats) : 0);
+          const amt = Number(it.amount) || (seats * rate);
+          const gstP = Number(it.gstPercent) || 18;
+          const gstAmt = Math.round(amt * (gstP / 100));
+          const tot = Number(it.totalAmount) || (amt + gstAmt);
+
+          const periodInfo = computeInvoicePeriod(it, inv.billingMonth, inv.clientMaster);
+          const dueDateStr = computeInvoiceDueDate(inv, it.dueDate, it.paymentDueDay);
+
+          return {
+            name: it.cabinName || it.productName || 'Workspace',
+            period: periodInfo.periodText,
+            isProrated: periodInfo.isProrated,
+            activeDays: periodInfo.activeDays,
+            seats,
+            rate,
+            amount: amt,
+            gstPercent: gstP,
+            gstAmount: gstAmt,
+            totalAmount: tot,
+            dueDate: dueDateStr,
+          };
+        });
+      }
+    } catch {}
+  }
+
+  if (products.length === 0 && inv.clientMaster?.products && inv.clientMaster.products.length > 0) {
+    products = inv.clientMaster.products.map((p) => {
+      const seats = Number(p.noOfSeats) || 0;
+      const rate = Number(p.ratePerAgreement) || (seats > 0 && p.amount ? Math.round(Number(p.amount) / seats) : 0);
+      const amt = Number(p.amount) || (seats * rate);
+      const gstP = Number(p.gstPercent) || 18;
+      const gstAmt = Math.round(amt * (gstP / 100));
+      const tot = Number(p.totalAmount) || (amt + gstAmt);
+
+      const periodInfo = computeInvoicePeriod(p as any, inv.billingMonth, inv.clientMaster);
+      const dueDateStr = computeInvoiceDueDate(inv, null, p.paymentDueDay);
+
+      return {
+        name: p.cabinName || 'Workspace',
+        period: periodInfo.periodText,
+        isProrated: periodInfo.isProrated,
+        activeDays: periodInfo.activeDays,
+        seats,
+        rate,
+        amount: amt,
+        gstPercent: gstP,
+        gstAmount: gstAmt,
+        totalAmount: tot,
+        dueDate: dueDateStr,
+      };
+    });
+  }
+
+  if (products.length === 0) {
+    const seats = Number(inv.noOfSeats) || 0;
+    const rate = Number(inv.ratePerAgreement) || (seats > 0 && inv.amount ? Math.round(Number(inv.amount) / seats) : 0);
+    const amt = Number(inv.amount) || (seats * rate);
+    const gstP = Number(inv.gstPercent) || 18;
+    const gstAmt = Math.round(amt * (gstP / 100));
+    const tot = Number(inv.totalAmount) || (amt + gstAmt);
+
+    const periodInfo = computeInvoicePeriod(inv as any, inv.billingMonth, inv.clientMaster);
+    const dueDateStr = computeInvoiceDueDate(inv, inv.dueDate, inv.paymentDueDay);
+
+    products = [{
+      name: inv.cabinName || 'Workspace',
+      period: periodInfo.periodText,
+      isProrated: periodInfo.isProrated,
+      activeDays: periodInfo.activeDays,
+      seats,
+      rate,
+      amount: amt,
+      gstPercent: gstP,
+      gstAmount: gstAmt,
+      totalAmount: tot,
+      dueDate: dueDateStr,
+    }];
+  }
+
+  return products;
 }
 
 const ACCOUNTANT_CM_EMAIL = 'ssinfrazone21@gmail.com';
@@ -347,36 +637,135 @@ export default function AdminInvoicesWorkflowPage() {
   const [showArrivalBanner, setShowArrivalBanner] = useState(false);
   const [hasShownArrivalBanner, setHasShownArrivalBanner] = useState(false);
 
+  // Sorting state for table (defaults to SR.NO ascending for CM & Super Admin)
+  const [sortColumn, setSortColumn] = useState<'srNo' | 'dueDate' | 'company' | 'none'>('srNo');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // ── EXCEL-STYLE COLUMN RESIZING (DRAGGABLE CELL WIDTHS) ──
+  const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    srNo: 65,
+    company: 230,
+    agreement: 170,
+    lockin: 110,
+    notice: 135,
+    escalation: 175,
+    cycle: 130,
+    node: 120,
+    product: 150,
+    period: 180,
+    seats: 90,
+    rate: 100,
+    amount: 115,
+    totalAmount: 140,
+    dueDate: 125,
+    arrival: 155,
+    month: 135,
+    status: 165,
+    action: 185,
+  };
+
+  const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('sspacia_invoice_col_widths');
+        if (saved) return { ...DEFAULT_COL_WIDTHS, ...JSON.parse(saved) };
+      } catch {}
+    }
+    return DEFAULT_COL_WIDTHS;
+  });
+
+  const resizingColRef = useRef<{ colKey: string; startX: number; startWidth: number } | null>(null);
+
+  const handleResizeStart = (e: React.MouseEvent, colKey: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startWidth = colWidths[colKey] || DEFAULT_COL_WIDTHS[colKey] || 120;
+    resizingColRef.current = { colKey, startX: e.clientX, startWidth };
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizingColRef.current) return;
+      const diff = moveEvent.clientX - resizingColRef.current.startX;
+      const newWidth = Math.max(50, resizingColRef.current.startWidth + diff);
+      setColWidths((prev) => ({ ...prev, [resizingColRef.current!.colKey]: newWidth }));
+    };
+
+    const onMouseUp = () => {
+      if (resizingColRef.current) {
+        setColWidths((prev) => {
+          try {
+            localStorage.setItem('sspacia_invoice_col_widths', JSON.stringify(prev));
+          } catch {}
+          return prev;
+        });
+      }
+      resizingColRef.current = null;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  const renderResizeHandle = (colKey: string) => (
+    <div
+      onMouseDown={(e) => handleResizeStart(e, colKey)}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setColWidths((prev) => {
+          const next = { ...prev, [colKey]: DEFAULT_COL_WIDTHS[colKey] || 120 };
+          try { localStorage.setItem('sspacia_invoice_col_widths', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      }}
+      className="absolute right-0 top-0 bottom-0 w-2.5 cursor-col-resize hover:bg-amber-400 active:bg-amber-500 z-30 select-none group"
+      title="Drag to resize column (Double-click to reset)"
+    >
+      <div className="w-[1.5px] h-full mx-auto bg-teal-900/40 group-hover:bg-amber-500 transition-colors" />
+    </div>
+  );
+
   // Excel-Style Frozen Header Column Filters
-  const [excelFilters, setExcelFilters] = useState<{
-    company: string[];
-    cycle: string[];
-    node: string[];
-    month: string[];
-    status: string[];
-  }>({
+  type ExcelFilterColKey =
+    | 'company'
+    | 'cycle'
+    | 'node'
+    | 'month'
+    | 'status'
+    | 'notice'
+    | 'escalation'
+    | 'product'
+    | 'dueDate'
+    | 'arrival';
+
+  const [excelFilters, setExcelFilters] = useState<Record<ExcelFilterColKey, string[]>>({
     company: [],
     cycle: [],
     node: [],
     month: [],
     status: [],
+    notice: [],
+    escalation: [],
+    product: [],
+    dueDate: [],
+    arrival: [],
   });
-  const [activeExcelFilterCol, setActiveExcelFilterCol] = useState<'company' | 'cycle' | 'node' | 'month' | 'status' | null>(null);
+  const [activeExcelFilterCol, setActiveExcelFilterCol] = useState<ExcelFilterColKey | null>(null);
   const [excelFilterSearch, setExcelFilterSearch] = useState<string>('');
 
-  const toggleExcelFilter = (colKey: 'company' | 'cycle' | 'node' | 'month' | 'status', value: string) => {
+  const toggleExcelFilter = (colKey: ExcelFilterColKey, value: string) => {
     setExcelFilters((prev) => {
-      const current = prev[colKey];
+      const current = prev[colKey] || [];
       const next = current.includes(value) ? current.filter((x) => x !== value) : [...current, value];
       return { ...prev, [colKey]: next };
     });
   };
 
-  const selectAllExcelFilter = (colKey: 'company' | 'cycle' | 'node' | 'month' | 'status', allValues: string[]) => {
+  const selectAllExcelFilter = (colKey: ExcelFilterColKey, allValues: string[]) => {
     setExcelFilters((prev) => ({ ...prev, [colKey]: allValues }));
   };
 
-  const clearExcelFilter = (colKey: 'company' | 'cycle' | 'node' | 'month' | 'status') => {
+  const clearExcelFilter = (colKey: ExcelFilterColKey) => {
     setExcelFilters((prev) => ({ ...prev, [colKey]: [] }));
   };
 
@@ -387,17 +776,16 @@ export default function AdminInvoicesWorkflowPage() {
       node: [],
       month: [],
       status: [],
+      notice: [],
+      escalation: [],
+      product: [],
+      dueDate: [],
+      arrival: [],
     });
   };
 
   const totalActiveExcelFiltersCount = useMemo(() => {
-    return (
-      (excelFilters.company.length > 0 ? 1 : 0) +
-      (excelFilters.cycle.length > 0 ? 1 : 0) +
-      (excelFilters.node.length > 0 ? 1 : 0) +
-      (excelFilters.month.length > 0 ? 1 : 0) +
-      (excelFilters.status.length > 0 ? 1 : 0)
-    );
+    return Object.values(excelFilters).reduce((count, arr) => count + (arr && arr.length > 0 ? 1 : 0), 0);
   }, [excelFilters]);
 
   // Click outside to close active Excel filter popover
@@ -694,11 +1082,6 @@ export default function AdminInvoicesWorkflowPage() {
 
   // Remote DSC Signing Handlers (Mercado CM Hardware Token)
   const handleApplySingleDsc = async (invoiceId: number) => {
-    if (!dscStatus.isOnline) {
-      setShowDscOfflineModal(true);
-      return;
-    }
-
     setSigningInvoiceId(invoiceId);
     try {
       const queueRes = await fetch('/api/admin/Invoices/dsc-bridge', {
@@ -708,7 +1091,7 @@ export default function AdminInvoicesWorkflowPage() {
       });
       const queueData = await queueRes.json();
       if (!queueRes.ok || !queueData.success) {
-        if (queueData.error?.includes('insert the USB key') || !dscStatus.isOnline) {
+        if (!dscStatus.isOnline) {
           setShowDscOfflineModal(true);
         } else {
           toast.error(queueData.error || 'Failed to queue invoice for digital signature');
@@ -718,7 +1101,12 @@ export default function AdminInvoicesWorkflowPage() {
       }
 
       const jobId = queueData.jobId;
-      toast.info(queueData.message || 'Invoice queued for USB DSC Token. Awaiting hardware signature...');
+      if (!queueData.isOnline && !dscStatus.isOnline) {
+        setShowDscOfflineModal(true);
+        toast.info(queueData.message || 'Queued for USB Token. Will sign automatically once connected.');
+      } else {
+        toast.info(queueData.message || 'Invoice queued for USB DSC Token. Awaiting hardware signature...');
+      }
 
       let attempts = 0;
       const pollTimer = setInterval(async () => {
@@ -3093,6 +3481,11 @@ export default function AdminInvoicesWorkflowPage() {
     const nodes = new Map<string, number>();
     const months = new Map<string, number>();
     const statuses = new Map<string, number>();
+    const notices = new Map<string, number>();
+    const escalations = new Map<string, number>();
+    const productsMap = new Map<string, number>();
+    const dueDates = new Map<string, number>();
+    const arrivals = new Map<string, number>();
 
     invoices.forEach((inv) => {
       const c = inv.companyName?.trim();
@@ -3111,6 +3504,31 @@ export default function AdminInvoicesWorkflowPage() {
 
       const s = inv.status;
       statuses.set(s, (statuses.get(s) || 0) + 1);
+
+      // Notice Period
+      const notMonths = inv.clientMaster?.noticePeriodMonths;
+      const notLabel = notMonths ? `${notMonths} Months` : 'N/A';
+      notices.set(notLabel, (notices.get(notLabel) || 0) + 1);
+
+      // Escalation
+      const esc = getProbableEscalationInfo(inv.clientMaster);
+      const escLabel = esc ? `${esc.percent}%` : 'N/A';
+      escalations.set(escLabel, (escalations.get(escLabel) || 0) + 1);
+
+      // Products
+      const prods = extractInvoiceProducts(inv);
+      prods.forEach((p) => {
+        const pName = p.name || 'Workspace Rent';
+        productsMap.set(pName, (productsMap.get(pName) || 0) + 1);
+      });
+
+      // Due Date
+      const dDate = computeInvoiceDueDate(inv) || (inv.paymentDueDay ? `Day ${inv.paymentDueDay}` : 'Standard');
+      dueDates.set(dDate, (dueDates.get(dDate) || 0) + 1);
+
+      // Arrival & Dispatch
+      const arr = inv.sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC' : 'MANUAL';
+      arrivals.set(arr, (arrivals.get(arr) || 0) + 1);
     });
 
     return {
@@ -3127,6 +3545,11 @@ export default function AdminInvoicesWorkflowPage() {
         else if (val === 'REJECTED_WITH_REMARKS') label = 'Revision Requested';
         return { val, label, count };
       }),
+      notice: Array.from(notices.entries()).map(([val, count]) => ({ val, label: val, count })).sort((a, b) => a.label.localeCompare(b.label)),
+      escalation: Array.from(escalations.entries()).map(([val, count]) => ({ val, label: val, count })).sort((a, b) => a.label.localeCompare(b.label)),
+      product: Array.from(productsMap.entries()).map(([val, count]) => ({ val, label: val, count })).sort((a, b) => a.label.localeCompare(b.label)),
+      dueDate: Array.from(dueDates.entries()).map(([val, count]) => ({ val, label: val, count })).sort((a, b) => a.label.localeCompare(b.label)),
+      arrival: Array.from(arrivals.entries()).map(([val, count]) => ({ val, label: val, count })).sort((a, b) => a.label.localeCompare(b.label)),
     };
   }, [invoices]);
 
@@ -3140,11 +3563,17 @@ export default function AdminInvoicesWorkflowPage() {
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
     const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0];
 
-    return invoices.filter((e) => {
+    const filtered = invoices.filter((e) => {
+      const cleanSearch = searchTerm.trim().toLowerCase().replace(/^#/, '');
       const matchesSearch =
-        e.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (e.gstNo && e.gstNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (e.cabinName && e.cabinName.toLowerCase().includes(searchTerm.toLowerCase()));
+        !cleanSearch ||
+        e.companyName.toLowerCase().includes(cleanSearch) ||
+        (e.gstNo && e.gstNo.toLowerCase().includes(cleanSearch)) ||
+        (e.cabinName && e.cabinName.toLowerCase().includes(cleanSearch)) ||
+        (e.bookingId && e.bookingId.toLowerCase().includes(cleanSearch)) ||
+        (e.srNo !== undefined && e.srNo !== null && String(e.srNo) === cleanSearch) ||
+        (e.srNo !== undefined && e.srNo !== null && String(e.srNo).includes(cleanSearch)) ||
+        (e.clientMaster?.srNo !== undefined && String(e.clientMaster.srNo).includes(cleanSearch));
 
       let matchesRoleFilter = true;
       if (userRoleView === 'ACCOUNTANT') {
@@ -3211,10 +3640,41 @@ export default function AdminInvoicesWorkflowPage() {
       if (excelFilters.status.length > 0 && !excelFilters.status.includes(e.status)) {
         return false;
       }
+      if (excelFilters.notice.length > 0) {
+        const notMonths = e.clientMaster?.noticePeriodMonths;
+        const notLabel = notMonths ? `${notMonths} Months` : 'N/A';
+        if (!excelFilters.notice.includes(notLabel)) return false;
+      }
+      if (excelFilters.escalation.length > 0) {
+        const esc = getProbableEscalationInfo(e.clientMaster);
+        const escLabel = esc ? `${esc.percent}%` : 'N/A';
+        if (!excelFilters.escalation.includes(escLabel)) return false;
+      }
+      if (excelFilters.product.length > 0) {
+        const prods = extractInvoiceProducts(e);
+        if (!prods.some((p) => excelFilters.product.includes(p.name || 'Workspace Rent'))) return false;
+      }
+      if (excelFilters.dueDate.length > 0) {
+        const dDate = computeInvoiceDueDate(e) || (e.paymentDueDay ? `Day ${e.paymentDueDay}` : 'Standard');
+        if (!excelFilters.dueDate.includes(dDate)) return false;
+      }
+      if (excelFilters.arrival.length > 0) {
+        const arr = e.sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC' : 'MANUAL';
+        if (!excelFilters.arrival.includes(arr)) return false;
+      }
 
       return true;
     });
-  }, [invoices, searchTerm, userRoleView, accountantArrivalFilter, selectedStatusFilter, selectedCompanyFilter, selectedCycleFilter, selectedDueDayFilter, selectedBillingMonthFilter, excelFilters]);
+
+    return filtered.sort((a, b) => {
+      if (sortColumn === 'srNo') {
+        const srA = Number(a.srNo || a.clientMaster?.srNo || a.id || 0);
+        const srB = Number(b.srNo || b.clientMaster?.srNo || b.id || 0);
+        return sortDirection === 'asc' ? srA - srB : srB - srA;
+      }
+      return 0;
+    });
+  }, [invoices, searchTerm, userRoleView, accountantArrivalFilter, selectedStatusFilter, selectedCompanyFilter, selectedCycleFilter, selectedDueDayFilter, selectedBillingMonthFilter, excelFilters, sortColumn, sortDirection]);
 
   // Count of invoices requiring Remote DSC across all centres and current filtered view
   const totalAllCentersPendingDscCount = useMemo(() => {
@@ -3309,21 +3769,23 @@ export default function AdminInvoicesWorkflowPage() {
   };
 
   const renderExcelFilterPopover = (
-    colKey: 'company' | 'cycle' | 'node' | 'month' | 'status',
+    colKey: ExcelFilterColKey,
     title: string
   ) => {
     if (activeExcelFilterCol !== colKey) return null;
 
-    const allOptions = excelFilterOptions[colKey] || [];
+    const allOptions = (excelFilterOptions as any)[colKey] || [];
     const searchLower = excelFilterSearch.trim().toLowerCase();
     const filteredOpts = searchLower
-      ? allOptions.filter((opt) => opt.label.toLowerCase().includes(searchLower))
+      ? allOptions.filter((opt: any) => opt.label.toLowerCase().includes(searchLower))
       : allOptions;
+
+    const isRightSide = ['status', 'month', 'arrival', 'dueDate', 'totalAmount'].includes(colKey);
 
     return (
       <div
         onClick={(e) => e.stopPropagation()}
-        className="excel-filter-popover absolute left-0 top-full mt-1.5 z-50 bg-white text-[#1B1C1C] border border-neutral-300 shadow-2xl rounded-sm p-3 min-w-[250px] max-w-[290px] font-normal normal-case text-xs tracking-normal"
+        className={`excel-filter-popover absolute ${isRightSide ? 'right-0' : 'left-0'} top-full mt-1.5 z-50 bg-white text-[#1B1C1C] border border-neutral-300 shadow-2xl rounded-sm p-3 min-w-[250px] max-w-[290px] font-normal normal-case text-xs tracking-normal`}
       >
         <div className="flex items-center justify-between pb-2 border-b border-neutral-200">
           <div className="font-bold text-[11px] uppercase tracking-wider text-[#006064] flex items-center gap-1.5">
@@ -3356,7 +3818,7 @@ export default function AdminInvoicesWorkflowPage() {
         <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-dashed border-neutral-200 text-[10.5px] font-bold">
           <button
             type="button"
-            onClick={() => selectAllExcelFilter(colKey, allOptions.map((o) => o.val))}
+            onClick={() => selectAllExcelFilter(colKey, allOptions.map((o: any) => o.val))}
             className="text-[#006064] hover:underline cursor-pointer"
           >
             Select All ({allOptions.length})
@@ -3377,8 +3839,8 @@ export default function AdminInvoicesWorkflowPage() {
               No matching options
             </div>
           ) : (
-            filteredOpts.map((opt) => {
-              const checked = excelFilters[colKey].includes(opt.val);
+            filteredOpts.map((opt: any) => {
+              const checked = (excelFilters[colKey] || []).includes(opt.val);
               return (
                 <label
                   key={opt.val}
@@ -3405,8 +3867,8 @@ export default function AdminInvoicesWorkflowPage() {
         {/* Footer */}
         <div className="mt-2.5 pt-2 border-t border-neutral-200 flex items-center justify-between text-[10.5px]">
           <span className="text-neutral-500 font-medium">
-            {excelFilters[colKey].length > 0
-              ? `${excelFilters[colKey].length} of ${allOptions.length} selected`
+            {(excelFilters[colKey] || []).length > 0
+              ? `${(excelFilters[colKey] || []).length} of ${allOptions.length} selected`
               : 'All visible'}
           </span>
           <button
@@ -3421,11 +3883,38 @@ export default function AdminInvoicesWorkflowPage() {
     );
   };
 
+  const renderHeaderFilterBtn = (colKey: ExcelFilterColKey, title: string) => {
+    const activeCount = (excelFilters[colKey] || []).length;
+    const isActive = activeCount > 0;
+    return (
+      <div className="relative inline-flex items-center">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExcelFilterSearch('');
+            setActiveExcelFilterCol(activeExcelFilterCol === colKey ? null : colKey);
+          }}
+          className={`excel-filter-trigger px-1 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
+            isActive
+              ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
+              : 'hover:bg-white/20 text-white/80 hover:text-white'
+          }`}
+          title={`Filter by ${title}`}
+        >
+          <Filter size={10} className={isActive ? 'fill-neutral-900' : ''} />
+          {isActive && <span className="text-[9px] font-mono">({activeCount})</span>}
+        </button>
+        {renderExcelFilterPopover(colKey, title)}
+      </div>
+    );
+  };
+
   return (
-    <div className="p-6 sm:p-10 max-w-[1600px] mx-auto space-y-8 bg-[#F8F9FA] min-h-screen text-[#1B1C1C]">
+    <div className="p-3 sm:p-5 max-w-[1850px] mx-auto space-y-3 bg-[#F8F9FA] min-h-screen text-[#1B1C1C]">
       {/* ── TOP LEVEL SECTION SWITCHER (Active Invoices vs Old Invoices Archive) ── */}
       <FadeUp>
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-3 bg-white border border-[var(--outline-variant)]/40 shadow-xs">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-2.5 p-2 bg-white border border-[var(--outline-variant)]/40 shadow-xs">
           <div className="flex items-center gap-2 w-full md:w-auto">
             <button
               type="button"
@@ -3582,63 +4071,33 @@ export default function AdminInvoicesWorkflowPage() {
       ) : (
 
         <>
-          {/* Header */}
+          {/* Compact Super Admin Header & Horizontal Clickable KPI Pill Strip */}
           <FadeUp delay={0.05}>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[var(--outline-variant)]/40">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.25em] text-[var(--primary)] mb-1">
-                  <FileCheck size={16} /> {userRoleView === 'CM' ? 'CM Monthly Invoices Review' : 'Accountant Tally PDF Attachment'}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 bg-white border border-[var(--outline-variant)]/50 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-[#006064]/10 text-[#006064] rounded-xs shrink-0">
+                  <FileCheck size={18} />
                 </div>
-                <h1 className="text-3xl sm:text-4xl font-display font-black tracking-tight text-[#1B1C1C]">
-                  Invoices & Tally PDF Processing
-                </h1>
-                <p className="text-sm text-[#616161] mt-1 font-light">
-                  {userRoleView === 'CM'
-                    ? 'Review entries that arrived automatically or manually from Client Master, send to Accountant, and review attached Tally PDF invoices.'
-                    : 'Inspect client entries sent by CM, attach Tally PDF invoices, review CM revision remarks, and re-submit.'}
-                </p>
-              </div>
-            </div>
-          </FadeUp>
-
-          {/* KPI Cards */}
-          <FadeUp delay={0.1}>
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="bg-white p-5 border border-[var(--outline-variant)]/40 shadow-xs">
-                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#616161]">Total Invoices</div>
-                <div className="text-2xl font-display font-black mt-1 text-[#1B1C1C]">{kpis.totalInvoices}</div>
-                <div className="text-[11px] text-[#616161] font-light">Dispatched from Client Master</div>
-              </div>
-
-              <div className="bg-white p-5 border border-purple-200 bg-purple-50/20 shadow-xs">
-                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-700">Pending CM Review</div>
-                <div className="text-2xl font-display font-black mt-1 text-purple-800">{kpis.pendingCM}</div>
-                <div className="text-[11px] text-purple-600 font-light">New arrivals</div>
-              </div>
-
-              <div className="bg-white p-5 border border-blue-200 bg-blue-50/20 shadow-xs">
-                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-700">With Accountant</div>
-                <div className="text-2xl font-display font-black mt-1 text-blue-800">{kpis.sentToAccountant}</div>
-                <div className="text-[11px] text-blue-600 font-light">Pending Tally PDF</div>
-              </div>
-
-              <div className="bg-white p-5 border border-amber-200 bg-amber-50/20 shadow-xs">
-                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-700">Pending CM Approval</div>
-                <div className="text-2xl font-display font-black mt-1 text-amber-800">{kpis.pendingCMApproval}</div>
-                <div className="text-[11px] text-amber-600 font-light">Tally PDF attached</div>
-              </div>
-
-              <div className="bg-white p-5 border border-emerald-200 bg-emerald-50/20 shadow-xs col-span-2 lg:col-span-1">
-                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">Approved Invoices</div>
-                <div className="text-2xl font-display font-black mt-1 text-emerald-800">{kpis.approved}</div>
-                <div className="text-[11px] text-emerald-600 font-light">Approved by CM</div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-base sm:text-lg font-black tracking-tight text-[#1B1C1C]">
+                      Invoices &amp; Tally Workflow
+                    </h1>
+                    <span className="px-2 py-0.5 bg-neutral-100 text-neutral-700 text-[10px] font-mono font-bold rounded-xs border border-neutral-200">
+                      Total: {kpis.totalInvoices}
+                    </span>
+                    <span className="px-2 py-0.5 bg-teal-50 text-[#006064] text-[9.5px] font-bold uppercase tracking-wider rounded-xs border border-teal-200">
+                      {userRoleView === 'CM' ? 'CM / Super Admin' : 'Accountant'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </FadeUp>
 
           {/* TABLE WORKFLOW */}
-          <FadeUp delay={0.2}>
-            <div className="bg-white border border-[var(--outline-variant)]/40 p-6 space-y-4 shadow-xs">
+          <FadeUp delay={0.15}>
+            <div className="bg-white border border-[var(--outline-variant)]/40 p-3 sm:p-4 space-y-3 shadow-xs">
               {/* 5-SECOND ONE-TIME NOTIFICATION BANNER FOR ACCOUNTANT */}
               <AnimatePresence>
                 {showArrivalBanner && userRoleView === 'ACCOUNTANT' && accountantArrivalCounts.pendingAttachCount > 0 && (
@@ -3689,7 +4148,7 @@ export default function AdminInvoicesWorkflowPage() {
 
               {/* Quick Arrival Shortcuts for Accountant */}
               {userRoleView === 'ACCOUNTANT' && (
-                <div className="flex items-center gap-1.5 flex-wrap p-2.5 bg-blue-50/70 border border-blue-200 text-xs">
+                <div className="flex items-center gap-1.5 flex-wrap p-2 bg-blue-50/70 border border-blue-200 text-xs">
                   <div className="flex items-center gap-1 font-bold text-blue-950 uppercase tracking-wider text-[10px] mr-1">
                     <Sparkles size={12} className="text-blue-700" />
                     <span>Quick Arrival Filter:</span>
@@ -3701,7 +4160,6 @@ export default function AdminInvoicesWorkflowPage() {
                       ? 'bg-[#006064] text-white border-[#006064] shadow-2xs'
                       : 'bg-white hover:bg-neutral-100 text-gray-700 border-neutral-300'
                       }`}
-                    title="View all client invoices in accountant scope"
                   >
                     All ({accountantArrivalCounts.allCount})
                   </button>
@@ -3714,7 +4172,6 @@ export default function AdminInvoicesWorkflowPage() {
                         ? 'bg-amber-500 text-white border-amber-600 font-black animate-pulse'
                         : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
                       }`}
-                    title="Filter to all invoices waiting for Tally PDF attachment from CM"
                   >
                     <span>⚡ Pending Tally PDF</span>
                     <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.pendingAttachCount}</span>
@@ -3726,7 +4183,6 @@ export default function AdminInvoicesWorkflowPage() {
                       ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
                       : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
                       }`}
-                    title="Filter to invoices that arrived today from CM in accountant view"
                   >
                     <span>📅 Today&apos;s Arrived</span>
                     <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.todayCount}</span>
@@ -3738,7 +4194,6 @@ export default function AdminInvoicesWorkflowPage() {
                       ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
                       : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
                       }`}
-                    title="Filter to invoices that arrived yesterday from CM in accountant view"
                   >
                     <span>Yesterday&apos;s Arrived</span>
                     <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.yesterdayCount}</span>
@@ -3750,7 +4205,6 @@ export default function AdminInvoicesWorkflowPage() {
                       ? 'bg-blue-700 text-white border-blue-800 shadow-2xs'
                       : 'bg-white hover:bg-blue-100 text-blue-900 border-blue-300'
                       }`}
-                    title="Filter to invoices that arrived 2-3 days ago from CM in accountant view"
                   >
                     <span>2-3 Days Ago</span>
                     <span className="font-mono px-1 py-0.2 rounded bg-black/15 text-[9px]">{accountantArrivalCounts.twoDaysCount}</span>
@@ -3758,202 +4212,190 @@ export default function AdminInvoicesWorkflowPage() {
                 </div>
               )}
 
-              {/* Search & Filter Bar - 2-Tier Structured Layout */}
-              <div className="bg-[#F8F9FA] border border-[var(--outline-variant)]/60 p-4 space-y-3.5 shadow-xs">
-                {/* Tier 1: Primary Dimensions & Action Button */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* 1. Select Company */}
-                    <div className="flex items-center gap-1.5 bg-white border border-[#006064]/30 px-2.5 py-1.5 shadow-2xs">
-                      <Building2 size={13} className="text-[#006064] shrink-0" />
-                      <span className="text-[10px] font-bold text-[#006064] uppercase tracking-wider">Company:</span>
-                      <select
-                        value={selectedCompanyFilter}
-                        onChange={(e) => {
-                          setSelectedCompanyFilter(e.target.value);
-                          setSelectedCycleFilter('ALL');
+              {/* Compact Unified Search & Filter Toolbar */}
+              <div className="bg-[#F8F9FA] border border-[var(--outline-variant)]/60 p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
+                  {/* Search with button */}
+                  <div className="flex items-center min-w-[220px] max-w-xs flex-1">
+                    <div className="relative flex-1">
+                      <Search size={13} className="absolute left-2.5 top-2 text-[#616161]" />
+                      <input
+                        type="text"
+                        placeholder="Search SR, company, GST..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') fetchData();
                         }}
-                        className="bg-transparent text-xs font-extrabold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[140px] truncate"
-                      >
-                        <option value="ALL">All Companies ({companyOptions.length})</option>
-                        {companyOptions.map((cName) => (
-                          <option key={cName} value={cName}>
-                            {cName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* 2. Billing Month Filter */}
-                    <div className="flex items-center gap-1.5 bg-purple-50/80 border border-purple-300 px-2.5 py-1.5 shadow-2xs">
-                      <Calendar size={13} className="text-purple-700 shrink-0" />
-                      <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider">Billing Month:</span>
-                      <select
-                        value={selectedBillingMonthFilter}
-                        onChange={(e) => setSelectedBillingMonthFilter(e.target.value)}
-                        className="bg-transparent text-xs font-bold text-purple-950 focus:outline-none cursor-pointer"
-                      >
-                        <option value="ALL">All Months ({billingMonthOptions.length})</option>
-                        {billingMonthOptions.map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* 3. Due Date Filter */}
-                    <div className="flex items-center gap-1.5 bg-white border border-teal-300 px-2.5 py-1.5 shadow-2xs">
-                      <Clock size={13} className="text-teal-700 shrink-0" />
-                      <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Due Day:</span>
-                      <select
-                        value={selectedDueDayFilter}
-                        onChange={(e) => setSelectedDueDayFilter(e.target.value)}
-                        className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
-                      >
-                        <option value="ALL">All Due Days</option>
-                        <option value="5">5th of Month</option>
-                        <option value="7">7th of Month</option>
-                        <option value="10">10th of Month</option>
-                        <option value="15">15th of Month</option>
-                        <option value="20">20th of Month</option>
-                        <option value="25">25th of Month</option>
-                        <option value="30">30th of Month</option>
-                      </select>
-                    </div>
-
-                    {/* 4. Payment Duration */}
-                    <div className="flex items-center gap-1.5 bg-white border border-amber-300 px-2.5 py-1.5 shadow-2xs">
-                      <Calendar size={13} className="text-amber-700 shrink-0" />
-                      <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Duration:</span>
-                      <select
-                        value={selectedCycleFilter}
-                        onChange={(e) => setSelectedCycleFilter(e.target.value)}
-                        className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[150px] truncate"
-                      >
-                        <option value="ALL">All Cycles ({availableCycleOptions.length})</option>
-                        {availableCycleOptions.map((cyc) => (
-                          <option key={cyc.key} value={cyc.key}>
-                            {cyc.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-
-                </div>
-
-                {/* Tier 2: Search, Node Scoping, Status Filter & Refresh */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-neutral-200/80">
-                  <div className="relative flex-1 min-w-[240px] max-w-md">
-                    <Search size={14} className="absolute left-3 top-2.5 text-[#616161]" />
-                    <input
-                      type="text"
-                      placeholder="Search by company, GST, or cabin..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full bg-white border border-[var(--outline-variant)] pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:border-[#006064] font-medium"
-                    />
-                    {searchTerm && (
-                      <button
-                        onClick={() => setSearchTerm('')}
-                        className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-black"
-                      >
-                        <X size={13} />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Node Filter */}
-                    {canUseNodeFilter && (
-                      <div className="flex items-center gap-1 bg-white border border-[var(--outline-variant)] px-2.5 py-1.5">
-                        <MapPin size={13} className="text-[#616161]" />
-                        <span className="text-[10px] font-bold uppercase text-[#616161]">Node:</span>
-                        <select
-                          value={selectedLocationFilter}
-                          onChange={(e) => setSelectedLocationFilter(e.target.value)}
-                          className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                        className="w-full bg-white border border-r-0 border-neutral-300 pl-7 pr-6 py-1 text-xs focus:outline-none focus:border-[#006064] font-medium rounded-l-xs"
+                      />
+                      {searchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchTerm('')}
+                          className="absolute right-1.5 top-2 text-neutral-400 hover:text-black cursor-pointer"
+                          title="Clear search"
                         >
-                          <option value="ALL">All Nodes</option>
-                          {locations.map((loc) => (
-                            <option key={loc.id} value={String(loc.id)}>
-                              {loc.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Status Filter */}
-                    <div className="flex items-center gap-1 bg-white border border-[var(--outline-variant)] px-2.5 py-1.5">
-                      <Filter size={13} className="text-[#616161]" />
-                      <span className="text-[10px] font-bold uppercase text-[#616161]">Status:</span>
-                      <select
-                        value={selectedStatusFilter}
-                        onChange={(e) => setSelectedStatusFilter(e.target.value)}
-                        className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
-                      >
-                        <option value="ALL">All Statuses</option>
-                        <option value="PENDING_CM_REVIEW">Pending CM Review</option>
-                        <option value="SENT_TO_ACCOUNTANT">Sent to Accountant</option>
-                        <option value="INVOICE_ATTACHED">Invoice Attached</option>
-                        <option value="APPROVED">Approved</option>
-                        <option value="REJECTED_WITH_REMARKS">Revision Requested</option>
-                      </select>
+                          <X size={12} />
+                        </button>
+                      )}
                     </div>
-
-                    {/* Reset all filters button if active */}
-                    {(selectedCompanyFilter !== 'ALL' || selectedDueDayFilter !== 'ALL' || selectedCycleFilter !== 'ALL' || selectedBillingMonthFilter !== 'ALL' || selectedStatusFilter !== 'ALL' || searchTerm) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCompanyFilter('ALL');
-                          setSelectedDueDayFilter('ALL');
-                          setSelectedCycleFilter('ALL');
-                          setSelectedBillingMonthFilter('ALL');
-                          setSelectedStatusFilter('ALL');
-                          setSearchTerm('');
-                        }}
-                        className="px-2.5 py-1.5 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-[10px] font-bold uppercase tracking-wider"
-                        title="Reset all active filters"
-                      >
-                        Clear Filters
-                      </button>
-                    )}
-
-                    {/* Bulk Apply DSC Button (Universal: Visible across all centres for CM & Super Admin) */}
-                    {(userRoleView === 'CM' || isAdmin) && totalAllCentersPendingDscCount > 0 && (
-                      <button
-                        type="button"
-                        disabled={bulkSigningDsc}
-                        onClick={handleBulkApplyDsc}
-                        className="px-3.5 py-1.5 bg-[#006064] text-white hover:bg-[#004d40] text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50 transition-all border border-cyan-400/40"
-                        title="Apply Remote DSC to all attached invoices requiring digital signature across all centers"
-                      >
-                        {bulkSigningDsc ? (
-                          <>
-                            <Loader2 size={13} className="animate-spin" />
-                            <span>Signing DSC ({bulkSigningProgress.current}/{bulkSigningProgress.total})...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Shield size={13} className="text-cyan-200" />
-                            <span>✍️ Apply DSC to All Required ({totalAllCentersPendingDscCount})</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-
                     <button
-                      onClick={fetchData}
-                      className="p-1.5 bg-white border border-[var(--outline-variant)] hover:bg-neutral-100 text-[#616161] shadow-2xs"
-                      title="Refresh data"
+                      type="button"
+                      onClick={() => fetchData()}
+                      className="px-2.5 py-1 bg-[#006064] hover:bg-[#004d40] text-white text-[11px] font-bold uppercase tracking-wider rounded-r-xs flex items-center gap-1 border border-[#006064] cursor-pointer shadow-2xs transition-colors shrink-0"
+                      title="Search invoices"
                     >
-                      <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                      <Search size={11} />
+                      <span>Search</span>
                     </button>
                   </div>
+
+                  {/* Center Filter */}
+                  {canUseNodeFilter && (
+                    <div className="flex items-center gap-1 bg-white border border-neutral-300 px-2 py-1 shadow-2xs">
+                      <MapPin size={12} className="text-[#006064]" />
+                      <span className="text-[10px] font-bold uppercase text-[#006064]">Center:</span>
+                      <select
+                        value={selectedLocationFilter}
+                        onChange={(e) => setSelectedLocationFilter(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                      >
+                        <option value="ALL">All Centers</option>
+                        {locations.map((loc) => (
+                          <option key={loc.id} value={String(loc.id)}>
+                            {loc.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Company */}
+                  <div className="flex items-center gap-1 bg-white border border-neutral-300 px-2 py-1 shadow-2xs">
+                    <Building2 size={12} className="text-neutral-600" />
+                    <span className="text-[10px] font-bold text-neutral-600 uppercase">Company:</span>
+                    <select
+                      value={selectedCompanyFilter}
+                      onChange={(e) => setSelectedCompanyFilter(e.target.value)}
+                      className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer max-w-[130px] truncate"
+                    >
+                      <option value="ALL">All ({companyOptions.length})</option>
+                      {companyOptions.map((cName) => (
+                        <option key={cName} value={cName}>
+                          {cName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Billing Month */}
+                  <div className="flex items-center gap-1 bg-white border border-purple-300 px-2 py-1 shadow-2xs">
+                    <Calendar size={12} className="text-purple-700" />
+                    <span className="text-[10px] font-bold text-purple-900 uppercase">Month:</span>
+                    <select
+                      value={selectedBillingMonthFilter}
+                      onChange={(e) => setSelectedBillingMonthFilter(e.target.value)}
+                      className="bg-transparent text-xs font-bold text-purple-950 focus:outline-none cursor-pointer"
+                    >
+                      <option value="ALL">All ({billingMonthOptions.length})</option>
+                      {billingMonthOptions.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Status */}
+                  <div className="flex items-center gap-1 bg-white border border-neutral-300 px-2 py-1 shadow-2xs">
+                    <Filter size={12} className="text-neutral-600" />
+                    <span className="text-[10px] font-bold uppercase text-neutral-600">Status:</span>
+                    <select
+                      value={selectedStatusFilter}
+                      onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                      className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                    >
+                      <option value="ALL">All Statuses</option>
+                      <option value="PENDING_CM_REVIEW">Pending CM Review</option>
+                      <option value="SENT_TO_ACCOUNTANT">With Accountant</option>
+                      <option value="INVOICE_ATTACHED">Invoice Attached</option>
+                      <option value="APPROVED">Approved</option>
+                      <option value="REJECTED_WITH_REMARKS">Revision Requested</option>
+                    </select>
+                  </div>
+
+                  {/* Due Day */}
+                  <div className="flex items-center gap-1 bg-white border border-teal-300 px-2 py-1 shadow-2xs">
+                    <Clock size={12} className="text-teal-700" />
+                    <span className="text-[10px] font-bold text-teal-800 uppercase">Due:</span>
+                    <select
+                      value={selectedDueDayFilter}
+                      onChange={(e) => setSelectedDueDayFilter(e.target.value)}
+                      className="bg-transparent text-xs font-bold text-[#1B1C1C] focus:outline-none cursor-pointer"
+                    >
+                      <option value="ALL">All Days</option>
+                      <option value="5">5th</option>
+                      <option value="7">7th</option>
+                      <option value="10">10th</option>
+                      <option value="15">15th</option>
+                      <option value="20">20th</option>
+                      <option value="25">25th</option>
+                      <option value="30">30th</option>
+                    </select>
+                  </div>
+
+                  {/* Reset button if any filter active */}
+                  {(selectedCompanyFilter !== 'ALL' || selectedDueDayFilter !== 'ALL' || selectedBillingMonthFilter !== 'ALL' || selectedStatusFilter !== 'ALL' || (canUseNodeFilter && selectedLocationFilter !== 'ALL') || searchTerm) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCompanyFilter('ALL');
+                        setSelectedDueDayFilter('ALL');
+                        setSelectedBillingMonthFilter('ALL');
+                        setSelectedStatusFilter('ALL');
+                        setSelectedLocationFilter('ALL');
+                        setSearchTerm('');
+                      }}
+                      className="px-2 py-1 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 text-[10px] font-bold uppercase tracking-wider rounded-xs cursor-pointer"
+                      title="Reset all filters"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {/* Right Actions: Universal Apply DSC + Refresh */}
+                <div className="flex items-center gap-2">
+                  {(userRoleView === 'CM' || isAdmin) && totalAllCentersPendingDscCount > 0 && (
+                    <button
+                      type="button"
+                      disabled={bulkSigningDsc}
+                      onClick={handleBulkApplyDsc}
+                      className="px-3 py-1 bg-[#006064] text-white hover:bg-[#004d40] text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 transition-all border border-cyan-400/40 rounded-xs"
+                      title="Apply Remote DSC to all attached invoices requiring digital signature across all centers"
+                    >
+                      {bulkSigningDsc ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          <span>Signing ({bulkSigningProgress.current}/{bulkSigningProgress.total})...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Shield size={12} className="text-cyan-200" />
+                          <span>✍️ Apply DSC to All Required ({totalAllCentersPendingDscCount})</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  <button
+                    onClick={fetchData}
+                    className="p-1.5 bg-white border border-neutral-300 hover:bg-neutral-100 text-[#616161] shadow-2xs rounded-xs cursor-pointer"
+                    title="Refresh data"
+                  >
+                    <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+                  </button>
                 </div>
               </div>
 
@@ -3989,12 +4431,37 @@ export default function AdminInvoicesWorkflowPage() {
                         )}
                         {excelFilters.cycle.length > 0 && (
                           <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
-                            Cycle: {excelFilters.cycle.length} selected
+                            Duration: {excelFilters.cycle.length} selected
                           </span>
                         )}
                         {excelFilters.node.length > 0 && (
                           <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
-                            Node: {excelFilters.node.length} selected
+                            Center: {excelFilters.node.length} selected
+                          </span>
+                        )}
+                        {excelFilters.notice.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
+                            Notice: {excelFilters.notice.length} selected
+                          </span>
+                        )}
+                        {excelFilters.escalation.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
+                            Escalation: {excelFilters.escalation.length} selected
+                          </span>
+                        )}
+                        {excelFilters.product.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
+                            Product: {excelFilters.product.length} selected
+                          </span>
+                        )}
+                        {excelFilters.dueDate.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
+                            Due Date: {excelFilters.dueDate.length} selected
+                          </span>
+                        )}
+                        {excelFilters.arrival.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-xs text-[10px] font-bold">
+                            Arrival: {excelFilters.arrival.length} selected
                           </span>
                         )}
                         {excelFilters.month.length > 0 && (
@@ -4008,874 +4475,856 @@ export default function AdminInvoicesWorkflowPage() {
                           </span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={clearAllExcelFilters}
-                        className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 text-[10.5px] font-bold uppercase tracking-wider rounded-xs cursor-pointer shadow-2xs transition-colors shrink-0"
-                      >
-                        Reset All Column Filters
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setColWidths(DEFAULT_COL_WIDTHS);
+                            try { localStorage.removeItem('sspacia_invoice_col_widths'); } catch {}
+                          }}
+                          className="px-2 py-1 bg-white hover:bg-neutral-100 text-neutral-800 text-[10.5px] font-bold border border-amber-300 rounded-xs cursor-pointer shadow-2xs"
+                          title="Reset all column widths to default"
+                        >
+                          Reset Widths
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearAllExcelFilters}
+                          className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 text-[10.5px] font-bold uppercase tracking-wider rounded-xs cursor-pointer shadow-2xs transition-colors shrink-0"
+                        >
+                          Reset Filters
+                        </button>
+                      </div>
                     </div>
                   )}
 
                   {/* Frozen Header Excel-style Table Container */}
-                  <div className="border border-neutral-300 rounded-sm shadow-xs overflow-x-auto max-h-[calc(100vh-270px)] overflow-y-auto bg-white relative">
-                    <table className="w-full text-left text-xs border-collapse divide-y divide-neutral-200">
+                  <div className="border-2 border-neutral-800 rounded-sm shadow-xs overflow-x-auto max-h-[calc(100vh-210px)] overflow-y-auto bg-white relative">
+                    <table className="w-full text-left text-xs border-collapse excel-dark-grid">
                       <thead className="sticky top-0 z-30 bg-[#006064] text-white shadow-sm select-none">
-                        <tr className="bg-[#006064] text-white uppercase tracking-wider text-[10px] font-bold divide-x divide-teal-800">
-                          <th className="sticky top-0 bg-[#006064] p-3 w-12 text-center z-20 border-b-2 border-teal-800">SR.No</th>
-
-                          {/* 1. Company Name (with Excel Filter) */}
-                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[300px] relative">
-                            <div className="flex items-center justify-between gap-1">
-                              <span>Company Name</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExcelFilterSearch('');
-                                  setActiveExcelFilterCol(activeExcelFilterCol === 'company' ? null : 'company');
-                                }}
-                                className={`excel-filter-trigger px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
-                                  excelFilters.company.length > 0
-                                    ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
-                                    : 'hover:bg-white/20 text-white/80 hover:text-white'
-                                }`}
-                                title="Filter by Company (Excel Search & Select All)"
-                              >
-                                <Filter size={11} className={excelFilters.company.length > 0 ? 'fill-neutral-900' : ''} />
-                                {excelFilters.company.length > 0 && (
-                                  <span className="text-[9px] font-mono">({excelFilters.company.length})</span>
-                                )}
-                              </button>
+                        <tr className="bg-[#006064] text-white uppercase tracking-wider text-[10px] font-bold divide-x divide-teal-950">
+                          {/* 1. SR.NO */}
+                          <th
+                            onClick={() => {
+                              if (sortColumn === 'srNo') {
+                                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortColumn('srNo');
+                                setSortDirection('asc');
+                              }
+                            }}
+                            style={{ width: `${colWidths.srNo}px`, minWidth: `${colWidths.srNo}px`, maxWidth: `${colWidths.srNo}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 text-center z-20 border-b-2 border-teal-800 cursor-pointer select-none hover:bg-[#004d40] transition-colors relative"
+                            title="Click to sort by SR.NO"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              <span>SR.NO</span>
+                              <span className="text-[10px] text-teal-200">
+                                {sortColumn === 'srNo' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+                              </span>
                             </div>
-                            {renderExcelFilterPopover('company', 'Company Name')}
+                            {renderResizeHandle('srNo')}
                           </th>
 
-                          {/* 2. Payment Cycle & Duration (with Excel Filter) */}
-                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[190px] relative">
-                            <div className="flex items-center justify-between gap-1">
-                              <span>Cycle &amp; Duration</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExcelFilterSearch('');
-                                  setActiveExcelFilterCol(activeExcelFilterCol === 'cycle' ? null : 'cycle');
-                                }}
-                                className={`excel-filter-trigger px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
-                                  excelFilters.cycle.length > 0
-                                    ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
-                                    : 'hover:bg-white/20 text-white/80 hover:text-white'
-                                }`}
-                                title="Filter by Payment Cycle (Excel Search & Select All)"
-                              >
-                                <Filter size={11} className={excelFilters.cycle.length > 0 ? 'fill-neutral-900' : ''} />
-                                {excelFilters.cycle.length > 0 && (
-                                  <span className="text-[9px] font-mono">({excelFilters.cycle.length})</span>
-                                )}
-                              </button>
+                          {/* 2. COMPANY NAME (with Excel Filter) */}
+                          <th
+                            style={{ width: `${colWidths.company}px`, minWidth: `${colWidths.company}px`, maxWidth: `${colWidths.company}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <div className="flex items-center justify-between gap-1 pr-1">
+                              <span className="truncate">Company Name</span>
+                              {renderHeaderFilterBtn('company', 'Company Name')}
                             </div>
-                            {renderExcelFilterPopover('cycle', 'Cycle & Duration')}
+                            {renderResizeHandle('company')}
                           </th>
 
-                          {/* 3. Node & Person (with Excel Filter) */}
-                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[170px] relative">
-                            <div className="flex items-center justify-between gap-1">
-                              <span>Node &amp; Person</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExcelFilterSearch('');
-                                  setActiveExcelFilterCol(activeExcelFilterCol === 'node' ? null : 'node');
-                                }}
-                                className={`excel-filter-trigger px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
-                                  excelFilters.node.length > 0
-                                    ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
-                                    : 'hover:bg-white/20 text-white/80 hover:text-white'
-                                }`}
-                                title="Filter by Node Centre (Excel Search & Select All)"
-                              >
-                                <Filter size={11} className={excelFilters.node.length > 0 ? 'fill-neutral-900' : ''} />
-                                {excelFilters.node.length > 0 && (
-                                  <span className="text-[9px] font-mono">({excelFilters.node.length})</span>
-                                )}
-                              </button>
-                            </div>
-                            {renderExcelFilterPopover('node', 'Node Centre')}
+                          {/* 3. AGREEMENT START - END + PDF ICON */}
+                          <th
+                            style={{ width: `${colWidths.agreement}px`, minWidth: `${colWidths.agreement}px`, maxWidth: `${colWidths.agreement}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <span className="truncate block pr-1">Agreement (Start - End)</span>
+                            {renderResizeHandle('agreement')}
                           </th>
 
-                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[170px]">Cabin &amp; Seats / Items</th>
-                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[170px]">Arrival Date &amp; Dispatch Type</th>
-
-                          {/* 4. Billing Month (with Excel Filter) */}
-                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[170px] relative">
-                            <div className="flex items-center justify-between gap-1">
-                              <span>Billing Month</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExcelFilterSearch('');
-                                  setActiveExcelFilterCol(activeExcelFilterCol === 'month' ? null : 'month');
-                                }}
-                                className={`excel-filter-trigger px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
-                                  excelFilters.month.length > 0
-                                    ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
-                                    : 'hover:bg-white/20 text-white/80 hover:text-white'
-                                }`}
-                                title="Filter by Billing Month (Excel Search & Select All)"
-                              >
-                                <Filter size={11} className={excelFilters.month.length > 0 ? 'fill-neutral-900' : ''} />
-                                {excelFilters.month.length > 0 && (
-                                  <span className="text-[9px] font-mono">({excelFilters.month.length})</span>
-                                )}
-                              </button>
-                            </div>
-                            {renderExcelFilterPopover('month', 'Billing Month')}
+                          {/* 4. LOCK-IN */}
+                          <th
+                            style={{ width: `${colWidths.lockin}px`, minWidth: `${colWidths.lockin}px`, maxWidth: `${colWidths.lockin}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <span className="truncate block pr-1">Lock-In</span>
+                            {renderResizeHandle('lockin')}
                           </th>
 
-                          <th className="sticky top-0 bg-[#006064] p-3 text-right z-20 border-b-2 border-teal-800 min-w-[140px]">Total Amt (₹)</th>
-
-                          {/* 5. Workflow Status (with Excel Filter) */}
-                          <th className="sticky top-0 bg-[#006064] p-3 z-20 border-b-2 border-teal-800 min-w-[170px] relative">
-                            <div className="flex items-center justify-between gap-1">
-                              <span>Workflow Status</span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExcelFilterSearch('');
-                                  setActiveExcelFilterCol(activeExcelFilterCol === 'status' ? null : 'status');
-                                }}
-                                className={`excel-filter-trigger px-1.5 py-0.5 rounded-xs transition-colors cursor-pointer flex items-center gap-1 ${
-                                  excelFilters.status.length > 0
-                                    ? 'bg-amber-400 text-neutral-900 font-black shadow-xs'
-                                    : 'hover:bg-white/20 text-white/80 hover:text-white'
-                                }`}
-                                title="Filter by Workflow Status (Excel Search & Select All)"
-                              >
-                                <Filter size={11} className={excelFilters.status.length > 0 ? 'fill-neutral-900' : ''} />
-                                {excelFilters.status.length > 0 && (
-                                  <span className="text-[9px] font-mono">({excelFilters.status.length})</span>
-                                )}
-                              </button>
+                          {/* 5. NOTICE PERIOD (with Excel Filter) */}
+                          <th
+                            style={{ width: `${colWidths.notice}px`, minWidth: `${colWidths.notice}px`, maxWidth: `${colWidths.notice}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <div className="flex items-center justify-between gap-1 pr-1">
+                              <span className="truncate">Notice Period</span>
+                              {renderHeaderFilterBtn('notice', 'Notice Period')}
                             </div>
-                            {renderExcelFilterPopover('status', 'Workflow Status')}
+                            {renderResizeHandle('notice')}
                           </th>
 
-                          <th className="sticky top-0 bg-[#006064] p-3 text-center w-40 z-20 border-b-2 border-teal-800">Action</th>
+                          {/* 6. ESCALATION (with Excel Filter) */}
+                          <th
+                            style={{ width: `${colWidths.escalation}px`, minWidth: `${colWidths.escalation}px`, maxWidth: `${colWidths.escalation}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <div className="flex items-center justify-between gap-1 pr-1">
+                              <span className="truncate">Escalation</span>
+                              {renderHeaderFilterBtn('escalation', 'Escalation')}
+                            </div>
+                            {renderResizeHandle('escalation')}
+                          </th>
+
+                          {/* 7. PAYMENT DURATION (with Excel Filter) */}
+                          <th
+                            style={{ width: `${colWidths.cycle}px`, minWidth: `${colWidths.cycle}px`, maxWidth: `${colWidths.cycle}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <div className="flex items-center justify-between gap-1 pr-1">
+                              <span className="truncate">Duration</span>
+                              {renderHeaderFilterBtn('cycle', 'Duration')}
+                            </div>
+                            {renderResizeHandle('cycle')}
+                          </th>
+
+                          {/* 8. CENTER (with Excel Filter) */}
+                          <th
+                            style={{ width: `${colWidths.node}px`, minWidth: `${colWidths.node}px`, maxWidth: `${colWidths.node}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <div className="flex items-center justify-between gap-1 pr-1">
+                              <span className="truncate">Center</span>
+                              {renderHeaderFilterBtn('node', 'Center')}
+                            </div>
+                            {renderResizeHandle('node')}
+                          </th>
+
+                          {/* 9-15. PRODUCT DETAILS GROUP (NEVER COMBINE SEATS) */}
+                          {/* 9. Product Name (with Excel Filter) */}
+                          <th
+                            style={{ width: `${colWidths.product}px`, minWidth: `${colWidths.product}px`, maxWidth: `${colWidths.product}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <div className="flex items-center justify-between gap-1 pr-1">
+                              <span className="truncate">Product Name</span>
+                              {renderHeaderFilterBtn('product', 'Product')}
+                            </div>
+                            {renderResizeHandle('product')}
+                          </th>
+
+                          {/* 10. Invoice Period */}
+                          <th
+                            style={{ width: `${colWidths.period}px`, minWidth: `${colWidths.period}px`, maxWidth: `${colWidths.period}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <span className="truncate block pr-1">Invoice Period</span>
+                            {renderResizeHandle('period')}
+                          </th>
+
+                          {/* 11. Seats */}
+                          <th
+                            style={{ width: `${colWidths.seats}px`, minWidth: `${colWidths.seats}px`, maxWidth: `${colWidths.seats}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 text-center relative"
+                          >
+                            <span className="truncate block pr-1">Seats</span>
+                            {renderResizeHandle('seats')}
+                          </th>
+
+                          {/* 12. Rate/Seat */}
+                          <th
+                            style={{ width: `${colWidths.rate}px`, minWidth: `${colWidths.rate}px`, maxWidth: `${colWidths.rate}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 text-right relative"
+                          >
+                            <span className="truncate block pr-1">Rate/Seat</span>
+                            {renderResizeHandle('rate')}
+                          </th>
+
+                          {/* 13. Amount (₹) */}
+                          <th
+                            style={{ width: `${colWidths.amount}px`, minWidth: `${colWidths.amount}px`, maxWidth: `${colWidths.amount}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 text-right relative"
+                          >
+                            <span className="truncate block pr-1">Amount (₹)</span>
+                            {renderResizeHandle('amount')}
+                          </th>
+
+                          {/* 14. GST & Total (₹) */}
+                          <th
+                            style={{ width: `${colWidths.totalAmount}px`, minWidth: `${colWidths.totalAmount}px`, maxWidth: `${colWidths.totalAmount}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 text-right relative"
+                          >
+                            <span className="truncate block pr-1">GST &amp; Total (₹)</span>
+                            {renderResizeHandle('totalAmount')}
+                          </th>
+
+                          {/* 15. Due Date (with Excel Filter) */}
+                          <th
+                            style={{ width: `${colWidths.dueDate}px`, minWidth: `${colWidths.dueDate}px`, maxWidth: `${colWidths.dueDate}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 text-center relative"
+                          >
+                            <div className="flex items-center justify-between gap-1 pr-1">
+                              <span className="truncate">Due Date</span>
+                              {renderHeaderFilterBtn('dueDate', 'Due Date')}
+                            </div>
+                            {renderResizeHandle('dueDate')}
+                          </th>
+
+                          {/* 16. ARRIVAL & DISPATCH (with Excel Filter) */}
+                          <th
+                            style={{ width: `${colWidths.arrival}px`, minWidth: `${colWidths.arrival}px`, maxWidth: `${colWidths.arrival}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <div className="flex items-center justify-between gap-1 pr-1">
+                              <span className="truncate">Arrival &amp; Dispatch</span>
+                              {renderHeaderFilterBtn('arrival', 'Arrival')}
+                            </div>
+                            {renderResizeHandle('arrival')}
+                          </th>
+
+                          {/* 17. BILLING MONTH (with Excel Filter) */}
+                          <th
+                            style={{ width: `${colWidths.month}px`, minWidth: `${colWidths.month}px`, maxWidth: `${colWidths.month}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <div className="flex items-center justify-between gap-1 pr-1">
+                              <span className="truncate">Billing Month</span>
+                              {renderHeaderFilterBtn('month', 'Billing Month')}
+                            </div>
+                            {renderResizeHandle('month')}
+                          </th>
+
+                          {/* 18. STATUS (with Excel Filter) */}
+                          <th
+                            style={{ width: `${colWidths.status}px`, minWidth: `${colWidths.status}px`, maxWidth: `${colWidths.status}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <div className="flex items-center justify-between gap-1 pr-1">
+                              <span className="truncate">Status</span>
+                              {renderHeaderFilterBtn('status', 'Status')}
+                            </div>
+                            {renderResizeHandle('status')}
+                          </th>
+
+                          {/* 19. ACTION */}
+                          <th
+                            style={{ width: `${colWidths.action}px`, minWidth: `${colWidths.action}px`, maxWidth: `${colWidths.action}px` }}
+                            className="sticky top-0 bg-[#006064] p-2 text-center z-20 border-b-2 border-teal-800 relative"
+                          >
+                            <span className="truncate block pr-1">Action</span>
+                            {renderResizeHandle('action')}
+                          </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-neutral-100 font-medium">
-                        {filteredInvoices.map((invoice, index) => (
-                          <tr key={invoice.id} className="hover:bg-neutral-50/60 transition-colors">
-                            <td className="p-3 text-center font-mono font-bold text-neutral-600 bg-neutral-50/50">
-                              #{index + 1}
-                            </td>
-
-                            <td className="p-3">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-[#1B1C1C] text-sm">{invoice.companyName}</span>
-                                {invoice.isExtendedHours && (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap">
-                                    ⚡ Extended Hours
-                                  </span>
-                                )}
-                                {invoice.bookingId && (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-300 text-[9px] font-black uppercase tracking-wider rounded-xs whitespace-nowrap font-mono" title={`Booking Reference ID: ${invoice.bookingId}`}>
-                                    <Tag size={9} /> ID: {invoice.bookingId}
-                                  </span>
-                                )}
-                                {invoice.billedTo === 'BROKER' && (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded-xs whitespace-nowrap">
-                                    🏢 Billed to Broker: {invoice.brokerName || 'Broker'} {invoice.brokerCommissionPercent ? `(${invoice.brokerCommissionPercent}%)` : ''}
-                                  </span>
-                                )}
-                                {invoice.billedTo === 'CLIENT' && invoice.brokerName && (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 text-[9px] font-bold uppercase tracking-wider rounded-xs whitespace-nowrap">
-                                    👤 Direct Client Invoice
-                                  </span>
-                                )}
-                              </div>
-                              {invoice.gstNo && <div className="text-[10px] font-mono text-neutral-500">GST: {invoice.gstNo}</div>}
-
-                              {/* Agreement Terms Capsule (Start Date, End Date, Lock-In, Notice, Escalation) */}
-                              {invoice.clientMaster && (invoice.clientMaster.agreementStartDate || invoice.clientMaster.lockinEndDate || invoice.clientMaster.noticePeriodMonths || invoice.clientMaster.escalationPercent) && (
-                                <div className="mt-2 pt-1.5 border-t border-neutral-100 flex flex-wrap items-center gap-1.5 text-[9.5px]">
-                                  {invoice.clientMaster.agreementStartDate && (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-900 border border-emerald-200 font-semibold rounded-xs" title="Agreement Term">
-                                      <Calendar size={10} className="text-emerald-700 shrink-0" />
-                                      <span>Agr: <strong>{formatDisplayDate(invoice.clientMaster.agreementStartDate)}</strong> → <strong>{formatDisplayDate(invoice.clientMaster.agreementEndDate) || 'Ongoing'}</strong></span>
-                                    </span>
-                                  )}
-                                  {invoice.clientMaster.lockinEndDate && (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-900 border border-blue-200 font-semibold rounded-xs" title="Lock-In Period End">
-                                      <Lock size={10} className="text-blue-700 shrink-0" />
-                                      <span>Lock-in: <strong>{formatDisplayDate(invoice.clientMaster.lockinEndDate)}</strong></span>
-                                    </span>
-                                  )}
-                                  {Boolean(invoice.clientMaster.noticePeriodMonths) && (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-950 border border-amber-200 font-semibold rounded-xs" title="Notice Period">
-                                      <Clock size={10} className="text-amber-700 shrink-0" />
-                                      <span>Notice: <strong>{invoice.clientMaster.noticePeriodMonths} Months ({invoice.clientMaster.noticePeriodApplicable || 'After Lock-in'})</strong></span>
-                                    </span>
-                                  )}
-                                  {Boolean(invoice.clientMaster.escalationPercent) && (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-950 border border-purple-200 font-semibold rounded-xs" title="Escalation Rate & Applicable Date">
-                                      <TrendingUp size={10} className="text-purple-700 shrink-0" />
-                                      <span>Esc: <strong>{invoice.clientMaster.escalationPercent}%</strong>{invoice.clientMaster.escalationApplicable ? ` (${formatDisplayDate(invoice.clientMaster.escalationApplicable)})` : ''}</span>
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-
-                          <td className="p-3">
-                            <div className="flex flex-col gap-1">
-                              <span className="px-2 py-0.5 bg-[#006064] text-white text-[10px] font-bold uppercase tracking-wider inline-block text-center w-fit">
-                                {invoice.paymentDuration === 'TWO_YEARS' || invoice.paymentDuration === '2_YEARS' ? '2 YEARS' : (invoice.paymentDuration ? String(invoice.paymentDuration).replace('_', ' ') : 'MONTHLY')}
-                              </span>
-                              {invoice.paymentDueDay && (
-                                <span className="text-[10px] font-bold text-teal-900 bg-teal-50 px-1.5 py-0.5 border border-teal-200 w-fit">
-                                  Due: {invoice.paymentDueDay}th of month
-                                </span>
-                              )}
-                              {((invoice.totalOverdueDays && invoice.totalOverdueDays > 0) || (invoice.calculatedLateDays && invoice.calculatedLateDays > 0) || Number(invoice.lateFeeAmount || 0) > 0 || Number(invoice.waivedLateDays || 0) > 0) ? (
-                                <div className="space-y-1 mt-1 font-sans">
-                                  {/* Overdue Badge */}
-                                  <span className="text-[9px] font-extrabold text-red-700 bg-red-50 px-1.5 py-0.5 border border-red-200 flex items-center gap-1 w-fit">
-                                    <AlertOctagon size={10} /> Overdue {invoice.totalOverdueDays || invoice.calculatedLateDays || invoice.lateDays || 0} days
-                                  </span>
-
-                                  {/* Waived Days Note */}
-                                  {Number(invoice.waivedLateDays || invoice.effectiveWaivedDays || 0) > 0 && (
-                                    <span className="text-[8.5px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 border border-emerald-200 flex items-center gap-1 w-fit">
-                                      ✓ {invoice.waivedLateDays || invoice.effectiveWaivedDays} days waived (-₹{Number(invoice.waivedLateFee || invoice.effectiveWaivedFee || (Number(invoice.waivedLateDays || 0) * 100)).toLocaleString('en-IN')})
-                                    </span>
-                                  )}
-
-                                  {/* Late Fee Charged Line */}
-                                  <div className="text-[9px] font-bold">
-                                    {Number(invoice.calculatedLateFee || invoice.lateFeeAmount || 0) > 0 ? (
-                                      <span className="text-red-900">
-                                        Late Fee: ₹{Number(invoice.calculatedLateFee || invoice.lateFeeAmount || 0).toLocaleString('en-IN')}
-                                      </span>
-                                    ) : (
-                                      <span className="text-emerald-700 font-bold">Late Fee: ₹0 (Waived)</span>
-                                    )}
-                                  </div>
-
-                                  {/* Manage / Waive Days Button */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenWaiveModal(invoice)}
-                                    disabled={actionLoading}
-                                    className="text-[8.5px] bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1 mt-0.5"
-                                    title="Click to waive full or specific number of days"
-                                  >
-                                    <Sliders size={9} />
-                                    <span>Waive / Adjust Days</span>
-                                  </button>
-                                </div>
-                              ) : null}
-                            </div>
-                          </td>
-
-                          <td className="p-3">
-                            <div className="space-y-0.5">
-                              {invoice.createdBy?.assignedLocations && invoice.createdBy.assignedLocations.length > 0 ? (
-                                invoice.createdBy.assignedLocations.map((al: any, i: number) => (
-                                  <div key={i} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 text-[9px] font-bold uppercase tracking-wider mr-1">
-                                    <MapPin size={9} /> {al.location.name}
-                                  </div>
-                                ))
-                              ) : (
-                                <span className="text-[9px] text-neutral-400">No Node</span>
-                              )}
-                              <div className="text-[11px] font-bold text-[#1B1C1C] mt-0.5">
-                                {invoice.createdBy?.name || 'System'}
-                              </div>
-                              <div className="text-[9px] text-neutral-400">
-                                {invoice.createdBy?.email}
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="p-3">
-                            <div className="font-bold">{invoice.cabinName || 'N/A'}</div>
-                            <div className="text-[10px] text-[#616161]">
-                              {invoice.noOfSeats || 0} seats @ ₹{Number(invoice.ratePerAgreement || 0).toLocaleString('en-IN')}
-                            </div>
-                            {invoice.complimentaryUsageJson &&
-                              invoice.clientMaster?.clientType !== 'ONE_TIME' &&
-                              invoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' &&
-                              (() => {
-                                try {
-                                  const usage = JSON.parse(invoice.complimentaryUsageJson);
-                                  const parts = [];
-                                  if (usage.meetingRoom?.extraUsed > 0) parts.push(`+${usage.meetingRoom.extraUsed}h Mtg (₹${usage.meetingRoom.charge})`);
-                                  if (usage.printerPages?.extraUsed > 0) parts.push(`+${usage.printerPages.extraUsed}p Print (₹${usage.printerPages.charge})`);
-                                  if (parts.length > 0) {
-                                    return (
-                                      <div className="mt-1 flex items-center gap-1 text-[9px] font-bold text-teal-800 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded w-fit" title="Complimentary Over-Usage included">
-                                        <Gift size={9} className="text-teal-700 shrink-0" />
-                                        <span>{parts.join(' | ')}</span>
-                                      </div>
-                                    );
-                                  }
-                                } catch { }
-                                return null;
-                              })()}
-                          </td>
-
-                          <td className="p-3">
-                            <div className="font-bold text-[#1B1C1C]">
-                              {formatDisplayDate(invoice.sentAt) || 'N/A'}
-                            </div>
-                            <div className="mt-0.5">
-                              <span
-                                className={`inline-flex items-center gap-1 px-1.5 py-0.2 text-[9px] font-extrabold uppercase ${invoice.sendType === 'AUTOMATIC_MONTH_END'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-blue-100 text-blue-800'
-                                  }`}
+                      <tbody className="divide-y divide-neutral-700 font-medium">
+                        {filteredInvoices.map((invoice, index) => {
+                          const products = extractInvoiceProducts(invoice);
+                          return (
+                            <tr key={invoice.id} className="hover:bg-neutral-50/70 transition-colors divide-x divide-neutral-700">
+                              {/* 1. SR.NO */}
+                              <td
+                                style={{ width: `${colWidths.srNo}px`, minWidth: `${colWidths.srNo}px`, maxWidth: `${colWidths.srNo}px` }}
+                                className="p-2 text-center font-mono font-bold text-neutral-800 bg-neutral-50/50"
                               >
-                                <Tag size={9} />
-                                {invoice.sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC MONTH-END' : 'MANUAL DISPATCH'}
-                              </span>
-                            </div>
-                          </td>
-
-                          <td className="p-3 font-bold text-neutral-700">
-                            {invoice.paymentDuration === 'ONE_TIME' || invoice.productGroupKey === 'ONE_TIME_SESSION' || invoice.billingMonth?.toLowerCase().includes('one-time') ? (
-                              <div className="space-y-0.5">
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-300 rounded text-[10px] font-bold">
-                                  <Clock size={10} className="text-amber-700 shrink-0" />
-                                  <span>{formatOneTimeBillingMonth(invoice)}</span>
-                                </span>
-                                <div className="text-[9px] text-neutral-400 font-sans font-normal">
-                                  Month: {normalizeBillingMonth(invoice.billingMonth)}
+                                <div className="text-xs font-black text-[#006064]">
+                                  #{invoice.srNo || invoice.clientMaster?.srNo || (index + 1)}
                                 </div>
-                              </div>
-                            ) : (
-                              <div>
-                                <span className="text-[#1B1C1C] font-extrabold">{invoice.billingMonth || 'N/A'}</span>
-                                {invoice.splitsJson && (() => {
-                                  let splits: InvoiceSplitGroup[] = [];
-                                  try { splits = JSON.parse(invoice.splitsJson || '[]'); } catch { }
-                                  if (splits.length > 1) {
+                              </td>
+
+                              {/* 2. COMPANY NAME (+ GST & tags) */}
+                              <td
+                                style={{ width: `${colWidths.company}px`, minWidth: `${colWidths.company}px`, maxWidth: `${colWidths.company}px` }}
+                                className="p-2"
+                              >
+                                <div className="font-bold text-[#1B1C1C] text-sm break-words">{invoice.companyName}</div>
+                                {invoice.gstNo && <div className="text-[10px] font-mono text-neutral-500">GST: {invoice.gstNo}</div>}
+                                <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                  {invoice.isExtendedHours && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-bold uppercase rounded-xs">
+                                      ⚡ Extended Hours
+                                    </span>
+                                  )}
+                                  {invoice.bookingId && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 bg-teal-50 text-teal-800 border border-teal-300 text-[9px] font-mono font-bold rounded-xs" title={`Booking Reference: ${invoice.bookingId}`}>
+                                      <Tag size={9} /> ID: {invoice.bookingId}
+                                    </span>
+                                  )}
+                                  {invoice.billedTo === 'BROKER' && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase rounded-xs">
+                                      Broker: {invoice.brokerName || 'Broker'} {invoice.brokerCommissionPercent ? `(${invoice.brokerCommissionPercent}%)` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* 3. AGREEMENT START - END + CLICKABLE PDF ICON */}
+                              <td
+                                style={{ width: `${colWidths.agreement}px`, minWidth: `${colWidths.agreement}px`, maxWidth: `${colWidths.agreement}px` }}
+                                className="p-2 whitespace-nowrap"
+                              >
+                                <div className="flex items-center justify-between gap-1.5">
+                                  <div className="space-y-0.5 text-[10px]">
+                                    <div>
+                                      <span className="text-neutral-400 font-medium">Start: </span>
+                                      <strong className="text-emerald-900 font-bold">{formatDisplayDate(invoice.clientMaster?.agreementStartDate) || '-'}</strong>
+                                    </div>
+                                    <div>
+                                      <span className="text-neutral-400 font-medium">End: </span>
+                                      <strong className="text-neutral-800 font-bold">{formatDisplayDate(invoice.clientMaster?.agreementEndDate) || 'Ongoing'}</strong>
+                                    </div>
+                                  </div>
+                                  {(() => {
+                                    const agrUrl = invoice.clientMaster?.products?.find((p) => p.agreementPdfUrl)?.agreementPdfUrl || (invoice.clientMaster as any)?.agreementPdfUrl || (invoice.clientMaster as any)?.agreementUrl;
+                                    if (agrUrl) {
+                                      return (
+                                        <a
+                                          href={agrUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded shadow-2xs transition-colors shrink-0 cursor-pointer"
+                                          title="View Attached Agreement PDF Document"
+                                        >
+                                          <FileText size={14} className="text-emerald-700" />
+                                        </a>
+                                      );
+                                    }
                                     return (
-                                      <div className="mt-1.5 space-y-1">
-                                        {splits.map((s, idx) => (
-                                          <div key={s.id || idx} className="text-[9.5px] bg-purple-50/90 text-purple-950 border border-purple-200 px-2 py-1 rounded font-normal leading-snug">
-                                            <div className="font-extrabold text-[9.5px] text-purple-900 flex items-center justify-between gap-1">
-                                              <span>#{idx + 1} {s.name}</span>
-                                              <span className="font-mono text-teal-800 font-bold">₹{Number(s.totalAmount || 0).toLocaleString('en-IN')}</span>
-                                            </div>
-                                            <div className="text-[9px] text-purple-900 font-semibold flex items-center gap-1 mt-0.5">
-                                              <span>📅</span>
-                                              <span className="underline decoration-purple-300 font-bold">
-                                                {formatDisplayDateSafe(s.startDate) || 'Month Start'} → {formatDisplayDateSafe(s.endDate) || 'Month End'}
-                                              </span>
-                                              {s.activeDays ? <span className="text-purple-700 font-extrabold">({s.activeDays}d)</span> : null}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
+                                      <span className="p-1.5 text-neutral-300" title="No Agreement PDF Attached">
+                                        <FileText size={14} />
+                                      </span>
                                     );
-                                  }
+                                  })()}
+                                </div>
+                              </td>
+
+                              {/* 4. LOCK-IN */}
+                              <td
+                                style={{ width: `${colWidths.lockin}px`, minWidth: `${colWidths.lockin}px`, maxWidth: `${colWidths.lockin}px` }}
+                                className="p-2 text-[10.5px] font-bold text-neutral-800 whitespace-nowrap"
+                              >
+                                {invoice.clientMaster?.lockinEndDate ? formatDisplayDate(invoice.clientMaster.lockinEndDate) : '-'}
+                              </td>
+
+                              {/* 5. NOTICE PERIOD */}
+                              <td
+                                style={{ width: `${colWidths.notice}px`, minWidth: `${colWidths.notice}px`, maxWidth: `${colWidths.notice}px` }}
+                                className="p-2 whitespace-nowrap"
+                              >
+                                {invoice.clientMaster?.noticePeriodMonths ? (
+                                  <div>
+                                    <div className="text-xs font-bold text-neutral-900">
+                                      {invoice.clientMaster.noticePeriodMonths} {invoice.clientMaster.noticePeriodMonths === 1 ? 'Month' : 'Months'}
+                                    </div>
+                                    <div className="text-[11px] font-medium text-neutral-600">
+                                      {invoice.clientMaster.noticePeriodApplicable ? `(${invoice.clientMaster.noticePeriodApplicable})` : '(After Lock-in)'}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-neutral-400 font-normal">-</span>
+                                )}
+                              </td>
+
+                              {/* 6. ESCALATION (% and applicable date in cell) */}
+                              <td
+                                style={{ width: `${colWidths.escalation}px`, minWidth: `${colWidths.escalation}px`, maxWidth: `${colWidths.escalation}px` }}
+                                className="p-2 whitespace-nowrap"
+                              >
+                                {(() => {
+                                  const esc = getProbableEscalationInfo(invoice.clientMaster);
+                                  if (!esc) return <span className="text-xs text-neutral-400 font-normal">-</span>;
+                                  return (
+                                    <div>
+                                      <div className="text-xs font-black text-purple-900 tracking-tight">
+                                        {esc.percent}%
+                                      </div>
+                                      {esc.applicableDateStr ? (
+                                        <div className="text-[11px] font-bold text-purple-700 mt-0.5 leading-tight">
+                                          <span className="text-[9.5px] text-purple-600 block font-medium">Applicable Date:</span>
+                                          <span className="font-bold text-purple-900">{esc.applicableDateStr}</span>
+                                        </div>
+                                      ) : (
+                                        <div className="text-[10px] text-neutral-400">Date N/A</div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+
+                              {/* 7. PAYMENT DURATION */}
+                              <td
+                                style={{ width: `${colWidths.cycle}px`, minWidth: `${colWidths.cycle}px`, maxWidth: `${colWidths.cycle}px` }}
+                                className="p-2"
+                              >
+                                <span className="px-2 py-0.5 bg-[#006064] text-white text-[9.5px] font-extrabold uppercase tracking-wider inline-block rounded-xs">
+                                  {invoice.paymentDuration === 'TWO_YEARS' || invoice.paymentDuration === '2_YEARS'
+                                    ? '2 YEARS'
+                                    : invoice.paymentDuration
+                                    ? String(invoice.paymentDuration).replace('_', ' ')
+                                    : 'MONTHLY'}
+                                </span>
+                              </td>
+
+                              {/* 8. CENTER */}
+                              <td
+                                style={{ width: `${colWidths.node}px`, minWidth: `${colWidths.node}px`, maxWidth: `${colWidths.node}px` }}
+                                className="p-2 whitespace-nowrap"
+                              >
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-50 text-teal-900 border border-teal-200 text-[10px] font-extrabold rounded-xs uppercase tracking-wide">
+                                  <MapPin size={10} className="text-[#006064]" />
+                                  {invoice.createdBy?.assignedLocations?.[0]?.location?.name || 'Mercado'}
+                                </span>
+                              </td>
+
+                              {/* 9-15. GROUP OF COLUMNS FOR PRODUCTS (NEVER COMBINING SEATS) */}
+                              {/* 9. Product Name */}
+                              {products.length === 1 ? (
+                                <td
+                                  style={{ width: `${colWidths.product}px`, minWidth: `${colWidths.product}px`, maxWidth: `${colWidths.product}px` }}
+                                  className="p-2 font-bold text-xs text-[#1B1C1C] break-words"
+                                >
+                                  {products[0].name}
+                                </td>
+                              ) : (
+                                <td
+                                  style={{ width: `${colWidths.product}px`, minWidth: `${colWidths.product}px`, maxWidth: `${colWidths.product}px` }}
+                                  className="p-0"
+                                >
+                                  <div className="divide-y divide-neutral-600 sub-product-divider">
+                                    {products.map((p, pIdx) => (
+                                      <div key={pIdx} className="p-2 font-bold text-xs text-[#1B1C1C] break-words">{p.name}</div>
+                                    ))}
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* 10. Invoice Period */}
+                              {products.length === 1 ? (
+                                <td
+                                  style={{ width: `${colWidths.period}px`, minWidth: `${colWidths.period}px`, maxWidth: `${colWidths.period}px` }}
+                                  className="p-2 whitespace-nowrap"
+                                >
+                                  <div className="font-semibold text-xs text-neutral-900">{products[0].period}</div>
+                                  {products[0].isProrated && (
+                                    <div className="mt-0.5">
+                                      <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-bold rounded-2xs uppercase">
+                                        Prorated {products[0].activeDays ? `(${products[0].activeDays}d)` : ''}
+                                      </span>
+                                    </div>
+                                  )}
+                                </td>
+                              ) : (
+                                <td
+                                  style={{ width: `${colWidths.period}px`, minWidth: `${colWidths.period}px`, maxWidth: `${colWidths.period}px` }}
+                                  className="p-0"
+                                >
+                                  <div className="divide-y divide-neutral-600 sub-product-divider">
+                                    {products.map((p, pIdx) => (
+                                      <div key={pIdx} className="p-2 whitespace-nowrap">
+                                        <div className="font-semibold text-xs text-neutral-900">{p.period}</div>
+                                        {p.isProrated && (
+                                          <div className="mt-0.5">
+                                            <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-bold rounded-2xs uppercase">
+                                              Prorated {p.activeDays ? `(${p.activeDays}d)` : ''}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* 11. No. of Seats (NEVER COMBINED!) */}
+                              {products.length === 1 ? (
+                                <td
+                                  style={{ width: `${colWidths.seats}px`, minWidth: `${colWidths.seats}px`, maxWidth: `${colWidths.seats}px` }}
+                                  className="p-2 text-center font-bold text-xs text-neutral-900 whitespace-nowrap"
+                                >
+                                  {products[0].seats} {products[0].seats === 1 ? 'seat' : 'seats'}
+                                </td>
+                              ) : (
+                                <td
+                                  style={{ width: `${colWidths.seats}px`, minWidth: `${colWidths.seats}px`, maxWidth: `${colWidths.seats}px` }}
+                                  className="p-0"
+                                >
+                                  <div className="divide-y divide-neutral-600 sub-product-divider">
+                                    {products.map((p, pIdx) => (
+                                      <div key={pIdx} className="p-2 text-center font-bold text-xs text-neutral-900 whitespace-nowrap">
+                                        {p.seats} {p.seats === 1 ? 'seat' : 'seats'}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* 12. Rate / Seat */}
+                              {products.length === 1 ? (
+                                <td
+                                  style={{ width: `${colWidths.rate}px`, minWidth: `${colWidths.rate}px`, maxWidth: `${colWidths.rate}px` }}
+                                  className="p-2 text-right font-mono font-medium text-xs text-neutral-800 whitespace-nowrap"
+                                >
+                                  ₹{products[0].rate.toLocaleString('en-IN')}
+                                </td>
+                              ) : (
+                                <td
+                                  style={{ width: `${colWidths.rate}px`, minWidth: `${colWidths.rate}px`, maxWidth: `${colWidths.rate}px` }}
+                                  className="p-0"
+                                >
+                                  <div className="divide-y divide-neutral-600 sub-product-divider">
+                                    {products.map((p, pIdx) => (
+                                      <div key={pIdx} className="p-2 text-right font-mono font-medium text-xs text-neutral-800 whitespace-nowrap">
+                                        ₹{p.rate.toLocaleString('en-IN')}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* 13. Amount (Seats × Rate) */}
+                              {products.length === 1 ? (
+                                <td
+                                  style={{ width: `${colWidths.amount}px`, minWidth: `${colWidths.amount}px`, maxWidth: `${colWidths.amount}px` }}
+                                  className="p-2 text-right font-mono font-bold text-xs text-neutral-900 whitespace-nowrap"
+                                >
+                                  ₹{products[0].amount.toLocaleString('en-IN')}
+                                </td>
+                              ) : (
+                                <td
+                                  style={{ width: `${colWidths.amount}px`, minWidth: `${colWidths.amount}px`, maxWidth: `${colWidths.amount}px` }}
+                                  className="p-0"
+                                >
+                                  <div className="divide-y divide-neutral-600 sub-product-divider">
+                                    {products.map((p, pIdx) => (
+                                      <div key={pIdx} className="p-2 text-right font-mono font-bold text-xs text-neutral-900 whitespace-nowrap">
+                                        ₹{p.amount.toLocaleString('en-IN')}
+                                      </div>
+                                    ))}
+                                    <div className="p-1 text-right font-mono font-black text-[10px] text-[#006064] bg-teal-50/50 whitespace-nowrap border-t border-neutral-600">
+                                      Base: ₹{products.reduce((acc, p) => acc + p.amount, 0).toLocaleString('en-IN')}
+                                    </div>
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* 14. GST & Total Amount */}
+                              {products.length === 1 ? (
+                                <td
+                                  style={{ width: `${colWidths.totalAmount}px`, minWidth: `${colWidths.totalAmount}px`, maxWidth: `${colWidths.totalAmount}px` }}
+                                  className="p-2 text-right font-mono whitespace-nowrap"
+                                >
+                                  <div className="font-black text-xs text-[var(--primary)]">₹{products[0].totalAmount.toLocaleString('en-IN')}</div>
+                                  <div className="text-[9px] text-neutral-400 font-medium">Incl. ₹{products[0].gstAmount.toLocaleString('en-IN')} GST ({products[0].gstPercent}%)</div>
+                                </td>
+                              ) : (
+                                <td
+                                  style={{ width: `${colWidths.totalAmount}px`, minWidth: `${colWidths.totalAmount}px`, maxWidth: `${colWidths.totalAmount}px` }}
+                                  className="p-0"
+                                >
+                                  <div className="divide-y divide-neutral-600 sub-product-divider">
+                                    {products.map((p, pIdx) => (
+                                      <div key={pIdx} className="p-2 text-right font-mono whitespace-nowrap">
+                                        <div className="font-bold text-xs text-neutral-800">₹{p.totalAmount.toLocaleString('en-IN')}</div>
+                                        <div className="text-[9px] text-neutral-400">₹{p.gstAmount.toLocaleString('en-IN')} GST</div>
+                                      </div>
+                                    ))}
+                                    <div className="p-1 text-right font-mono font-black text-xs text-[var(--primary)] bg-teal-50/50 whitespace-nowrap border-t border-neutral-600">
+                                      Total: ₹{Number(invoice.totalAmount || 0).toLocaleString('en-IN')}
+                                    </div>
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* 15. Due Date */}
+                              {products.length === 1 ? (
+                                <td
+                                  style={{ width: `${colWidths.dueDate}px`, minWidth: `${colWidths.dueDate}px`, maxWidth: `${colWidths.dueDate}px` }}
+                                  className="p-2 text-center whitespace-nowrap"
+                                >
+                                  <span className="font-bold text-xs text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-xs border border-neutral-200 inline-block shadow-2xs">
+                                    {products[0].dueDate || computeInvoiceDueDate(invoice)}
+                                  </span>
+                                </td>
+                              ) : (
+                                <td
+                                  style={{ width: `${colWidths.dueDate}px`, minWidth: `${colWidths.dueDate}px`, maxWidth: `${colWidths.dueDate}px` }}
+                                  className="p-0"
+                                >
+                                  <div className="divide-y divide-neutral-600 sub-product-divider">
+                                    {products.map((p, pIdx) => (
+                                      <div key={pIdx} className="p-2 text-center whitespace-nowrap">
+                                        <span className="font-bold text-xs text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-xs border border-neutral-200 inline-block shadow-2xs">
+                                          {p.dueDate || computeInvoiceDueDate(invoice)}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* 16. ARRIVAL DATE & DISPATCH */}
+                              <td
+                                style={{ width: `${colWidths.arrival}px`, minWidth: `${colWidths.arrival}px`, maxWidth: `${colWidths.arrival}px` }}
+                                className="p-2 whitespace-nowrap"
+                              >
+                                <div className="font-bold text-[#1B1C1C] text-xs">{formatDisplayDate(invoice.sentAt) || 'N/A'}</div>
+                                <div className="mt-0.5">
+                                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 text-[9px] font-extrabold uppercase ${invoice.sendType === 'AUTOMATIC_MONTH_END' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
+                                    <Tag size={9} />
+                                    {invoice.sendType === 'AUTOMATIC_MONTH_END' ? 'AUTOMATIC' : 'MANUAL'}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* 17. BILLING MONTH */}
+                              <td
+                                style={{ width: `${colWidths.month}px`, minWidth: `${colWidths.month}px`, maxWidth: `${colWidths.month}px` }}
+                                className="p-2 whitespace-nowrap"
+                              >
+                                <div className="font-extrabold text-[#1B1C1C] text-xs">{invoice.billingMonth || 'N/A'}</div>
+                                {invoice.splitsJson && (() => {
+                                  try {
+                                    const splits = JSON.parse(invoice.splitsJson || '[]');
+                                    if (Array.isArray(splits) && splits.length > 1) {
+                                      return (
+                                        <div className="mt-1">
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold rounded">
+                                            <Scissors size={9} /> {splits.length} Sub-Invoices
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+                                  } catch {}
                                   return null;
                                 })()}
-                              </div>
-                            )}
-                          </td>
+                              </td>
 
-                          <td className="p-3 text-right">
-                            <div className="font-black text-sm text-[var(--primary)]">
-                              ₹{Number(invoice.totalAmount || 0).toLocaleString('en-IN')}
-                            </div>
-                            {invoice.splitsJson && (() => {
-                              let splits: InvoiceSplitGroup[] = [];
-                              try { splits = JSON.parse(invoice.splitsJson || '[]'); } catch { }
-                              if (splits.length > 1) {
-                                return (
-                                  <div className="mt-0.5 text-[9px] text-purple-800 font-mono font-bold flex flex-col items-end">
-                                    <span>✂ {splits.length} Sub-Invoices</span>
-                                    <span className="text-neutral-500 font-normal">
-                                      {splits.map(s => `₹${Number(s.totalAmount || 0).toLocaleString('en-IN')}`).join(' + ')}
-                                    </span>
+                              {/* 18. STATUS (+ Red Rejection remarks box if rejected) */}
+                              <td
+                                style={{ width: `${colWidths.status}px`, minWidth: `${colWidths.status}px`, maxWidth: `${colWidths.status}px` }}
+                                className="p-2 space-y-1"
+                              >
+                                {renderStatusBadge(invoice.status)}
+                                {invoice.digitallySignedPdfUrl && (
+                                  <div className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-bold uppercase rounded">
+                                    <Award size={10} className="text-emerald-700" /> Digitally Signed
                                   </div>
-                                );
-                              }
-                              return null;
-                            })()}
-                            {invoice.brokerCommissionPercent !== null && invoice.brokerCommissionPercent !== undefined && Number(invoice.brokerCommissionPercent) > 0 && (
-                              <div className="mt-1 flex flex-col items-end">
-                                <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 rounded text-[9px] font-bold"
-                                  title={`Broker Commission: ${invoice.brokerCommissionPercent}%`}
-                                >
-                                  <span>Broker Comm: {invoice.brokerCommissionPercent}%</span>
-                                </span>
-                              </div>
-                            )}
-                            {hasProration(invoice) && (() => {
-                              const summary = getProrationSummary(invoice);
-                              return (
-                                <div className="mt-1 flex flex-col items-end">
-                                  <span
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9px] font-bold"
-                                    title={summary?.formula || 'Prorated invoice amount'}
+                                )}
+                                {invoice.clientEmailSentAt && (
+                                  <div
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-sky-50 text-sky-900 border border-sky-300 text-[9px] font-bold uppercase rounded"
+                                    title={`Email sent on ${formatDisplayDate(invoice.clientEmailSentAt)} to ${invoice.clientEmailSentTo || 'client'}`}
                                   >
-                                    <CalendarDays size={9} className="text-amber-700" />
-                                    <span>Prorated: {summary?.label || 'Custom Days'}</span>
-                                  </span>
-                                </div>
-                              );
-                            })()}
-                            {Number(invoice.lateFeeAmount || 0) > 0 ? (
-                              <div className="text-[9px] text-red-600 font-bold">
-                                Includes ₹{Number(invoice.lateFeeAmount).toLocaleString('en-IN')} Late Fee
-                              </div>
-                            ) : Number(invoice.waivedLateDays || 0) > 0 ? (
-                              <div className="text-[9px] text-emerald-700 font-bold">
-                                Late Fee Waived (₹0)
-                              </div>
-                            ) : null}
-                          </td>
-
-                          <td className="p-3">
-                            <div className="space-y-1.5">
-                              {renderStatusBadge(invoice.status)}
-
-                              {invoice.splitsJson && (() => {
-                                let spCount = 0;
-                                try { spCount = JSON.parse(invoice.splitsJson || '[]').length; } catch { }
-                                if (spCount > 1) {
-                                  return (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenSplitModal(invoice)}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold uppercase tracking-wider rounded cursor-pointer hover:bg-purple-100 transition-colors"
-                                      title="Click to view or adjust sub-invoice splits"
-                                    >
-                                      <Scissors size={9} /> Split: {spCount} Sub-Invoices
-                                    </button>
-                                  );
-                                }
-                                return null;
-                              })()}
-
-                              {invoice.isDigitalSignRequired && (
-                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-950 border border-amber-300 text-[9px] font-extrabold uppercase rounded shadow-2xs">
-                                  <PenTool size={10} className="text-amber-800" /> Digital Sign Required
-                                </div>
-                              )}
-
-                              {invoice.digitallySignedPdfUrl && (
-                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-bold uppercase rounded">
-                                  <Award size={10} className="text-emerald-700" /> Digitally Signed
-                                </div>
-                              )}
-
-                              {/* Show Revision Remarks if rejected by CM */}
-                              {invoice.status === 'REJECTED_WITH_REMARKS' && invoice.remarks && (
-                                <div className="mt-2 p-2 bg-red-50 border border-red-200 text-red-800 text-[10px] space-y-1">
-                                  <div className="font-bold flex items-center gap-1">
-                                    <AlertTriangle size={11} /> CM Revision Remarks:
+                                    <MailCheck size={10} className="text-sky-700 shrink-0" />
+                                    <span>Sent to Client</span>
                                   </div>
-                                  <div className="italic">"{invoice.remarks}"</div>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-
-                          <td className="p-3 text-center">
-                            <div className="flex flex-col gap-1.5 items-center justify-center">
-                              {/* CM ACTIONS */}
-                              {userRoleView === 'CM' && (
-                                <>
-                                  {invoice.status === 'PENDING_CM_REVIEW' && (
-                                    <button
-                                      onClick={() => handleSendToAccountantClick(invoice)}
-                                      disabled={actionLoading}
-                                      className="px-3 py-1.5 bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1 w-full justify-center shadow-xs cursor-pointer"
-                                    >
-                                      <Send size={11} /> Send to Accountant
-                                    </button>
-                                  )}
-
-                                  {/* Visible Manage Invoice Button for CM */}
-                                  {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenEditModal(invoice)}
-                                      className="px-2.5 py-1.5 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 w-full justify-center shadow-xs transition-colors rounded cursor-pointer border border-teal-800"
-                                      title="Manage invoice entry: Edit products, Prorate Days, Adjust Sub-Invoices & Complimentary Usage"
-                                    >
-                                      <Edit2 size={11} className="text-amber-300 shrink-0" />
-                                      <span>Manage Invoice</span>
-                                    </button>
-                                  )}
-
-                                  {/* Prorate Days Action for CM */}
-                                  {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'INVOICE_ATTACHED', 'APPROVED', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenProrateModal(invoice)}
-                                      className={`px-2.5 py-1 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors rounded ${hasProration(invoice)
-                                        ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
-                                        : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
-                                        }`}
-                                      title="Prorate days if client occupied fewer days in month"
-                                    >
-                                      <CalendarDays size={10} className="text-amber-700" />
-                                      <span>{hasProration(invoice) ? 'Adjust Prorated Days' : '⚡ Prorate Days'}</span>
-                                    </button>
-                                  )}
-
-                                  {/* Split Invoice Action for CM */}
-                                  {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS'].includes(invoice.status) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenSplitModal(invoice)}
-                                      className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors"
-                                    >
-                                      <Scissors size={10} /> {invoice.splitsJson ? 'Adjust Sub-Invoices' : 'Split Invoice'}
-                                    </button>
-                                  )}
-
-                                  {/* Complimentary Over-Usage Action for CM (Full-Time Clients Only) */}
-                                  {['PENDING_CM_REVIEW', 'SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS'].includes(invoice.status) &&
-                                    invoice.paymentDuration !== 'ONE_TIME' &&
-                                    invoice.productGroupKey !== 'ONE_TIME_SESSION' &&
-                                    invoice.clientMaster?.clientType !== 'ONE_TIME' &&
-                                    invoice.clientMaster?.clientType !== 'VIRTUAL_OFFICE' && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenComplimentaryModal(invoice)}
-                                        className={`px-2.5 py-1 font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors rounded ${hasComplimentaryOverusage(invoice)
-                                          ? 'bg-teal-100 text-teal-900 border border-teal-300 hover:bg-teal-200'
-                                          : 'bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100'
-                                          }`}
-                                        title="Review complimentary meeting room & printer usage, bill extra usage"
-                                      >
-                                        <Gift size={10} className="text-teal-700" />
-                                        <span>{hasComplimentaryOverusage(invoice) ? '✓ Over-Usage Logged' : '🎁 Complimentary Usage'}</span>
-                                      </button>
-                                    )}
-
-                                  {invoice.status === 'INVOICE_ATTACHED' && (invoice.attachedInvoice || invoice.splitsJson) && (
-                                    <button
-                                      onClick={() => setEntryToReviewInvoice(invoice)}
-                                      className="px-3 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 w-full justify-center shadow-xs"
-                                    >
-                                      <Eye size={11} /> Review Tally PDF
-                                    </button>
-                                  )}
-
-                                  {invoice.clientEmailSentAt ? (
-                                    <div className="flex flex-col gap-1 w-full items-center">
-                                      <div
-                                        className="px-2 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-[9.5px] uppercase tracking-wider rounded flex items-center justify-center gap-1 w-full shadow-2xs"
-                                        title={`Email sent to: ${invoice.clientEmailSentTo || 'Primary Contact'} on ${new Date(invoice.clientEmailSentAt).toLocaleString('en-IN')}`}
-                                      >
-                                        <CheckCircle2 size={11} className="text-emerald-700 shrink-0" />
-                                        <span>Sent to Client ({invoice.billingMonth || 'Month'})</span>
-                                      </div>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenSendClientEmailModal(invoice)}
-                                        className="text-[9px] text-neutral-500 hover:text-emerald-800 underline font-semibold flex items-center gap-0.5 cursor-pointer"
-                                        title="Click if you need to resend this invoice email"
-                                      >
-                                        <RotateCcw size={9} /> Resend Email
-                                      </button>
+                                )}
+                                {/* If Rejected by CM with Remarks, show prominent Red Rejection Box */}
+                                {invoice.status === 'REJECTED_WITH_REMARKS' && invoice.remarks && (
+                                  <div className="mt-1.5 p-2 bg-red-50 border-2 border-red-300 text-red-900 text-[10px] rounded space-y-0.5">
+                                    <div className="font-extrabold flex items-center gap-1 uppercase tracking-wide text-red-700">
+                                      <AlertTriangle size={11} /> CM Revision Remarks:
                                     </div>
-                                  ) : invoice.status === 'APPROVED' ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenSendClientEmailModal(invoice)}
-                                      className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-xs transition-colors cursor-pointer"
-                                      title="Send Tax Invoice Email directly to Client with Primary Contact selection"
-                                    >
-                                      <Send size={11} /> Send Invoice to Client
-                                    </button>
-                                  ) : null}
+                                    <div className="italic">"{invoice.remarks}"</div>
+                                  </div>
+                                )}
+                              </td>
 
-                                  {invoice.isDigitalSignRequired && (
-                                    <>
-                                      {invoice.digitallySignedPdfUrl ? (
-                                        <div className="flex flex-col gap-1 w-full">
-                                          <div className="flex items-center gap-1">
-                                            <a
-                                              href={invoice.digitallySignedPdfUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="flex-1 px-2 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-[9.5px] uppercase tracking-wider hover:bg-emerald-100 flex items-center justify-center gap-1 shadow-2xs"
-                                              title="View Digitally Signed PDF in new tab"
-                                            >
-                                              <Eye size={10} /> View Signed
-                                            </a>
-                                            <a
-                                              href={invoice.digitallySignedPdfUrl}
-                                              download={invoice.digitallySignedPdfName || `Signed_Invoice_${invoice.companyName}.pdf`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="px-2 py-1 bg-emerald-700 text-white font-bold text-[9.5px] uppercase tracking-wider hover:bg-emerald-800 flex items-center justify-center gap-1 shadow-2xs"
-                                              title="Download Digitally Signed PDF"
-                                            >
-                                              <Download size={10} /> Download
-                                            </a>
-                                          </div>
-                                          <div className="text-[9px] text-emerald-700 font-medium text-center">
-                                            {(() => {
-                                              try {
-                                                const splits = JSON.parse(invoice.splitsJson || "[]");
-                                                if (Array.isArray(splits) && splits.length > 1) {
-                                                  const signedCnt = splits.filter((s) => s.digitallySignedPdfUrl || (s.attachedInvoice && s.attachedInvoice.fileUrl && s.attachedInvoice.fileUrl.includes("signed_dsc"))).length;
-                                                  return "✓ DSC Applied (" + signedCnt + "/" + splits.length + " Sub-Invoices)";
-                                                }
-                                              } catch {}
-                                              return "✓ DSC Applied (USB Token)";
-                                            })()}
-                                          </div>
-                                          {isAdmin && (
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                setEntryToAttachInvoice(invoice);
-                                                setSelectedInvoiceFile(null);
-                                              }}
-                                              className="w-full mt-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[9.5px] font-bold rounded flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                                              title="Super Admin: Change or replace Tally PDF for this approved invoice"
-                                            >
-                                              <Paperclip size={10} /> Change Tally PDF
-                                            </button>
-                                          )}
-                                        </div>
-                                      ) : invoice.status === 'INVOICE_ATTACHED' ? (
-                                        <button
-                                          type="button"
-                                          disabled={signingInvoiceId === invoice.id || bulkSigningDsc}
-                                          onClick={() => handleApplySingleDsc(invoice.id)}
-                                          className="px-2.5 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
-                                          title="Apply Remote Digital Signature via Mercado USB Key"
-                                        >
-                                          {signingInvoiceId === invoice.id ? (
-                                            <>
-                                              <Loader2 size={11} className="animate-spin" /> Signing...
-                                            </>
-                                          ) : (
-                                            <>
-                                              <Shield size={11} /> ✍️ Apply Digital Sign
-                                            </>
-                                          )}
-                                        </button>
-                                      ) : null}
-                                    </>
-                                  )}
-                                  {!invoice.isDigitalSignRequired && (
-                                    <>
-                                      {invoice.digitallySignedPdfUrl ? (
-                                        <div className="flex flex-col gap-1 w-full">
-                                          <div className="flex items-center gap-1">
-                                            <a
-                                              href={invoice.digitallySignedPdfUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="flex-1 px-2 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-[9.5px] uppercase tracking-wider hover:bg-emerald-100 flex items-center justify-center gap-1 shadow-2xs"
-                                              title="View Digitally Signed PDF"
-                                            >
-                                              <Eye size={10} /> View Signed
-                                            </a>
-                                            <a
-                                              href={invoice.digitallySignedPdfUrl}
-                                              download={invoice.digitallySignedPdfName || `Signed_Invoice_${invoice.companyName}.pdf`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="px-2 py-1 bg-emerald-700 text-white font-bold text-[9.5px] uppercase tracking-wider hover:bg-emerald-800 flex items-center justify-center gap-1 shadow-2xs"
-                                              title="Download Signed PDF"
-                                            >
-                                              <Download size={10} /> Download
-                                            </a>
-                                          </div>
-                                          <div className="text-[9px] text-emerald-700 font-medium text-center">
-                                            {(() => {
-                                              try {
-                                                const splits = JSON.parse(invoice.splitsJson || "[]");
-                                                if (Array.isArray(splits) && splits.length > 1) {
-                                                  const signedCnt = splits.filter((s) => s.digitallySignedPdfUrl || (s.attachedInvoice && s.attachedInvoice.fileUrl && s.attachedInvoice.fileUrl.includes("signed_dsc"))).length;
-                                                  return "✓ DSC Applied (" + signedCnt + "/" + splits.length + " Sub-Invoices)";
-                                                }
-                                              } catch {}
-                                              return "✓ DSC Applied (Optional Security)";
-                                            })()}
-                                          </div>
-                                          {isAdmin && (
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                setEntryToAttachInvoice(invoice);
-                                                setSelectedInvoiceFile(null);
-                                              }}
-                                              className="w-full mt-1 px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[9.5px] font-bold rounded flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                                              title="Super Admin: Change or replace Tally PDF for this approved invoice"
-                                            >
-                                              <Paperclip size={10} /> Change Tally PDF
-                                            </button>
-                                          )}
-                                        </div>
-                                      ) : invoice.status === 'INVOICE_ATTACHED' ? (
-                                        <button
-                                          type="button"
-                                          disabled={signingInvoiceId === invoice.id || bulkSigningDsc}
-                                          onClick={() => handleApplySingleDsc(invoice.id)}
-                                          className="px-2.5 py-1.5 bg-neutral-800 hover:bg-neutral-900 text-white font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
-                                          title="Optionally apply digital signature from Mercado USB key for extra security"
-                                        >
-                                          {signingInvoiceId === invoice.id ? (
-                                            <>
-                                              <Loader2 size={11} className="animate-spin" /> Signing...
-                                            </>
-                                          ) : (
-                                            <>
-                                              <Shield size={10} className="text-cyan-300" /> ✍️ Apply DSC (Optional)
-                                            </>
-                                          )}
-                                        </button>
-                                      ) : null}
-                                    </>
-                                  )}
-                                </>
-                              )}
-
-                              {/* ACCOUNTANT ACTIONS */}
-                              {userRoleView === 'ACCOUNTANT' && (
-                                <>
-                                  {['SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS', 'INVOICE_ATTACHED'].includes(invoice.status) ? (
-                                    <>
-                                      {invoice.isDigitalSignRequired && (
-                                        <div className="w-full text-center py-0.5 px-1 bg-amber-100 border border-amber-300 text-amber-950 font-black text-[9px] uppercase tracking-wide rounded">
-                                          ✍️ DSC Required
-                                        </div>
-                                      )}
-                                      <button
-                                        onClick={() => {
-                                          setEntryToAttachInvoice(invoice);
-                                          setSelectedInvoiceFile(null);
-                                        }}
-                                        className={`px-3 py-1.5 font-bold text-[10px] uppercase tracking-wider text-white flex items-center justify-center gap-1 w-full shadow-xs ${invoice.status === 'REJECTED_WITH_REMARKS'
-                                          ? 'bg-red-600 hover:bg-red-700'
-                                          : 'bg-[var(--primary)] hover:opacity-90'
-                                          }`}
-                                      >
-                                        <Paperclip size={11} />
-                                        {invoice.attachedInvoice ? 'Replace Tally PDF' : 'Attach Tally PDF'}
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        onClick={() => setEntryToViewDetails(invoice)}
-                                        className="w-full mt-1 px-2 py-1 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-[#006064] text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-colors"
-                                        title="View complete invoice entry and sub-invoice splits"
-                                      >
-                                        <Eye size={11} /> View Invoice Entry
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <div className="space-y-1 w-full">
-                                      <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
-                                        <CheckCircle2 size={12} /> Finalized
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => setEntryToViewDetails(invoice)}
-                                        className="w-full px-2 py-0.5 text-neutral-600 hover:text-neutral-900 border border-neutral-200 text-[9.5px] font-bold rounded flex items-center justify-center gap-1"
-                                      >
-                                        <Eye size={10} /> View Entry
-                                      </button>
-                                      {isAdmin && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setEntryToAttachInvoice(invoice);
-                                            setSelectedInvoiceFile(null);
-                                          }}
-                                          className="w-full px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[9.5px] font-bold rounded flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                                          title="Super Admin: Change or replace Tally PDF for this approved invoice"
-                                        >
-                                          <Paperclip size={10} /> Change Tally PDF
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
-                                </>
-                              )}
-
-                              <div className="flex items-center gap-1 mt-1 border-t border-neutral-100 pt-1 w-full justify-center">
-                                <button
-                                  onClick={() => setEntryToViewDetails(invoice)}
-                                  className="p-1 text-neutral-500 hover:text-black hover:bg-neutral-100"
-                                  title="View details"
-                                >
-                                  <Eye size={12} />
-                                </button>
-                                {isAdmin && (
+                              {/* 19. ACTION (CM vs Accountant) */}
+                              <td
+                                style={{ width: `${colWidths.action}px`, minWidth: `${colWidths.action}px`, maxWidth: `${colWidths.action}px` }}
+                                className="p-2 text-center"
+                              >
+                                <div className="flex flex-col gap-1.5 items-center justify-center">
+                                  {/* View Details Button (Always at TOP of Action Column) */}
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setEntryToAttachInvoice(invoice);
-                                      setSelectedInvoiceFile(null);
-                                    }}
-                                    className="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-50 rounded"
-                                    title="Super Admin: Change / Replace Tally PDF"
+                                    onClick={() => setEntryToViewDetails(invoice)}
+                                    className="w-full px-2 py-1 bg-white hover:bg-neutral-100 text-[#006064] font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-2xs rounded cursor-pointer border border-[#006064]/40 transition-colors"
+                                    title="View complete invoice entry details"
                                   >
-                                    <Paperclip size={12} />
+                                    <Eye size={11} className="text-[#006064] shrink-0" />
+                                    <span>View Details</span>
                                   </button>
-                                )}
-                                {(canAccessCM || isAdmin) && invoice.status === 'APPROVED' && (
-                                  <button
-                                    onClick={() => handleOpenSendClientEmailModal(invoice)}
-                                    className="p-1 text-neutral-500 hover:text-emerald-700 hover:bg-emerald-50"
-                                    title="Send Tax Invoice to Client"
-                                  >
-                                    <Send size={12} />
-                                  </button>
-                                )}
-                                {userRoleView === 'CM' && (
-                                  <>
-                                    <button
-                                      onClick={() => handleOpenProrateModal(invoice)}
-                                      className="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-50"
-                                      title="Prorate / adjust active billing days"
-                                    >
-                                      <CalendarDays size={12} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleOpenEditModal(invoice)}
-                                      className="p-1 text-neutral-500 hover:text-[#006064] hover:bg-neutral-100"
-                                      title="Edit invoice record"
-                                    >
-                                      <Edit2 size={12} />
-                                    </button>
-                                  </>
-                                )}
-                                <button
-                                  onClick={() => handleDeleteInvoice(invoice.id)}
-                                  className="p-1 text-neutral-500 hover:text-red-600 hover:bg-neutral-100"
-                                  title="Delete invoice record"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
+
+                                  {/* CM / SUPER ADMIN ACTIONS */}
+                                  {(userRoleView === 'CM' || isAdmin) && (
+                                    <>
+                                      {/* Primary Unified Modal Button */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditModal(invoice)}
+                                        className="px-2.5 py-1.5 bg-[#006064] hover:bg-[#004d40] text-white font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 w-full justify-center shadow-xs transition-colors rounded cursor-pointer border border-teal-800"
+                                        title="Manage invoice entry: Edit products, Prorate Days, Adjust Sub-Invoices & Complimentary Usage"
+                                      >
+                                        <Edit2 size={11} className="text-amber-300 shrink-0" />
+                                        <span>Manage Invoice Entry</span>
+                                      </button>
+
+                                      {invoice.status === 'PENDING_CM_REVIEW' && (
+                                        <button
+                                          onClick={() => handleSendToAccountantClick(invoice)}
+                                          disabled={actionLoading}
+                                          className="px-2.5 py-1 bg-blue-600 text-white font-bold text-[9.5px] uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1 w-full justify-center shadow-2xs cursor-pointer"
+                                        >
+                                          <Send size={10} /> Send to Accountant
+                                        </button>
+                                      )}
+
+                                      {(invoice.status === 'INVOICE_ATTACHED' || invoice.status === 'APPROVED') && (invoice.attachedInvoice || invoice.splitsJson) && (
+                                        <button
+                                          onClick={() => setEntryToReviewInvoice(invoice)}
+                                          className="px-2.5 py-1 bg-amber-600 text-white font-bold text-[9.5px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 w-full justify-center shadow-2xs cursor-pointer"
+                                        >
+                                          <Eye size={10} /> View Tally PDF
+                                        </button>
+                                      )}
+
+                                      {/* Digital Signature Buttons */}
+                                      {invoice.digitallySignedPdfUrl ? (
+                                        <div className="flex items-center gap-1 w-full">
+                                          <a
+                                            href={invoice.digitallySignedPdfUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-[9px] uppercase tracking-wider hover:bg-emerald-100 flex items-center justify-center gap-1"
+                                            title="View Digitally Signed PDF"
+                                          >
+                                            <Eye size={9} /> View Signed
+                                          </a>
+                                          <a
+                                            href={invoice.digitallySignedPdfUrl}
+                                            download={invoice.digitallySignedPdfName || `Signed_Invoice_${invoice.companyName}.pdf`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-2 py-0.5 bg-emerald-700 text-white font-bold text-[9px] uppercase tracking-wider hover:bg-emerald-800 flex items-center justify-center gap-1"
+                                            title="Download Signed PDF"
+                                          >
+                                            <Download size={9} />
+                                          </a>
+                                        </div>
+                                      ) : (invoice.status === 'INVOICE_ATTACHED' && (invoice.isDigitalSignRequired || true)) ? (
+                                        <button
+                                          type="button"
+                                          disabled={signingInvoiceId === invoice.id || bulkSigningDsc}
+                                          onClick={() => handleApplySingleDsc(invoice.id)}
+                                          className="px-2 py-1 bg-blue-700 hover:bg-blue-800 text-white font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs cursor-pointer disabled:opacity-50 transition-colors"
+                                          title="Apply Remote Digital Signature via USB Key"
+                                        >
+                                          {signingInvoiceId === invoice.id ? (
+                                            <>
+                                              <Loader2 size={10} className="animate-spin" /> Signing...
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Shield size={10} /> ✍️ Apply DSC
+                                            </>
+                                          )}
+                                        </button>
+                                      ) : null}
+
+                                      {invoice.status === 'APPROVED' && (
+                                        invoice.clientEmailSentAt ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenSendClientEmailModal(invoice)}
+                                            className="px-2 py-1 bg-[#004d40] hover:bg-[#00382e] text-white font-bold text-[9.5px] uppercase tracking-wider flex items-center justify-between gap-1 w-full shadow-2xs transition-colors cursor-pointer rounded-xs border border-teal-700/80"
+                                            title={`Tax invoice email sent on ${formatDisplayDate(invoice.clientEmailSentAt)} to ${invoice.clientEmailSentTo || 'client'}. Click to resend.`}
+                                          >
+                                            <span className="flex items-center gap-1 text-emerald-200">
+                                              <MailCheck size={11} className="text-emerald-400 shrink-0" />
+                                              <span className="truncate">Sent to Client</span>
+                                            </span>
+                                            <span
+                                              className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-black/40 hover:bg-black/60 text-amber-300 border border-teal-500/50 text-[8.5px] shrink-0"
+                                              title="Resend email to client"
+                                            >
+                                              <RotateCcw size={9} className="shrink-0" />
+                                              <span className="font-extrabold tracking-tight">Resend</span>
+                                            </span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenSendClientEmailModal(invoice)}
+                                            className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs transition-colors cursor-pointer rounded-xs"
+                                            title="Send Tax Invoice Email to Client"
+                                          >
+                                            <Send size={10} /> Send to Client
+                                          </button>
+                                        )
+                                      )}
+
+                                      {isAdmin && (
+                                        <button
+                                          onClick={() => handleDeleteInvoice(invoice.id)}
+                                          className="p-1 text-neutral-400 hover:text-red-600 transition-colors"
+                                          title="Delete invoice record"
+                                        >
+                                          <Trash2 size={11} />
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+
+                                  {/* ACCOUNTANT ACTIONS */}
+                                  {userRoleView === 'ACCOUNTANT' && (
+                                    <>
+                                      {['SENT_TO_ACCOUNTANT', 'REJECTED_WITH_REMARKS', 'INVOICE_ATTACHED'].includes(invoice.status) ? (
+                                        <>
+                                          <button
+                                            onClick={() => {
+                                              setEntryToAttachInvoice(invoice);
+                                              setSelectedInvoiceFile(null);
+                                            }}
+                                            className={`px-2.5 py-1.5 font-bold text-[10px] uppercase tracking-wider text-white flex items-center justify-center gap-1 w-full shadow-xs cursor-pointer ${
+                                              invoice.status === 'REJECTED_WITH_REMARKS'
+                                                ? 'bg-red-600 hover:bg-red-700 animate-pulse'
+                                                : 'bg-[var(--primary)] hover:opacity-90'
+                                            }`}
+                                          >
+                                            <Paperclip size={11} />
+                                            {invoice.attachedInvoice || invoice.status === 'REJECTED_WITH_REMARKS' ? 'Replace Tally PDF' : 'Attach Tally PDF'}
+                                          </button>
+
+                                          {(invoice.attachedInvoice || invoice.splitsJson) && (
+                                            <button
+                                              type="button"
+                                              onClick={() => setEntryToReviewInvoice(invoice)}
+                                              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[9.5px] uppercase tracking-wider flex items-center gap-1 w-full justify-center shadow-2xs cursor-pointer"
+                                            >
+                                              <Eye size={10} /> View Tally PDF
+                                            </button>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <div className="space-y-1 w-full">
+                                          <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider flex items-center justify-center gap-1">
+                                            <CheckCircle2 size={11} /> Approved
+                                          </span>
+                                          {invoice.digitallySignedPdfUrl && (
+                                            <a
+                                              href={invoice.digitallySignedPdfUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="px-2 py-1 bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-[9px] uppercase tracking-wider hover:bg-emerald-100 flex items-center justify-center gap-1 w-full"
+                                            >
+                                              <Eye size={9} /> View Signed PDF
+                                            </a>
+                                          )}
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
                   </table>
                 </div>
               </div>
@@ -6278,12 +6727,28 @@ export default function AdminInvoicesWorkflowPage() {
                             <span className="font-bold text-[#1B1C1C]">{entryToViewDetails.createdBy?.name || 'System'}</span> ({entryToViewDetails.createdBy?.email})
                           </p>
                         </div>
-                        <button
-                          onClick={() => setEntryToViewDetails(null)}
-                          className="text-neutral-400 hover:text-neutral-700 p-1"
-                        >
-                          <X size={20} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cmId = entryToViewDetails.clientMasterId || (entryToViewDetails.clientMaster as any)?.id;
+                              const targetPath = isAdmin ? '/admin/client-master' : '/manager/client-master';
+                              const targetUrl = `${targetPath}?editId=${cmId || ''}&search=${encodeURIComponent(entryToViewDetails.companyName)}`;
+                              window.location.href = targetUrl;
+                            }}
+                            className="px-3 py-1.5 bg-[#006064] hover:bg-[#004d40] text-white font-extrabold uppercase tracking-wider text-[11px] flex items-center gap-1.5 rounded-xs shadow-2xs cursor-pointer transition-colors"
+                            title="Redirect to Client Master to edit client registry"
+                          >
+                            <Edit2 size={12} className="text-amber-300" />
+                            <span>Edit in Client Master</span>
+                          </button>
+                          <button
+                            onClick={() => setEntryToViewDetails(null)}
+                            className="text-neutral-400 hover:text-neutral-700 p-1 cursor-pointer"
+                          >
+                            <X size={20} />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Booking & Broker Details Banner */}
@@ -6658,7 +7123,7 @@ export default function AdminInvoicesWorkflowPage() {
                               <span>Late Payment Surcharge &amp; Overdue Status</span>
                             </div>
                             <span className="text-[10px] font-mono font-bold bg-red-100 text-red-800 px-2 py-0.5 border border-red-300">
-                              Due Date: {entryToViewDetails.dueDate ? formatDisplayDate(entryToViewDetails.dueDate) : `Day ${entryToViewDetails.paymentDueDay || 7} of Month`}
+                              Due Date: {computeInvoiceDueDate(entryToViewDetails)}
                             </span>
                           </div>
 
@@ -6772,9 +7237,17 @@ export default function AdminInvoicesWorkflowPage() {
                           <div>
                             <div className="font-bold uppercase text-[#616161] text-[9px]">Escalation Applicable Date</div>
                             <div className="font-bold text-[#1B1C1C] mt-0.5">
-                              {entryToViewDetails.clientMaster?.escalationApplicable
-                                ? formatDisplayDate(entryToViewDetails.clientMaster.escalationApplicable)
-                                : 'N/A'}
+                              {(() => {
+                                const esc = getProbableEscalationInfo(entryToViewDetails.clientMaster);
+                                if (esc?.applicableDateStr) {
+                                  return (
+                                    <span>
+                                      {esc.applicableDateStr} {esc.isEstimated && <span className="text-[10px] text-purple-700 font-semibold">(Estimated 1 Yr)</span>}
+                                    </span>
+                                  );
+                                }
+                                return 'N/A';
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -6851,182 +7324,53 @@ export default function AdminInvoicesWorkflowPage() {
                         </div>
                       )}
 
-                      {/* SECTION 6: Attached Tally PDF Invoice & Digitally Signed PDF */}
-                      <div className="space-y-2">
-                        {(() => {
-                          let splits: any[] = [];
-                          try {
-                            if (entryToViewDetails.splitsJson) {
-                              splits = JSON.parse(entryToViewDetails.splitsJson);
-                            }
-                          } catch {}
-                          const isSplit = Array.isArray(splits) && splits.length > 1;
-
-                          if (isSplit) {
-                            return (
-                              <div className="p-3.5 bg-purple-50/80 border border-purple-200 text-xs space-y-2.5 rounded">
-                                <div className="flex items-center justify-between flex-wrap gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <Scissors className="text-purple-700 h-5 w-5 shrink-0" />
-                                    <div>
-                                      <span className="font-bold text-purple-950">Split Invoice Tally PDFs ({splits.length} Sub-Invoices):</span>
-                                      <span className="text-purple-800 text-[11px] block">
-                                        Each sub-invoice has its own Tally PDF attached.
-                                      </span>
-                                    </div>
-                                  </div>
-                                  {isAdmin && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEntryToAttachInvoice(entryToViewDetails);
-                                        setSelectedInvoiceFile(null);
-                                      }}
-                                      className="px-3.5 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 cursor-pointer shadow-xs transition-colors rounded"
-                                      title="Super Admin: Manage and change all sub-invoice PDFs"
-                                    >
-                                      <Paperclip size={12} /> Manage Split PDFs
-                                    </button>
-                                  )}
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                                  {splits.map((grp: any, gIdx: number) => (
-                                    <div key={gIdx} className="bg-white p-2.5 border border-purple-200 rounded flex items-center justify-between gap-2 shadow-2xs">
-                                      <div className="min-w-0">
-                                        <div className="font-bold text-[#1B1C1C] truncate text-[11px]">
-                                          #{gIdx + 1} {grp.name}
-                                        </div>
-                                        <div className="text-[10px] text-neutral-600 truncate">
-                                          {grp.attachedInvoice?.fileName || '⚠️ No PDF attached'}
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-1 shrink-0">
-                                        {grp.attachedInvoice?.fileUrl && (
-                                          <a
-                                            href={grp.attachedInvoice.fileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="px-2 py-1 bg-purple-700 text-white font-bold text-[9.5px] rounded hover:bg-purple-800 transition-colors"
-                                          >
-                                            View
-                                          </a>
-                                        )}
-                                        {isAdmin && (
-                                          <label className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[9.5px] rounded flex items-center gap-1 cursor-pointer transition-colors shadow-2xs" title="Super Admin: Change Tally PDF for this sub-invoice">
-                                            {splitUploadingGroupIndex === gIdx ? (
-                                              <Loader2 size={10} className="animate-spin" />
-                                            ) : (
-                                              <Paperclip size={10} />
-                                            )}
-                                            Change
-                                            <input
-                                              type="file"
-                                              accept="application/pdf,.pdf,image/jpeg,image/png,image/jpg"
-                                              className="hidden"
-                                              disabled={splitUploadingGroupIndex !== null}
-                                              onChange={(e) => {
-                                                if (e.target.files && e.target.files[0]) {
-                                                  handleUploadSplitPdfDirect(entryToViewDetails, gIdx, e.target.files[0]);
-                                                }
-                                              }}
-                                            />
-                                          </label>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <>
-                              {entryToViewDetails.attachedInvoice ? (
-                                <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-xs flex items-center justify-between flex-wrap gap-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <Paperclip className="text-emerald-700 h-5 w-5 shrink-0" />
-                                    <div className="min-w-0">
-                                      <span className="font-bold text-emerald-900">Attached Tally Invoice PDF: </span>
-                                      <span className="text-emerald-800 break-all">{entryToViewDetails.attachedInvoice.fileName}</span>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <a
-                                      href={entryToViewDetails.attachedInvoice.fileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="px-3.5 py-1.5 bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-800 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
-                                    >
-                                      <Eye size={12} /> View Tally PDF
-                                    </a>
-                                    {isAdmin && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setEntryToAttachInvoice(entryToViewDetails);
-                                          setSelectedInvoiceFile(null);
-                                        }}
-                                        className="px-3.5 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
-                                        title="Super Admin: Replace or update Tally PDF for this invoice"
-                                      >
-                                        <Paperclip size={12} /> Change Tally PDF
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              ) : isAdmin ? (
-                                <div className="p-3.5 bg-amber-50 border border-amber-200 text-xs flex items-center justify-between flex-wrap gap-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <Paperclip className="text-amber-700 h-5 w-5 shrink-0" />
-                                    <div className="min-w-0">
-                                      <span className="font-bold text-amber-900">Attached Tally Invoice PDF: </span>
-                                      <span className="text-amber-700 italic">No Tally PDF attached yet</span>
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEntryToAttachInvoice(entryToViewDetails);
-                                      setSelectedInvoiceFile(null);
-                                    }}
-                                    className="px-3.5 py-1.5 bg-amber-600 text-white font-bold text-[10px] uppercase tracking-wider hover:bg-amber-700 flex items-center gap-1 cursor-pointer shadow-xs transition-colors"
-                                    title="Super Admin: Attach Tally PDF for this invoice"
-                                  >
-                                    <Paperclip size={12} /> Attach Tally PDF
-                                  </button>
-                                </div>
-                              ) : null}
-                            </>
-                          );
-                        })()}
-
-                        {entryToViewDetails.digitallySignedPdfUrl && (
-                          <div className="p-3.5 bg-teal-50 border border-teal-300 text-xs flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Award className="text-teal-700 h-5 w-5" />
-                              <div>
-                                <span className="font-bold text-teal-950">Digitally Signed &amp; Approved PDF: </span>
-                                <span className="text-teal-800 font-medium">Cryptographic Digital Signature Applied</span>
-                              </div>
+                      {/* Redirection / Quick Edit to Client Master */}
+                      <div className="p-4 bg-teal-50 border border-teal-200 rounded flex items-center justify-between flex-wrap gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <Building2 size={18} className="text-[#006064] shrink-0" />
+                          <div>
+                            <div className="font-bold text-[#006064] text-xs">Client Master Profile & Agreement Registry</div>
+                            <div className="text-[11px] text-neutral-600">
+                              Edit master agreement rates, cabins, lock-in, escalation dates, GST, and client details directly in Client Master.
                             </div>
-                            <a
-                              href={entryToViewDetails.digitallySignedPdfUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-4 py-1.5 bg-[#006064] text-white font-bold text-[10px] uppercase tracking-wider hover:bg-[#004d40] flex items-center gap-1 cursor-pointer"
-                            >
-                              <Download size={12} /> View / Download Signed PDF
-                            </a>
                           </div>
-                        )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const cmId = entryToViewDetails.clientMasterId || (entryToViewDetails.clientMaster as any)?.id;
+                            const targetPath = isAdmin ? '/admin/client-master' : '/manager/client-master';
+                            const targetUrl = `${targetPath}?editId=${cmId || ''}&search=${encodeURIComponent(entryToViewDetails.companyName)}`;
+                            window.location.href = targetUrl;
+                          }}
+                          className="px-4 py-2 bg-[#006064] hover:bg-[#004d40] text-white font-extrabold uppercase tracking-wider text-xs flex items-center gap-2 rounded shadow-2xs cursor-pointer transition-colors"
+                          title="Open and edit this client record in Client Master"
+                        >
+                          <Edit2 size={13} className="text-amber-300" />
+                          <span>Edit in Client Master</span>
+                        </button>
                       </div>
 
-                      <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200">
+                      <div className="flex items-center justify-between gap-3 pt-4 border-t border-neutral-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const cmId = entryToViewDetails.clientMasterId || (entryToViewDetails.clientMaster as any)?.id;
+                            const targetPath = isAdmin ? '/admin/client-master' : '/manager/client-master';
+                            const targetUrl = `${targetPath}?editId=${cmId || ''}&search=${encodeURIComponent(entryToViewDetails.companyName)}`;
+                            window.location.href = targetUrl;
+                          }}
+                          className="px-4 py-2 bg-[#006064] hover:bg-[#004d40] text-white font-extrabold uppercase tracking-wider text-xs flex items-center gap-2 rounded-xs shadow-xs transition-colors cursor-pointer"
+                          title="Edit this entry in Client Master"
+                        >
+                          <Edit2 size={13} className="text-amber-300" />
+                          <span>Edit in Client Master</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => setEntryToViewDetails(null)}
-                          className="px-5 py-2.5 bg-[#F8F9FA] border border-[var(--outline-variant)] font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100"
+                          className="px-5 py-2.5 bg-[#F8F9FA] border border-[var(--outline-variant)] font-bold uppercase tracking-wider text-[#616161] hover:bg-neutral-100 cursor-pointer"
                         >
                           Close
                         </button>
@@ -9213,6 +9557,21 @@ export default function AdminInvoicesWorkflowPage() {
                         </div>
                       ) : (
                         <form onSubmit={handleSendClientEmailSubmit} className="overflow-y-auto flex-1 pr-1 space-y-4">
+                          {/* Resend Notice if previously sent */}
+                          {entryToSendClientEmail.clientEmailSentAt && (
+                            <div className="bg-emerald-50 border border-emerald-300 p-2.5 rounded text-[11px] text-emerald-950 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <MailCheck size={14} className="text-emerald-700 shrink-0" />
+                                <span>
+                                  Previously dispatched to client on <strong>{formatDisplayDate(entryToSendClientEmail.clientEmailSentAt)}</strong> to <strong>{entryToSendClientEmail.clientEmailSentTo || 'Primary Contact'}</strong>.
+                                </span>
+                              </div>
+                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[9px] uppercase rounded flex items-center gap-1 shrink-0">
+                                <RotateCcw size={9} /> Resend Mode
+                              </span>
+                            </div>
+                          )}
+
                           {/* Context Banner */}
                           <div className="bg-[#F8F9FA] p-3 border border-neutral-200 space-y-1">
                             <div className="flex items-center justify-between">
@@ -9412,10 +9771,24 @@ export default function AdminInvoicesWorkflowPage() {
                             <button
                               type="submit"
                               disabled={isSendingClientEmail || !customPrimaryEmailInput.trim()}
-                              className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50"
+                              className={`px-6 py-2.5 text-white font-bold uppercase tracking-wider flex items-center gap-2 rounded shadow-xs cursor-pointer disabled:opacity-50 ${
+                                entryToSendClientEmail.clientEmailSentAt
+                                  ? 'bg-[#006064] hover:bg-[#004d40]'
+                                  : 'bg-emerald-700 hover:bg-emerald-800'
+                              }`}
                             >
-                              {isSendingClientEmail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                              <span>Send Tax Invoice to Client</span>
+                              {isSendingClientEmail ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : entryToSendClientEmail.clientEmailSentAt ? (
+                                <RotateCcw size={14} />
+                              ) : (
+                                <Send size={14} />
+                              )}
+                              <span>
+                                {entryToSendClientEmail.clientEmailSentAt
+                                  ? 'Resend Tax Invoice to Client'
+                                  : 'Send Tax Invoice to Client'}
+                              </span>
                             </button>
                           </div>
                         </form>

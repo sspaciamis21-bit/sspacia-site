@@ -765,6 +765,25 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
     fetchData();
   }, [fetchData]);
 
+  // Auto-open edit modal or filter when redirected from Invoices (e.g. ?editId=123 or ?search=company)
+  useEffect(() => {
+    if (typeof window === 'undefined' || entries.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const editIdParam = params.get('editId');
+    const searchParam = params.get('search');
+    if (searchParam && !searchTerm) {
+      setSearchTerm(searchParam);
+    }
+    if (editIdParam) {
+      const targetId = Number(editIdParam);
+      const found = entries.find((e) => e.id === targetId);
+      if (found) {
+        handleEditEntry(found);
+        setShowAddClientModal(true);
+      }
+    }
+  }, [entries]);
+
   // Contact Persons Handlers
   const handleAddContactPerson = () => {
     setContactPersons((prev) => [
@@ -1254,6 +1273,26 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
 
     setShowAddClientModal(true);
   };
+
+  // Auto-open client edit form or filter by search query if passed in URL (?editId=... or ?search=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const editIdParam = urlParams.get('editId');
+    const searchParam = urlParams.get('search');
+
+    if (searchParam && !searchTerm) {
+      setSearchTerm(searchParam);
+    }
+
+    if (editIdParam && entries.length > 0) {
+      const numEditId = Number(editIdParam);
+      const found = entries.find((e) => e.id === numEditId || String(e.clientId) === editIdParam);
+      if (found) {
+        handleEditEntry(found);
+      }
+    }
+  }, [entries]);
 
   // Submit Handler with Validations
   const handleSubmit = async (e: React.FormEvent) => {
