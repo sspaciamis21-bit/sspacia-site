@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '4';
+process.env.TOKIO_WORKER_THREADS = process.env.TOKIO_WORKER_THREADS || '2';
+
 const nextConfig: NextConfig = {
+  experimental: {
+    cpus: 4,
+    workerThreads: false,
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
@@ -45,15 +52,6 @@ const nextConfig: NextConfig = {
           {
             key: 'Expires',
             value: '0',
-          },
-        ],
-      },
-      {
-        source: '/_next/static/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
           },
         ],
       },

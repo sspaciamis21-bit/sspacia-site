@@ -38,7 +38,7 @@
     "dotenv": "^17.3.1",
     "dwg2dxf-converter": "^1.0.4",
     "dxf-parser": "^1.1.2",
-    "geoip-lite": "^2.0.3",
+    "geoip-lite": "^1.4.10",
     "jose": "^6.2.2",
     "lucide-react": "^0.577.0",
     "mammoth": "^1.12.0",
