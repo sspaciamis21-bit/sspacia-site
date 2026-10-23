@@ -1590,10 +1590,12 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
   };
 
   // Dispatch to Invoices Section Handler
-  const handleOpenDispatchModal = (ids: number[] = [], force: boolean = false) => {
+  const handleOpenDispatchModal = (ids: number[] = [], force?: boolean) => {
+    const isSpecific = ids.length > 0;
     setDispatchModalIds(ids);
     setDispatchModalTargetMonth(selectedTargetMonth);
-    setForceReDispatch(force);
+    // When specific clients are selected (e.g. mid-month seat addition), default to allowing additional invoice entries
+    setForceReDispatch(force !== undefined ? force : isSpecific);
     setShowDispatchModal(true);
   };
 
@@ -1847,7 +1849,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
           <div className="flex flex-wrap items-center gap-3">
             {selectedIds.length > 0 && (
               <button
-                onClick={() => handleOpenDispatchModal(selectedIds, false)}
+                onClick={() => handleOpenDispatchModal(selectedIds, true)}
                 disabled={dispatching}
                 className="px-5 py-3 bg-blue-600 text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md hover:bg-blue-700 cursor-pointer"
               >
@@ -6229,7 +6231,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                     onClick={() => {
                       const id = entryToViewDetails.id;
                       setEntryToViewDetails(null);
-                      handleOpenDispatchModal([id], false);
+                      handleOpenDispatchModal([id], true);
                     }}
                     disabled={dispatching}
                     className="px-5 py-2.5 bg-blue-600 text-white font-bold uppercase tracking-wider hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer"
@@ -6313,11 +6315,28 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                       ).toLocaleString('en-IN')}
                     </span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-500 font-medium">Mode:</span>
                     <span className="font-bold text-gray-900">
-                      {forceReDispatch ? 'Force Re-dispatch (Allow duplicate month entry)' : 'Standard (Duplicate-Safe)'}
+                      {dispatchModalIds.length > 0
+                        ? 'Selected Clients (Allows mid-month / additional seat entries)'
+                        : (forceReDispatch ? 'Force Re-dispatch (Allow duplicate month entries)' : 'Standard (Duplicate-Safe)')
+                      }
                     </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-neutral-200">
+                    <label className="flex items-start gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={forceReDispatch}
+                        onChange={(e) => setForceReDispatch(e.target.checked)}
+                        className="w-4 h-4 mt-0.5 text-[#006064] border-gray-300 rounded focus:ring-[#006064] cursor-pointer"
+                      />
+                      <span className="text-xs text-gray-700 leading-tight">
+                        <strong>Allow additional invoice entries</strong> for {dispatchModalTargetMonth} (for mid-month seat additions, adjustments, etc. Manageable in CM Review before sending to accounts).
+                      </span>
+                    </label>
                   </div>
                 </div>
 

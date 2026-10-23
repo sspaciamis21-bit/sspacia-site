@@ -118,13 +118,18 @@ export async function POST(request: Request) {
     const invoiceCreates: any[] = [];
     let skippedDuplicatesCount = 0;
 
+    const isManualSelection = Array.isArray(clientMasterIds) && clientMasterIds.length > 0;
+
     for (const cm of clientsToDispatch) {
       // If not explicitly selected by ID, never bulk-dispatch ONE_TIME or VIRTUAL_OFFICE
-      if ((!Array.isArray(clientMasterIds) || clientMasterIds.length === 0) && (cm.clientType === 'ONE_TIME' || cm.clientType === 'VIRTUAL_OFFICE')) {
+      if (!isManualSelection && (cm.clientType === 'ONE_TIME' || cm.clientType === 'VIRTUAL_OFFICE')) {
         continue;
       }
 
-      if (!forceReDispatch && existingSet.has(cm.id)) {
+      // In bulk mode, skip already generated clients to prevent unintentional mass duplicates.
+      // If client is manually selected (e.g. mid-month seat addition) OR forceReDispatch is true,
+      // allow generating the invoice entry in PENDING_CM_REVIEW so CM can manage/prorate it!
+      if (!isManualSelection && !forceReDispatch && existingSet.has(cm.id)) {
         skippedDuplicatesCount++;
         continue;
       }
@@ -199,11 +204,14 @@ export async function POST(request: Request) {
     if (invoiceCreates.length === 0) {
       return NextResponse.json(
         {
-          error: `Selected clients already have invoice records generated for ${targetBillingMonth}.`,
+          success: true,
+          message: `All eligible clients already have invoice records generated for ${targetBillingMonth}. (Select individual clients to create additional mid-month entries).`,
+          count: 0,
           skippedDuplicatesCount,
           targetBillingMonth,
+          data: [],
         },
-        { status: 400 }
+        { status: 200 }
       );
     }
 
