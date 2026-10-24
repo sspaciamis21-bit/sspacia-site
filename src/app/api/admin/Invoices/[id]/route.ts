@@ -41,14 +41,60 @@ export async function PUT(
 
     // Node scoping verification for non-admins
     if (!isAdmin) {
+      const caller = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          assignedLocations: { select: { locationId: true } },
+        },
+      });
+      const myLocationIds = caller?.assignedLocations.map((ul) => ul.locationId) || [];
       const scopedUserIds = await getNodeScopedUserIds(userId);
+
       if (scopedUserIds !== null) {
         const existingRecord = await (prisma as any).invoiceRecord.findUnique({
           where: { id },
-          select: { createdById: true },
+          select: {
+            id: true,
+            createdById: true,
+            createdBy: {
+              select: {
+                assignedLocations: { select: { locationId: true } },
+              },
+            },
+            clientMaster: {
+              select: {
+                createdById: true,
+                createdBy: {
+                  select: {
+                    assignedLocations: { select: { locationId: true } },
+                  },
+                },
+              },
+            },
+          },
         });
 
-        if (!existingRecord || (existingRecord.createdById && !scopedUserIds.includes(existingRecord.createdById))) {
+        if (!existingRecord) {
+          return NextResponse.json({ error: 'Invoice record not found' }, { status: 404 });
+        }
+
+        const invoiceLocationIds: number[] = [
+          ...(existingRecord.createdBy?.assignedLocations?.map((al: any) => al.locationId) || []),
+          ...(existingRecord.clientMaster?.createdBy?.assignedLocations?.map((al: any) => al.locationId) || []),
+        ];
+
+        let isAllowed = false;
+        if (existingRecord.createdById === userId || existingRecord.clientMaster?.createdById === userId) {
+          isAllowed = true;
+        } else if (myLocationIds.length > 0 && invoiceLocationIds.length > 0) {
+          isAllowed = invoiceLocationIds.some((locId) => myLocationIds.includes(locId));
+        } else if (myLocationIds.length > 0 && invoiceLocationIds.length === 0) {
+          isAllowed = scopedUserIds.includes(existingRecord.createdById);
+        } else {
+          isAllowed = existingRecord.createdById === userId;
+        }
+
+        if (!isAllowed) {
           return NextResponse.json({ error: 'Forbidden: You cannot edit invoices from another center' }, { status: 403 });
         }
       }
@@ -253,17 +299,63 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
     }
 
-    // Node scoping verification for non-admins
+    // Node scoping verification for non-admins (Community Managers can delete for their centers)
     if (!isAdmin) {
+      const caller = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          assignedLocations: { select: { locationId: true } },
+        },
+      });
+      const myLocationIds = caller?.assignedLocations.map((ul) => ul.locationId) || [];
       const scopedUserIds = await getNodeScopedUserIds(userId);
+
       if (scopedUserIds !== null) {
         const existingRecord = await (prisma as any).invoiceRecord.findUnique({
           where: { id },
-          select: { createdById: true },
+          select: {
+            id: true,
+            createdById: true,
+            createdBy: {
+              select: {
+                assignedLocations: { select: { locationId: true } },
+              },
+            },
+            clientMaster: {
+              select: {
+                createdById: true,
+                createdBy: {
+                  select: {
+                    assignedLocations: { select: { locationId: true } },
+                  },
+                },
+              },
+            },
+          },
         });
 
-        if (!existingRecord || (existingRecord.createdById && !scopedUserIds.includes(existingRecord.createdById))) {
-          return NextResponse.json({ error: 'Forbidden: You cannot delete invoices from another center' }, { status: 403 });
+        if (!existingRecord) {
+          return NextResponse.json({ error: 'Invoice record not found' }, { status: 404 });
+        }
+
+        const invoiceLocationIds: number[] = [
+          ...(existingRecord.createdBy?.assignedLocations?.map((al: any) => al.locationId) || []),
+          ...(existingRecord.clientMaster?.createdBy?.assignedLocations?.map((al: any) => al.locationId) || []),
+        ];
+
+        let isAllowed = false;
+        if (existingRecord.createdById === userId || existingRecord.clientMaster?.createdById === userId) {
+          isAllowed = true;
+        } else if (myLocationIds.length > 0 && invoiceLocationIds.length > 0) {
+          isAllowed = invoiceLocationIds.some((locId) => myLocationIds.includes(locId));
+        } else if (myLocationIds.length > 0 && invoiceLocationIds.length === 0) {
+          isAllowed = scopedUserIds.includes(existingRecord.createdById);
+        } else {
+          isAllowed = existingRecord.createdById === userId;
+        }
+
+        if (!isAllowed) {
+          return NextResponse.json({ error: 'Forbidden: You can only delete invoice records for your assigned center(s)' }, { status: 403 });
         }
       }
     }

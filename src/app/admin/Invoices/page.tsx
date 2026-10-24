@@ -649,7 +649,7 @@ export default function AdminInvoicesWorkflowPage() {
     lockin: 110,
     notice: 135,
     escalation: 175,
-    cycle: 130,
+    cycle: 140,
     node: 120,
     product: 150,
     period: 180,
@@ -4580,14 +4580,17 @@ export default function AdminInvoicesWorkflowPage() {
                             {renderResizeHandle('escalation')}
                           </th>
 
-                          {/* 7. PAYMENT DURATION (with Excel Filter) */}
+                          {/* 7. DURATION & BILLING MONTH (with Excel Filter) */}
                           <th
                             style={{ width: `${colWidths.cycle}px`, minWidth: `${colWidths.cycle}px`, maxWidth: `${colWidths.cycle}px` }}
                             className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
                           >
                             <div className="flex items-center justify-between gap-1 pr-1">
                               <span className="truncate">Duration</span>
-                              {renderHeaderFilterBtn('cycle', 'Duration')}
+                              <div className="flex items-center gap-0.5">
+                                {renderHeaderFilterBtn('month', 'Billing Month')}
+                                {renderHeaderFilterBtn('cycle', 'Duration')}
+                              </div>
                             </div>
                             {renderResizeHandle('cycle')}
                           </th>
@@ -4686,17 +4689,7 @@ export default function AdminInvoicesWorkflowPage() {
                             {renderResizeHandle('arrival')}
                           </th>
 
-                          {/* 17. BILLING MONTH (with Excel Filter) */}
-                          <th
-                            style={{ width: `${colWidths.month}px`, minWidth: `${colWidths.month}px`, maxWidth: `${colWidths.month}px` }}
-                            className="sticky top-0 bg-[#006064] p-2 z-20 border-b-2 border-teal-800 relative"
-                          >
-                            <div className="flex items-center justify-between gap-1 pr-1">
-                              <span className="truncate">Billing Month</span>
-                              {renderHeaderFilterBtn('month', 'Billing Month')}
-                            </div>
-                            {renderResizeHandle('month')}
-                          </th>
+
 
                           {/* 18. STATUS (with Excel Filter) */}
                           <th
@@ -4854,18 +4847,38 @@ export default function AdminInvoicesWorkflowPage() {
                                 })()}
                               </td>
 
-                              {/* 7. PAYMENT DURATION */}
+                              {/* 7. DURATION & BILLING MONTH */}
                               <td
                                 style={{ width: `${colWidths.cycle}px`, minWidth: `${colWidths.cycle}px`, maxWidth: `${colWidths.cycle}px` }}
-                                className="p-2"
+                                className="p-2 whitespace-nowrap"
                               >
-                                <span className="px-2 py-0.5 bg-[#006064] text-white text-[9.5px] font-extrabold uppercase tracking-wider inline-block rounded-xs">
-                                  {invoice.paymentDuration === 'TWO_YEARS' || invoice.paymentDuration === '2_YEARS'
-                                    ? '2 YEARS'
-                                    : invoice.paymentDuration
-                                    ? String(invoice.paymentDuration).replace('_', ' ')
-                                    : 'MONTHLY'}
-                                </span>
+                                <div className="font-extrabold text-[#1B1C1C] text-xs leading-tight mb-1">
+                                  {invoice.billingMonth || 'N/A'}
+                                </div>
+                                <div>
+                                  <span className="px-2 py-0.5 bg-[#006064] text-white text-[9.5px] font-extrabold uppercase tracking-wider inline-block rounded-xs">
+                                    {invoice.paymentDuration === 'TWO_YEARS' || invoice.paymentDuration === '2_YEARS'
+                                      ? '2 YEARS'
+                                      : invoice.paymentDuration
+                                      ? String(invoice.paymentDuration).replace('_', ' ')
+                                      : 'MONTHLY'}
+                                  </span>
+                                </div>
+                                {invoice.splitsJson && (() => {
+                                  try {
+                                    const splits = JSON.parse(invoice.splitsJson || '[]');
+                                    if (Array.isArray(splits) && splits.length > 1) {
+                                      return (
+                                        <div className="mt-1">
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold rounded">
+                                            <Scissors size={9} /> {splits.length} Sub-Invoices
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+                                  } catch {}
+                                  return null;
+                                })()}
                               </td>
 
                               {/* 8. CENTER */}
@@ -5079,28 +5092,7 @@ export default function AdminInvoicesWorkflowPage() {
                                 </div>
                               </td>
 
-                              {/* 17. BILLING MONTH */}
-                              <td
-                                style={{ width: `${colWidths.month}px`, minWidth: `${colWidths.month}px`, maxWidth: `${colWidths.month}px` }}
-                                className="p-2 whitespace-nowrap"
-                              >
-                                <div className="font-extrabold text-[#1B1C1C] text-xs">{invoice.billingMonth || 'N/A'}</div>
-                                {invoice.splitsJson && (() => {
-                                  try {
-                                    const splits = JSON.parse(invoice.splitsJson || '[]');
-                                    if (Array.isArray(splits) && splits.length > 1) {
-                                      return (
-                                        <div className="mt-1">
-                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 text-[9px] font-bold rounded">
-                                            <Scissors size={9} /> {splits.length} Sub-Invoices
-                                          </span>
-                                        </div>
-                                      );
-                                    }
-                                  } catch {}
-                                  return null;
-                                })()}
-                              </td>
+
 
                               {/* 18. STATUS (+ Red Rejection remarks box if rejected) */}
                               <td
@@ -5258,13 +5250,15 @@ export default function AdminInvoicesWorkflowPage() {
                                         )
                                       )}
 
-                                      {isAdmin && (
+                                      {(isAdmin || userRoleView === 'CM' || isCommunityManager) && (
                                         <button
+                                          type="button"
                                           onClick={() => handleDeleteInvoice(invoice.id)}
-                                          className="p-1 text-neutral-400 hover:text-red-600 transition-colors"
-                                          title="Delete invoice record"
+                                          className="p-1 text-neutral-400 hover:text-red-600 transition-colors flex items-center justify-center gap-1 w-full text-[9.5px] font-bold cursor-pointer hover:bg-red-50 rounded"
+                                          title="Delete this invoice record"
                                         >
-                                          <Trash2 size={11} />
+                                          <Trash2 size={11} className="shrink-0" />
+                                          <span>Delete</span>
                                         </button>
                                       )}
                                     </>
@@ -7352,20 +7346,38 @@ export default function AdminInvoicesWorkflowPage() {
                       </div>
 
                       <div className="flex items-center justify-between gap-3 pt-4 border-t border-neutral-200">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const cmId = entryToViewDetails.clientMasterId || (entryToViewDetails.clientMaster as any)?.id;
-                            const targetPath = isAdmin ? '/admin/client-master' : '/manager/client-master';
-                            const targetUrl = `${targetPath}?editId=${cmId || ''}&search=${encodeURIComponent(entryToViewDetails.companyName)}`;
-                            window.location.href = targetUrl;
-                          }}
-                          className="px-4 py-2 bg-[#006064] hover:bg-[#004d40] text-white font-extrabold uppercase tracking-wider text-xs flex items-center gap-2 rounded-xs shadow-xs transition-colors cursor-pointer"
-                          title="Edit this entry in Client Master"
-                        >
-                          <Edit2 size={13} className="text-amber-300" />
-                          <span>Edit in Client Master</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cmId = entryToViewDetails.clientMasterId || (entryToViewDetails.clientMaster as any)?.id;
+                              const targetPath = isAdmin ? '/admin/client-master' : '/manager/client-master';
+                              const targetUrl = `${targetPath}?editId=${cmId || ''}&search=${encodeURIComponent(entryToViewDetails.companyName)}`;
+                              window.location.href = targetUrl;
+                            }}
+                            className="px-4 py-2 bg-[#006064] hover:bg-[#004d40] text-white font-extrabold uppercase tracking-wider text-xs flex items-center gap-2 rounded-xs shadow-xs transition-colors cursor-pointer"
+                            title="Edit this entry in Client Master"
+                          >
+                            <Edit2 size={13} className="text-amber-300" />
+                            <span>Edit in Client Master</span>
+                          </button>
+
+                          {(isAdmin || userRoleView === 'CM' || isCommunityManager) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const idToDelete = entryToViewDetails.id;
+                                setEntryToViewDetails(null);
+                                handleDeleteInvoice(idToDelete);
+                              }}
+                              className="px-3 py-2 bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 font-extrabold uppercase tracking-wider text-xs flex items-center gap-1.5 rounded-xs transition-colors cursor-pointer"
+                              title="Delete this invoice record"
+                            >
+                              <Trash2 size={13} />
+                              <span>Delete Record</span>
+                            </button>
+                          )}
+                        </div>
 
                         <button
                           type="button"
@@ -8169,23 +8181,41 @@ export default function AdminInvoicesWorkflowPage() {
                         </div>
 
                         {/* Form Action Buttons */}
-                        <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
-                          <button
-                            type="button"
-                            onClick={() => setEntryToEditInvoice(null)}
-                            className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider rounded"
-                          >
-                            Cancel
-                          </button>
+                        <div className="flex items-center justify-between pt-3 border-t border-neutral-200">
+                          {(isAdmin || userRoleView === 'CM' || isCommunityManager) ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const idToDelete = entryToEditInvoice.id;
+                                setEntryToEditInvoice(null);
+                                handleDeleteInvoice(idToDelete);
+                              }}
+                              className="px-3 py-2 bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 rounded transition-colors cursor-pointer"
+                              title="Delete this invoice record"
+                            >
+                              <Trash2 size={13} />
+                              <span>Delete Record</span>
+                            </button>
+                          ) : <div />}
 
-                          <button
-                            type="submit"
-                            disabled={actionLoading || editItems.length === 0}
-                            className="px-5 py-2.5 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 rounded shadow-sm cursor-pointer disabled:opacity-50"
-                          >
-                            {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                            Save Invoice Changes
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setEntryToEditInvoice(null)}
+                              className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-[#1B1C1C] font-bold text-xs uppercase tracking-wider rounded cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+
+                            <button
+                              type="submit"
+                              disabled={actionLoading || editItems.length === 0}
+                              className="px-5 py-2.5 bg-[#006064] hover:bg-teal-900 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 rounded shadow-sm cursor-pointer disabled:opacity-50"
+                            >
+                              {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                              Save Invoice Changes
+                            </button>
+                          </div>
                         </div>
                       </form>
                     </motion.div>
