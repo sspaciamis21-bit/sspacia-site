@@ -7,7 +7,7 @@ import { CareersClient } from './careers-client';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Careers & Hiring | SSPACIA Coworking Spaces Ahmedabad',
+  title: 'Careers & Hiring',
   description:
     'Explore current job openings at SSPACIA Coworking, CG Road, Ahmedabad. Join our energetic team in front office, CRM, sales, operations, and inventory management.',
   alternates: { canonical: `${seoConfig.baseUrl}/careers` },

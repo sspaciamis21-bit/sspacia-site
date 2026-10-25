@@ -3,7 +3,8 @@ import { Suspense } from "react";
 import CheckoutClient from "./checkout-client";
 
 export const metadata: Metadata = {
-  title: "Checkout | SSPACIA",
+  title: "Checkout",
+  robots: { index: false, follow: false },
   description: "Complete your booking at SSPACIA Coworking.",
 };
 

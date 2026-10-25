@@ -32,7 +32,7 @@ export const CENTRES: CentreData[] = [
     pincode: "380009",
   },
   {
-    id: "mercardo",
+    id: "mercado",
     name: "Mercado",
     area: "CG Road",
     address: "6th Floor, Mercado, Chimanlal Girdharlal Rd, opp. Municipal Market, Vasant Vihar, Ellisbridge, Ahmedabad, Gujarat 380009",
@@ -70,6 +70,7 @@ export const CENTRES: CentreData[] = [
 ];
 
 export function getCentreById(id: string): CentreData | undefined {
-  if (id === "mercado") return CENTRES.find((c) => c.id === "mercardo");
-  return CENTRES.find((c) => c.id === id);
+  // "mercardo" is the legacy misspelt slug; next.config.ts 301s it, this keeps deep links working.
+  const normalised = id === "mercardo" ? "mercado" : id;
+  return CENTRES.find((c) => c.id === normalised);
 }

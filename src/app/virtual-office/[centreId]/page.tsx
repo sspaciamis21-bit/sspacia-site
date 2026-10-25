@@ -22,12 +22,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!centre) {
     return {
-      title: 'Centre Not Found | SSPACIA Virtual Office',
+      title: 'Centre Not Found',
     };
   }
 
   return {
-    title: `Virtual Office at ${centre.name} (${centre.area}) | Business Address & Mail Handling | SSPACIA`,
+    title: `Virtual Office at ${centre.name}, ${centre.area}, Ahmedabad – Business Address & Mail Handling`,
     description: `Book your dedicated Virtual Office at SSPACIA ${centre.name}, ${centre.area}, Ahmedabad. Commercial business address usage and front desk mail handling at fixed ₹24,000/year (0% GST).`,
     alternates: {
       canonical: `${seoConfig.baseUrl}/virtual-office/${centre.id}`,

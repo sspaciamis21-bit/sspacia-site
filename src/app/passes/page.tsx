@@ -2,11 +2,13 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import PassesClient from './passes-client';
 import { Loader2 } from 'lucide-react';
+import { seoConfig } from '@/config/seo';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Daily & Weekly Pass | Flexi Desk Coworking | SSPACIA',
+  title: 'Day Pass & Weekly Pass – Flexi Desk Coworking in Ahmedabad',
+  alternates: { canonical: `${seoConfig.baseUrl}/passes` },
   description:
     'Book instant Daily (₹500+GST) and Weekly (₹4,000+GST) Flexi Desk passes across SSPACIA premium coworking centres in Ahmedabad: Agarwal Complex, Mercado, and Premier House.',
 };

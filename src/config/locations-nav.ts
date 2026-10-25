@@ -112,11 +112,11 @@ export const locationsNavData: LocationArea[] = [
         }
       },
       {
-        id: "mercardo",
+        id: "mercado",
         locationId: 2,
         name: "Mercado",
-        shortName: "Chandkheda",
-        address: "Mercado, Chandkheda, Ahmedabad",
+        shortName: "CG Road, Ellisbridge",
+        address: "6th Floor, Mercado, C.G. Road, opp. Municipal Market, Ellisbridge, Ahmedabad 380009",
         href: "/products?city=1&area=CG+Road&centre=2",
         guestSpaces: {
           title: "Guest Spaces",
