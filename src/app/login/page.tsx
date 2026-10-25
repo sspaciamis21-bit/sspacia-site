@@ -4,7 +4,8 @@ import LoginClient from './login-client';
 import { Loader2 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Login | SSPACIA',
+  title: 'Login',
+  robots: { index: false, follow: false },
   description: 'Sign in to your SSPACIA workspace to manage bookings and community access.',
 };
 

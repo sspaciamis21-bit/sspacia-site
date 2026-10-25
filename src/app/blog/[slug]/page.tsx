@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
   if (!post) return { title: "Post Not Found" };
 
   return {
-    title: `${post.title} | SSPACIA Blog`,
+    title: post.title,
     description: post.excerpt,
     alternates: { canonical: `${seoConfig.baseUrl}/blog/${slug}` },
     openGraph: {
@@ -189,7 +189,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                     <h3>Continuing the Conversation</h3>
                     <p>
                       Stay tuned for more updates, tips, and stories from our vibrant coworking 
-                      hubs at CG Road, Mercardo, and Premier House.
+                      hubs at CG Road, Mercado, and Premier House.
                     </p>
                   </div>
                 )}

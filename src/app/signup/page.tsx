@@ -4,7 +4,8 @@ import SignupClient from './signup-client';
 import { Loader2 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Sign Up | SSPACIA',
+  title: 'Sign Up',
+  robots: { index: false, follow: false },
   description: 'Create your SSPACIA account to book premium workspaces and join our professional community.',
 };
 

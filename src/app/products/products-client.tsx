@@ -699,12 +699,16 @@ export default function ProductsClient({
         <div>
           <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#006064]">SSPACIA // AHMEDABAD</span>
           <h1 className="text-2xl sm:text-3xl font-display font-black text-[#004D40] tracking-tight uppercase">
-            {initialCategoryId === 2 ? "Guest Spaces" : initialCategoryId === 1 ? "Coworking Spaces" : "All Workspaces"}
+            {initialCategoryId === 2
+              ? "Meeting Rooms, Board Rooms & Event Space by the Hour in Ahmedabad"
+              : initialCategoryId === 1
+                ? "Coworking Spaces in Ahmedabad: Desks & Private Cabins"
+                : "All Workspaces in Ahmedabad"}
           </h1>
           <p className="text-xs text-gray-500 max-w-md mt-0.5">
             {initialCategoryId === 2 
-              ? "Book premium meeting rooms, event spaces, and day passes on-demand."
-              : "Flexible dedicated desks, shared offices, and private cabins across Ahmedabad."}
+              ? "Live calendar for the 7 rooms at Agarwal Complex, Mercado and Premier House. From ₹400/hour, open to non-members."
+              : "Flexi desks, fixed desks and private cabins for 4–12 people at CG Road and SG Highway."}
           </p>
         </div>
         <div className="shrink-0">
@@ -1209,11 +1213,10 @@ export default function ProductsClient({
                     <span>{faq.q}</span>
                     <ChevronDown className={`w-4 h-4 transition-transform ${openFaq === idx ? 'rotate-180 text-[#1ab0bc]' : 'text-gray-400'}`} />
                   </button>
-                  {openFaq === idx && (
-                    <div className="px-5 pb-5 text-xs text-gray-600 leading-relaxed border-t border-gray-100 pt-3">
-                      {faq.a}
-                    </div>
-                  )}
+                  {/* Answer stays in the HTML (hidden, not unmounted) so crawlers read it. */}
+                  <div className={`px-5 pb-5 text-xs text-gray-600 leading-relaxed border-t border-gray-100 pt-3 ${openFaq === idx ? '' : 'hidden'}`}>
+                    {faq.a}
+                  </div>
                 </div>
               ))}
             </div>

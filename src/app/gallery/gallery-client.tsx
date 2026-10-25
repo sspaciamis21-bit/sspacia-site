@@ -25,7 +25,7 @@ const formatAltText = (src: string) => {
 
 const categoryMapping: Record<string, string> = {
   "Agarwal Complex": "AGARWAL COMPLEX IMAGES",
-  "Mercardo": "MERCADO IMAGES",
+  "Mercado": "MERCADO IMAGES",
   "Premier House": "PREMIER HOUSE"
 };
 

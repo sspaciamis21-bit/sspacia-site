@@ -63,7 +63,7 @@ export const siteConfig = {
     shortDescription:
       "SSPACIA offers modern coworking spaces in Ahmedabad, designed to foster creativity and collaboration in a professional environment.",
     fullDescription:
-      "Welcome to SSPACIA, the best coworking space in Ahmedabad, with three prime locations. Our CG Road Agarwal Complex site offers a vibrant, central hub, while Mercardo features modern amenities and a dynamic atmosphere. Premier House combines elegance and efficiency for a prestigious business address. At SSPACIA, we foster creativity, collaboration, and growth in inspiring environments. Join us and elevate your work experience.",
+      "Welcome to SSPACIA, the best coworking space in Ahmedabad, with three prime locations. Our CG Road Agarwal Complex site offers a vibrant, central hub, while Mercado features modern amenities and a dynamic atmosphere. Premier House combines elegance and efficiency for a prestigious business address. At SSPACIA, we foster creativity, collaboration, and growth in inspiring environments. Join us and elevate your work experience.",
     missionStatement:
       "SSPACIA is a new and fresh creative coworking space in Ahmedabad, Gujarat here to open doors to a collaborative work environment where freelancers, entrepreneurs or start-ups from different industries, backgrounds and talents can feel comfortable pursuing their passions while having the opportunity to network, share and exchange ideas with others. In essence, we create the space and together we build the community.",
     targetAudience: ["Freelancers", "Entrepreneurs", "Start-ups", "Growing Teams"],
@@ -85,12 +85,12 @@ export const siteConfig = {
       }
     },
     {
-      id: "mercardo",
-      name: "CG Road – Mercardo",
+      id: "mercado",
+      name: "CG Road – Mercado",
       description: "Modern amenities and a dynamic atmosphere.",
       image: {
         src: "/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg",
-        alt: "Mercardo reception",
+        alt: "Mercado reception",
       },
       link: {
         href: "https://maps.app.goo.gl/hvfuXehGcpgP1FfBA",
@@ -446,7 +446,7 @@ export const siteConfig = {
           <h2>Finding Your Perfect Workspace Match</h2>
           <p>Choosing the right workspace is more than just picking a desk; it's about choosing the right environment for your growth. Consider your business type, work style, and growth trajectory. Are you a designer who thrives in creative energy? Choose a space known for its creative community. Running an enterprise development team? Look for a space with reliable meeting facilities and professional atmosphere. The right fit accelerates your success; the wrong one becomes an unnecessary distraction.</p>
           
-          <p>SSPACIA's three locations—Agarwal Complex on CG Road, Mercardo, and Premier House—each offer distinct personalities while maintaining our high standards of service and community. Visit each space and feel the vibe. Talk to current members. Understand how each space can support your specific needs and ambitions. The investment in finding the right location pays dividends in your productivity and business growth.</p>
+          <p>SSPACIA's three locations—Agarwal Complex on CG Road, Mercado, and Premier House—each offer distinct personalities while maintaining our high standards of service and community. Visit each space and feel the vibe. Talk to current members. Understand how each space can support your specific needs and ambitions. The investment in finding the right location pays dividends in your productivity and business growth.</p>
           
           <h2>Your Ahmedabad Coworking Journey Starts Here</h2>
           <p>Whether you're building a startup, scaling a team, or seeking professional workspace for freelance endeavors, Ahmedabad's coworking scene offers something for everyone. SSPACIA is here to support your journey with premium spaces, professional services, and a thriving community. The city's entrepreneurial spirit combined with world-class coworking infrastructure creates the perfect recipe for success. Your next big opportunity might be waiting at the desk next to yours.</p>
@@ -505,7 +505,7 @@ export const siteConfig = {
         date: "2026-03-10",
         readTime: "16 min read",
         href: "/blog/startup-business-address",
-        excerpt: "Establish trust and scale faster with a prestigious address at Premier House or Mercardo. Learn the benefits of virtual offices.",
+        excerpt: "Establish trust and scale faster with a prestigious address at Premier House or Mercado. Learn the benefits of virtual offices.",
         image: {
           src: "/images/blog/startup.png",
           alt: "High-end corporate building reception",
@@ -514,12 +514,12 @@ export const siteConfig = {
           <p>In the business world, first impressions matter. For a startup, having a prestigious office address can be the difference between winning a contract and being overlooked. In fact, research shows that businesses with professional addresses receive 50% more client inquiries than those operating from home or without a clear business location. Your address isn't just a place—it's a statement about your business credibility.</p>
           
           <h2>The Psychology of Professional Addresses</h2>
-          <p>Humans make snap judgments. When a potential client discovers your business operates from someone's home, the perception changes instantly. That initial impression affects everything from contract terms to pricing power. A business address at Premier House or Mercardo instantly signals stability, permanence, and professionalism.</p>
+          <p>Humans make snap judgments. When a potential client discovers your business operates from someone's home, the perception changes instantly. That initial impression affects everything from contract terms to pricing power. A business address at Premier House or Mercado instantly signals stability, permanence, and professionalism.</p>
           
           <p>Consider what a professional address communicates: You're serious about your business. You've invested in professional infrastructure. You operate like a legitimate enterprise. These signals, while unspoken, profoundly influence how clients, partners, and investors perceive your business.</p>
           
           <h2>The Power of Prestige</h2>
-          <p>While you might be building your empire from a garage or a spare bedroom, your clients don't need to know that. A business address at Premier House or Mercardo instantly signals stability and professionalism. Both locations are known throughout Ahmedabad as premium business centers, which means your address carries inherent prestige.</p>
+          <p>While you might be building your empire from a garage or a spare bedroom, your clients don't need to know that. A business address at Premier House or Mercado instantly signals stability and professionalism. Both locations are known throughout Ahmedabad as premium business centers, which means your address carries inherent prestige.</p>
           
           <p>This prestige extends beyond perception. When you list "Premier House" as your business address, you're associating your startup with a known business landmark. When meeting clients, a prestigious address means you can invite them to a professional environment rather than apologizing for meeting at a coffee shop. This changes the dynamic of negotiations and relationship building.</p>
           
@@ -876,34 +876,40 @@ export const siteConfig = {
   },
   faq: [
     {
-      id: "what-is-coworking",
-      question: "What is a coworking space?",
+      id: "what-is-sspacia",
+      question: "What does SSPACIA offer in Ahmedabad?",
       answer:
-        "A coworking space is a shared working environment where professionals from different companies or industries work alongside each other. At SSPACIA, you get a fully-equipped desk or private cabin without the overhead of a traditional office lease.",
+        "Coworking desks, private cabins for 4 to 12 people (managed offices), meeting rooms and board rooms by the hour, a 40-seat event room, day passes and virtual-office addresses, at three centres: Agarwal Complex and Mercado on CG Road and Premier House on SG Highway.",
+    },
+    {
+      id: "meeting-room-price",
+      question: "How much is a meeting room per hour?",
+      answer:
+        "Meeting rooms for 4 to 6 people cost ₹400 to ₹500 per hour, board rooms for 11 to 14 people ₹600 to ₹1,000 per hour, and the 40-seat event room ₹2,000 per hour, all plus GST. Rooms are open to non-members and bookable online in hourly slots from 8 am to 8 pm.",
     },
     {
       id: "who-is-it-for",
-      question: "Who can use SSPACIA coworking spaces?",
+      question: "Who uses SSPACIA?",
       answer:
-        "Our spaces are perfect for freelancers, remote workers, startups, entrepreneurs, and growing teams of any size. Whether you need a hot desk for a day or a dedicated private office, we have a plan for you.",
+        "Freelancers and consultants on flexi or fixed desks; CA, legal, IT and consulting firms in private cabins; corporate teams in executive cabins; and visiting professionals who need a room for a few hours or a day pass.",
     },
     {
       id: "amenities",
-      question: "What amenities are included?",
+      question: "What is included in a membership?",
       answer:
-        "All memberships include high-speed internet, unlimited tea & coffee, professional & homely staff support, 24/7 access, printing facilities, meeting room access (as per plan), and a vibrant community environment.",
+        "High-speed fibre internet, 24/7 access, air-conditioning, reception with mail and courier handling, daily housekeeping, unlimited tea and coffee, printing, meeting-room credits with cabin plans, and a commercial address usable for company and GST registration.",
     },
     {
       id: "locations",
-      question: "Where are you located in Ahmedabad?",
+      question: "Where are the SSPACIA centres?",
       answer:
-        "SSPACIA operates from three prime locations: CG Road – Agarwal Complex, Mercardo, and Premier House. Each location offers its own unique character while maintaining the same high-quality SSPACIA experience.",
+        "Agarwal Complex on C.G. Road, Navrangpura (380009); Mercado, 6th floor, C.G. Road opposite Municipal Market, Ellisbridge (380009); and Premier House, 6th floor, S.G. Highway opposite the Gurudwara, Bodakdev (380054).",
     },
     {
       id: "book-tour",
-      question: "Can I visit before committing to a membership?",
+      question: "Can I visit before committing?",
       answer:
-        "Absolutely! We encourage you to book a free tour of any of our locations. Our community manager will walk you through the space, explain the plans, and help you find the perfect fit.",
+        "Yes. Book a free tour online or call +91 76003 93779. The community manager walks you through the cabins, rooms and pantry, and you receive a written proposal the same day. A day pass (₹500 + GST) lets you try a desk for a day.",
     },
   ],
   pages: {

@@ -76,13 +76,14 @@ function Hero() {
                 animate="show"
                 custom={0.1}
               >
-                <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl max-w-lg tracking-tighter leading-[0.95] font-bold text-[#004D40]">
-                  Top Coworking Spaces
+                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl max-w-xl tracking-tighter leading-[0.95] font-bold text-[#004D40]">
+                  Coworking Space in Ahmedabad
                 </h1>
                 <p className="text-sm sm:text-base md:text-lg leading-relaxed tracking-tight text-[#616161] max-w-md mx-auto md:mx-0">
-                  SSPACIA offers modern coworking spaces in Ahmedabad, designed to
-                  foster creativity and collaboration in a professional
-                  environment. Join our vibrant community today.
+                  Private cabins, desks, meeting and board rooms by the hour, and
+                  virtual offices at three SSPACIA centres: Agarwal Complex and
+                  Mercado on CG Road, Premier House on SG Highway. 24/7 access,
+                  fibre internet, homely staff.
                 </p>
               </motion.div>
 
@@ -172,7 +173,7 @@ function Hero() {
               >
                 <Image
                   src="/IMAGES_SSPACIA/MERCADO IMAGES/Reception.jpg"
-                  alt="SSPACIA Mercardo"
+                  alt="SSPACIA Mercado reception, CG Road, Ahmedabad"
                   width={400}
                   height={240}
                   className="w-full h-full object-cover"

@@ -39,7 +39,7 @@ export default function VirtualOfficeClient() {
 
   const getTourLocationName = (centreId?: string) => {
     if (centreId === "agarwal-complex") return "Agarwal Complex (CG Road)";
-    if (centreId === "mercardo") return "Mercado (CG Road)";
+    if (centreId === "mercado" || centreId === "mercardo") return "Mercado (CG Road)";
     if (centreId === "premier-house") return "Premier House (SG Highway)";
     return "Premier House (SG Highway)";
   };

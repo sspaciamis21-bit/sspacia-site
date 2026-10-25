@@ -91,9 +91,9 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/products#mercardo" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
+                <Link href="/locations/mercado" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
                   <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />
-                  <span className="font-bold text-white group-hover:text-[#1ab0bc]">CG Road – Mercardo</span>
+                  <span className="font-bold text-white group-hover:text-[#1ab0bc]">CG Road – Mercado</span>
                 </Link>
               </li>
               <li>

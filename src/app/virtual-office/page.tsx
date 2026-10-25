@@ -6,7 +6,7 @@ import VirtualOfficeClient from './virtual-office-client';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Virtual Office in Ahmedabad | Prestigious Business Address & Mail Handling | SSPACIA',
+  title: 'Virtual Office in Ahmedabad – Business Address for GST & Company Registration',
   description:
     'Get a prestigious business address for company correspondence and commercial presence across 3 prime Ahmedabad centres: Agarwal Complex (CG Road), Mercado (CG Road) & Premier House (SG Highway). Fixed ₹24,000/year for business address usage.',
   keywords: [

@@ -9,7 +9,7 @@ import { motion } from "motion/react";
 import {
   MapPin, Clock, Users, Coffee,
   Home as HomeIcon, Cpu, Tag, Wifi,
-  ArrowUpRight, BookOpen,
+  ArrowUpRight, BookOpen, Presentation, Building2, CalendarClock, Globe,
 } from "lucide-react";
 import { FadeUp } from "../components/ui/fade-up";
 import { SectionLabel } from "../components/ui/section-label";
@@ -72,16 +72,66 @@ export default function HomeClient() {
                 </div>
                 <div className="flex flex-1 flex-col gap-4 p-6">
                   <p className="text-sm leading-relaxed text-[#616161] line-clamp-2">{location.description}</p>
-                  <a
-                    href={location.link.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-auto inline-flex items-center gap-2 text-sm font-bold text-[#006064] transition-colors hover:text-[#004D40]"
-                  >
-                    Get directions <ArrowUpRight className="h-4 w-4" />
-                  </a>
+                  <div className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-2">
+                    <Link
+                      href={`/locations/${location.id}`}
+                      className="inline-flex items-center gap-2 text-sm font-bold text-[#006064] transition-colors hover:text-[#004D40]"
+                    >
+                      Rooms, cabins and prices <ArrowUpRight className="h-4 w-4" />
+                    </Link>
+                    <a
+                      href={location.link.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#616161] hover:text-[#004D40]"
+                    >
+                      Get directions
+                    </a>
+                  </div>
                 </div>
               </motion.article>
+            </FadeUp>
+          ))}
+        </div>
+      </section>
+
+      {/* ── WHAT WE RENT ── */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+        <FadeUp className="space-y-3">
+          <SectionLabel>
+            <Building2 className="h-3 w-3" /> What we rent
+          </SectionLabel>
+          <h2 className="text-3xl font-bold tracking-tight text-[#004D40] sm:text-4xl">
+            Workspaces by the month, rooms by the hour
+          </h2>
+          <p className="max-w-2xl text-base text-[#616161]">
+            Everything is bookable online. Meeting rooms start at ₹400 per hour, day passes at ₹500, and a
+            virtual office address at ₹24,000 a year. Cabin rent is quoted after your tour.
+          </p>
+        </FadeUp>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            { href: "/managed-office-space-ahmedabad", icon: <Building2 className="h-5 w-5" />, title: "Managed office space", text: "Private, furnished cabins for 4 to 12 people with reception, housekeeping and internet on one monthly bill." },
+            { href: "/coworking-spaces", icon: <Users className="h-5 w-5" />, title: "Coworking desks", text: "Flexi and fixed desks for individuals and small teams, 24/7 access, unlimited tea and coffee." },
+            { href: "/meeting-rooms-ahmedabad", icon: <CalendarClock className="h-5 w-5" />, title: "Meeting rooms by the hour", text: "4 to 6 seater rooms from ₹400 per hour at CG Road and SG Highway. Open to non-members." },
+            { href: "/board-rooms-ahmedabad", icon: <Presentation className="h-5 w-5" />, title: "Board rooms", text: "11, 12 and 14 seat board rooms with video conferencing, from ₹600 per hour." },
+            { href: "/event-space-ahmedabad", icon: <MapPin className="h-5 w-5" />, title: "Event and training room", text: "40-seat event room at Premier House, SG Highway, ₹2,000 per hour, theatre or classroom layout." },
+            { href: "/virtual-office", icon: <Globe className="h-5 w-5" />, title: "Virtual office", text: "Business address for company and GST registration with mail handling, ₹24,000 per year." },
+          ].map((item, i) => (
+            <FadeUp key={item.href} delay={i * 0.05}>
+              <Link
+                href={item.href}
+                className="group flex h-full flex-col gap-4 rounded-[2rem] border border-[#CFD8DC]/60 bg-white p-7 shadow-sm transition-all hover:border-[#006064]/30 hover:shadow-xl hover:shadow-[#006064]/5"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E0F7FA] text-[#006064] transition-colors group-hover:bg-[#006064] group-hover:text-white">
+                  {item.icon}
+                </div>
+                <h3 className="text-lg font-bold text-[#004D40]">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-[#616161]">{item.text}</p>
+                <span className="mt-auto inline-flex items-center gap-2 text-sm font-bold text-[#006064]">
+                  See details and prices <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </span>
+              </Link>
             </FadeUp>
           ))}
         </div>

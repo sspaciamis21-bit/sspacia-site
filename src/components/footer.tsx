@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Youtube, Instagram, Linkedin, Facebook, MapPin, Phone, Mail, Clock, Globe } from "lucide-react";
+import { Youtube, Instagram, Linkedin, Facebook, MapPin, Phone, Mail, Clock } from "lucide-react";
 
 export function Footer() {
   return (
@@ -68,63 +68,67 @@ export function Footer() {
             </div>
           </div>
 
-          {/* COLUMN 2: QUICK LINKS */}
+          {/* COLUMN 2: SERVICES */}
           <div className="space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-[#1ab0bc]">NAVIGATE</h4>
+            <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-[#1ab0bc]">WHAT WE RENT</h4>
             <ul className="space-y-2.5 text-xs text-white/70">
-              <li><Link href="/" className="hover:text-[#1ab0bc] transition-colors">Home</Link></li>
-              <li><Link href="/coworking-spaces" className="hover:text-[#1ab0bc] transition-colors">All Workspaces</Link></li>
-              <li><Link href="/guest-spaces" className="hover:text-[#1ab0bc] transition-colors">Guest Meeting Rooms</Link></li>
-              <li>
-                <Link href="/virtual-office" className="hover:text-[#1ab0bc] transition-colors">
-                  Virtual Office
-                </Link>
-              </li>
-              <li><Link href="/about" className="hover:text-[#1ab0bc] transition-colors">About Us</Link></li>
-              <li>
-                <Link
-                  href="/careers"
-                  className="inline-flex items-center gap-2 group text-white font-bold hover:text-[#1ab0bc] transition-all bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg border border-white/10"
-                >
-                  <span>Careers</span>
-                  <span className="bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded-full shadow-xs tracking-wide uppercase">
-                    We're Hiring
-                  </span>
-                </Link>
-              </li>
-              <li><Link href="/contact" className="hover:text-[#1ab0bc] transition-colors">Contact Support</Link></li>
-
+              <li><Link href="/coworking-spaces" className="hover:text-[#1ab0bc] transition-colors">Coworking desks and private cabins</Link></li>
+              <li><Link href="/managed-office-space-ahmedabad" className="hover:text-[#1ab0bc] transition-colors">Managed office space in Ahmedabad</Link></li>
+              <li><Link href="/meeting-rooms-ahmedabad" className="hover:text-[#1ab0bc] transition-colors">Meeting rooms on hourly rent</Link></li>
+              <li><Link href="/board-rooms-ahmedabad" className="hover:text-[#1ab0bc] transition-colors">Board rooms (11–14 seats)</Link></li>
+              <li><Link href="/event-space-ahmedabad" className="hover:text-[#1ab0bc] transition-colors">Event and training room (40 seats)</Link></li>
+              <li><Link href="/virtual-office" className="hover:text-[#1ab0bc] transition-colors">Virtual office and GST address</Link></li>
+              <li><Link href="/passes" className="hover:text-[#1ab0bc] transition-colors">Day and weekly passes</Link></li>
+              <li><Link href="/guest-spaces" className="hover:text-[#1ab0bc] transition-colors">Live room calendar</Link></li>
             </ul>
           </div>
 
-          {/* COLUMN 3: OUR SPACES */}
+          {/* COLUMN 3: OUR CENTRES + COMPANY */}
           <div className="space-y-4">
-            <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-[#1ab0bc]">OUR SPACES</h4>
+            <h4 className="text-xs font-bold uppercase tracking-[0.3em] text-[#1ab0bc]">OUR CENTRES</h4>
             <ul className="space-y-3 text-xs text-white/70">
               <li>
-                <Link href="/virtual-office" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
-                  <Globe className="w-4 h-4 text-indigo-400 shrink-0 group-hover:scale-110 transition-transform" />
-                  <span className="font-bold text-white group-hover:text-[#1ab0bc]">Virtual Office</span>
+                <Link href="/locations/agarwal-complex" className="flex items-start gap-2 group hover:text-[#1ab0bc] transition-colors">
+                  <MapPin className="w-4 h-4 mt-0.5 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />
+                  <span>
+                    <span className="font-bold text-white group-hover:text-[#1ab0bc] block">Agarwal Complex, CG Road</span>
+                    <span className="text-white/50">Navrangpura, Ahmedabad 380009</span>
+                  </span>
                 </Link>
               </li>
               <li>
-                <Link href="/products#agarwal-complex" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
-                  <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />
-                  <span className="font-bold text-white group-hover:text-[#1ab0bc]">CG Road – Agarwal Complex</span>
+                <Link href="/locations/mercado" className="flex items-start gap-2 group hover:text-[#1ab0bc] transition-colors">
+                  <MapPin className="w-4 h-4 mt-0.5 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />
+                  <span>
+                    <span className="font-bold text-white group-hover:text-[#1ab0bc] block">Mercado, CG Road</span>
+                    <span className="text-white/50">6th Floor, opp. Municipal Market, Ellisbridge 380009</span>
+                  </span>
                 </Link>
               </li>
               <li>
-                <Link href="/products#mercardo" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
-                  <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />
-                  <span className="font-bold text-white group-hover:text-[#1ab0bc]">CG Road – Mercardo</span>
+                <Link href="/locations/premier-house" className="flex items-start gap-2 group hover:text-[#1ab0bc] transition-colors">
+                  <MapPin className="w-4 h-4 mt-0.5 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />
+                  <span>
+                    <span className="font-bold text-white group-hover:text-[#1ab0bc] block">Premier House, SG Highway</span>
+                    <span className="text-white/50">6th Floor, opp. Gurudwara, Bodakdev 380054</span>
+                  </span>
                 </Link>
               </li>
+            </ul>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1 text-xs text-white/70">
+              <li><Link href="/locations" className="hover:text-[#1ab0bc]">All centres</Link></li>
+              <li><Link href="/about" className="hover:text-[#1ab0bc]">About</Link></li>
+              <li><Link href="/blog" className="hover:text-[#1ab0bc]">Blog</Link></li>
+              <li><Link href="/gallery" className="hover:text-[#1ab0bc]">Gallery</Link></li>
               <li>
-                <Link href="/products#premier-house" className="flex items-center gap-2 group hover:text-[#1ab0bc] transition-colors">
-                  <MapPin className="w-4 h-4 text-[#1ab0bc] shrink-0 group-hover:scale-110 transition-transform" />
-                  <span className="font-bold text-white group-hover:text-[#1ab0bc]">SG Highway – Premier House</span>
+                <Link href="/careers" className="inline-flex items-center gap-1.5 text-white font-bold hover:text-[#1ab0bc]">
+                  Careers
+                  <span className="bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded-full tracking-wide uppercase">
+                    Hiring
+                  </span>
                 </Link>
               </li>
+              <li><Link href="/contact" className="hover:text-[#1ab0bc]">Contact</Link></li>
             </ul>
           </div>
 
@@ -144,7 +148,7 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-3">
                 <Clock className="w-4 h-4 text-[#1ab0bc] shrink-0" />
-                <span>24/7</span>
+                <span>Members 24/7 · rooms bookable 8 am – 8 pm</span>
               </div>
             </div>
           </div>
