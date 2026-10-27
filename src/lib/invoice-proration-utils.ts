@@ -146,10 +146,14 @@ export function calculateProratedBilling(params: {
   const validActiveDays = Math.max(1, Math.min(validMonthDays, activeDays || validMonthDays));
   const dailyRate = Math.round((monthlyAmount / validMonthDays) * 100) / 100;
 
-  const proratedSubtotal =
-    customSubtotal !== undefined && customSubtotal !== null && !isNaN(customSubtotal)
-      ? customSubtotal
-      : Math.round(dailyRate * validActiveDays * 100) / 100;
+  let proratedSubtotal: number;
+  if (customSubtotal !== undefined && customSubtotal !== null && !isNaN(customSubtotal)) {
+    proratedSubtotal = customSubtotal;
+  } else if (validActiveDays === validMonthDays) {
+    proratedSubtotal = monthlyAmount;
+  } else {
+    proratedSubtotal = Math.round(((monthlyAmount * validActiveDays) / validMonthDays) * 100) / 100;
+  }
 
   const gstAmount = Math.round(((proratedSubtotal * gstPercent) / 100) * 100) / 100;
   const totalAmount = Math.round(proratedSubtotal + gstAmount);
@@ -159,7 +163,9 @@ export function calculateProratedBilling(params: {
     periodLabel = `From ${formatDateToIndian(startDateStr)} to ${formatDateToIndian(endDateStr)} (${validActiveDays} Days)`;
   }
 
-  const formulaText = `₹${monthlyAmount.toLocaleString('en-IN')} ÷ ${validMonthDays} days × ${validActiveDays} days = ₹${proratedSubtotal.toLocaleString('en-IN')}`;
+  const formulaText = validActiveDays === validMonthDays
+    ? `₹${monthlyAmount.toLocaleString('en-IN')} (Full Month: ${validMonthDays} Days)`
+    : `₹${monthlyAmount.toLocaleString('en-IN')} ÷ ${validMonthDays} days × ${validActiveDays} days = ₹${proratedSubtotal.toLocaleString('en-IN')}`;
 
   return {
     monthlyAmount,

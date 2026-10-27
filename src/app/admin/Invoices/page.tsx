@@ -297,19 +297,22 @@ function computeInvoicePeriod(
 ): { periodText: string; isProrated: boolean; activeDays?: number } {
   const explicitStart = item.proratedStartDate || item.startDate;
   const explicitEnd = item.proratedEndDate || item.endDate;
+  const info = getBillingMonthInfo(billingMonthStr);
+
   if (explicitStart && explicitEnd) {
     const sIso = toIsoDateOnly(explicitStart);
     const eIso = toIsoDateOnly(explicitEnd);
     if (sIso && eIso) {
+      const days = item.activeDays || calculateInclusiveDays(sIso, eIso);
+      const isCustomPeriod = Boolean(item.isProrated || (days > 0 && days < info.totalDays) || (sIso !== info.firstDateStr || eIso !== info.lastDateStr));
       return {
         periodText: `${formatDateToIndian(sIso)} to ${formatDateToIndian(eIso)}`,
-        isProrated: true,
-        activeDays: item.activeDays || calculateInclusiveDays(sIso, eIso),
+        isProrated: isCustomPeriod,
+        activeDays: isCustomPeriod ? days : undefined,
       };
     }
   }
 
-  const info = getBillingMonthInfo(billingMonthStr);
   let effectiveStart = info.firstDateStr;
   let effectiveEnd = info.lastDateStr;
   let isCustom = false;
@@ -344,11 +347,13 @@ function computeInvoicePeriod(
 
   const sText = formatDateToIndian(effectiveStart);
   const eText = formatDateToIndian(effectiveEnd);
+  const activeDays = calculateInclusiveDays(effectiveStart, effectiveEnd);
+  const isActualProrated = isCustom || Boolean(item.isProrated) || (activeDays > 0 && activeDays < info.totalDays);
 
   return {
     periodText: `${sText} to ${eText}`,
-    isProrated: isCustom || !!item.isProrated,
-    activeDays: isCustom ? calculateInclusiveDays(effectiveStart, effectiveEnd) : undefined,
+    isProrated: isActualProrated,
+    activeDays: isActualProrated ? activeDays : undefined,
   };
 }
 
@@ -441,10 +446,10 @@ function extractInvoiceProducts(inv: InvoiceRecord): ExtractedProduct[] {
         products = raw.map((it: any) => {
           const seats = Number(it.noOfSeats) || 0;
           const rate = Number(it.ratePerAgreement) || (seats > 0 && it.amount ? Math.round(Number(it.amount) / seats) : 0);
-          const amt = Number(it.amount) || (seats * rate);
+          const amt = (it.amount !== undefined && it.amount !== null && it.amount !== '') ? Number(it.amount) : (seats * rate);
           const gstP = Number(it.gstPercent) || 18;
           const gstAmt = Math.round(amt * (gstP / 100));
-          const tot = Number(it.totalAmount) || (amt + gstAmt);
+          const tot = (it.totalAmount !== undefined && it.totalAmount !== null && it.totalAmount !== '') ? Number(it.totalAmount) : (amt + gstAmt);
 
           const periodInfo = computeInvoicePeriod(it, inv.billingMonth, inv.clientMaster);
           const dueDateStr = computeInvoiceDueDate(inv, it.dueDate, it.paymentDueDay);
@@ -916,6 +921,8 @@ export default function AdminInvoicesWorkflowPage() {
     totalMonthDays?: number;
     proratedStartDate?: string;
     proratedEndDate?: string;
+    startDate?: string;
+    endDate?: string;
     prorateFormula?: string;
     note?: string;
   }
@@ -2720,6 +2727,9 @@ export default function AdminInvoicesWorkflowPage() {
     setEditBillingMonth(inv.billingMonth || '');
     setEditStatus(inv.status);
 
+    const monthInfo = getBillingMonthInfo(inv.billingMonth, inv.dueDate ? new Date(inv.dueDate) : undefined);
+    setEditProrateTotalMonthDays(monthInfo.totalDays);
+
     let parsed: EditInvoiceItem[] = [];
     if (inv.itemsJson) {
       try {
@@ -2728,7 +2738,16 @@ export default function AdminInvoicesWorkflowPage() {
           parsed = raw.map((it: any) => {
             const seats = Number(it.noOfSeats) || 0;
             const rate = Number(it.ratePerAgreement) || 0;
-            const baseAmt = Number(it.baseMonthlyAmount) || (seats > 0 && rate > 0 ? seats * rate : Number(it.amount || 0));
+            const baseAmt = (seats > 0 && rate > 0) ? (seats * rate) : (Number(it.baseMonthlyAmount) || Number(it.amount || 0));
+            const startD = it.proratedStartDate || it.startDate || monthInfo.firstDateStr;
+            const endD = it.proratedEndDate || it.endDate || monthInfo.lastDateStr;
+            const days = Number(it.activeDays) || calculateInclusiveDays(startD, endD) || monthInfo.totalDays;
+            const isItemProrated = Boolean(
+              it.isProrated ||
+              it.billingType === 'PRORATED' ||
+              (startD !== monthInfo.firstDateStr || endD !== monthInfo.lastDateStr)
+            );
+
             return {
               cabinName: it.cabinName || '',
               noOfSeats: it.noOfSeats ?? '',
@@ -2737,13 +2756,15 @@ export default function AdminInvoicesWorkflowPage() {
               gstPercent: it.gstPercent ?? 18,
               totalAmount: it.totalAmount ?? '',
               paymentDuration: it.paymentDuration || 'MONTHLY',
-              billingType: it.billingType || 'REGULAR',
+              billingType: isItemProrated ? 'PRORATED' : 'REGULAR',
               baseMonthlyAmount: baseAmt,
-              isProrated: it.isProrated || it.billingType === 'PRORATED',
-              activeDays: it.activeDays,
-              totalMonthDays: it.totalMonthDays,
-              proratedStartDate: it.proratedStartDate,
-              proratedEndDate: it.proratedEndDate,
+              isProrated: isItemProrated,
+              activeDays: days,
+              totalMonthDays: Number(it.totalMonthDays) || monthInfo.totalDays,
+              proratedStartDate: startD,
+              proratedEndDate: endD,
+              startDate: startD,
+              endDate: endD,
               prorateFormula: it.prorateFormula,
               note: it.note,
             };
@@ -2757,7 +2778,7 @@ export default function AdminInvoicesWorkflowPage() {
     if (parsed.length === 0) {
       const seats = Number(inv.noOfSeats) || 0;
       const rate = Number(inv.ratePerAgreement) || 0;
-      const baseAmt = seats > 0 && rate > 0 ? seats * rate : Number(inv.amount || 0);
+      const baseAmt = (seats > 0 && rate > 0) ? (seats * rate) : Number(inv.amount || 0);
 
       parsed = [{
         cabinName: inv.cabinName || 'Workspace',
@@ -2769,14 +2790,18 @@ export default function AdminInvoicesWorkflowPage() {
         paymentDuration: inv.paymentDuration || 'MONTHLY',
         billingType: 'REGULAR',
         baseMonthlyAmount: baseAmt,
+        proratedStartDate: monthInfo.firstDateStr,
+        proratedEndDate: monthInfo.lastDateStr,
+        startDate: monthInfo.firstDateStr,
+        endDate: monthInfo.lastDateStr,
+        activeDays: monthInfo.totalDays,
+        totalMonthDays: monthInfo.totalDays,
       }];
     }
 
     setEditItems(parsed);
 
     // Initialize Edit Proration State
-    const monthInfo = getBillingMonthInfo(inv.billingMonth, inv.dueDate ? new Date(inv.dueDate) : undefined);
-    setEditProrateTotalMonthDays(monthInfo.totalDays);
     const existingProrated = parsed.find(it => it.isProrated || it.billingType === 'PRORATED');
     if (existingProrated) {
       setEditProrateStartDate(existingProrated.proratedStartDate || monthInfo.firstDateStr);
@@ -2820,7 +2845,8 @@ export default function AdminInvoicesWorkflowPage() {
     const updated = editItems.map(item => {
       const seats = Number(item.noOfSeats) || 0;
       const rate = Number(item.ratePerAgreement) || 0;
-      const baseAmt = Number(item.baseMonthlyAmount) || (seats > 0 && rate > 0 ? seats * rate : Number(item.amount || 0));
+      // Dynamic monthly base: seats * rate takes priority
+      const baseAmt = (seats > 0 && rate > 0) ? (seats * rate) : (Number(item.baseMonthlyAmount) || Number(item.amount || 0));
       const gstP = Number(item.gstPercent) || 18;
 
       const calc = calculateProratedBilling({
@@ -2843,6 +2869,8 @@ export default function AdminInvoicesWorkflowPage() {
         totalMonthDays: calc.totalMonthDays,
         proratedStartDate: editProrateStartDate,
         proratedEndDate: editProrateEndDate,
+        startDate: editProrateStartDate,
+        endDate: editProrateEndDate,
         prorateFormula: calc.formulaText,
         note: `Prorated: ${calc.activeDays} of ${calc.totalMonthDays} Days (${formatDateToIndian(editProrateStartDate)} to ${formatDateToIndian(editProrateEndDate)})`,
       };
@@ -2851,33 +2879,40 @@ export default function AdminInvoicesWorkflowPage() {
     setEditItems(updated);
     recalculateEditTotals(updated);
     const newTot = updated.reduce((s, it) => s + (Number(it.totalAmount) || 0), 0);
-    toast.success(`Proration applied: ${editProrateActiveDays} days → ₹${newTot.toLocaleString('en-IN')}. Click "Save Invoice Changes" to save! 🎉`);
+    toast.success(`Proration applied: ${editProrateActiveDays} days (${formatDateToIndian(editProrateStartDate)} to ${formatDateToIndian(editProrateEndDate)}) → ₹${newTot.toLocaleString('en-IN')}. Click "Save Invoice Changes" to save! 🎉`);
   };
 
   const handleResetEditProration = () => {
+    const monthInfo = getBillingMonthInfo(editBillingMonth);
     const updated = editItems.map(item => {
       const seats = Number(item.noOfSeats) || 0;
       const rate = Number(item.ratePerAgreement) || 0;
-      const baseAmt = Number(item.baseMonthlyAmount) || (seats > 0 && rate > 0 ? seats * rate : Number(item.amount || 0));
+      const baseAmt = (seats > 0 && rate > 0) ? (seats * rate) : (Number(item.baseMonthlyAmount) || Number(item.amount || 0));
       const gstP = Number(item.gstPercent) || 18;
       const gstAmt = Math.round(((baseAmt * gstP) / 100) * 100) / 100;
       const totalAmt = Math.round(baseAmt + gstAmt);
 
       return {
         ...item,
+        baseMonthlyAmount: baseAmt,
         amount: baseAmt,
         totalAmount: totalAmt,
         billingType: 'REGULAR',
         isProrated: false,
-        activeDays: undefined,
-        totalMonthDays: undefined,
-        proratedStartDate: undefined,
-        proratedEndDate: undefined,
+        activeDays: monthInfo.totalDays,
+        totalMonthDays: monthInfo.totalDays,
+        proratedStartDate: monthInfo.firstDateStr,
+        proratedEndDate: monthInfo.lastDateStr,
+        startDate: monthInfo.firstDateStr,
+        endDate: monthInfo.lastDateStr,
         prorateFormula: undefined,
         note: undefined,
       };
     });
 
+    setEditProrateStartDate(monthInfo.firstDateStr);
+    setEditProrateEndDate(monthInfo.lastDateStr);
+    setEditProrateActiveDays(monthInfo.totalDays);
     setEditItems(updated);
     recalculateEditTotals(updated);
     toast.success('Reset back to full month billing.');
@@ -2904,6 +2939,9 @@ export default function AdminInvoicesWorkflowPage() {
     setEditAmount(roundedSubtotal);
     setEditTotalAmount(roundedTotal);
     setEditCabinName(summaryName);
+    if (items.length > 0 && items[0].ratePerAgreement !== '') {
+      setEditRatePerAgreement(items[0].ratePerAgreement);
+    }
   };
 
   const handleDeleteEditItem = (index: number) => {
@@ -2927,17 +2965,42 @@ export default function AdminInvoicesWorkflowPage() {
       const rate = field === 'ratePerAgreement' ? (value === '' ? 0 : Number(value)) : (Number(item.ratePerAgreement) || 0);
       const gstP = field === 'gstPercent' ? (value === '' ? 18 : Number(value)) : (Number(item.gstPercent) || 18);
 
-      if (seats > 0 && rate > 0) {
-        const lineAmt = Math.round(seats * rate * 100) / 100;
-        const lineGst = Math.round(((lineAmt * gstP) / 100) * 100) / 100;
-        item.amount = lineAmt;
-        item.totalAmount = Math.round(lineAmt + lineGst);
+      const monthlyBase = (seats > 0 && rate > 0) ? (seats * rate) : (Number(item.amount) || 0);
+      item.baseMonthlyAmount = monthlyBase;
+
+      // If the item is currently prorated, dynamically recalculate prorated amount for the new seat count / rate
+      if (item.isProrated || item.billingType === 'PRORATED') {
+        const activeDays = Number(item.activeDays || editProrateActiveDays || editProrateTotalMonthDays);
+        const totalDays = Number(item.totalMonthDays || editProrateTotalMonthDays || 31);
+        const calc = calculateProratedBilling({
+          monthlyAmount: monthlyBase,
+          totalMonthDays: totalDays,
+          activeDays,
+          startDateStr: item.proratedStartDate || editProrateStartDate,
+          endDateStr: item.proratedEndDate || editProrateEndDate,
+          gstPercent: gstP,
+        });
+        item.amount = calc.proratedSubtotal;
+        item.totalAmount = calc.totalAmount;
+        item.prorateFormula = calc.formulaText;
+        item.note = `Prorated: ${calc.activeDays} of ${calc.totalMonthDays} Days (${formatDateToIndian(item.proratedStartDate || editProrateStartDate)} to ${formatDateToIndian(item.proratedEndDate || editProrateEndDate)})`;
+      } else {
+        if (seats > 0 && rate > 0) {
+          const lineAmt = Math.round(seats * rate * 100) / 100;
+          const lineGst = Math.round(((lineAmt * gstP) / 100) * 100) / 100;
+          item.amount = lineAmt;
+          item.totalAmount = Math.round(lineAmt + lineGst);
+        }
       }
     } else if (field === 'amount') {
       const lineAmt = value === '' ? 0 : Number(value);
       const gstP = Number(item.gstPercent) || 18;
       const lineGst = Math.round(((lineAmt * gstP) / 100) * 100) / 100;
+      item.amount = lineAmt;
       item.totalAmount = Math.round(lineAmt + lineGst);
+      if (!item.isProrated) {
+        item.baseMonthlyAmount = lineAmt;
+      }
     }
 
     updated[index] = item;
@@ -2955,6 +3018,12 @@ export default function AdminInvoicesWorkflowPage() {
       totalAmount: 0,
       paymentDuration: 'MONTHLY',
       billingType: 'REGULAR',
+      proratedStartDate: editProrateStartDate,
+      proratedEndDate: editProrateEndDate,
+      startDate: editProrateStartDate,
+      endDate: editProrateEndDate,
+      activeDays: editProrateActiveDays,
+      totalMonthDays: editProrateTotalMonthDays,
     };
     const updated = [...editItems, newItem];
     setEditItems(updated);
@@ -3159,6 +3228,59 @@ export default function AdminInvoicesWorkflowPage() {
       toast.error('Invoice must contain at least one product item');
       return;
     }
+
+    const monthInfo = getBillingMonthInfo(editBillingMonth, entryToEditInvoice.dueDate ? new Date(entryToEditInvoice.dueDate) : undefined);
+    const hasCustomProrateDates =
+      editProrateActiveDays < monthInfo.totalDays ||
+      (editProrateStartDate && editProrateStartDate !== monthInfo.firstDateStr) ||
+      (editProrateEndDate && editProrateEndDate !== monthInfo.lastDateStr);
+
+    let finalItems = [...editItems];
+    if (hasCustomProrateDates || showEditProratePanel || finalItems.some(it => it.isProrated || it.billingType === 'PRORATED')) {
+      finalItems = finalItems.map(it => {
+        const seats = Number(it.noOfSeats) || 0;
+        const rate = Number(it.ratePerAgreement) || 0;
+        const baseAmt = (seats > 0 && rate > 0) ? (seats * rate) : (Number(it.baseMonthlyAmount) || Number(it.amount || 0));
+        const gstP = Number(it.gstPercent) || 18;
+        const startD = it.proratedStartDate || editProrateStartDate || monthInfo.firstDateStr;
+        const endD = it.proratedEndDate || editProrateEndDate || monthInfo.lastDateStr;
+        const activeDays = Number(it.activeDays || editProrateActiveDays || calculateInclusiveDays(startD, endD));
+
+        const isProratedItem = activeDays < monthInfo.totalDays || startD !== monthInfo.firstDateStr || endD !== monthInfo.lastDateStr || it.isProrated;
+
+        if (isProratedItem) {
+          const calc = calculateProratedBilling({
+            monthlyAmount: baseAmt,
+            totalMonthDays: monthInfo.totalDays,
+            activeDays,
+            startDateStr: startD,
+            endDateStr: endD,
+            gstPercent: gstP,
+          });
+          return {
+            ...it,
+            baseMonthlyAmount: baseAmt,
+            amount: it.isProrated ? Number(it.amount) : calc.proratedSubtotal,
+            totalAmount: it.isProrated ? Number(it.totalAmount) : calc.totalAmount,
+            billingType: 'PRORATED',
+            isProrated: true,
+            activeDays,
+            totalMonthDays: monthInfo.totalDays,
+            proratedStartDate: startD,
+            proratedEndDate: endD,
+            startDate: startD,
+            endDate: endD,
+            prorateFormula: calc.formulaText,
+            note: `Prorated: ${activeDays} of ${monthInfo.totalDays} Days (${formatDateToIndian(startD)} to ${formatDateToIndian(endD)})`,
+          };
+        }
+        return it;
+      });
+    }
+
+    const finalSubtotal = finalItems.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+    const finalTotal = finalItems.reduce((sum, it) => sum + (Number(it.totalAmount) || 0), 0);
+
     setActionLoading(true);
     try {
       const res = await fetch(`/api/admin/Invoices/${entryToEditInvoice.id}`, {
@@ -3169,13 +3291,13 @@ export default function AdminInvoicesWorkflowPage() {
           cabinName: editCabinName,
           noOfSeats: editNoOfSeats,
           ratePerAgreement: editRatePerAgreement,
-          amount: editAmount,
+          amount: Math.round(finalSubtotal * 100) / 100,
           gstPercent: editGstPercent,
-          totalAmount: editTotalAmount,
+          totalAmount: Math.round(finalTotal),
           gstNo: editGstNo,
           billingMonth: editBillingMonth,
           status: editStatus,
-          itemsJson: JSON.stringify(editItems),
+          itemsJson: JSON.stringify(finalItems),
         }),
       });
 
@@ -7794,6 +7916,38 @@ export default function AdminInvoicesWorkflowPage() {
                               <option value="REJECTED_WITH_REMARKS">Rejected with Remarks</option>
                             </select>
                           </div>
+
+                          {/* Active Invoice Period / Usage Dates Display */}
+                          <div className="sm:col-span-4 bg-teal-50/70 p-2.5 rounded border border-teal-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <CalendarDays size={14} className="text-[#006064] shrink-0" />
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-[#006064]">
+                                Invoice Period:
+                              </span>
+                              <span className="font-mono font-bold text-xs text-neutral-900 bg-white px-2 py-0.5 rounded border border-teal-200">
+                                {editProrateStartDate && editProrateEndDate
+                                  ? `${formatDateToIndian(editProrateStartDate)} to ${formatDateToIndian(editProrateEndDate)}`
+                                  : 'Full Month'}
+                              </span>
+                              {editItems.some(it => it.isProrated || it.billingType === 'PRORATED') || (editProrateActiveDays && editProrateActiveDays < editProrateTotalMonthDays) ? (
+                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 text-[9.5px] font-bold rounded">
+                                  ⚡ Prorated ({editProrateActiveDays} of {editProrateTotalMonthDays} Days)
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9.5px] font-bold rounded">
+                                  Full Month ({editProrateTotalMonthDays} Days)
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowEditProratePanel(!showEditProratePanel)}
+                              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold uppercase tracking-wider rounded flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                            >
+                              <CalendarDays size={11} />
+                              <span>{showEditProratePanel ? 'Hide Controls' : '⚡ Configure Prorate Days'}</span>
+                            </button>
+                          </div>
                         </div>
 
                         {/* INVOICE PRODUCTS & LINE ITEMS (EDITABLE & DELETABLE) */}
@@ -7842,7 +7996,7 @@ export default function AdminInvoicesWorkflowPage() {
                             const totalBaseMonthly = editItems.reduce((sum, it) => {
                               const seats = Number(it.noOfSeats) || 0;
                               const rate = Number(it.ratePerAgreement) || 0;
-                              const base = Number(it.baseMonthlyAmount) || (seats > 0 && rate > 0 ? seats * rate : Number(it.amount || 0));
+                              const base = (seats > 0 && rate > 0) ? (seats * rate) : (Number(it.baseMonthlyAmount) || Number(it.amount || 0));
                               return sum + base;
                             }, 0);
 
@@ -8064,7 +8218,10 @@ export default function AdminInvoicesWorkflowPage() {
                                           <div className="mt-1 flex items-center gap-1">
                                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9.5px] font-bold">
                                               <CalendarDays size={10} className="text-amber-700" />
-                                              <span>Prorated: {item.activeDays || editProrateActiveDays} of {item.totalMonthDays || editProrateTotalMonthDays} Days</span>
+                                              <span>
+                                                Prorated: {item.activeDays || editProrateActiveDays} of {item.totalMonthDays || editProrateTotalMonthDays} Days
+                                                {item.proratedStartDate && item.proratedEndDate ? ` (${formatDateToIndian(item.proratedStartDate)} to ${formatDateToIndian(item.proratedEndDate)})` : ''}
+                                              </span>
                                             </span>
                                           </div>
                                         ) : item.note ? (
