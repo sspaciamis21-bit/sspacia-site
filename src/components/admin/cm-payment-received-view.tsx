@@ -28,17 +28,17 @@ import {
 import { formatDateToIndian, getBillingMonthInfo } from '@/lib/invoice-proration-utils';
 
 interface PaymentPart {
-  partIndex•: number;
+  partIndex?: number;
   amount: number;
-  payReceiveDate•: string;
-  utrDate•: string;
-  paymentMode•: string;
-  utrNumber•: string;
-  utrFileUrl•: string;
-  utrFileName•: string;
-  tdsAmount•: number;
-  remarks•: string;
-  bankName•: string;
+  payReceiveDate?: string;
+  utrDate?: string;
+  paymentMode?: string;
+  utrNumber?: string;
+  utrFileUrl?: string;
+  utrFileName?: string;
+  tdsAmount?: number;
+  remarks?: string;
+  bankName?: string;
 }
 
 interface ApprovedInvoicePayment {
@@ -88,10 +88,10 @@ interface ApprovedInvoicePayment {
 
 interface CmPaymentReceivedViewProps {
   isSuperAdmin: boolean;
-  userRoleView•: 'CM' | 'ACCOUNTANT';
-  currentUserLocationId•: number | null;
-  currentUserLocationName•: string | null;
-  onBack•: () => void;
+  userRoleView?: 'CM' | 'ACCOUNTANT';
+  currentUserLocationId?: number | null;
+  currentUserLocationName?: string | null;
+  onBack?: () => void;
 }
 
 export default function CmPaymentReceivedView({
@@ -141,7 +141,7 @@ export default function CmPaymentReceivedView({
       if (selectedStatus && selectedStatus !== 'ALL') params.set('paymentStatus', selectedStatus);
       if (searchTerm) params.set('search', searchTerm);
 
-      const res = await fetch(`/api/admin/invoice-payments•${params.toString()}`);
+      const res = await fetch(`/api/admin/invoice-payments?${params.toString()}`);
       if (!res.ok) {
         throw new Error(`Failed to load payment records: ${res.statusText}`);
       }
@@ -149,10 +149,10 @@ export default function CmPaymentReceivedView({
       const json = await res.json();
       if (json.success) {
         setInvoices(json.data || []);
-        if (json.availableBillingMonths•.length) {
+        if (json.availableBillingMonths?.length) {
           setAvailableMonths(json.availableBillingMonths);
         }
-        if (json.locations•.length) {
+        if (json.locations?.length) {
           setLocations(json.locations);
         }
         if (typeof json.isCM === 'boolean') {
@@ -204,7 +204,7 @@ export default function CmPaymentReceivedView({
     const receivedCount = filteredInvoices.filter((inv) => inv.paymentStatus === 'RECEIVED').length;
     const partialCount = filteredInvoices.filter((inv) => inv.paymentStatus === 'PARTIAL').length;
     const pendingCount = filteredInvoices.filter((inv) => inv.paymentStatus === 'PENDING').length;
-    const collectionRate = totalBilled > 0 • ((totalReceived / totalBilled) * 100).toFixed(1) : '0';
+    const collectionRate = totalBilled > 0 ? ((totalReceived / totalBilled) * 100).toFixed(1) : '0';
 
     return {
       totalCount: filteredInvoices.length,
@@ -250,7 +250,7 @@ export default function CmPaymentReceivedView({
   };
 
   // Helper: Client Type Label & Pill
-  const getClientTypeBadge = (clientType•: string) => {
+  const getClientTypeBadge = (clientType?: string) => {
     const ct = (clientType || 'DEFAULT').toUpperCase();
     if (ct === 'VIRTUAL_OFFICE') {
       return (
@@ -274,7 +274,7 @@ export default function CmPaymentReceivedView({
   };
 
   // Helper: Parse multi-installment payments
-  const parsePaymentsList = (paymentsJson•: string | null): PaymentPart[] => {
+  const parsePaymentsList = (paymentsJson?: string | null): PaymentPart[] => {
     if (!paymentsJson) return [];
     try {
       const parsed = JSON.parse(paymentsJson);
@@ -317,11 +317,11 @@ export default function CmPaymentReceivedView({
         `"${dates[0] || ''}"`,
         `"${dates[1] || ''}"`,
         inv.totalAmount,
-        inv.dueDate • formatDateToIndian(inv.dueDate.split('T')[0]) : `Day ${inv.paymentDueDay}`,
+        inv.dueDate ? formatDateToIndian(inv.dueDate.split('T')[0]) : `Day ${inv.paymentDueDay}`,
         inv.paymentStatus,
         inv.receiveAmount || 0,
         inv.balanceAmount || 0,
-        inv.payReceiveDate • formatDateToIndian(inv.payReceiveDate.split('T')[0]) : '',
+        inv.payReceiveDate ? formatDateToIndian(inv.payReceiveDate.split('T')[0]) : '',
         `"${inv.paymentMode || ''}"`,
         `"${inv.utrNumber || ''}"`,
         inv.tdsAmount || 0,
@@ -342,7 +342,7 @@ export default function CmPaymentReceivedView({
   // Active Centre Name for CM Badge
   const activeCentreDisplay =
     currentUserLocationName ||
-    (locations.length > 0 • locations[0].name : 'Assigned Centre');
+    (locations.length > 0 ? locations[0].name : 'Assigned Centre');
 
   return (
     <div className="space-y-4 text-slate-800">
@@ -369,7 +369,7 @@ export default function CmPaymentReceivedView({
                   Payment Received Register
                 </h1>
                 {/* Centre Badge for CM (Locked, No Filter) or Super Admin Notice */}
-                {!showCentreFilter • (
+                {!showCentreFilter ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
                     <Building2 size={13} />
                     <span>Centre: {activeCentreDisplay}</span>
@@ -406,7 +406,7 @@ export default function CmPaymentReceivedView({
               disabled={refreshing}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
             >
-              <RefreshCw size={14} className={refreshing • 'animate-spin' : ''} />
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
               <span>Refresh</span>
             </button>
           </div>
@@ -420,7 +420,7 @@ export default function CmPaymentReceivedView({
               <span>Total Invoiced</span>
             </div>
             <div className="text-base sm:text-lg font-black text-slate-900 mt-1">
-              ₹{kpis.totalBilled.toLocaleString('en-IN')}
+              {'\u20B9'}{kpis.totalBilled.toLocaleString('en-IN')}
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">
               {kpis.totalCount} client invoices
@@ -433,7 +433,7 @@ export default function CmPaymentReceivedView({
               <span>Total Received</span>
             </div>
             <div className="text-base sm:text-lg font-black text-emerald-800 mt-1">
-              ₹{kpis.totalReceived.toLocaleString('en-IN')}
+              {'\u20B9'}{kpis.totalReceived.toLocaleString('en-IN')}
             </div>
             <div className="text-[11px] text-emerald-600 mt-0.5 font-semibold">
               {kpis.collectionRate}% collected ({kpis.receivedCount} fully paid)
@@ -446,7 +446,7 @@ export default function CmPaymentReceivedView({
               <span>Total Balance Due</span>
             </div>
             <div className="text-base sm:text-lg font-black text-rose-800 mt-1">
-              ₹{kpis.totalBalance.toLocaleString('en-IN')}
+              {'\u20B9'}{kpis.totalBalance.toLocaleString('en-IN')}
             </div>
             <div className="text-[11px] text-rose-600 mt-0.5 font-semibold">
               {kpis.pendingCount + kpis.partialCount} outstanding invoices
@@ -460,9 +460,9 @@ export default function CmPaymentReceivedView({
             </div>
             <div className="flex items-center gap-2 mt-1.5 text-xs font-bold">
               <span className="text-emerald-700">{kpis.receivedCount} Paid</span>
-              <span className="text-slate-300">•</span>
+              <span className="text-slate-300">&bull;</span>
               <span className="text-amber-700">{kpis.partialCount} Partial</span>
-              <span className="text-slate-300">•</span>
+              <span className="text-slate-300">&bull;</span>
               <span className="text-rose-700">{kpis.pendingCount} Pending</span>
             </div>
             <div className="text-[11px] text-amber-800/80 mt-0.5">
@@ -524,7 +524,7 @@ export default function CmPaymentReceivedView({
             </div>
 
             {/* 3. Centre Filter: ONLY for Super Admin; for CM, NO centre filter! */}
-            {showCentreFilter • (
+            {showCentreFilter ? (
               <div className="flex items-center gap-1.5 bg-blue-50/70 border border-blue-300 rounded-md px-2.5 py-1">
                 <Building2 size={13} className="text-blue-600 shrink-0" />
                 <label className="text-[11px] font-bold text-blue-800 uppercase">Centre:</label>
@@ -615,7 +615,7 @@ export default function CmPaymentReceivedView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
-              {loading • (
+              {loading ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
@@ -624,7 +624,7 @@ export default function CmPaymentReceivedView({
                     </div>
                   </td>
                 </tr>
-              ) : filteredInvoices.length === 0 • (
+              ) : filteredInvoices.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-2">
@@ -646,18 +646,18 @@ export default function CmPaymentReceivedView({
                   const isExpanded = expandedInvoiceId === inv.id;
 
                   // Due date check
-                  const dueObj = inv.dueDate • new Date(inv.dueDate) : null;
+                  const dueObj = inv.dueDate ? new Date(inv.dueDate) : null;
                   const isOverdue = dueObj && !isPaid && dueObj.getTime() < new Date().getTime();
                   const overdueDays =
                     isOverdue && dueObj
-                      • Math.floor((new Date().getTime() - dueObj.getTime()) / (1000 * 60 * 60 * 24))
+                      ? Math.floor((new Date().getTime() - dueObj.getTime()) / (1000 * 60 * 60 * 24))
                       : 0;
 
                   return (
                     <React.Fragment key={inv.id}>
                       <tr
                         className={`hover:bg-slate-50/80 transition-colors ${
-                          isExpanded • 'bg-slate-50/90' : ''
+                          isExpanded ? 'bg-slate-50/90' : ''
                         }`}
                       >
                         {/* 1. Sr. No */}
@@ -686,9 +686,9 @@ export default function CmPaymentReceivedView({
                                   {inv.cabinName}
                                 </span>
                               )}
-                              {inv.noOfSeats • (
+                              {inv.noOfSeats ? (
                                 <span className="text-[10px] text-slate-500 font-semibold">
-                                  ({inv.noOfSeats} seat{inv.noOfSeats > 1 • 's' : ''})
+                                  ({inv.noOfSeats} seat{inv.noOfSeats > 1 ? 's' : ''})
                                 </span>
                               ) : null}
                             </div>
@@ -712,9 +712,9 @@ export default function CmPaymentReceivedView({
                         <td className="py-3 px-3 bg-emerald-50/20">
                           <div className="space-y-1">
                             <div className="font-black text-slate-900 text-xs sm:text-[13px]">
-                              ₹{inv.totalAmount.toLocaleString('en-IN')}
+                              {'\u20B9'}{inv.totalAmount.toLocaleString('en-IN')}
                             </div>
-                            {inv.attachedPdfUrl • (
+                            {inv.attachedPdfUrl ? (
                               <a
                                 href={inv.attachedPdfUrl}
                                 target="_blank"
@@ -739,7 +739,7 @@ export default function CmPaymentReceivedView({
                           <div className="space-y-0.5">
                             <div className="font-semibold text-slate-800 text-xs">
                               {inv.dueDate
-                                • formatDateToIndian(inv.dueDate.split('T')[0])
+                                ? formatDateToIndian(inv.dueDate.split('T')[0])
                                 : `Day ${inv.paymentDueDay} of month`}
                             </div>
                             {isOverdue && (
@@ -752,12 +752,12 @@ export default function CmPaymentReceivedView({
 
                         {/* 7. Status */}
                         <td className="py-3 px-3 text-center">
-                          {isPaid • (
+                          {isPaid ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
                               <CheckCircle2 size={12} className="text-emerald-700" />
                               <span>PAID</span>
                             </span>
-                          ) : isPartial • (
+                          ) : isPartial ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
                               <Clock size={12} className="text-amber-700" />
                               <span>PARTIAL</span>
@@ -780,16 +780,16 @@ export default function CmPaymentReceivedView({
                                   Received:{' '}
                                 </span>
                                 <span className="font-extrabold text-emerald-800 text-[12.5px]">
-                                  ₹{(inv.receiveAmount || 0).toLocaleString('en-IN')}
+                                  {'\u20B9'}{(inv.receiveAmount || 0).toLocaleString('en-IN')}
                                 </span>
                               </div>
-                              {inv.balanceAmount > 0 && (
+                              {'\u20B9'}{inv.balanceAmount > 0 && (
                                 <div>
                                   <span className="text-[10px] text-rose-600 uppercase font-bold">
                                     Due:{' '}
                                   </span>
                                   <span className="font-extrabold text-rose-700 text-[12px]">
-                                    ₹{inv.balanceAmount.toLocaleString('en-IN')}
+                                    {'\u20B9'}{inv.balanceAmount.toLocaleString('en-IN')}
                                   </span>
                                 </div>
                               )}
@@ -815,7 +815,7 @@ export default function CmPaymentReceivedView({
                             )}
 
                             {/* UTR & Proof Link */}
-                            {inv.utrNumber • (
+                            {inv.utrNumber ? (
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-[10px] text-slate-400 uppercase font-bold">
                                   UTR:
@@ -832,7 +832,7 @@ export default function CmPaymentReceivedView({
                                   className="text-slate-400 hover:text-slate-700 p-0.5 cursor-pointer"
                                   title="Copy UTR Number"
                                 >
-                                  {copiedUtr === inv.utrNumber • (
+                                  {copiedUtr === inv.utrNumber ? (
                                     <Check size={12} className="text-emerald-600" />
                                   ) : (
                                     <Copy size={12} />
@@ -850,16 +850,16 @@ export default function CmPaymentReceivedView({
                                   </a>
                                 )}
                               </div>
-                            ) : isPending • (
+                            ) : isPending ? (
                               <span className="text-[10.5px] text-slate-400 italic">
                                 Awaiting payment confirmation
                               </span>
                             ) : null}
 
                             {/* TDS Deducted if any */}
-                            {inv.tdsAmount > 0 && (
+                            {'\u20B9'}{inv.tdsAmount > 0 && (
                               <div className="text-[10.5px] text-amber-800 font-semibold">
-                                TDS Deducted: ₹{inv.tdsAmount.toLocaleString('en-IN')}
+                                TDS Deducted: {'\u20B9'}{inv.tdsAmount.toLocaleString('en-IN')}
                               </div>
                             )}
 
@@ -868,12 +868,12 @@ export default function CmPaymentReceivedView({
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setExpandedInvoiceId(isExpanded • null : inv.id)
+                                  setExpandedInvoiceId(isExpanded ? null : inv.id)
                                 }
                                 className="inline-flex items-center gap-1 text-[10.5px] font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer pt-0.5"
                               >
                                 <span>{parts.length} Installments Breakdown</span>
-                                {isExpanded • <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                               </button>
                             )}
 
@@ -905,13 +905,13 @@ export default function CmPaymentReceivedView({
                                     <div className="flex items-center justify-between font-bold text-slate-800">
                                       <span>Installment #{pIdx + 1}</span>
                                       <span className="text-emerald-700">
-                                        ₹{Number(p.amount || 0).toLocaleString('en-IN')}
+                                        {'\u20B9'}{Number(p.amount || 0).toLocaleString('en-IN')}
                                       </span>
                                     </div>
                                     <div className="text-slate-500 text-[10.5px]">
                                       Date:{' '}
                                       {p.payReceiveDate || p.utrDate
-                                        • formatDateToIndian(
+                                        ? formatDateToIndian(
                                             (p.payReceiveDate || p.utrDate)!.split('T')[0]
                                           )
                                         : '—'}
