@@ -72,4 +72,4 @@ test-*.ts
 # logs and backups
 *.log
 *.tmp
-*.bak
+*.bak  

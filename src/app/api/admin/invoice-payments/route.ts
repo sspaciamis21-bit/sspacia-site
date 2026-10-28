@@ -42,7 +42,7 @@ const normalizeBillingMonth = (monthStr: string | null | undefined): string => {
   return `${standardMonth} ${yearPart}`;
 };
 
-// GET /api/admin/invoice-payments — Fetch only APPROVED live invoices for payment settlement management
+// GET /api/admin/invoice-payments — Fetch APPROVED live invoices for payment settlement view & management
 export async function GET(request: Request) {
   try {
     const cookieStore = await cookies();
@@ -51,6 +51,8 @@ export async function GET(request: Request) {
     let currentUserRole = '';
     let isSuperAdmin = false;
     let isAccountant = false;
+    let isCM = false;
+    let userAssignedLocationIds: number[] = [];
 
     if (token) {
       const payload = await verifyToken(token);
@@ -62,9 +64,16 @@ export async function GET(request: Request) {
         const dbUser = await (prisma as any).user.findUnique({
           where: { id: currentUserId },
           select: {
+            id: true,
             name: true,
             email: true,
             role: { select: { name: true } },
+            assignedLocations: {
+              select: {
+                locationId: true,
+                location: { select: { id: true, name: true, slug: true } },
+              },
+            },
           },
         });
 
@@ -76,28 +85,33 @@ export async function GET(request: Request) {
             (dbUser.name || '').toLowerCase() === 'accounts' ||
             roleName === 'ACCOUNTS' ||
             roleName === 'ACCOUNTANT';
+          isCM = !isSuperAdmin && !isAccountant;
+          userAssignedLocationIds = (dbUser.assignedLocations || []).map((al: any) => al.locationId);
         }
       }
+    }
+
+    if (!currentUserId) {
+      return NextResponse.json({ error: 'Unauthorized: Session missing' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const search = (searchParams.get('search') || '').trim();
     const billingMonth = searchParams.get('billingMonth');
     const locationId = searchParams.get('locationId');
-    const paymentStatus = searchParams.get('paymentStatus'); // 'ALL' | 'PENDING' | 'RECEIVED' | 'PARTIAL'
+    const clientType = searchParams.get('clientType'); // 'ALL' | 'DEFAULT' | 'VIRTUAL_OFFICE' | 'ONE_TIME'
+    const paymentStatus = searchParams.get('paymentStatus'); // 'ALL' | 'PENDING' | 'RECEIVED' | 'PARTIAL' | 'BALANCE_PENDING'
+
+    // Node-scoped user IDs for CM
+    let scopedUserIds: number[] | null = null;
+    if (isCM && currentUserId) {
+      scopedUserIds = await getNodeScopedUserIds(currentUserId);
+    }
 
     // Only APPROVED invoices should generate entries in Payment Management
     const where: any = {
       status: 'APPROVED',
     };
-
-    // Strict Role Access: Invoice Payment Receive Management is reserved for Accounts & Super Admin only (not CM)
-    if (!isSuperAdmin && !isAccountant) {
-      return NextResponse.json(
-        { error: 'Forbidden: Invoice Payment Receive Management is reserved for Accounts and Super Admin only' },
-        { status: 403 }
-      );
-    }
 
     const invoices = await (prisma as any).invoiceRecord.findMany({
       where,
@@ -106,6 +120,17 @@ export async function GET(request: Request) {
           include: {
             contactPersons: { orderBy: { sortOrder: 'asc' } },
             products: { orderBy: { sortOrder: 'asc' } },
+            createdBy: {
+              select: {
+                id: true,
+                assignedLocations: {
+                  select: {
+                    locationId: true,
+                    location: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            },
           },
         },
         createdBy: {
@@ -115,6 +140,7 @@ export async function GET(request: Request) {
             email: true,
             assignedLocations: {
               select: {
+                locationId: true,
                 location: { select: { id: true, name: true } },
               },
             },
@@ -181,6 +207,8 @@ export async function GET(request: Request) {
         } catch {}
       }
 
+      const clientTypeVal = inv.clientMaster?.clientType || 'DEFAULT';
+
       return {
         id: inv.id,
         srNo: inv.srNo,
@@ -194,6 +222,10 @@ export async function GET(request: Request) {
         totalAmount: totalAmt,
         gstNo: inv.gstNo || inv.clientMaster?.gstNo || null,
         billingMonth: normalizeBillingMonth(inv.billingMonth) || inv.billingMonth,
+        clientType: clientTypeVal,
+        paymentDuration: inv.paymentDuration || 'MONTHLY',
+        agreementStartDate: inv.clientMaster?.agreementStartDate || null,
+        agreementEndDate: inv.clientMaster?.agreementEndDate || null,
         status: inv.status,
         remarks: inv.remarks || null,
         dueDate: inv.dueDate,
@@ -225,13 +257,34 @@ export async function GET(request: Request) {
       };
     });
 
-    // Location filter
-    if (locationId && locationId !== 'ALL') {
-      const targetLocId = Number(locationId);
-      transformed = transformed.filter((inv: any) => Number(inv.locationId) === targetLocId);
+    // Node & Centre-wise isolation:
+    // For Community Managers: STRICT isolation to their centre. No centre filter allowed.
+    if (isCM) {
+      transformed = transformed.filter((inv: any) => {
+        if (userAssignedLocationIds.length > 0) {
+          if (inv.locationId && userAssignedLocationIds.includes(Number(inv.locationId))) {
+            return true;
+          }
+        }
+        if (scopedUserIds && inv.createdBy?.id && scopedUserIds.includes(Number(inv.createdBy.id))) {
+          return true;
+        }
+        return inv.createdBy?.id === currentUserId;
+      });
+    } else {
+      // Super Admin and Accountant: Centre filter is optional
+      if (locationId && locationId !== 'ALL') {
+        const targetLocId = Number(locationId);
+        transformed = transformed.filter((inv: any) => Number(inv.locationId) === targetLocId);
+      }
     }
 
-    // Apply Client-Side filters
+    // Client Type filter
+    if (clientType && clientType !== 'ALL') {
+      transformed = transformed.filter((inv: any) => inv.clientType === clientType);
+    }
+
+    // Billing Month filter
     if (billingMonth && billingMonth !== 'ALL') {
       const targetNorm = normalizeBillingMonth(billingMonth).toLowerCase();
       transformed = transformed.filter((inv: any) => {
@@ -240,6 +293,7 @@ export async function GET(request: Request) {
       });
     }
 
+    // Text Search
     if (search) {
       const q = search.toLowerCase();
       transformed = transformed.filter(
@@ -255,6 +309,7 @@ export async function GET(request: Request) {
       );
     }
 
+    // Payment Status filter
     if (paymentStatus && paymentStatus !== 'ALL') {
       if (paymentStatus === 'BALANCE_PENDING') {
         transformed = transformed.filter((inv: any) => inv.balanceAmount > 0 || inv.paymentStatus !== 'RECEIVED');
@@ -268,6 +323,11 @@ export async function GET(request: Request) {
       orderBy: { id: 'asc' },
     });
 
+    let returnLocations = allLocations;
+    if (isCM && userAssignedLocationIds.length > 0) {
+      returnLocations = allLocations.filter((l: any) => userAssignedLocationIds.includes(l.id));
+    }
+
     // Summary Analytics
     const totalApprovedCount = transformed.length;
     const totalInvoicedSum = transformed.reduce((acc: number, inv: any) => acc + inv.totalAmount, 0);
@@ -280,7 +340,11 @@ export async function GET(request: Request) {
       success: true,
       data: transformed,
       availableBillingMonths,
-      locations: allLocations,
+      availableClientTypes: ['ALL', 'DEFAULT', 'VIRTUAL_OFFICE', 'ONE_TIME'],
+      locations: returnLocations,
+      isCM,
+      isSuperAdmin,
+      isAccountant,
       summary: {
         totalApprovedCount,
         totalInvoicedSum,

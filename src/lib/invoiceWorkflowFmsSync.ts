@@ -146,6 +146,7 @@ export async function syncInvoiceWorkflowArrival(invoiceRecordId: number, custom
 
     return await sendToFmsWebhook({
       action: 'invoice_fms_arrival',
+      invoiceId: invoiceRecordId,
       centerName: details.centerName,
       invoiceMonth: details.invoiceMonth,
       companyName: details.companyName,
@@ -169,11 +170,14 @@ export async function syncInvoiceWorkflowReviewed(invoiceRecordId: number, custo
 
     const actualTime = formatFmsTimestamp(customTimestamp || new Date());
 
+    const logTimestamp = formatFmsTimestamp(details.invoice?.createdAt ? new Date(details.invoice.createdAt) : undefined);
     return await sendToFmsWebhook({
       action: 'invoice_fms_reviewed',
+      invoiceId: invoiceRecordId,
       centerName: details.centerName,
       invoiceMonth: details.invoiceMonth,
       companyName: details.companyName,
+      logTimestamp: logTimestamp,
       actual: actualTime,
       nextPlanned: actualTime,
     });
@@ -193,11 +197,14 @@ export async function syncInvoiceWorkflowSentToAccountant(invoiceRecordId: numbe
 
     const sentTime = formatFmsTimestamp(customTimestamp || new Date());
 
+    const logTimestamp = formatFmsTimestamp(details.invoice?.createdAt ? new Date(details.invoice.createdAt) : undefined);
     return await sendToFmsWebhook({
       action: 'invoice_fms_sent_accountant',
+      invoiceId: invoiceRecordId,
       centerName: details.centerName,
       invoiceMonth: details.invoiceMonth,
       companyName: details.companyName,
+      logTimestamp: logTimestamp,
       actual: sentTime,
       nextPlanned: sentTime,
     });
@@ -217,11 +224,14 @@ export async function syncInvoiceWorkflowPdfAttached(invoiceRecordId: number, cu
 
     const attachedTime = formatFmsTimestamp(customTimestamp || new Date());
 
+    const logTimestamp = formatFmsTimestamp(details.invoice?.createdAt ? new Date(details.invoice.createdAt) : undefined);
     return await sendToFmsWebhook({
       action: 'invoice_fms_pdf_attached',
+      invoiceId: invoiceRecordId,
       centerName: details.centerName,
       invoiceMonth: details.invoiceMonth,
       companyName: details.companyName,
+      logTimestamp: logTimestamp,
       actual: attachedTime,
       nextPlanned: attachedTime,
     });
@@ -241,11 +251,14 @@ export async function syncInvoiceWorkflowApprovedClient(invoiceRecordId: number,
 
     const approvedTime = formatFmsTimestamp(customTimestamp || new Date());
 
+    const logTimestamp = formatFmsTimestamp(details.invoice?.createdAt ? new Date(details.invoice.createdAt) : undefined);
     return await sendToFmsWebhook({
       action: 'invoice_fms_approved_client',
+      invoiceId: invoiceRecordId,
       centerName: details.centerName,
       invoiceMonth: details.invoiceMonth,
       companyName: details.companyName,
+      logTimestamp: logTimestamp,
       actual: approvedTime,
     });
   } catch (err) {
@@ -262,11 +275,14 @@ export async function syncInvoiceWorkflowEmailSent(invoiceRecordId: number) {
     const details = await getInvoiceFmsDetails(invoiceRecordId);
     if (!details) return;
 
+    const logTimestamp = formatFmsTimestamp(details.invoice?.createdAt ? new Date(details.invoice.createdAt) : undefined);
     return await sendToFmsWebhook({
       action: 'invoice_fms_email_sent',
+      invoiceId: invoiceRecordId,
       centerName: details.centerName,
       invoiceMonth: details.invoiceMonth,
       companyName: details.companyName,
+      logTimestamp: logTimestamp,
       status: 'Sent',
     });
   } catch (err) {
