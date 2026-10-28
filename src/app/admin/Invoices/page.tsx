@@ -38,6 +38,7 @@ import {
   DollarSign,
   AlertOctagon,
   Sparkles,
+  CreditCard,
   FolderArchive,
   Package,
   Plus,
@@ -59,6 +60,7 @@ import { useAuth } from '@/context/AuthContext';
 import { InvoicePaymentManagement } from '@/components/admin/invoice-payment-management';
 import { SdrReceiveManagement } from '@/components/admin/sdr-receive-management';
 import { SuspenseManagement } from '@/components/admin/suspense-management';
+import CmPaymentReceivedView from '@/components/admin/cm-payment-received-view';
 import {
   getBillingMonthInfo,
   calculateInclusiveDays,
@@ -560,7 +562,7 @@ export default function AdminInvoicesWorkflowPage() {
     }
   }, [canAccessCM, canAccessAccountant, userRoleView]);
 
-  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES' | 'SDR_MANAGEMENT' | 'SUSPENSE'>('ACTIVE_WORKFLOW');
+  const [activeSection, setActiveSection] = useState<'ACTIVE_WORKFLOW' | 'OLD_INVOICES' | 'SDR_MANAGEMENT' | 'SUSPENSE' | 'CM_PAYMENT_RECEIVED'>('ACTIVE_WORKFLOW');
   const [pendingSuspenseCount, setPendingSuspenseCount] = useState(0);
 
   // Fetch pending suspense count for navigation badge
@@ -577,7 +579,7 @@ export default function AdminInvoicesWorkflowPage() {
 
   // Ensure Payment Receive Management and SDR Receive Management are strictly NOT accessible for CM
   useEffect(() => {
-    if ((!canAccessAccountant || userRoleView === 'CM') && activeSection !== 'ACTIVE_WORKFLOW' && activeSection !== 'SUSPENSE') {
+    if ((!canAccessAccountant || userRoleView === 'CM') && activeSection !== 'ACTIVE_WORKFLOW' && activeSection !== 'SUSPENSE' && activeSection !== 'CM_PAYMENT_RECEIVED') {
       setActiveSection('ACTIVE_WORKFLOW');
     }
   }, [canAccessAccountant, userRoleView, activeSection]);
@@ -4053,6 +4055,19 @@ export default function AdminInvoicesWorkflowPage() {
               </span>
             </button>
 
+            {/* View Payment Received Button for CM & Super Admin */}
+            <button
+              type="button"
+              onClick={() => setActiveSection('CM_PAYMENT_RECEIVED')}
+              className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer ${activeSection === 'CM_PAYMENT_RECEIVED'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'text-emerald-900 bg-emerald-50/80 border border-emerald-200/80 hover:bg-emerald-100/80'
+                }`}
+            >
+              <CreditCard size={15} className={activeSection === 'CM_PAYMENT_RECEIVED' ? 'text-white' : 'text-emerald-700'} />
+              <span>View Payment Received</span>
+            </button>
+
             {canAccessAccountant && userRoleView === 'ACCOUNTANT' && (
               <>
                 <button
@@ -4167,6 +4182,14 @@ export default function AdminInvoicesWorkflowPage() {
           userAssignedLocations={(user as any)?.assignedLocations || []}
           currentUserId={user?.id ? Number(user.id) : null}
           currentUserName={user?.name || (userRoleView === 'ACCOUNTANT' ? 'Accountant' : 'Community Manager')}
+          onBack={() => setActiveSection('ACTIVE_WORKFLOW')}
+        />
+      ) : activeSection === 'CM_PAYMENT_RECEIVED' ? (
+        <CmPaymentReceivedView
+          isSuperAdmin={isAdmin}
+          userRoleView={userRoleView}
+          currentUserLocationId={(user as any)?.locationId || (user as any)?.assignedLocations?.[0]?.locationId}
+          currentUserLocationName={(user as any)?.location?.name || (user as any)?.assignedLocations?.[0]?.location?.name}
           onBack={() => setActiveSection('ACTIVE_WORKFLOW')}
         />
       ) : canAccessAccountant && userRoleView === 'ACCOUNTANT' && activeSection === 'SDR_MANAGEMENT' ? (
