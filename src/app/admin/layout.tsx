@@ -93,10 +93,17 @@ export default function AdminLayout({
     user?.role?.toUpperCase() === 'COMMUNITY_MANAGER' ||
     user?.role?.toUpperCase() === 'MANAGER';
 
+  const isCrm =
+    user?.role?.toUpperCase() === 'CRM' ||
+    user?.role?.toUpperCase() === 'CUSTOMER_RELATIONSHIP_MANAGER' ||
+    user?.role?.toUpperCase() === 'CUSTOMER_RELATION_MANAGER' ||
+    isRole('CRM');
+
   const isAllowedToAdmin =
     isAdmin ||
     isCommunityManager ||
     isAccountant ||
+    isCrm ||
     (isHr && pathname?.startsWith('/admin/expenses'));
 
   useEffect(() => {
@@ -107,7 +114,21 @@ export default function AdminLayout({
         if (!pathname?.startsWith('/admin/expenses')) {
           router.push('/hr');
         }
-      } else if (!isAdmin && !isAccountant && !isCommunityManager) {
+      } else if (isCrm) {
+        // CRM has read-only access strictly to: Client Master, Locations, Bookings, Products, and Dashboard
+        const allowedCrmPrefixes = [
+          '/admin/dashboard',
+          '/admin/client-master',
+          '/admin/locations',
+          '/admin/bookings',
+          '/admin/products',
+        ];
+        const isAllowed = allowedCrmPrefixes.some(prefix => pathname === prefix || pathname?.startsWith(prefix + '/'));
+        if (!isAllowed) {
+          toast.error('Access restricted. CRM role has read-only access to Client Master, Locations, Bookings, Products, and Dashboard.');
+          router.push('/admin/dashboard');
+        }
+      } else if (!isAdmin && !isAccountant && !isCommunityManager && !isCrm) {
         toast.error('Unauthorized access');
         router.push('/');
       }
@@ -220,6 +241,9 @@ export default function AdminLayout({
               if (isAccountant) {
                 return ['/admin/Invoices', '/admin/expenses', '/admin/vendor-master', '/admin/client-master'].includes(item.href);
               }
+              if (isCrm) {
+                return ['/admin/dashboard', '/admin/client-master', '/admin/locations', '/admin/bookings', '/admin/products'].includes(item.href);
+              }
               return true;
             })
             .map((item) => {
@@ -268,7 +292,7 @@ export default function AdminLayout({
                   <p className="text-[9px] text-[#006064] font-black uppercase tracking-[0.25em] truncate">
                     {user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'SUPER_ADMIN' || user.role?.toUpperCase() === 'SUPER ADMIN'
                       ? 'SUPER ADMIN'
-                      : user.role}
+                      : user.role?.toUpperCase() === 'CRM' ? 'CRM (READ ONLY)' : user.role}
                   </p>
 
                 </div>

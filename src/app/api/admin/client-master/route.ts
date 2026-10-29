@@ -158,6 +158,10 @@ export async function POST(request: Request) {
       const payload = await verifyToken(token);
       if (payload?.id) {
         userId = Number(payload.id);
+        const role = String(payload.role || '').toUpperCase();
+        if (role === 'CRM') {
+          return NextResponse.json({ error: 'Forbidden: CRM role has read-only access' }, { status: 403 });
+        }
       }
     }
 

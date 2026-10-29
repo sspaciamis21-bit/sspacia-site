@@ -32,8 +32,9 @@ export const GET = withPermission('locations', 'view', async (req: NextRequest) 
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
+    const role = (payload.role as string || '').toUpperCase();
     const assignedIds = user.assignedLocations.map((al) => al.locationId);
-    const scopeWhere = assignedIds.length > 0 ? { id: { in: assignedIds } } : {};
+    const scopeWhere = (role === 'CRM' || role === 'ADMIN' || role === 'SUPER_ADMIN') ? {} : (assignedIds.length > 0 ? { id: { in: assignedIds } } : {});
 
     const [total, locations] = await Promise.all([
       prisma.location.count({ where: scopeWhere }),

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { verifyToken } from '@/lib/jwt';
 import prisma from '@/lib/prisma';
 import { mapClientMasterPayload } from '@/lib/client-master-payload';
 
@@ -35,6 +37,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth-token')?.value;
+    if (token) {
+      const payload = await verifyToken(token);
+      const role = String(payload?.role || '').toUpperCase();
+      if (role === 'CRM') {
+        return NextResponse.json({ error: 'Forbidden: CRM role has read-only access' }, { status: 403 });
+      }
+    }
     const { id } = await params;
     const entryId = Number(id);
 
@@ -95,6 +106,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('auth-token')?.value;
+    if (token) {
+      const payload = await verifyToken(token);
+      const role = String(payload?.role || '').toUpperCase();
+      if (role === 'CRM') {
+        return NextResponse.json({ error: 'Forbidden: CRM role has read-only access' }, { status: 403 });
+      }
+    }
     const { id } = await params;
     const entryId = Number(id);
 

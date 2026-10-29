@@ -170,7 +170,7 @@ export default function LoginClient() {
       const role = data.user.role?.toUpperCase();
       if (role === 'HR') {
         router.push('/hr');
-      } else if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
+      } else if (role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'CRM') {
         router.push('/admin/dashboard');
       } else if (role === 'USER') {
         router.push('/dashboard');

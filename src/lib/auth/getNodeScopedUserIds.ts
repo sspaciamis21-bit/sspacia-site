@@ -29,7 +29,7 @@ export async function getNodeScopedUserIds(userId: number): Promise<number[] | n
   const roleName = (user.role?.name || '').toUpperCase().replace(/[\s_-]/g, '');
 
   // Admins & Super Admins see everything
-  if (roleName === 'ADMIN' || roleName === 'SUPERADMIN') {
+  if (roleName === 'ADMIN' || roleName === 'SUPERADMIN' || roleName === 'CRM') {
     return null;
   }
 

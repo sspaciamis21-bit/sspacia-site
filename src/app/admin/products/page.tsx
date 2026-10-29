@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from '@/context/AuthContext';
 import { 
+  Shield,
   Plus, 
   Loader2, 
   Edit2, 
@@ -67,6 +69,8 @@ interface RecentProduct {
 }
 
 export default function AdminProductsPage() {
+  const { user, isRole } = useAuth();
+  const isCrm = isRole('CRM') || user?.role?.toUpperCase() === 'CRM';
   const { setIsSidebarOpen } = useSidebar();
   const [products, setProducts] = useState<RecentProduct[]>([]);
   const [locations, setLocations] = useState<LocationItem[]>([]);
@@ -242,7 +246,8 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
-        <button
+        {!isCrm ? (
+          <button
           onClick={() => {
             setEditingProduct(null);
             setIsModalOpen(true);
@@ -252,6 +257,12 @@ export default function AdminProductsPage() {
           <Plus size={16} />
           <span>Add New Product</span>
         </button>
+        ) : (
+          <div className="inline-flex items-center gap-2 px-5 py-3.5 bg-blue-50 border border-blue-200 text-blue-900 text-xs font-black uppercase tracking-[0.2em]">
+            <Shield size={16} className="text-blue-600" />
+            <span>CRM Analysis View (Read-Only)</span>
+          </div>
+        )}
       </div>
 
       {/* Stats KPI Ribbon */}
@@ -503,7 +514,7 @@ export default function AdminProductsPage() {
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                               : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
                           }`}
-                          title="Click to toggle status"
+                          disabled={isCrm} title={isCrm ? "Status toggle disabled (Read-Only)" : "Click to toggle status"}
                         >
                           <Power size={10} />
                           <span>{product.isActive ? 'Active' : 'Inactive'}</span>
@@ -512,7 +523,8 @@ export default function AdminProductsPage() {
 
                       {/* Actions */}
                       <td className="py-4 px-6 text-right">
-                        <div className="flex justify-end gap-1.5">
+                        {!isCrm ? (
+                          <div className="flex justify-end gap-1.5">
                           <button
                             onClick={() => handleEditProduct(product)}
                             className="p-2 text-gray-600 hover:text-[#006064] hover:bg-neutral-100 border border-gray-200 transition-all cursor-pointer"
@@ -528,6 +540,9 @@ export default function AdminProductsPage() {
                             <Trash2 size={14} />
                           </button>
                         </div>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Read Only</span>
+                        )}
                       </td>
                     </tr>
                   );

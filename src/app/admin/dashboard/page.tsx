@@ -204,6 +204,12 @@ export default function AdminDashboardPage() {
     user?.role?.toUpperCase() === 'MANAGER'
   );
 
+  const isCrm =
+    user?.role?.toUpperCase() === 'CRM' ||
+    user?.role?.toUpperCase() === 'CUSTOMER_RELATIONSHIP_MANAGER' ||
+    user?.role?.toUpperCase() === 'CUSTOMER_RELATION_MANAGER' ||
+    isRole('CRM');
+
   // Location Filter
   const [selectedLocation, setSelectedLocation] = useState<string>('ALL');
 
@@ -427,7 +433,7 @@ export default function AdminDashboardPage() {
             </Link>
 
             {/* Quick Link to Super Admin Executive Expenses (P&L & Record Keeping) */}
-            {!isCommunityManager && (
+            {!isCommunityManager && !isCrm && (
               <Link
                 href="/admin/executive-expenses"
                 className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md transition-all hover:scale-102"
@@ -449,7 +455,7 @@ export default function AdminDashboardPage() {
             </Link>
 
             {/* Quick Link to Finance & P&L Section */}
-            {!isCommunityManager && (
+            {!isCommunityManager && !isCrm && (
               <Link
                 href="/admin/financials"
                 className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-colors"

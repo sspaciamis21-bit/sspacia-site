@@ -307,6 +307,12 @@ export default function ClientMasterRegistryPage() {
     userRole === 'ACCOUNTANT' ||
     user?.name?.toLowerCase() === 'accounts';
 
+  const isCrm =
+    userRole === 'CRM' ||
+    userRole === 'CUSTOMER_RELATIONSHIP_MANAGER' ||
+    userRole === 'CUSTOMER_RELATION_MANAGER' ||
+    isRole('CRM');
+
   const [entries, setEntries] = useState<ClientMasterEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -707,7 +713,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
     });
   };
 
-  const canUseNodeFilter = isAdmin || isAccountant;
+  const canUseNodeFilter = isAdmin || isAccountant || isCrm;
 
   // Fetch locations for Admin & Accountant filter dropdown
   const fetchLocations = useCallback(async () => {
@@ -1297,6 +1303,10 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
   // Submit Handler with Validations
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCrm) {
+      toast.error('CRM role has read-only access. You cannot create or modify client entries.');
+      return;
+    }
 
     const isVO = clientType === 'VIRTUAL_OFFICE';
     const isOneTime = clientType === 'ONE_TIME';
@@ -1819,6 +1829,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
               </select>
             </div>
 
+            {!isCrm && (
             <button
               type="button"
               onClick={() => handleOpenDispatchModal([], false)}
@@ -1827,6 +1838,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
             >
               {dispatching ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Dispatch All Active to Invoices
             </button>
+            )}
           </div>
         </div>
       </FadeUp>
@@ -1847,7 +1859,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {selectedIds.length > 0 && (
+            {!isCrm && selectedIds.length > 0 && (
               <button
                 onClick={() => handleOpenDispatchModal(selectedIds, true)}
                 disabled={dispatching}
@@ -1858,32 +1870,44 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
               </button>
             )}
 
-            <Link
-              href={isAdmin ? "/admin/vendor-master" : "/manager/vendor-master"}
-              className="px-5 py-3 bg-[#006064] hover:bg-[#004D40] text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md cursor-pointer border border-[#004D40]"
-              title="Manage Centralized Vendor Master Directory"
-            >
-              <Building2 size={16} className="text-white" />
-              <span>Vendor Master</span>
-            </Link>
+            {!isCrm && (
+              <Link
+                href={isAdmin ? "/admin/vendor-master" : "/manager/vendor-master"}
+                className="px-5 py-3 bg-[#006064] hover:bg-[#004D40] text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md cursor-pointer border border-[#004D40]"
+                title="Manage Centralized Vendor Master Directory"
+              >
+                <Building2 size={16} className="text-white" />
+                <span>Vendor Master</span>
+              </Link>
+            )}
 
-            <Link
-              href={isAdmin ? "/admin/client-master/terminations" : "/manager/client-master/terminations"}
-              className="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md cursor-pointer"
-            >
-              <FileSpreadsheet size={16} className="text-amber-200" />
-              <span>Termination Checklist 📋</span>
-            </Link>
+            {!isCrm && (
+              <Link
+                href={isAdmin ? "/admin/client-master/terminations" : "/manager/client-master/terminations"}
+                className="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md cursor-pointer"
+              >
+                <FileSpreadsheet size={16} className="text-amber-200" />
+                <span>Termination Checklist 📋</span>
+              </Link>
+            )}
 
-            <button
-              onClick={() => {
-                resetForm();
-                setShowAddClientModal(true);
-              }}
-              className="px-6 py-3 bg-[#006064] text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md hover:bg-[#004D40]"
-            >
-              <Plus size={18} /> Add New Client Master Entry
-            </button>
+            {!isCrm ? (
+              <button
+                type="button"
+                onClick={() => {
+                  resetForm();
+                  setShowAddClientModal(true);
+                }}
+                className="px-6 py-3 bg-[#006064] text-white font-bold text-xs uppercase tracking-widest transition-all flex items-center gap-2 shadow-md hover:bg-[#004D40]"
+              >
+                <Plus size={18} /> Add New Client Master Entry
+              </button>
+            ) : (
+              <div className="px-4 py-2.5 bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs flex items-center gap-2">
+                <Shield size={16} className="text-blue-600 shrink-0" />
+                <span>CRM Analysis Mode (Read-Only)</span>
+              </div>
+            )}
           </div>
         </div>
       </FadeUp>
@@ -2597,7 +2621,17 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                               </button>
                             )}
 
-                            <div className="flex items-center gap-1 mt-0.5">
+                            {isCrm ? (
+                              <button
+                                type="button"
+                                onClick={() => handleEditEntry(entry)}
+                                className="px-2 py-1 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[10px] font-bold rounded flex items-center gap-1 mt-1 cursor-pointer"
+                                title="View Client Details"
+                              >
+                                <Eye size={12} /> View Details
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-1 mt-0.5">
                               <button
                                 onClick={() => handleEditEntry(entry)}
                                 className="p-1 text-neutral-500 hover:text-[#006064] hover:bg-neutral-100"
@@ -2613,6 +2647,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                                 <Trash2 size={12} />
                               </button>
                             </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -5537,7 +5572,8 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                   >
                     Cancel
                   </button>
-                  <button
+                  {!isCrm ? (
+                    <button
                     type="submit"
                     disabled={submitting}
                     className="px-8 py-3 bg-[#006064] text-white text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-all flex items-center gap-2 shadow-md disabled:opacity-50"
@@ -5552,6 +5588,15 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                       </>
                     )}
                   </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddClientModal(false)}
+                      className="px-6 py-2.5 bg-blue-600 text-white font-bold text-xs uppercase tracking-wider flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-md cursor-pointer"
+                    >
+                      Close View (Read-Only)
+                    </button>
+                  )}
                 </div>
               </form>
             </motion.div>

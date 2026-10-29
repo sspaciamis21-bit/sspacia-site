@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     // ─── Find User by Username (name) OR Email (Flexible lookup) ────────────
     const isAccountantAlias = ['accountant', 'accounts', 'account', 'ssinfrazone21'].includes(identifier.toLowerCase())
     const isHrAlias = ['hr', 'human resource', 'human resources', 'hr.ssinfrazone', 'hr.ssinfrazone@gmail.com'].includes(identifier.toLowerCase())
+    const isCrmAlias = ['crm', 'customer relation manager', 'customer relationship manager', 'crm@sspacia.com'].includes(identifier.toLowerCase())
 
     const user: any = await (prisma as any).user.findFirst({
       where: {
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
           { email: identifier.toLowerCase() },
           ...(isAccountantAlias ? [{ email: 'ssinfrazone21@gmail.com' }, { name: 'Accounts' }] : []),
           ...(isHrAlias ? [{ email: 'hr.ssinfrazone@gmail.com' }, { name: 'human resource' }] : []),
+          ...(isCrmAlias ? [{ email: 'crm@sspacia.com' }, { name: 'customer relation manager' }, { name: 'Customer Relation Manager' }] : []),
         ],
       },
       include: {

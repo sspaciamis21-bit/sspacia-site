@@ -24,8 +24,9 @@ export const GET = withPermission('products', 'view', async (req: NextRequest, {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
+    const role = (payload.role as string || '').toUpperCase();
     const assignedIds = user.assignedLocations.map((al) => al.locationId);
-    const locationFilter = assignedIds.length > 0 ? { locationId: { in: assignedIds } } : {};
+    const locationFilter = (role === 'CRM' || role === 'ADMIN' || role === 'SUPER_ADMIN') ? {} : (assignedIds.length > 0 ? { locationId: { in: assignedIds } } : {});
 
     const [total, products] = await prisma.$transaction([
       prisma.product.count({ where: locationFilter }),

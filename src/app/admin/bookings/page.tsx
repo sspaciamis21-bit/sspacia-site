@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from '@/context/AuthContext';
 import { 
+  Shield,
   Loader2, 
   MapPin, 
   Briefcase, 
@@ -59,6 +61,8 @@ interface StandardBooking {
 }
 
 export default function AdminBookingsPage() {
+  const { user, isRole } = useAuth();
+  const isCrm = isRole('CRM') || user?.role?.toUpperCase() === 'CRM';
   const [activeTab, setActiveTab] = useState<'QR' | 'ALL'>('QR');
   const [qrBookings, setQrBookings] = useState<QrBookingItem[]>([]);
   const [bookings, setBookings] = useState<StandardBooking[]>([]);
@@ -352,7 +356,7 @@ export default function AdminBookingsPage() {
                             })}
                           </span>
 
-                          {qr.status === 'PENDING' && (
+                          {!isCrm && qr.status === 'PENDING' && (
                             <span className="bg-amber-50 text-amber-700 border border-amber-300 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                               Pending Verification
@@ -446,7 +450,7 @@ export default function AdminBookingsPage() {
 
                         {/* Actions */}
                         <div className="w-full flex flex-col gap-2 pt-2">
-                          {qr.status === 'PENDING' && (
+                          {!isCrm && qr.status === 'PENDING' && (
                             <>
                               <button
                                 type="button"
@@ -490,7 +494,7 @@ export default function AdminBookingsPage() {
                             </div>
                           )}
 
-                          {/* Super Admin Delete Booking Option */}
+                          {!isCrm && (
                           <button
                             type="button"
                             onClick={() => setDeleteModalData({
@@ -507,6 +511,7 @@ export default function AdminBookingsPage() {
                             <Trash2 size={12} className="text-rose-500" />
                             <span>Delete Record</span>
                           </button>
+                        )}
                         </div>
                       </div>
                     </div>
@@ -577,7 +582,8 @@ export default function AdminBookingsPage() {
                         <span className="font-bold text-gray-900">₹{parseFloat(b.grandTotal.toString()).toLocaleString()}</span>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <button
+                        {!isCrm ? (
+                          <button
                           type="button"
                           onClick={() => setDeleteModalData({
                             id: b.id,
@@ -594,6 +600,9 @@ export default function AdminBookingsPage() {
                           <Trash2 size={12} className="text-rose-600" />
                           <span>Delete</span>
                         </button>
+                        ) : (
+                          <span className="text-[10px] text-gray-400 font-bold uppercase">Read Only</span>
+                        )}
                       </td>
                     </tr>
                   ))}

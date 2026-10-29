@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Edit2, Trash2, MapPin, Building2, CheckCircle2, XCircle, Map } from 'lucide-react';
+import { Plus, Edit2, Trash2, MapPin, Building2, CheckCircle2, XCircle, Map, Shield } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import { AddLocationModal } from '@/components/admin/add-location-modal';
 import { EditLocationModal } from '@/components/admin/edit-location-modal';
 import { AddCityModal } from '@/components/admin/add-city-modal';
@@ -17,6 +18,8 @@ export default function LocationsClient({ initialLocations }: { initialLocations
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const router = useRouter();
+  const { user, isRole } = useAuth();
+  const isCrm = isRole('CRM') || user?.role?.toUpperCase() === 'CRM';
 
   const handleSuccess = () => {
     router.refresh();
@@ -53,7 +56,8 @@ export default function LocationsClient({ initialLocations }: { initialLocations
             <span className="bg-neutral-50 text-[var(--primary)] px-3 py-1 font-black border border-[var(--outline-variant)]/40 shadow-sm">{locations.length}</span>
           </div>
           
-          <div className="flex items-center gap-4 w-full md:w-auto">
+          {!isCrm ? (
+            <div className="flex items-center gap-4 w-full md:w-auto">
             <button
               onClick={() => setIsAddCityModalOpen(true)}
               className="flex-1 md:flex-none flex items-center justify-center gap-3 px-6 py-4 bg-white text-[#1B1B1B] border border-[#1B1B1B] rounded-none text-[10px] font-black uppercase tracking-[0.2em] hover:bg-neutral-100 transition-all shadow-sm group"
@@ -69,6 +73,12 @@ export default function LocationsClient({ initialLocations }: { initialLocations
               Add Location
             </button>
           </div>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-200 text-blue-900 text-[10px] font-black uppercase tracking-[0.2em]">
+              <Shield size={14} className="text-blue-600" />
+              <span>CRM Analysis View (Read-Only)</span>
+            </div>
+          )}
         </div>
 
         {/* Registry Table */}
@@ -115,7 +125,8 @@ export default function LocationsClient({ initialLocations }: { initialLocations
                     </td>
 
                     <td className="px-10 py-6 text-right">
-                      <div className="flex justify-end gap-2">
+                      {!isCrm ? (
+                        <div className="flex justify-end gap-2">
                         <button 
                           onClick={() => { setSelectedLocation(loc); setIsEditModalOpen(true); }}
                           className="p-2.5 text-[#616161] hover:text-[var(--primary)] hover:bg-neutral-50 transition-all border border-transparent hover:border-[var(--outline-variant)]/20" title="Edit Location">
@@ -128,6 +139,9 @@ export default function LocationsClient({ initialLocations }: { initialLocations
                           {isDeleting === loc.id ? <span className="animate-spin text-xs">...</span> : <Trash2 size={16} />}
                         </button>
                       </div>
+                      ) : (
+                        <span className="text-[10px] font-mono text-neutral-400 font-bold uppercase tracking-wider">Read Only</span>
+                      )}
                     </td>
                   </tr>
                 ))
