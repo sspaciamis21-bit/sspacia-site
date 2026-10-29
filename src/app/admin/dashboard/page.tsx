@@ -204,10 +204,16 @@ export default function AdminDashboardPage() {
     user?.role?.toUpperCase() === 'MANAGER'
   );
 
+  const userRole = (user?.role || '').toUpperCase();
+  const userName = (user?.name || '').toLowerCase();
+  const userEmail = (user?.email || '').toLowerCase();
   const isCrm =
-    user?.role?.toUpperCase() === 'CRM' ||
-    user?.role?.toUpperCase() === 'CUSTOMER_RELATIONSHIP_MANAGER' ||
-    user?.role?.toUpperCase() === 'CUSTOMER_RELATION_MANAGER' ||
+    userRole === 'CRM' ||
+    userRole.includes('CRM') ||
+    userRole.includes('RELATION') ||
+    userName.includes('customer relation') ||
+    userName.includes('crm') ||
+    userEmail.includes('crm') ||
     isRole('CRM');
 
   // Location Filter
@@ -423,6 +429,7 @@ export default function AdminDashboardPage() {
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Prominent Button to EM Report (Operations MIS Scorecard) */}
+            {!isCrm && (
             <Link
               href="/admin/em-report"
               className="px-3.5 py-2 bg-[#0c1933] hover:bg-[#111c2e] text-[#d4af37] text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md border border-[#d4af37]/50 transition-all hover:scale-102"
@@ -431,6 +438,7 @@ export default function AdminDashboardPage() {
               <FileSpreadsheet size={14} className="text-[#d4af37]" />
               <span>EM Report →</span>
             </Link>
+            )}
 
             {/* Quick Link to Super Admin Executive Expenses (P&L & Record Keeping) */}
             {!isCommunityManager && !isCrm && (
@@ -473,6 +481,7 @@ export default function AdminDashboardPage() {
               <span>India Map</span>
             </button>
 
+            {!isCrm && (
             <button
               onClick={() => setIsModalOpen(true)}
               className="px-3 py-2 bg-white border border-neutral-200 hover:bg-neutral-50 text-gray-800 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
@@ -480,6 +489,7 @@ export default function AdminDashboardPage() {
               <Plus size={14} />
               <span>Add Workspace</span>
             </button>
+            )}
           </div>
         </div>
 

@@ -72,9 +72,10 @@ export async function GET(req: NextRequest) {
 
     const roleName = (user?.role?.name || '').toUpperCase();
     const isSuperAdmin = roleName === 'SUPER_ADMIN' || roleName === 'ADMIN' || roleName === 'SUPER-ADMIN';
+    const isCrm = roleName === 'CRM' || (user?.name || '').toLowerCase().includes('customer relation');
 
-    if (!isSuperAdmin) {
-      return NextResponse.json({ error: 'Occupancy intelligence is strictly limited to Super Admin.' }, { status: 403 });
+    if (!isSuperAdmin && !isCrm) {
+      return NextResponse.json({ error: 'Occupancy intelligence is strictly limited to Super Admin and CRM.' }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);

@@ -29,6 +29,7 @@ import {
   Briefcase,
   Wallet,
   Building2,
+  LayoutGrid,
 } from 'lucide-react';
 
 import { toast } from 'sonner';
@@ -44,6 +45,7 @@ const sidebarItems = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { name: 'Locations', href: '/admin/locations', icon: MapPin },
   { name: 'Products', href: '/admin/products', icon: Package },
+  { name: 'Occupancy CAD', href: '/admin/occupancy', icon: LayoutGrid },
   { name: 'Amenities', href: '/admin/amenities', icon: Sparkles },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Roles', href: '/admin/roles', icon: Shield },
@@ -93,10 +95,16 @@ export default function AdminLayout({
     user?.role?.toUpperCase() === 'COMMUNITY_MANAGER' ||
     user?.role?.toUpperCase() === 'MANAGER';
 
+  const userRole = (user?.role || '').toUpperCase();
+  const userName = (user?.name || '').toLowerCase();
+  const userEmail = (user?.email || '').toLowerCase();
   const isCrm =
-    user?.role?.toUpperCase() === 'CRM' ||
-    user?.role?.toUpperCase() === 'CUSTOMER_RELATIONSHIP_MANAGER' ||
-    user?.role?.toUpperCase() === 'CUSTOMER_RELATION_MANAGER' ||
+    userRole === 'CRM' ||
+    userRole.includes('CRM') ||
+    userRole.includes('RELATION') ||
+    userName.includes('customer relation') ||
+    userName.includes('crm') ||
+    userEmail.includes('crm') ||
     isRole('CRM');
 
   const isAllowedToAdmin =
@@ -117,6 +125,7 @@ export default function AdminLayout({
       } else if (isCrm) {
         // CRM has read-only access strictly to: Client Master, Locations, Bookings, Products, and Dashboard
         const allowedCrmPrefixes = [
+          '/admin/occupancy',
           '/admin/dashboard',
           '/admin/client-master',
           '/admin/locations',
@@ -242,7 +251,7 @@ export default function AdminLayout({
                 return ['/admin/Invoices', '/admin/expenses', '/admin/vendor-master', '/admin/client-master'].includes(item.href);
               }
               if (isCrm) {
-                return ['/admin/dashboard', '/admin/client-master', '/admin/locations', '/admin/bookings', '/admin/products'].includes(item.href);
+                return ['/admin/dashboard', '/admin/occupancy', '/admin/client-master', '/admin/locations', '/admin/bookings', '/admin/products'].includes(item.href);
               }
               return true;
             })
