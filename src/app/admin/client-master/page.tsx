@@ -307,10 +307,14 @@ export default function ClientMasterRegistryPage() {
     userRole === 'ACCOUNTANT' ||
     user?.name?.toLowerCase() === 'accounts';
 
+  const userName = (user?.name || '').toLowerCase();
   const isCrm =
     userRole === 'CRM' ||
-    userRole === 'CUSTOMER_RELATIONSHIP_MANAGER' ||
-    userRole === 'CUSTOMER_RELATION_MANAGER' ||
+    userRole.includes('CRM') ||
+    userRole.includes('RELATION') ||
+    userName.includes('customer relation') ||
+    userName.includes('crm') ||
+    userEmail.includes('crm') ||
     isRole('CRM');
 
   const [entries, setEntries] = useState<ClientMasterEntry[]>([]);
@@ -1804,6 +1808,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
   return (
     <div className="p-6 sm:p-10 max-w-[1600px] mx-auto space-y-8 bg-[#F8F9FA] min-h-screen text-[#1B1C1C]">
       {/* Auto-Dispatch Notice + Month Selection & Manual Button */}
+      {!isCrm && (
       <FadeUp>
         <div className="bg-white border border-[var(--outline-variant)]/60 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
           <div className="flex items-center gap-2 text-xs text-[#616161]">
@@ -1842,6 +1847,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
           </div>
         </div>
       </FadeUp>
+      )}
 
       {/* Title Header */}
       <FadeUp delay={0.05}>
@@ -2031,6 +2037,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                 <option value="ONE_TIME">One-Time Client (1-Day / Hourly)</option>
               </select>
 
+              {!isCrm && (
               <div className="flex items-center gap-1.5 text-xs font-bold text-purple-800 bg-purple-50 px-2.5 py-1.5 border border-purple-200">
                 <Calendar size={14} className="text-purple-700" />
                 <span className="text-[10px] font-bold uppercase tracking-wider">Billing Month:</span>
@@ -2046,6 +2053,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                   ))}
                 </select>
               </div>
+              )}
 
               <button
                 onClick={fetchData}
@@ -2090,6 +2098,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="sticky top-0 z-20 bg-[#F8F9FA] shadow-[0_2px_4px_rgba(0,0,0,0.06)] border-b border-neutral-300">
                     <tr className="bg-[#F8F9FA] text-[#616161] uppercase tracking-wider border-b border-neutral-300 font-bold text-[10px]">
+                      {!isCrm && (
                       <th className="p-2.5 w-10 text-center border-r border-neutral-200">
                         <button onClick={toggleSelectAll} className="text-neutral-500 hover:text-black">
                           {selectedIds.length === filteredEntries.length && filteredEntries.length > 0 ? (
@@ -2099,6 +2108,7 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                           )}
                         </button>
                       </th>
+                      )}
                       <th className="p-2.5 w-12 text-center border-r border-neutral-200 whitespace-nowrap">SR.No</th>
                       <th className="p-2.5 min-w-[200px] border-r border-neutral-200 whitespace-nowrap">Company & Address</th>
                       {isAdmin && <th className="p-2.5 min-w-[140px] border-r border-neutral-200 whitespace-nowrap">Node / Created By</th>}
@@ -2115,9 +2125,11 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
 
                     {/* Row 2: Excel-Style Column Filters */}
                     <tr className="bg-neutral-50/95 border-b border-neutral-300 text-[10px] font-sans">
+                      {!isCrm && (
                       <th className="p-1 text-center bg-neutral-100/90 border-r border-neutral-200">
                         {/* Checkbox filler */}
                       </th>
+                      )}
                       <th className="p-1 text-center bg-neutral-100/90 border-r border-neutral-200">
                         <input
                           type="text"
@@ -2247,11 +2259,13 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                         key={entry.id}
                         className={`transition-colors ${isSelected ? 'bg-blue-50/40' : 'hover:bg-neutral-50/60'}`}
                       >
+                        {!isCrm && (
                         <td className="p-3 text-center">
                           <button onClick={() => toggleSelectId(entry.id)} className="text-neutral-500 hover:text-black">
                             {isSelected ? <CheckSquare size={16} className="text-[#006064]" /> : <Square size={16} />}
                           </button>
                         </td>
+                        )}
 
                         <td className="p-3 text-center font-mono font-bold text-neutral-600 bg-neutral-50/50">
                           #{displaySrNo}
