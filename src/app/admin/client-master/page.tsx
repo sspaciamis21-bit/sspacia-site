@@ -2535,118 +2535,120 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
 
                         <td className="p-3 text-center">
                           <div className="flex flex-col gap-1 items-center justify-center">
-                            <button
-                              onClick={() => setEntryToViewDetails(entry)}
-                              className="p-1 text-xs text-neutral-600 hover:text-[#006064] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-neutral-100 w-full justify-center"
-                              title="View full client master record"
-                            >
-                              <Eye size={12} /> View Record
-                            </button>
-
-                            {entry.clientType === 'ONE_TIME' ? (
-                              entry.isDispatchedToInvoices ? (
-                                <div className="w-full flex flex-col gap-1">
-                                  <span
-                                    className="px-2 py-1 bg-emerald-50 text-emerald-800 font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 border border-emerald-300 shadow-2xs"
-                                    title={`Invoice for ${entry.companyName} session has been sent to Invoices section`}
-                                  >
-                                    <CheckCircle2 size={10} className="text-emerald-600 shrink-0" /> Sent to Invoice
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const firstSession = entry.products?.[0] || {
-                                        id: undefined,
-                                        cabinName: entry.cabinName || 'Meeting Room',
-                                        amount: entry.amount,
-                                        gstPercent: entry.gstPercent ?? 18,
-                                        totalAmount: entry.totalAmount,
-                                        sessionDate: entry.agreementStartDate ? new Date(entry.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                                        startTime: '',
-                                        endTime: '',
-                                      };
-                                      handleGenerateSessionInvoice(firstSession as any, entry.id);
-                                    }}
-                                    className="text-[9px] text-amber-800 hover:text-amber-950 font-bold uppercase tracking-wider underline text-center cursor-pointer"
-                                    title="Re-send / Re-dispatch session invoice"
-                                  >
-                                    + Re-send / Re-dispatch
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const firstSession = entry.products?.[0] || {
-                                      id: undefined,
-                                      cabinName: entry.cabinName || 'Meeting Room',
-                                      amount: entry.amount,
-                                      gstPercent: entry.gstPercent ?? 18,
-                                      totalAmount: entry.totalAmount,
-                                      sessionDate: entry.agreementStartDate ? new Date(entry.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                                      startTime: '',
-                                      endTime: '',
-                                    };
-                                    handleGenerateSessionInvoice(firstSession as any, entry.id);
-                                  }}
-                                  className="px-2 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 shadow-xs cursor-pointer"
-                                  title="Generate on-demand invoice for this booking session"
-                                >
-                                  <FileText size={10} /> Generate Invoice
-                                </button>
-                              )
-                            ) : entry.isDispatchedToInvoices ? (
-                              <div className="w-full flex flex-col gap-1">
-                                <span
-                                  className="px-2 py-1 bg-emerald-50 text-emerald-800 font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 border border-emerald-300 shadow-2xs"
-                                  title={`Invoice for ${entry.companyName} has been generated for ${selectedTargetMonth}`}
-                                >
-                                  <CheckCircle2 size={10} className="text-emerald-600 shrink-0" /> Sent for {selectedTargetMonth.split(' ')[0]}
-                                </span>
-                                <button
-                                  onClick={() => handleOpenDispatchModal([entry.id], true)}
-                                  disabled={dispatching}
-                                  className="text-[9px] text-blue-700 hover:text-blue-900 font-bold uppercase tracking-wider underline text-center cursor-pointer"
-                                >
-                                  + Re-dispatch
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => handleOpenDispatchModal([entry.id])}
-                                disabled={dispatching}
-                                className="px-2 py-1.5 bg-blue-600 text-white font-bold text-[9px] uppercase tracking-wider hover:bg-blue-700 w-full flex items-center justify-center gap-1 shadow-xs cursor-pointer"
-                              >
-                                <Send size={10} /> Send to Invoice
-                              </button>
-                            )}
-
                             {isCrm ? (
                               <button
                                 type="button"
                                 onClick={() => handleEditEntry(entry)}
-                                className="px-2 py-1 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[10px] font-bold rounded flex items-center gap-1 mt-1 cursor-pointer"
-                                title="View Client Details"
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold uppercase tracking-wider rounded-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer w-full"
+                                title="View Complete Client Entry (Read-Only)"
                               >
-                                <Eye size={12} /> View Details
+                                <Eye size={13} /> View Details
                               </button>
                             ) : (
-                              <div className="flex items-center gap-1 mt-0.5">
-                              <button
-                                onClick={() => handleEditEntry(entry)}
-                                className="p-1 text-neutral-500 hover:text-[#006064] hover:bg-neutral-100"
-                                title="Edit entry"
-                              >
-                                <Edit2 size={12} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteEntry(entry.id)}
-                                className="p-1 text-neutral-500 hover:text-red-600 hover:bg-neutral-100"
-                                title="Delete entry"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
+                              <>
+                                <button
+                                  onClick={() => setEntryToViewDetails(entry)}
+                                  className="p-1 text-xs text-neutral-600 hover:text-[#006064] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-neutral-100 w-full justify-center"
+                                  title="View full client master record"
+                                >
+                                  <Eye size={12} /> View Record
+                                </button>
+
+                                {entry.clientType === 'ONE_TIME' ? (
+                                  entry.isDispatchedToInvoices ? (
+                                    <div className="w-full flex flex-col gap-1">
+                                      <span
+                                        className="px-2 py-1 bg-emerald-50 text-emerald-800 font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 border border-emerald-300 shadow-2xs"
+                                        title={`Invoice for ${entry.companyName} session has been sent to Invoices section`}
+                                      >
+                                        <CheckCircle2 size={10} className="text-emerald-600 shrink-0" /> Sent to Invoice
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const firstSession = entry.products?.[0] || {
+                                            id: undefined,
+                                            cabinName: entry.cabinName || 'Meeting Room',
+                                            amount: entry.amount,
+                                            gstPercent: entry.gstPercent ?? 18,
+                                            totalAmount: entry.totalAmount,
+                                            sessionDate: entry.agreementStartDate ? new Date(entry.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                            startTime: '',
+                                            endTime: '',
+                                          };
+                                          handleGenerateSessionInvoice(firstSession as any, entry.id);
+                                        }}
+                                        className="text-[9px] text-amber-800 hover:text-amber-950 font-bold uppercase tracking-wider underline text-center cursor-pointer"
+                                        title="Re-send / Re-dispatch session invoice"
+                                      >
+                                        + Re-send / Re-dispatch
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const firstSession = entry.products?.[0] || {
+                                          id: undefined,
+                                          cabinName: entry.cabinName || 'Meeting Room',
+                                          amount: entry.amount,
+                                          gstPercent: entry.gstPercent ?? 18,
+                                          totalAmount: entry.totalAmount,
+                                          sessionDate: entry.agreementStartDate ? new Date(entry.agreementStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                          startTime: '',
+                                          endTime: '',
+                                        };
+                                        handleGenerateSessionInvoice(firstSession as any, entry.id);
+                                      }}
+                                      className="px-2 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                                      title="Generate on-demand invoice for this booking session"
+                                    >
+                                      <FileText size={10} /> Generate Invoice
+                                    </button>
+                                  )
+                                ) : entry.isDispatchedToInvoices ? (
+                                  <div className="w-full flex flex-col gap-1">
+                                    <span
+                                      className="px-2 py-1 bg-emerald-50 text-emerald-800 font-bold text-[9px] uppercase tracking-wider w-full flex items-center justify-center gap-1 border border-emerald-300 shadow-2xs"
+                                      title={`Invoice for ${entry.companyName} has been generated for ${selectedTargetMonth}`}
+                                    >
+                                      <CheckCircle2 size={10} className="text-emerald-600 shrink-0" /> Sent for {selectedTargetMonth.split(' ')[0]}
+                                    </span>
+                                    <button
+                                      onClick={() => handleOpenDispatchModal([entry.id], true)}
+                                      disabled={dispatching}
+                                      className="text-[9px] text-blue-700 hover:text-blue-900 font-bold uppercase tracking-wider underline text-center cursor-pointer"
+                                    >
+                                      + Re-dispatch
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => handleOpenDispatchModal([entry.id])}
+                                    disabled={dispatching}
+                                    className="px-2 py-1.5 bg-blue-600 text-white font-bold text-[9px] uppercase tracking-wider hover:bg-blue-700 w-full flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                                  >
+                                    <Send size={10} /> Send to Invoice
+                                  </button>
+                                )}
+
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  <button
+                                    onClick={() => handleEditEntry(entry)}
+                                    className="p-1 text-neutral-500 hover:text-[#006064] hover:bg-neutral-100"
+                                    title="Edit entry"
+                                  >
+                                    <Edit2 size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteEntry(entry.id)}
+                                    className="p-1 text-neutral-500 hover:text-red-600 hover:bg-neutral-100"
+                                    title="Delete entry"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </>
                             )}
                           </div>
                         </td>
@@ -2698,6 +2700,16 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
 
               {/* Modal Form Scrollable Area */}
               <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-8 overflow-y-auto flex-1 text-xs">
+                {isCrm && (
+                  <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center gap-2.5 rounded-xs shadow-xs">
+                    <Shield size={18} className="text-blue-600 shrink-0" />
+                    <div>
+                      <span className="font-bold uppercase tracking-wider block text-[10px] text-blue-800">CRM Analysis View</span>
+                      <span>Complete pre-filled client entry is open in read-only mode. Field modifications are disabled.</span>
+                    </div>
+                  </div>
+                )}
+                <fieldset disabled={isCrm} className="contents">
                 {/* TOP CLIENT TYPE SELECTOR BAR */}
                 <div className="bg-neutral-50 p-4 border border-neutral-300 rounded-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
                   <div>
@@ -5562,6 +5574,8 @@ const DEFAULT_OPERATING_LOCATIONS: LocationOption[] = [
                     <option value="YES">Yes</option>
                   </select>
                 </div>
+
+                </fieldset>
 
                 {/* Submit Buttons Footer */}
                 <div className="pt-6 border-t border-neutral-200 flex items-center justify-end gap-4 shrink-0">
