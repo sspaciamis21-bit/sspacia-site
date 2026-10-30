@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard,
+  UserPlus,
   Users,
   Package,
   LogOut,
@@ -43,6 +44,7 @@ import { VisitorChatButton } from '@/components/ui/visitor-chat-button';
 
 const sidebarItems = [
   { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+  { name: 'CRM - NBD Inquiries', href: '/admin/crm-inquiries', icon: UserPlus },
   { name: 'Locations', href: '/admin/locations', icon: MapPin },
   { name: 'Products', href: '/admin/products', icon: Package },
   { name: 'Occupancy CAD', href: '/admin/occupancy', icon: LayoutGrid },
@@ -116,6 +118,13 @@ export default function AdminLayout({
 
   useEffect(() => {
     if (!isLoading) {
+      // Restrict CRM Inquiries to CRM and Admin
+      if (pathname?.startsWith('/admin/crm-inquiries') && !isCrm && !isAdmin) {
+        toast.error('Access restricted. CRM NBD Inquiries is only accessible to CRM.');
+        router.push(isCommunityManager ? '/admin/dashboard' : isAccountant ? '/admin/Invoices' : '/');
+        return;
+      }
+
       if (!user) {
         router.push('/login');
       } else if (isHr) {
@@ -125,6 +134,7 @@ export default function AdminLayout({
       } else if (isCrm) {
         // CRM has read-only access strictly to: Client Master, Locations, Bookings, Products, and Dashboard
         const allowedCrmPrefixes = [
+          '/admin/crm-inquiries',
           '/admin/occupancy',
           '/admin/dashboard',
           '/admin/client-master',
@@ -243,6 +253,9 @@ export default function AdminLayout({
         <nav className="flex-1 px-3 md:px-4 py-4 md:py-8 space-y-1.5 overflow-y-auto admin-nav-scrollbar pr-1.5 md:pr-2">
           {sidebarItems
             .filter((item) => {
+              if (item.href === '/admin/crm-inquiries') {
+                return isCrm || isAdmin;
+              }
               if (isAdmin) return true;
               if (isHr) {
                 return item.href === '/admin/expenses' || item.href === '/hr';
@@ -251,7 +264,7 @@ export default function AdminLayout({
                 return ['/admin/Invoices', '/admin/expenses', '/admin/vendor-master', '/admin/client-master'].includes(item.href);
               }
               if (isCrm) {
-                return ['/admin/dashboard', '/admin/occupancy', '/admin/client-master', '/admin/locations', '/admin/bookings', '/admin/products'].includes(item.href);
+                return ['/admin/crm-inquiries', '/admin/dashboard', '/admin/occupancy', '/admin/client-master', '/admin/locations', '/admin/bookings', '/admin/products'].includes(item.href);
               }
               return true;
             })

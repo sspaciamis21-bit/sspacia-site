@@ -1814,3 +1814,41 @@ model SuspenseCenterAllocation {
   @@index([centerName], map: "idx_alloc_center")
   @@index([decision], map: "idx_alloc_decision")
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CRM - NEW BUSINESS DEVELOPMENT (NBD) INQUIRY MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CrmInquiry {
+  id                Int      @id @default(autoincrement())
+  srNo              Int      @default(1)
+  inquiryDate       DateTime @default(now())
+  clientName        String   @db.VarChar(255)
+  companyName       String?  @db.VarChar(255)
+  natureOfBusiness  String?  @db.VarChar(255)
+  companyGeography  String   @default("Local") @db.VarChar(50)
+  phone             String   @db.VarChar(50)
+  email             String   @db.VarChar(255)
+  companyAddress    String?  @db.Text
+  centreRequired    String   @db.VarChar(100)
+  whatRequired      String   @db.VarChar(150)
+  noOfSeats         Int?     @default(0)
+  budget            String?  @db.VarChar(100)
+  otherRequirements String?  @db.Text
+  reference         String?  @db.VarChar(150)
+  leadAssignedTo    String   @default("Praveen Agarwal") @db.VarChar(150)
+  remarks           String?  @db.Text
+  status            String   @default("NEW") @db.VarChar(50)
+  createdById       Int?
+  createdByName     String?  @db.VarChar(255)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  @@index([inquiryDate], map: "idx_crm_inquiry_date")
+  @@index([centreRequired], map: "idx_crm_inquiry_centre")
+  @@index([status], map: "idx_crm_inquiry_status")
+  @@index([leadAssignedTo], map: "idx_crm_inquiry_assigned")
+  @@index([phone], map: "idx_crm_inquiry_phone")
+  @@index([email], map: "idx_crm_inquiry_email")
+}
